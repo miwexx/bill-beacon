@@ -1667,6 +1667,3 @@ a { color: var(--accent); text-decoration: none; }
   background: color-mix(in srgb, var(--overdue) 10%, var(--card));
 }
 
-.card.card-pad {
-  overflow: hidden;
-}
