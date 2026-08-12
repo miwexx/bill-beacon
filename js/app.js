@@ -1047,7 +1047,7 @@ window.openCalendarDay = function(dateString) {
 
       <div class="sheet-nav">
         <button class="nav-button" onclick="closeCalendarDay()">Close</button>
-        <div class="sheet-title">On This Day
+        <div class="sheet-title">Schedule
         <div style="width:54px"></div>
       </div>
 
