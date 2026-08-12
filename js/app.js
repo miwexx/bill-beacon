@@ -1410,7 +1410,7 @@ function openAddMenu() {
       <div class="sheet-handle"></div>
       <div class="sheet-nav">
         <button class="nav-button" onclick="closeAddMenu()">Cancel</button>
-        <div class="sheet-title">Add item</div>
+        <div class="sheet-title">Add Recurring</div>
         <div style="width: 54px"></div>
       </div>
 
