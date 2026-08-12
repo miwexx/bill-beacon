@@ -1120,7 +1120,7 @@ window.openCalendarDay = function(dateString) {
   onclick="closeCalendarDay(); openCalendarAddMenu('${dateString}')"
 >
   ${svgIcon('plus', 18)}
-  Add bill or plan
+  Add Bill
 </button>`
             : `<div class="empty-state">
                 <div class="empty-state-icon">${svgIcon('calendar', 44)}</div>
@@ -1131,7 +1131,7 @@ window.openCalendarDay = function(dateString) {
   onclick="closeCalendarDay(); openCalendarAddMenu('${dateString}')"
 >
   ${svgIcon('plus', 18)}
-  Add bill or plan
+  Add Bill
 </button>
               </div>`
         }
