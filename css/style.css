@@ -1662,3 +1662,38 @@ a { color: var(--accent); text-decoration: none; }
 .calendar-pay-button:active {
   transform: scale(0.94);
 }
+
+/* Fix calendar: keep all 7 days centered inside the screen */
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.calendar-grid > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.calendar-day,
+.calendar-weekday {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.calendar-day {
+  aspect-ratio: 1 / 1;
+  padding: 2px;
+}
+
+.calendar-day-clickable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+}
