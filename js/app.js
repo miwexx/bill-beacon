@@ -763,18 +763,11 @@ function renderBills() {
     <div class="nav-bar">
       <div class="nav-bar-content">
         <div class="nav-title">Recurring</div>
-        <div style="display: flex; align-items: center; gap: var(--space-2);">
-  <button
-  class="nav-button"
-  onclick="openInstallmentPlanForm()"
-  title="Add payment plan"
->
-  Payment Plan
-</button>
-
-  <button class="nav-button" onclick="openBillForm()" aria-label="Add Bill" title="Add Bill">
-  ${svgIcon('plus', 18)}
-</button>
+        
+        <div style="display: flex; align-items: center; gap: var(--space-2)">
+  <button class="nav-button" onclick="openAddMenu()" aria-label="Add a bill or payment plan" title="Add">
+    ${svgIcon('plus', 18)}
+  </button>
 </div>
       </div>
     </div>
@@ -1410,6 +1403,26 @@ function tabBar() {
 // ====================================
 
 let editingBillId = null;
+function openAddMenu() {
+  const choice = window.prompt(
+    'What would you like to add?\n\nType 1 for a bill or 2 for a payment plan.',
+    '1'
+  );
+
+  if (choice === null) return;
+
+  if (choice.trim() === '1') {
+    openBillForm();
+    return;
+  }
+
+  if (choice.trim() === '2') {
+    openInstallmentPlanForm();
+    return;
+  }
+
+  alert('Please choose 1 for a bill or 2 for a payment plan.');
+}
 
 function openBillForm(billId = null) {
   editingBillId = billId;
