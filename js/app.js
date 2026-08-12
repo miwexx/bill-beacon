@@ -849,12 +849,7 @@ function renderCalendar() {
       bill => getBillStatus(bill) === 'overdue'
     );
 
-    const dayTotal = dayBills.reduce(
-      (sum, bill) => sum + (parseFloat(bill.amount) || 0),
-      0
-    );
-
-    let dots = '';
+       let dots = '';
     if (dayBills.length) {
       dots = `
         <div class="calendar-dot-row">
@@ -865,10 +860,7 @@ function renderCalendar() {
       `;
     }
 
-    const amountLabel = dayBills.length
-      ? `<div style="font-size:10px;font-weight:700;line-height:1.1;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${formatCurrency(dayTotal).replace('.00', '')}</div>`
-      : '';
-
+   
     dayCells.push(`
       <button
         class="calendar-day calendar-day-clickable ${isToday ? 'today' : ''} ${hasOverdue ? 'calendar-day-overdue' : ''}"
@@ -876,8 +868,7 @@ function renderCalendar() {
         aria-label="View ${dayBills.length ? `${dayBills.length} bills due on ` : ''}${formatDate(date.toISOString(), 'full')}"
       >
         <span>${day}</span>
-        ${amountLabel}
-        ${dots}
+               ${dots}
       </button>
     `);
   }
