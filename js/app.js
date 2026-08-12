@@ -772,8 +772,8 @@ function renderBills() {
   Payment Plan
 </button>
 
-  <button class="nav-button" onclick="openBillForm()">
-  Add Bill
+  <button class="nav-button" onclick="openBillForm()" aria-label="Add Bill" title="Add Bill">
+  ${svgIcon('plus', 18)}
 </button>
 </div>
       </div>
