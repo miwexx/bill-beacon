@@ -550,41 +550,23 @@ const next7DaysTotal = next7DaysBills.reduce(
             `
         }
 
-        <div>
-          <div class="section-header">
-            Bill Status — ${currentMonthLabel}
-          </div>
+        <div class="section-header">Bill Status · ${currentMonthLabel}</div>
+<div class="dashboard-status-row">
+  <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
+    <div class="dashboard-status-number text-paid">${paidCount}</div>
+    <div class="dashboard-status-label">Paid</div>
+  </button>
 
-          <div class="dashboard-status-row">
-            <button
-              class="dashboard-status-card status-paid-card"
-              onclick="navigate('bills', { filter: 'paid' })"
-            >
-              <div class="dashboard-status-number text-paid">${paidCount}</div>
-              <div class="dashboard-status-label">Paid</div>
-            </button>
+  <button class="dashboard-status-card status-upcoming-card" onclick="openDashboardStatusSheet('due')" aria-label="View bills due">
+    <div class="dashboard-status-number text-upcoming">${upcomingCount}</div>
+    <div class="dashboard-status-label">Due</div>
+  </button>
 
-            <button
-              class="dashboard-status-card status-upcoming-card"
-              onclick="navigate('bills', { filter: 'unpaid' })"
-            >
-              <div class="dashboard-status-number text-upcoming">
-                ${upcomingCount}
-              </div>
-              <div class="dashboard-status-label">Upcoming</div>
-            </button>
-
-            <button
-              class="dashboard-status-card status-overdue-card"
-              onclick="navigate('bills', { filter: 'overdue' })"
-            >
-              <div class="dashboard-status-number text-overdue">
-                ${overdueCount}
-              </div>
-              <div class="dashboard-status-label">Overdue</div>
-            </button>
-          </div>
-        </div>
+  <button class="dashboard-status-card status-overdue-card" onclick="openDashboardStatusSheet('overdue')" aria-label="View overdue bills">
+    <div class="dashboard-status-number text-overdue">${overdueCount}</div>
+    <div class="dashboard-status-label">Overdue</div>
+  </button>
+</div>
 
         <div>
           <div class="dashboard-section-title-row">
@@ -1040,7 +1022,143 @@ window.openCalendarDay = function (dateString) {
     document.getElementById("calendarDaySheet")?.classList.add("show");
   });
 }
+function closeDashboardStatusSheet() {
+  const overlay = document.getElementById('dashboardStatusOverlay');
+  const sheet = document.getElementById('dashboardStatusSheet');
 
+  if (overlay) overlay.classList.remove('show');
+  if (sheet) sheet.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('dashboardStatusContainer')?.remove();
+  }, 300);
+}
+
+function openDashboardStatusSheet(status) {
+  const now = new Date();
+  const currentMonthBills = Store.getBills().filter(bill => {
+    const dueDate = new Date(bill.dueDate);
+    return dueDate.getMonth() === now.getMonth()
+      && dueDate.getFullYear() === now.getFullYear();
+  });
+
+  let title = 'Paid';
+  let color = 'var(--paid)';
+  let background = 'var(--paid-bg)';
+  let icon = svgIcon('checkCircle', 18);
+  let selectedBills = [];
+
+  if (status === 'paid') {
+    const paidBillIds = new Set(
+      Store.getPayments()
+        .filter(payment => isSameMonth(payment.paidDate, now))
+        .map(payment => payment.billId)
+    );
+    selectedBills = currentMonthBills.filter(bill => paidBillIds.has(bill.id));
+  }
+
+  if (status === 'due') {
+    title = 'Due';
+    color = 'var(--upcoming)';
+    background = 'var(--upcoming-bg)';
+    icon = svgIcon('clock', 18);
+    selectedBills = currentMonthBills.filter(
+      bill => getBillStatus(bill) === 'upcoming'
+    );
+  }
+
+  if (status === 'overdue') {
+    title = 'Overdue';
+    color = 'var(--overdue)';
+    background = 'var(--overdue-bg)';
+    icon = svgIcon('warning', 18);
+    selectedBills = Store.getBills().filter(
+      bill => getBillStatus(bill) === 'overdue'
+    );
+  }
+
+  selectedBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const total = selectedBills.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+  const container = document.createElement('div');
+  container.id = 'dashboardStatusContainer';
+  container.innerHTML = `
+    <div class="sheet-overlay" id="dashboardStatusOverlay" onclick="closeDashboardStatusSheet()"></div>
+
+    <div class="sheet" id="dashboardStatusSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeDashboardStatusSheet()">Close</button>
+        <div class="sheet-title">${title} bills</div>
+        <div style="width: 54px"></div>
+      </div>
+
+      <div style="padding: var(--space-4)">
+        <div class="card" style="margin-bottom: var(--space-4); overflow: hidden">
+          <div class="form-row">
+            <div style="display: flex; align-items: center; gap: var(--space-2); color: ${color}">
+              ${icon}
+              <span style="font-weight: 700">${selectedBills.length} ${selectedBills.length === 1 ? 'bill' : 'bills'}</span>
+            </div>
+            <div style="flex: 1"></div>
+            <div style="font-size: var(--text-lg); font-weight: 800; color: ${color}">
+              ${formatCurrency(total)}
+            </div>
+          </div>
+        </div>
+
+        ${
+          selectedBills.length
+            ? `<div class="card">
+                ${selectedBills.map(bill => {
+                  const category = getCategory(bill.category);
+                  const dateLabel = status === 'paid'
+                    ? 'Paid this month'
+                    : `${formatDate(bill.dueDate, 'full')} · ${relativeDue(bill.dueDate)}`;
+
+                  return `
+                    <button
+                      class="bill-row"
+                      onclick="closeDashboardStatusSheet(); navigate('detail', { id: '${bill.id}' })"
+                      style="width: 100%; text-align: left"
+                      aria-label="View ${escapeHtml(bill.name)}"
+                    >
+                      <div class="bill-icon" style="background: var(--${category.color}); color: white">
+                        ${svgIcon(category.icon, 18)}
+                      </div>
+
+                      <div class="bill-info">
+                        <div class="bill-name">${escapeHtml(bill.name)}</div>
+                        <div class="bill-meta" style="color: ${color}">${dateLabel}</div>
+                      </div>
+
+                      <div class="bill-amount">${formatCurrency(bill.amount)}</div>
+                    </button>
+                  `;
+                }).join('')}
+              </div>`
+            : `<div class="empty-state">
+                <div class="empty-state-icon">${svgIcon('checkCircle', 44)}</div>
+                <div class="empty-state-title">No ${title.toLowerCase()} bills</div>
+                <div class="empty-state-text">There is nothing to show for this month.</div>
+              </div>`
+        }
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => {
+    document.getElementById('dashboardStatusOverlay')?.classList.add('show');
+    document.getElementById('dashboardStatusSheet')?.classList.add('show');
+  });
+}
 
 function renderInsights() {
   const bills = Store.getBills();
