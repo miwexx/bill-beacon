@@ -784,9 +784,8 @@ function renderBills() {
   `;
 }
 
-function renderCalendar() {
-  let viewDate = routeParams.month || new Date();
-  if (typeof viewDate === 'string') viewDate = new Date(viewDate);
+  function renderCalendar() {
+  let viewDate = routeParams.month ? new Date(routeParams.month) : new Date();
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -795,51 +794,195 @@ function renderCalendar() {
   const startWeekday = firstDay.getDay();
   const today = new Date();
   const bills = Store.getBills();
-  const monthBills = bills.filter(b => {
-    const d = new Date(b.dueDate);
-    return d.getMonth() === month && d.getFullYear() === year;
+
+  const monthBills = bills.filter(bill => {
+    const dueDate = new Date(bill.dueDate);
+    return dueDate.getMonth() === month && dueDate.getFullYear() === year;
   });
 
-  const weekdays = ['S','M','T','W','T','F','S'];
-  let dayCells = '';
+  const monthTotal = monthBills.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
 
-  // Empty cells before first day
+  const paidBills = monthBills.filter(bill => isPaidThisMonth(bill));
+  const paidTotal = paidBills.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+  const dueBills = monthBills.filter(
+    bill => !isPaidThisMonth(bill) && getBillStatus(bill) === 'upcoming'
+  );
+
+  const dueTotal = dueBills.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+  const overdueBills = bills.filter(bill => getBillStatus(bill) === 'overdue');
+  const overdueTotal = overdueBills.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+  const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const dayCells = [];
+
   for (let i = 0; i < startWeekday; i++) {
-    dayCells += '<div class="calendar-day"></div>';
+    dayCells.push('<div class="calendar-day calendar-day-empty"></div>');
   }
 
-  // Day cells
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(year, month, day);
-    const dayBills = monthBills.filter(b => {
-      const bd = new Date(b.dueDate);
-      return bd.getDate() === day;
+    const dayBills = monthBills.filter(bill => {
+      const dueDate = new Date(bill.dueDate);
+      return dueDate.getDate() === day;
     });
+
     const isToday = date.toDateString() === today.toDateString();
-    const hasPaid = dayBills.some(b => getBillStatus(b) === 'paid');
-    const hasUpcoming = dayBills.some(b => getBillStatus(b) === 'upcoming');
-    const hasOverdue = dayBills.some(b => getBillStatus(b) === 'overdue');
+    const hasPaid = dayBills.some(bill => isPaidThisMonth(bill));
+    const hasUpcoming = dayBills.some(
+      bill => !isPaidThisMonth(bill) && getBillStatus(bill) === 'upcoming'
+    );
+    const hasOverdue = dayBills.some(
+      bill => getBillStatus(bill) === 'overdue'
+    );
+
+    const dayTotal = dayBills.reduce(
+      (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+      0
+    );
 
     let dots = '';
-    if (dayBills.length > 0) {
-      dots = '<div class="calendar-dot-row">';
-      if (hasPaid) dots += '<div class="calendar-dot" style="background:var(--paid)"></div>';
-      if (hasUpcoming) dots += '<div class="calendar-dot" style="background:var(--upcoming)"></div>';
-      if (hasOverdue) dots += '<div class="calendar-dot" style="background:var(--overdue)"></div>';
-      dots += '</div>';
+    if (dayBills.length) {
+      dots = `
+        <div class="calendar-dot-row">
+          ${hasPaid ? '<div class="calendar-dot" style="background:var(--paid)"></div>' : ''}
+          ${hasUpcoming ? '<div class="calendar-dot" style="background:var(--upcoming)"></div>' : ''}
+          ${hasOverdue ? '<div class="calendar-dot" style="background:var(--overdue)"></div>' : ''}
+        </div>
+      `;
     }
 
-    dayCells += `
-  <button
-    class="calendar-day calendar-day-clickable ${isToday ? 'today' : ''} ${dayBills.length ? 'dots' : ''}"
-    onclick="openCalendarDay('${date.toISOString()}')"
-    aria-label="View bills due on ${formatDate(date.toISOString(), 'full')}"
-  >
-    ${day}
-    ${dots}
-  </button>
-`;
+    const amountLabel = dayBills.length
+      ? `<div style="font-size:10px;font-weight:700;line-height:1.1;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${formatCurrency(dayTotal).replace('.00', '')}</div>`
+      : '';
+
+    dayCells.push(`
+      <button
+        class="calendar-day calendar-day-clickable ${isToday ? 'today' : ''} ${hasOverdue ? 'calendar-day-overdue' : ''}"
+        onclick="openCalendarDay('${date.toISOString()}')"
+        aria-label="View ${dayBills.length ? `${dayBills.length} bills due on ` : ''}${formatDate(date.toISOString(), 'full')}"
+      >
+        <span>${day}</span>
+        ${amountLabel}
+        ${dots}
+      </button>
+    `);
   }
+
+  const monthBillsSorted = [...monthBills].sort(
+    (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+  );
+
+  const prevMonth = new Date(year, month - 1, 1).toISOString();
+  const nextMonth = new Date(year, month + 1, 1).toISOString();
+  const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+  const viewingCurrentMonth =
+    today.getFullYear() === year && today.getMonth() === month;
+
+  return `
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <div class="nav-title">Calendar</div>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad content-gap">
+        <div class="card card-pad">
+          <div class="month-nav">
+            <button class="month-nav-btn" onclick="navigate('calendar', { month: '${prevMonth}' })" aria-label="Previous month">
+              ${svgIcon('chevronLeft', 22)}
+            </button>
+
+            <div class="month-nav-title">${formatDate(viewDate.toISOString(), 'monthYear')}</div>
+
+            <button class="month-nav-btn" onclick="navigate('calendar', { month: '${nextMonth}' })" aria-label="Next month">
+              ${svgIcon('chevronRight', 22)}
+            </button>
+          </div>
+
+          ${
+            !viewingCurrentMonth
+              ? `<button class="btn-secondary" style="width:100%;margin:var(--space-2) 0 var(--space-4)" onclick="navigate('calendar')">
+                  ${svgIcon('calendar', 18)}
+                  Today
+                </button>`
+              : ''
+          }
+
+          <div class="calendar-grid">
+            ${weekdays.map(day => `<div class="calendar-weekday">${day}</div>`).join('')}
+            ${dayCells.join('')}
+          </div>
+        </div>
+
+        <div class="calendar-summary">
+          <div class="calendar-summary-item">
+            <div class="calendar-summary-label">Scheduled</div>
+            <div class="calendar-summary-value">${formatCurrency(monthTotal)}</div>
+            <div class="calendar-summary-meta">${monthBills.length} ${monthBills.length === 1 ? 'bill' : 'bills'}</div>
+          </div>
+
+          <div class="calendar-summary-item">
+            <div class="calendar-summary-label">Still due</div>
+            <div class="calendar-summary-value text-upcoming">${formatCurrency(dueTotal)}</div>
+            <div class="calendar-summary-meta">${dueBills.length} ${dueBills.length === 1 ? 'bill' : 'bills'}</div>
+          </div>
+
+          <div class="calendar-summary-item">
+            <div class="calendar-summary-label">Paid</div>
+            <div class="calendar-summary-value text-paid">${formatCurrency(paidTotal)}</div>
+            <div class="calendar-summary-meta">${paidBills.length} ${paidBills.length === 1 ? 'bill' : 'bills'}</div>
+          </div>
+        </div>
+
+        ${
+          overdueBills.length
+            ? `<div class="card card-pad" style="border-color:color-mix(in srgb, var(--overdue) 38%, var(--border))">
+                <div style="display:flex;align-items:center;gap:var(--space-2);color:var(--overdue)">
+                  ${svgIcon('warning', 18)}
+                  <strong>${overdueBills.length} overdue ${overdueBills.length === 1 ? 'bill' : 'bills'}</strong>
+                  <span style="margin-left:auto;font-weight:800">${formatCurrency(overdueTotal)}</span>
+                </div>
+              </div>`
+            : ''
+        }
+
+        ${
+          monthBillsSorted.length
+            ? `<div>
+                <div class="section-header">This Month</div>
+                <div class="card">
+                  ${monthBillsSorted.map(bill => billRow(bill, true)).join('')}
+                </div>
+              </div>`
+            : `<div class="empty-state">
+                <div class="empty-state-icon">${svgIcon('calendar', 44)}</div>
+                <div class="empty-state-title">No bills this month</div>
+                <div class="empty-state-text">Add a bill to begin planning this month’s payments.</div>
+                <button class="btn-primary" style="margin-top:var(--space-4)" onclick="openBillForm()">
+                  ${svgIcon('plus', 18)}
+                  Add bill
+                </button>
+              </div>`
+        }
+      </div>
+    </div>
+  `;
+}
 
   const monthBillsSorted = monthBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   const prevMonth = new Date(year, month - 1, 1).toISOString();
@@ -898,121 +1041,131 @@ window.closeCalendarDay = function () {
   }, 300);
 }
 
-window.openCalendarDay = function (dateString) {
+window.openCalendarDay = function(dateString) {
   const selectedDate = new Date(dateString);
 
-  const billsForDay = Store.getBills().filter((bill) => {
+  const billsForDay = Store.getBills().filter(bill => {
     const dueDate = new Date(bill.dueDate);
-
-    return (
-      dueDate.getDate() === selectedDate.getDate() &&
-      dueDate.getMonth() === selectedDate.getMonth() &&
-      dueDate.getFullYear() === selectedDate.getFullYear()
-    );
+    return dueDate.getDate() === selectedDate.getDate()
+      && dueDate.getMonth() === selectedDate.getMonth()
+      && dueDate.getFullYear() === selectedDate.getFullYear();
   });
 
-  const container = document.createElement("div");
-  container.id = "calendarDaySheetContainer";
+  const dayTotal = billsForDay.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+  const container = document.createElement('div');
+  container.id = 'calendarDaySheetContainer';
 
   container.innerHTML = `
-    <div
-      class="sheet-overlay"
-      id="calendarDayOverlay"
-      onclick="closeCalendarDay()"
-    ></div>
+    <div class="sheet-overlay" id="calendarDayOverlay" onclick="closeCalendarDay()"></div>
 
     <div class="sheet" id="calendarDaySheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeCalendarDay()">
-          Close
-        </button>
-
-        <div class="sheet-title">Bills Due</div>
-
-        <div style="width: 54px;"></div>
+        <button class="nav-button" onclick="closeCalendarDay()">Close</button>
+        <div class="sheet-title">Bills due</div>
+        <div style="width:54px"></div>
       </div>
 
-      <div style="padding: var(--space-4);">
-        <div class="section-header">
-          ${formatDate(dateString, "full")}
+      <div style="padding:var(--space-4)">
+        <div class="card" style="margin-bottom:var(--space-4)">
+          <div class="form-row">
+            <div>
+              <div style="font-size:var(--text-sm);font-weight:700">${formatDate(dateString, 'full')}</div>
+              <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:2px">
+                ${billsForDay.length} ${billsForDay.length === 1 ? 'bill' : 'bills'} scheduled
+              </div>
+            </div>
+            <div style="margin-left:auto;font-size:var(--text-lg);font-weight:800">
+              ${formatCurrency(dayTotal)}
+            </div>
+          </div>
         </div>
 
         ${
           billsForDay.length
-            ? `
-              <div class="card">
-                ${billsForDay
-                  .map((bill) => {
-                    const category = getCategory(bill.category);
-                    const status = getBillStatus(bill);
+            ? `<div class="card">
+                ${billsForDay.map(bill => {
+                  const category = getCategory(bill.category);
+                  const paid = isPaidThisMonth(bill);
+                  const status = getBillStatus(bill);
+                  const statusText = paid ? 'Paid' : status === 'overdue' ? 'Overdue' : 'Due';
+                  const statusColor = paid
+                    ? 'var(--paid)'
+                    : status === 'overdue'
+                      ? 'var(--overdue)'
+                      : 'var(--upcoming)';
 
-                    const statusText =
-                      status === "paid"
-                        ? "Paid"
-                        : status === "overdue"
-                        ? "Overdue"
-                        : "Due today";
-
-                    const statusColor =
-                      status === "paid"
-                        ? "var(--paid)"
-                        : status === "overdue"
-                        ? "var(--overdue)"
-                        : "var(--upcoming)";
-
-                    return `
-                      <div
-                        class="bill-row"
-                        onclick="closeCalendarDay(); navigate('detail', { id: '${bill.id}' })"
-                        style="cursor: pointer;"
+                  return `
+                    <div class="bill-row">
+                      <button
+                        onclick="closeCalendarDay();navigate('detail',{id:'${bill.id}'})"
+                        style="display:contents;text-align:left"
+                        aria-label="View ${escapeHtml(bill.name)}"
                       >
-                        <div
-                          class="bill-icon"
-                          style="background: var(--${category.color}); color: white;"
-                        >
+                        <div class="bill-icon" style="background:var(--${category.color});color:white">
                           ${svgIcon(category.icon, 18)}
                         </div>
 
                         <div class="bill-info">
-                          <div class="bill-name">
-                            ${escapeHtml(bill.name)}
-                          </div>
-
-                          <div
-                            class="bill-meta"
-                            style="color: ${statusColor};"
-                          >
-                            ${statusText}
-                          </div>
+                          <div class="bill-name">${escapeHtml(bill.name)}</div>
+                          <div class="bill-meta" style="color:${statusColor}">${statusText}</div>
                         </div>
 
-                        <div class="bill-amount">
-                          ${formatCurrency(bill.amount)}
-                        </div>
-                      </div>
-                    `;
-                  })
-                  .join("")}
-              </div>
-            `
-            : `
-              <div class="empty-state">
-                <div class="empty-state-icon">
-                  ${svgIcon("calendar", 44)}
-                </div>
+                        <div class="bill-amount">${formatCurrency(bill.amount)}</div>
+                      </button>
 
+                      ${
+                        !paid
+                          ? `<button
+                              class="calendar-pay-button"
+                              onclick="markCalendarBillPaid('${bill.id}','${dateString}')"
+                              aria-label="Mark ${escapeHtml(bill.name)} as paid"
+                            >
+                              ${svgIcon('check', 16)}
+                            </button>`
+                          : ''
+                      }
+                    </div>
+                  `;
+                }).join('')}
+              </div>`
+            : `<div class="empty-state">
+                <div class="empty-state-icon">${svgIcon('calendar', 44)}</div>
                 <div class="empty-state-title">No bills due</div>
-
-                <div class="empty-state-text">
-                  There are no bills scheduled for this date.
-                </div>
-              </div>
-            `
+                <div class="empty-state-text">There are no bills scheduled for this date.</div>
+                <button class="btn-primary" style="margin-top:var(--space-4)" onclick="closeCalendarDay();openBillForm()">
+                  ${svgIcon('plus', 18)}
+                  Add bill
+                </button>
+              </div>`
         }
       </div>
     </div>
+  `;
+
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => {
+    document.getElementById('calendarDayOverlay')?.classList.add('show');
+    document.getElementById('calendarDaySheet')?.classList.add('show');
+  });
+};
+
+window.markCalendarBillPaid = function(billId, dateString) {
+  markBillPaid(billId);
+
+  closeCalendarDay();
+
+  setTimeout(() => {
+    openCalendarDay(dateString);
+    render();
+  }, 320);
+};
   `;
 
   document.body.appendChild(container);
