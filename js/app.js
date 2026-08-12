@@ -1047,7 +1047,7 @@ window.openCalendarDay = function(dateString) {
 
       <div class="sheet-nav">
         <button class="nav-button" onclick="closeCalendarDay()">Close</button>
-        <div class="sheet-title">Bills due</div>
+        <div class="sheet-title">${formatDate(dateString, 'full')}</div>
         <div style="width:54px"></div>
       </div>
 
@@ -1055,7 +1055,7 @@ window.openCalendarDay = function(dateString) {
         <div class="card" style="margin-bottom:var(--space-4)">
           <div class="form-row">
             <div>
-              <div style="font-size:var(--text-sm);font-weight:700">${formatDate(dateString, 'full')}</div>
+              
               <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:2px">
                 ${billsForDay.length} ${billsForDay.length === 1 ? 'bill' : 'bills'} scheduled
               </div>
