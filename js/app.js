@@ -1198,11 +1198,6 @@ function renderInsights() {
   }
   const maxMonthly = Math.max(...monthlyData.map(m => m.amount), 1);
 
-  // Status breakdown
-  const paidCount = bills.filter(b => getBillStatus(b) === 'paid').length;
-  const upcomingCount = bills.filter(b => getBillStatus(b) === 'upcoming').length;
-  const overdueCount = bills.filter(b => getBillStatus(b) === 'overdue').length;
-
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
@@ -1268,21 +1263,7 @@ function renderInsights() {
         </div>
 
         <div>
-          <div class="section-header">Bill Status</div>
-          <div class="stat-row">
-            <div class="stat-card">
-              <div class="stat-value text-paid">${paidCount}</div>
-              <div class="stat-label">Paid</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value text-upcoming">${upcomingCount}</div>
-              <div class="stat-label">Upcoming</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-value text-overdue">${overdueCount}</div>
-              <div class="stat-label">Overdue</div>
-            </div>
-          </div>
+        
         </div>
       </div>
     </div>
