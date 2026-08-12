@@ -1404,26 +1404,56 @@ function tabBar() {
 
 let editingBillId = null;
 function openAddMenu() {
-  const choice = window.prompt(
-    'What would you like to add?\n\nType 1 for a bill or 2 for a payment plan.',
-    '1'
-  );
+  const menuHtml = `
+    <div class="sheet-overlay" id="addMenuOverlay" onclick="closeAddMenu()"></div>
+    <div class="sheet" id="addMenuSheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeAddMenu()">Cancel</button>
+        <div class="sheet-title">Add item</div>
+        <div style="width: 54px"></div>
+      </div>
 
-  if (choice === null) return;
+      <div style="padding: var(--space-4)">
+        <div class="settings-footer" style="padding: 0 0 var(--space-4)">
+          Choose what you want to track.
+        </div>
 
-  if (choice.trim() === '1') {
-    openBillForm();
-    return;
-  }
+        <button class="btn-primary" onclick="closeAddMenu(); openBillForm()">
+          ${svgIcon('plus', 20)}
+          Add bill
+        </button>
 
-  if (choice.trim() === '2') {
-    openInstallmentPlanForm();
-    return;
-  }
+        <button class="btn-secondary" style="margin-top: var(--space-3)" onclick="closeAddMenu(); openInstallmentPlanForm()">
+          ${svgIcon('calendar', 20)}
+          Add payment plan
+        </button>
+      </div>
+    </div>
+  `;
 
-  alert('Please choose 1 for a bill or 2 for a payment plan.');
+  const container = document.createElement('div');
+  container.id = 'addMenuContainer';
+  container.innerHTML = menuHtml;
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => {
+    document.getElementById('addMenuOverlay').classList.add('show');
+    document.getElementById('addMenuSheet').classList.add('show');
+  });
 }
 
+function closeAddMenu() {
+  const overlay = document.getElementById('addMenuOverlay');
+  const sheet = document.getElementById('addMenuSheet');
+
+  if (overlay) overlay.classList.remove('show');
+  if (sheet) sheet.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('addMenuContainer')?.remove();
+  }, 300);
+}
 function openBillForm(billId = null) {
   editingBillId = billId;
   const bill = billId ? Store.getBill(billId) : null;
