@@ -876,7 +876,8 @@ function renderCalendar() {
   const monthBillsSorted = [...monthBills].sort(
     (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
   );
-
+  const visibleMonthBills = monthBillsSorted.slice(0, 5);
+  const hiddenMonthBills = monthBillsSorted.slice(5);
   const prevMonth = new Date(year, month - 1, 1).toISOString();
   const nextMonth = new Date(year, month + 1, 1).toISOString();
   const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
@@ -953,23 +954,47 @@ function renderCalendar() {
         }
 
         ${
-          monthBillsSorted.length
-            ? `<div>
-                <div class="section-header">This Month</div>
-                <div class="card">
-                  ${monthBillsSorted.map(bill => billRow(bill, true)).join('')}
+  monthBillsSorted.length
+    ? `<div>
+        <div class="section-header">This Month</div>
+
+        <div class="card">
+          ${visibleMonthBills.map(bill => billRow(bill, true)).join('')}
+
+          ${
+            hiddenMonthBills.length
+              ? `<div id="moreMonthBills" class="more-month-bills">
+                  ${hiddenMonthBills.map(bill => billRow(bill, true)).join('')}
                 </div>
-              </div>`
-            : `<div class="empty-state">
-                <div class="empty-state-icon">${svgIcon('calendar', 44)}</div>
-                <div class="empty-state-title">No bills this month</div>
-                <div class="empty-state-text">Add a bill to begin planning this month’s payments.</div>
-                <button class="btn-primary" style="margin-top:var(--space-4)" onclick="openBillForm()">
-                  ${svgIcon('plus', 18)}
-                  Add bill
-                </button>
-              </div>`
-        }
+
+                <button
+                  id="toggleMonthBills"
+                  class="show-more-bills-button"
+                  onclick="toggleMonthBills()"
+                >
+                  Show all ${monthBillsSorted.length} bills
+                  ${svgIcon('chevronRight', 18)}
+                </button>`
+              : ''
+          }
+        </div>
+      </div>`
+    : `<div class="empty-state">
+        <div class="empty-state-icon">${svgIcon('calendar', 44)}</div>
+        <div class="empty-state-title">No bills this month</div>
+        <div class="empty-state-text">
+          Add a bill to begin planning this month’s payments.
+        </div>
+        <button
+          class="btn-primary"
+          style="margin-top:var(--space-4)"
+          onclick="openBillForm()"
+        >
+          ${svgIcon('plus', 18)}
+          Add bill
+        </button>
+      </div>`
+}
       </div>
     </div>
   `;
@@ -1855,6 +1880,20 @@ function saveBill() {
 // ====================================
 
 let currentFilter = 'all';
+window.toggleMonthBills = function() {
+  const extraBills = document.getElementById('moreMonthBills');
+  const button = document.getElementById('toggleMonthBills');
+
+  if (!extraBills || !button) return;
+
+  const isOpen = extraBills.classList.toggle('is-open');
+
+  button.innerHTML = isOpen
+    ? `Show less ${svgIcon('chevronRight', 18)}`
+    : `Show all ${document.querySelectorAll('#moreMonthBills .bill-row').length + 5} bills ${svgIcon('chevronRight', 18)}`;
+
+  button.classList.toggle('is-open', isOpen);
+};
 
 function setFilter(filter) {
   routeParams.filter = filter;

@@ -1697,3 +1697,38 @@ a { color: var(--accent); text-decoration: none; }
   gap: 4px;
   overflow: hidden;
 }
+/* Calendar: show only five monthly bills until expanded */
+.more-month-bills {
+  display: none;
+}
+
+.more-month-bills.is-open {
+  display: block;
+}
+
+.show-more-bills-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--separator);
+  color: var(--accent);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  text-align: center;
+}
+
+.show-more-bills-button svg {
+  transition: transform var(--transition);
+}
+
+.show-more-bills-button.is-open svg {
+  transform: rotate(90deg);
+}
+
+.show-more-bills-button:active {
+  background: var(--surface-2);
+}
