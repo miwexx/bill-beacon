@@ -1761,3 +1761,46 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--text-muted);
   font-size: var(--text-xs);
 }
+
+/* Calendar add menu: match the teal pill style */
+.calendar-add-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  min-height: 68px;
+  margin-bottom: var(--space-3);
+  padding: var(--space-4);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--accent-dim);
+  color: var(--accent);
+  text-align: left;
+}
+
+.calendar-add-choice + .calendar-add-choice {
+  border-top: 1px solid var(--border-strong);
+}
+
+.calendar-add-choice:active {
+  transform: scale(0.98);
+  background: var(--surface-2);
+}
+
+.calendar-add-choice-title {
+  color: var(--accent);
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.calendar-add-choice-text {
+  margin-top: 2px;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+}
+
+.calendar-add-choice svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
