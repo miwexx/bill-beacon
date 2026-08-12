@@ -1709,38 +1709,34 @@ window.openCalendarAddMenu = function(dateString) {
           Cancel
         </button>
 
-        <div class="sheet-title">Add</div>
+        <div class="sheet-title">Add Recurring</div>
 
         <div style="width:54px"></div>
       </div>
 
       <div style="padding:var(--space-4)">
+        <div
+          class="settings-footer"
+          style="padding:0 0 var(--space-4)"
+        >
+          Choose what you want to track.
+        </div>
+
         <button
-          class="calendar-add-choice"
+          class="btn-primary"
           onclick="closeCalendarAddMenu(); openBillForm(null, '${selectedDate}')"
         >
-          <div>
-            <div class="calendar-add-choice-title">Add bill</div>
-            <div class="calendar-add-choice-text">
-              Add a one-time or recurring bill.
-            </div>
-          </div>
-
-          ${svgIcon('chevronRight', 20)}
+          ${svgIcon('plus', 20)}
+          Add bill
         </button>
 
         <button
-          class="calendar-add-choice"
+          class="btn-secondary"
+          style="margin-top:var(--space-3)"
           onclick="closeCalendarAddMenu(); openInstallmentPlanForm()"
         >
-          <div>
-            <div class="calendar-add-choice-title">Add payment plan</div>
-            <div class="calendar-add-choice-text">
-              Add Klarna, Afterpay, Affirm, or another plan.
-            </div>
-          </div>
-
-          ${svgIcon('chevronRight', 20)}
+          ${svgIcon('calendar', 20)}
+          Add payment plan
         </button>
       </div>
     </div>
@@ -1762,7 +1758,6 @@ window.closeCalendarAddMenu = function() {
     document.getElementById('calendarAddMenuContainer')?.remove();
   }, 300);
 };
-
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
   const bill = billId ? Store.getBill(billId) : null;
