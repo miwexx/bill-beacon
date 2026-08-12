@@ -1112,16 +1112,27 @@ window.openCalendarDay = function(dateString) {
                       }
                     </div>
                   `;
-                }).join('')}
-              </div>`
+              }).join('')}
+</div>
+
+<button
+  class="calendar-add-pill"
+  onclick="closeCalendarDay(); openCalendarAddMenu('${dateString}')"
+>
+  ${svgIcon('plus', 18)}
+  Add bill or plan
+</button>`
             : `<div class="empty-state">
                 <div class="empty-state-icon">${svgIcon('calendar', 44)}</div>
                 <div class="empty-state-title">No bills due</div>
                 <div class="empty-state-text">There are no bills scheduled for this date.</div>
-                <button class="btn-primary" style="margin-top:var(--space-4)" onclick="closeCalendarDay();openBillForm()">
-                  ${svgIcon('plus', 18)}
-                  Add bill
-                </button>
+                <button
+  class="calendar-add-pill"
+  onclick="closeCalendarDay(); openCalendarAddMenu('${dateString}')"
+>
+  ${svgIcon('plus', 18)}
+  Add bill or plan
+</button>
               </div>`
         }
       </div>
@@ -1677,12 +1688,89 @@ function closeAddMenu() {
     document.getElementById('addMenuContainer')?.remove();
   }, 300);
 }
-function openBillForm(billId = null) {
+window.openCalendarAddMenu = function(dateString) {
+  const selectedDate = dateString.split('T')[0];
+
+  const container = document.createElement('div');
+  container.id = 'calendarAddMenuContainer';
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="calendarAddMenuOverlay"
+      onclick="closeCalendarAddMenu()"
+    ></div>
+
+    <div class="sheet" id="calendarAddMenuSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeCalendarAddMenu()">
+          Cancel
+        </button>
+
+        <div class="sheet-title">Add</div>
+
+        <div style="width:54px"></div>
+      </div>
+
+      <div style="padding:var(--space-4)">
+        <button
+          class="calendar-add-choice"
+          onclick="closeCalendarAddMenu(); openBillForm(null, '${selectedDate}')"
+        >
+          <div>
+            <div class="calendar-add-choice-title">Add bill</div>
+            <div class="calendar-add-choice-text">
+              Add a one-time or recurring bill.
+            </div>
+          </div>
+
+          ${svgIcon('chevronRight', 20)}
+        </button>
+
+        <button
+          class="calendar-add-choice"
+          onclick="closeCalendarAddMenu(); openInstallmentPlanForm()"
+        >
+          <div>
+            <div class="calendar-add-choice-title">Add payment plan</div>
+            <div class="calendar-add-choice-text">
+              Add Klarna, Afterpay, Affirm, or another plan.
+            </div>
+          </div>
+
+          ${svgIcon('chevronRight', 20)}
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => {
+    document.getElementById('calendarAddMenuOverlay')?.classList.add('show');
+    document.getElementById('calendarAddMenuSheet')?.classList.add('show');
+  });
+};
+
+window.closeCalendarAddMenu = function() {
+  document.getElementById('calendarAddMenuOverlay')?.classList.remove('show');
+  document.getElementById('calendarAddMenuSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('calendarAddMenuContainer')?.remove();
+  }, 300);
+};
+
+function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
   const bill = billId ? Store.getBill(billId) : null;
 
   const today = new Date().toISOString().split('T')[0];
-  const dueDate = bill ? bill.dueDate.split('T')[0] : today;
+  const dueDate = bill
+  ? bill.dueDate.split('T')[0]
+  : (selectedDate || today);
   const selectedReminders = bill ? (bill.reminderOffsets || [7, 1]) : [7, 1];
 
   const sheetHtml = `

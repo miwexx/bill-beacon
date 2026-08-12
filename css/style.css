@@ -1732,3 +1732,32 @@ a { color: var(--accent); text-decoration: none; }
 .show-more-bills-button:active {
   background: var(--surface-2);
 }
+
+.calendar-add-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: var(--space-4);
+  color: var(--text);
+  text-align: left;
+}
+
+.calendar-add-choice + .calendar-add-choice {
+  border-top: 1px solid var(--separator);
+}
+
+.calendar-add-choice:active {
+  background: var(--surface-2);
+}
+
+.calendar-add-choice-title {
+  font-size: var(--text-base);
+  font-weight: 700;
+}
+
+.calendar-add-choice-text {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
