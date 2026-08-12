@@ -1593,44 +1593,37 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--text-muted);
 }
 
-.calendar-summary {
+.calendar-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-2);
-}
-
-.calendar-summary-item {
-  min-width: 0;
-  padding: var(--space-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--card);
-}
-
-.calendar-summary-label {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 1.2;
-}
-
-.calendar-summary-value {
-  margin-top: var(--space-1);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
-  font-size: var(--text-sm);
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.calendar-summary-meta {
-  margin-top: var(--space-1);
+.calendar-weekday {
+  min-width: 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
   color: var(--text-muted);
-  font-size: var(--text-xs);
+  padding: 4px 0;
 }
 
 .calendar-day {
-  position: relative;
-  min-height: 58px;
+  min-width: 0;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  overflow: hidden;
+}
+
+.calendar-day-empty {
+  background: transparent;
+  border: none;
 }
 
 .calendar-day-clickable {
@@ -1639,26 +1632,37 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 6px 2px;
+  padding: 4px;
+}
+
+.calendar-day-clickable span {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.calendar-dot-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 8px;
+  width: 100%;
+}
+
+.calendar-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  flex: 0 0 6px;
+}
+
+.calendar-day.today {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
 .calendar-day-overdue:not(.today) {
-  background: color-mix(in srgb, var(--overdue) 10%, transparent);
-}
-
-.calendar-pay-button {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  align-items: center;
-  justify-content: center;
-  margin-left: var(--space-2);
-  border-radius: var(--radius-full);
-  background: var(--paid);
-  color: white;
-}
-
-.calendar-pay-button:active {
-  transform: scale(0.94);
+  background: color-mix(in srgb, var(--overdue) 10%, var(--card));
 }
