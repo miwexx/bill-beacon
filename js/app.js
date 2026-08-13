@@ -1766,6 +1766,12 @@ function openBillForm(billId = null, selectedDate = null) {
   const dueDate = bill
   ? bill.dueDate.split('T')[0]
   : (selectedDate || today);
+
+  const defaultPayCycle = bill?.payCycle || (
+  new Date(`${dueDate}T12:00:00`).getDate() <= 15
+    ? 'first'
+    : 'second'
+);
   const selectedReminders = bill ? (bill.reminderOffsets || [7, 1]) : [7, 1];
 
   const sheetHtml = `
@@ -1811,6 +1817,19 @@ function openBillForm(billId = null, selectedDate = null) {
               </div>
               <div class="form-row">
                 <div class="form-label">Repeats</div>
+                <div class="form-row">
+  <div class="form-label">Pay Cycle</div>
+
+  <select class="form-select" id="billPayCycle">
+    <option value="first" ${defaultPayCycle === 'first' ? 'selected' : ''}>
+      1st–15th
+    </option>
+
+    <option value="second" ${defaultPayCycle === 'second' ? 'selected' : ''}>
+      16th–end
+    </option>
+  </select>
+</div>
                 <select class="form-select" id="billRecurrence">
                   ${RECURRENCE.map(r => `<option value="${r}" ${bill && bill.recurrence === r ? 'selected' : ''}>${r}</option>`).join('')}
                 </select>
@@ -1936,6 +1955,7 @@ function saveBill() {
     dueDate: new Date(document.getElementById('billDueDate').value).toISOString(),
     category: document.getElementById('billCategory').value,
     recurrence: document.getElementById('billRecurrence').value,
+    payCycle: document.getElementById('billPayCycle').value,
     paymentMethod: document.getElementById('billPaymentMethod').value,
     paymentUrl: document.getElementById('billPaymentUrl').value.trim(),
     autopay: document.getElementById('billAutopay').checked,
