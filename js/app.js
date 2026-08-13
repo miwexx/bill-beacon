@@ -146,19 +146,12 @@ function getCategory(id) {
   return CATEGORIES.find(c => c.id === id) || CATEGORIES.find(c => c.id === 'other');
 }
 function getPayCycleLabel(bill) {
-  if (bill.payCycle === 'first') {
-    return 'Early Cycle';
-  }
-
-  if (bill.payCycle === 'second') {
-    return 'Late Cycle';
-  }
+  if (bill.payCycle === 'first') return 'Early cycle';
+  if (bill.payCycle === 'second') return 'Late cycle';
 
   const dueDay = new Date(bill.dueDate).getDate();
-
-  return dueDay <= 15 ? 'Early Cycle' : 'Late Cycle';
+  return dueDay <= 15 ? 'Early cycle' : 'Late cycle';
 }
-
 function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
   return num.toLocaleString(undefined, { style: 'currency', currency: Store.getSettings().currency || 'USD' });
@@ -732,6 +725,23 @@ function renderBills() {
 }
   if (filter === 'paid') filtered = filtered.filter(b => isPaidThisMonth(b));
   if (filter === 'overdue') filtered = filtered.filter(b => getBillStatus(b) === 'overdue');
+  if (filter === 'early') {
+  filtered = filtered.filter(bill => {
+    if (bill.payCycle === 'first') return true;
+    if (bill.payCycle === 'second') return false;
+
+    return new Date(bill.dueDate).getDate() <= 15;
+  });
+}
+
+if (filter === 'late') {
+  filtered = filtered.filter(bill => {
+    if (bill.payCycle === 'second') return true;
+    if (bill.payCycle === 'first') return false;
+
+    return new Date(bill.dueDate).getDate() > 15;
+  });
+}
   if (search) {
     filtered = filtered.filter(b =>
       b.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -772,11 +782,19 @@ function renderBills() {
           oninput="debouncedSearch(this.value)">
       </div>
       <div class="filter-bar">
-        ${['all','unpaid','paid','overdue'].map(f => `
-          <button class="filter-pill ${filter === f ? 'active' : ''}" onclick="setFilter('${f}')">
-            ${f === 'paid' ? 'Paid' : f.charAt(0).toUpperCase() + f.slice(1)}
-          </button>
-        `).join('')}
+       ${[
+  { id: 'all', label: 'All' },
+  { id: 'unpaid', label: 'Due' },
+  { id: 'early', label: 'Early cycle' },
+  { id: 'late', label: 'Late cycle' },
+  { id: 'paid', label: 'Paid' },
+  { id: 'overdue', label: 'Overdue' },
+].map(item => `
+  <button class="filter-pill ${filter === item.id ? 'active' : ''}"
+    onclick="setFilter('${item.id}')">
+    ${item.label}
+  </button>
+`).join('')}
       </div>
       ${filtered.length === 0 ? `
         <div class="empty-state">
