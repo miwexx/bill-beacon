@@ -1811,3 +1811,12 @@ a { color: var(--accent); text-decoration: none; }
 .cycle-filter-bar {
   margin-bottom: var(--space-2);
 }
+
+/* Center the Recurring filter pills */
+.filter-bar {
+  justify-content: center;
+}
+
+.cycle-filter-bar {
+  margin-bottom: var(--space-2);
+}
