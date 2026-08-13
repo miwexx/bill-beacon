@@ -706,16 +706,16 @@ const next7DaysTotal = next7DaysBills.reduce(
 }
 function renderBills() {
   const bills = Store.getBills();
-  const filter = routeParams.filter || 'all';
+  const cycleFilter = routeParams.cycle || 'all';
+  const statusFilter = routeParams.status || routeParams.filter || 'all';
   const search = routeParams.search || '';
 
   let filtered = bills;
-  if (filter === 'unpaid') {
+  if (statusFilter === 'unpaid') {
   const now = new Date();
 
-  filtered = filtered.filter((bill) => {
+  filtered = filtered.filter(bill => {
     const dueDate = new Date(bill.dueDate);
-
     const isDueThisMonth =
       dueDate.getMonth() === now.getMonth() &&
       dueDate.getFullYear() === now.getFullYear();
@@ -723,14 +723,30 @@ function renderBills() {
     return isDueThisMonth && getBillStatus(bill) !== 'paid';
   });
 }
-  if (filter === 'paid') filtered = filtered.filter(b => isPaidThisMonth(b));
-  if (filter === 'overdue') filtered = filtered.filter(b => getBillStatus(b) === 'overdue');
-  if (filter === 'early') {
+
+if (statusFilter === 'paid') {
+  filtered = filtered.filter(bill => isPaidThisMonth(bill));
+}
+
+if (statusFilter === 'overdue') {
+  filtered = filtered.filter(bill => getBillStatus(bill) === 'overdue');
+}
+
+if (cycleFilter === 'early') {
   filtered = filtered.filter(bill => {
     if (bill.payCycle === 'first') return true;
     if (bill.payCycle === 'second') return false;
 
     return new Date(bill.dueDate).getDate() <= 15;
+  });
+}
+
+if (cycleFilter === 'late') {
+  filtered = filtered.filter(bill => {
+    if (bill.payCycle === 'second') return true;
+    if (bill.payCycle === 'first') return false;
+
+    return new Date(bill.dueDate).getDate() > 15;
   });
 }
 
@@ -781,21 +797,32 @@ if (filter === 'late') {
         <input class="search-input" type="search" placeholder="Search bills" value="${escapeHtml(search)}"
           oninput="debouncedSearch(this.value)">
       </div>
-      <div class="filter-bar">
-       ${[
-  { id: 'all', label: 'All' },
-  { id: 'unpaid', label: 'Due' },
-  { id: 'early', label: 'Early cycle' },
-  { id: 'late', label: 'Late cycle' },
-  { id: 'paid', label: 'Paid' },
-  { id: 'overdue', label: 'Overdue' },
-].map(item => `
-  <button class="filter-pill ${filter === item.id ? 'active' : ''}"
-    onclick="setFilter('${item.id}')">
-    ${item.label}
-  </button>
-`).join('')}
-      </div>
+     <div class="filter-bar cycle-filter-bar">
+  ${[
+    { id: 'all', label: 'All cycles' },
+    { id: 'early', label: 'Early' },
+    { id: 'late', label: 'Late' },
+  ].map(item => `
+    <button class="filter-pill ${cycleFilter === item.id ? 'active' : ''}"
+      onclick="setCycleFilter('${item.id}')">
+      ${item.label}
+    </button>
+  `).join('')}
+</div>
+
+<div class="filter-bar">
+  ${[
+    { id: 'all', label: 'All' },
+    { id: 'unpaid', label: 'Due' },
+    { id: 'paid', label: 'Paid' },
+    { id: 'overdue', label: 'Overdue' },
+  ].map(item => `
+    <button class="filter-pill ${statusFilter === item.id ? 'active' : ''}"
+      onclick="setStatusFilter('${item.id}')">
+      ${item.label}
+    </button>
+  `).join('')}
+</div>
       ${filtered.length === 0 ? `
         <div class="empty-state">
           <div class="empty-state-icon">${svgIcon('tray', 48)}</div>
@@ -1329,6 +1356,13 @@ function openDashboardStatusSheet(status) {
 function renderInsights() {
   const bills = Store.getBills();
   const payments = Store.getPayments();
+  const recentPayments = payments
+  .map(payment => ({
+    ...payment,
+    bill: Store.getBill(payment.billId),
+  }))
+  .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
+  .slice(0, 5);
   const now = new Date();
 
   // This month payments
@@ -1362,6 +1396,53 @@ function renderInsights() {
       amount: monthPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0),
     });
   }
+
+  <div>
+  <div class="dashboard-section-title-row">
+    <div class="section-header">Payment History</div>
+
+    <button class="dashboard-see-all" onclick="navigate('history')">
+      View all
+    </button>
+  </div>
+
+  ${recentPayments.length ? `
+    <div class="card">
+      ${recentPayments.map(payment => `
+        <button
+          class="recent-payment-row"
+          onclick="navigate('detail', { id: '${payment.billId}' })"
+          aria-label="View ${escapeHtml(
+            payment.bill ? payment.bill.name : 'payment'
+          )}"
+        >
+          <div class="recent-payment-icon">
+            ${svgIcon('checkCircle', 18)}
+          </div>
+
+          <div class="bill-info">
+            <div class="bill-name">
+              ${payment.bill ? escapeHtml(payment.bill.name) : 'Archived bill'}
+            </div>
+
+            <div class="bill-meta">
+              Paid ${formatDate(payment.paidDate, 'full')}
+            </div>
+          </div>
+
+          <div class="recent-payment-amount">
+            ${formatCurrency(payment.amount)}
+          </div>
+        </button>
+      `).join('')}
+    </div>
+  ` : `
+    <div class="dashboard-empty-card">
+      ${svgIcon('tray', 22)}
+      <span>No payments recorded yet.</span>
+    </div>
+  `}
+</div>
   const maxMonthly = Math.max(...monthlyData.map(m => m.amount), 1);
 
   return `
@@ -2068,8 +2149,14 @@ window.toggleMonthBills = function() {
   button.classList.toggle('is-open', isOpen);
 };
 
-function setFilter(filter) {
-  routeParams.filter = filter;
+function setCycleFilter(cycle) {
+  routeParams.cycle = cycle;
+  render();
+}
+
+function setStatusFilter(status) {
+  routeParams.status = status;
+  delete routeParams.filter;
   render();
 }
 

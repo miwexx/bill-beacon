@@ -1807,3 +1807,7 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--paid-bg);
   color: var(--paid);
 }
+
+.cycle-filter-bar {
+  margin-bottom: var(--space-2);
+}
