@@ -1820,3 +1820,28 @@ a { color: var(--accent); text-decoration: none; }
 .cycle-filter-bar {
   margin-bottom: var(--space-2);
 }
+
+/* Full-width Recurring filter rows */
+.filter-bar {
+  display: grid;
+  width: calc(100% - (var(--space-4) * 2));
+  margin-inline: auto;
+  gap: var(--space-2);
+  justify-content: stretch;
+}
+
+.cycle-filter-bar {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: var(--space-2);
+}
+
+.filter-bar:not(.cycle-filter-bar) {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.filter-bar .filter-pill {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+  white-space: nowrap;
+}
