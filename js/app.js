@@ -147,11 +147,11 @@ function getCategory(id) {
 }
 function getPayCycleLabel(bill) {
   if (bill.payCycle === 'first') {
-    return '1st–15th';
+    return 'Early Cycle';
   }
 
   if (bill.payCycle === 'second') {
-    return '16th–end';
+    return 'Late Cycle';
   }
 
   const dueDay = new Date(bill.dueDate).getDate();
@@ -1874,11 +1874,11 @@ function openBillForm(billId = null, selectedDate = null) {
 
   <select class="form-select" id="billPayCycle">
     <option value="first" ${defaultPayCycle === 'first' ? 'selected' : ''}>
-      1st–15th
+      Early Cycle
     </option>
 
     <option value="second" ${defaultPayCycle === 'second' ? 'selected' : ''}>
-      16th–end
+      Late Cycle
     </option>
   </select>
 </div>
