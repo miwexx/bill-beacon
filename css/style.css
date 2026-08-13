@@ -1794,3 +1794,16 @@ a { color: var(--accent); text-decoration: none; }
   line-height: 1.2;
   white-space: nowrap;
 }
+
+/* Pay Cycle colors */
+.pay-cycle-first {
+  border-color: color-mix(in srgb, var(--upcoming) 38%, var(--border));
+  background: var(--upcoming-bg);
+  color: var(--upcoming);
+}
+
+.pay-cycle-second {
+  border-color: color-mix(in srgb, var(--paid) 38%, var(--border));
+  background: var(--paid-bg);
+  color: var(--paid);
+}

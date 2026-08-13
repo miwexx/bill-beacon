@@ -1634,9 +1634,14 @@ function billRow(bill, clickable = false) {
             ${meta}
           </div>
 
-          <span class="pay-cycle-pill">
-            ${payCycleLabel}
-          </span>
+          <span class="pay-cycle-pill ${
+  bill.payCycle === 'first' ||
+  (!bill.payCycle && new Date(bill.dueDate).getDate() <= 15)
+    ? 'pay-cycle-first'
+    : 'pay-cycle-second'
+}">
+  ${payCycleLabel}
+</span>
         </div>
       </div>
 
