@@ -1765,7 +1765,7 @@ a { color: var(--accent); text-decoration: none; }
   flex-shrink: 0;
 }
 
-/* Bill row: Pay Cycle pill */
+/* Recurring bills: Pay Cycle pill */
 .bill-meta-row {
   display: flex;
   align-items: center;
