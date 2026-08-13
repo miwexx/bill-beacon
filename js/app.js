@@ -750,14 +750,6 @@ if (cycleFilter === 'late') {
   });
 }
 
-if (filter === 'late') {
-  filtered = filtered.filter(bill => {
-    if (bill.payCycle === 'second') return true;
-    if (bill.payCycle === 'first') return false;
-
-    return new Date(bill.dueDate).getDate() > 15;
-  });
-}
   if (search) {
     filtered = filtered.filter(b =>
       b.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -1397,16 +1389,7 @@ function renderInsights() {
     });
   }
 
-  <div>
-  <div class="dashboard-section-title-row">
-    <div class="section-header">Payment History</div>
-
-    <button class="dashboard-see-all" onclick="navigate('history')">
-      View all
-    </button>
-  </div>
-
-  ${recentPayments.length ? `
+    ${recentPayments.length ? `
     <div class="card">
       ${recentPayments.map(payment => `
         <button
