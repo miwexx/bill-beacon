@@ -145,7 +145,20 @@ function uid() {
 function getCategory(id) {
   return CATEGORIES.find(c => c.id === id) || CATEGORIES.find(c => c.id === 'other');
 }
+function getPayCycleLabel(bill) {
+  if (bill.payCycle === 'first') {
+    return '1st–15th';
+  }
 
+  if (bill.payCycle === 'second') {
+    return '16th–end';
+  }
+
+  const dueDay = new Date(bill.dueDate).getDate();
+
+  return dueDay <= 15 ? '1st–15th' : '16th–end';
+}
+\
 function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
   return num.toLocaleString(undefined, { style: 'currency', currency: Store.getSettings().currency || 'USD' });
@@ -1517,6 +1530,7 @@ function renderBillDetail() {
           <div class="section-header">Details</div>
           <div class="card">
             ${detailRow('Due Date', formatDate(bill.dueDate, 'full'))}
+            ${detailRow('Pay Cycle', getPayCycleLabel(bill))}
             ${detailRow('Category', cat.label)}
             ${detailRow('Repeats', bill.recurrence)}
             ${bill.paymentMethod ? detailRow('Payment Method', bill.paymentMethod) : ''}
@@ -1585,7 +1599,7 @@ function billRow(bill, clickable = false) {
   const statusColor = status === 'paid' ? 'paid' : status === 'overdue' ? 'overdue' : 'upcoming';
 
   const meta = `${formatDate(bill.dueDate)} · ${bill.recurrence === 'None' ? 'One-time' : bill.recurrence} · ${relativeDue(bill.dueDate)}`;
-
+  const payCycleLabel = getPayCycleLabel(bill);
   return `
     <div class="bill-row" ${clickable ? `onclick="navigate('detail', {id: '${bill.id}'})"` : ''}>
       <div class="bill-icon" style="background:var(--${cat.color});color:white">
@@ -1593,7 +1607,13 @@ function billRow(bill, clickable = false) {
       </div>
       <div class="bill-info">
         <div class="bill-name">${escapeHtml(bill.name)}</div>
-        <div class="bill-meta text-${statusColor}">${meta}</div>
+        <div class="bill-meta-row">
+  <div class="bill-meta text-${statusColor}">${meta}</div>
+
+  <span class="pay-cycle-pill">
+    ${payCycleLabel}
+  </span>
+</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
         <div class="bill-amount">${formatCurrency(bill.amount)}</div>

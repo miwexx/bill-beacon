@@ -1764,3 +1764,33 @@ a { color: var(--accent); text-decoration: none; }
   height: 18px;
   flex-shrink: 0;
 }
+
+/* Bill row: Pay Cycle pill */
+.bill-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.bill-meta-row .bill-meta {
+  min-width: 0;
+  margin-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pay-cycle-pill {
+  flex-shrink: 0;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-full);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
