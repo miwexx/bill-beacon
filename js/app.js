@@ -156,7 +156,7 @@ function getPayCycleLabel(bill) {
 
   const dueDay = new Date(bill.dueDate).getDate();
 
-  return dueDay <= 15 ? '1st–15th' : '16th–end';
+  return dueDay <= 15 ? 'Early Cycle' : 'Late Cycle';
 }
 
 function formatCurrency(amount) {
