@@ -1599,7 +1599,7 @@ function billRow(bill, clickable = false) {
   const statusColor = status === 'paid' ? 'paid' : status === 'overdue' ? 'overdue' : 'upcoming';
 
   const meta = `${formatDate(bill.dueDate)} · ${bill.recurrence === 'None' ? 'One-time' : bill.recurrence} · ${relativeDue(bill.dueDate)}`;
-  const payCycleLabel = getPayCycleLabel(bill);
+  
   return `
     <div class="bill-row" ${clickable ? `onclick="navigate('detail', {id: '${bill.id}'})"` : ''}>
       <div class="bill-icon" style="background:var(--${cat.color});color:white">
@@ -1607,13 +1607,7 @@ function billRow(bill, clickable = false) {
       </div>
       <div class="bill-info">
         <div class="bill-name">${escapeHtml(bill.name)}</div>
-        <div class="bill-meta-row">
-  <div class="bill-meta text-${statusColor}">${meta}</div>
-
-  <span class="pay-cycle-pill">
-    ${payCycleLabel}
-  </span>
-</div>
+       <div class="bill-meta text-${statusColor}">${meta}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
         <div class="bill-amount">${formatCurrency(bill.amount)}</div>
