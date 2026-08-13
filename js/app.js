@@ -1389,44 +1389,7 @@ function renderInsights() {
     });
   }
 
-    ${recentPayments.length ? `
-    <div class="card">
-      ${recentPayments.map(payment => `
-        <button
-          class="recent-payment-row"
-          onclick="navigate('detail', { id: '${payment.billId}' })"
-          aria-label="View ${escapeHtml(
-            payment.bill ? payment.bill.name : 'payment'
-          )}"
-        >
-          <div class="recent-payment-icon">
-            ${svgIcon('checkCircle', 18)}
-          </div>
-
-          <div class="bill-info">
-            <div class="bill-name">
-              ${payment.bill ? escapeHtml(payment.bill.name) : 'Archived bill'}
-            </div>
-
-            <div class="bill-meta">
-              Paid ${formatDate(payment.paidDate, 'full')}
-            </div>
-          </div>
-
-          <div class="recent-payment-amount">
-            ${formatCurrency(payment.amount)}
-          </div>
-        </button>
-      `).join('')}
-    </div>
-  ` : `
-    <div class="dashboard-empty-card">
-      ${svgIcon('tray', 22)}
-      <span>No payments recorded yet.</span>
-    </div>
-  `}
-</div>
-  const maxMonthly = Math.max(...monthlyData.map(m => m.amount), 1);
+   const maxMonthly = Math.max(...monthlyData.map(m => m.amount), 1);
 
   return `
     <div class="nav-bar">
