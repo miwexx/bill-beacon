@@ -158,7 +158,7 @@ function getPayCycleLabel(bill) {
 
   return dueDay <= 15 ? '1st–15th' : '16th–end';
 }
-\
+
 function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
   return num.toLocaleString(undefined, { style: 'currency', currency: Store.getSettings().currency || 'USD' });
