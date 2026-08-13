@@ -792,8 +792,8 @@ if (cycleFilter === 'late') {
      <div class="filter-bar cycle-filter-bar">
   ${[
     { id: 'all', label: 'All Cycles' },
-    { id: 'early', label: 'Early' },
-    { id: 'late', label: 'Late' },
+    { id: 'early', label: 'Early Cycle' },
+    { id: 'late', label: 'Late Cycle' },
   ].map(item => `
     <button class="filter-pill ${cycleFilter === item.id ? 'active' : ''}"
       onclick="setCycleFilter('${item.id}')">
