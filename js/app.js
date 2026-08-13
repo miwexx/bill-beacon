@@ -791,7 +791,7 @@ if (cycleFilter === 'late') {
       </div>
      <div class="filter-bar cycle-filter-bar">
   ${[
-    { id: 'all', label: 'All cycles' },
+    { id: 'all', label: 'All Cycles' },
     { id: 'early', label: 'Early' },
     { id: 'late', label: 'Late' },
   ].map(item => `
@@ -3398,28 +3398,6 @@ function renderPaymentHistory() {
   `;
 }
 
-function addHistoryButton(force = false) {
-  if (
-    (!force && currentRoute !== "bills") ||
-    document.getElementById("paymentHistoryButton")
-  ) {
-    return;
-  }
-  const filterBar = document.querySelector(".filter-bar");
-
-  if (!filterBar) {
-    return;
-  }
-
-  const button = document.createElement("button");
-  button.id = "paymentHistoryButton";
-  button.className = "filter-pill";
-  button.textContent = "History";
-  button.onclick = () => navigate("history");
-
-  filterBar.appendChild(button);
-}
-
 const renderWithArchiveHistory = render;
 
 render = function () {
@@ -3434,7 +3412,6 @@ render = function () {
   }
 
   renderWithArchiveHistory();
-  addHistoryButton();
 };
 
 /* ============================================
