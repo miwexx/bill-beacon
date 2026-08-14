@@ -1340,8 +1340,8 @@ window.openCalendarDay = function(dateString) {
                         aria-label="View ${escapeHtml(bill.name)}"
                       >
                         <div class="bill-icon" style="background:var(--${category.color});color:white">
-                          ${svgIcon(category.icon, 18)}
-                        </div>
+  ${billVisual(bill, 18)}
+</div>
 
                         <div class="bill-info">
                           <div class="bill-name">${escapeHtml(bill.name)}</div>
