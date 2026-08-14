@@ -154,45 +154,7 @@ deleteIncomeSource(id) {
 
   this.saveIncomeSources(sources);
 },
-  getPaychecks() {
-  try {
-    return JSON.parse(localStorage.getItem('paychecks')) || [];
-  } catch {
-    return [];
-  }
-},
-
-savePaychecks(paychecks) {
-  localStorage.setItem('paychecks', JSON.stringify(paychecks));
-},
-
-addPaycheck(paycheck) {
-  const paychecks = this.getPaychecks();
-  paychecks.push(paycheck);
-  this.savePaychecks(paychecks);
-},
-
-updatePaycheck(id, updates) {
-  const paychecks = this.getPaychecks();
-  const index = paychecks.findIndex(paycheck => paycheck.id === id);
-
-  if (index < 0) return;
-
-  paychecks[index] = {
-    ...paychecks[index],
-    ...updates,
-    updatedAt: new Date().toISOString(),
-  };
-
-  this.savePaychecks(paychecks);
-},
-
-deletePaycheck(id) {
-  const paychecks = this.getPaychecks()
-    .filter(paycheck => paycheck.id !== id);
-
-  this.savePaychecks(paychecks);
-},
+  
   addPayment(payment) {
     const payments = this.getPayments();
     payments.push(payment);
