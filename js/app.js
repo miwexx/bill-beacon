@@ -1673,9 +1673,85 @@ function renderSettings() {
     onclick="openIncomeSourceForm()">
     ${svgIcon('plus', 18)}
     Add Income Source
-  </button>
+   </button>
 </div>
-    
+
+        <div class="settings-section">
+          <div class="section-header">Data</div>
+
+          <div class="card">
+            <div class="form-row">
+              <div class="form-label">${svgIcon('internaldrive', 18)}</div>
+              <div style="flex:1;color:var(--text-muted)">
+                ${billCount} bill${billCount === 1 ? '' : 's'} stored on device
+              </div>
+            </div>
+
+            <div class="form-row" onclick="exportCSV()" style="cursor:pointer">
+              <div class="form-label">${svgIcon('export', 18)}</div>
+              <div style="flex:1;color:var(--accent)">Export Bills CSV</div>
+            </div>
+          </div>
+
+          <div class="settings-footer">
+            All data is stored on this device only. No cloud, no sync, no account.
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">About</div>
+
+          <div class="card">
+            <div class="about-row">
+              <span class="about-label">App Name</span>
+              <span class="about-value">Bill Beacon</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">Version</span>
+              <span class="about-value">1.0.0</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">Storage</span>
+              <span class="about-value">Local Offline</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">Cost</span>
+              <span class="about-value text-paid">Free</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">Ads</span>
+              <span class="about-value">None</span>
+            </div>
+            <div class="about-row">
+              <span class="about-label">Account</span>
+              <span class="about-value">Not Required</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">Install on Home Screen</div>
+
+          <div class="card card-pad">
+            <p style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5">
+              To install this app on your iPhone home screen:
+            </p>
+
+            <ol style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.7;padding-left:var(--space-5);margin-top:var(--space-2)">
+              <li>Tap the <strong>Share</strong> button in Safari</li>
+              <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+              <li>Tap <strong>Add</strong></li>
+            </ol>
+
+            <p style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--space-3)">
+              The app will work offline after installation. No internet needed.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
 
 function renderBillDetail() {
   const bill = Store.getBill(routeParams.id);
