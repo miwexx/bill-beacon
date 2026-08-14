@@ -379,6 +379,10 @@ function getNotificationCount() {
 function renderToday() {
   const bills = Store.getBills();
   const payments = Store.getPayments();
+  const totalMonthlyIncome = getTotalMonthlyIncomeEstimate();
+const monthlyIncomeSources = Store.getIncomeSources().filter(
+  source => source.frequency !== 'Manual / irregular'
+);
   const now = new Date();
 
   const currentMonthLabel = formatDate(now.toISOString(), 'monthYear');
@@ -1518,15 +1522,30 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
         <div class="stat-row">
-          <div class="stat-card">
-            <div class="stat-value text-paid">${formatCurrency(totalPaid)}</div>
-            <div class="stat-label">Paid</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-value text-upcoming">${formatCurrency(totalDue)}</div>
-            <div class="stat-label">Still Due</div>
-          </div>
-        </div>
+  <div class="stat-card">
+    <div class="stat-value text-paid">
+      ${formatCurrency(totalMonthlyIncome)}
+    </div>
+    <div class="stat-label">Est. Monthly Income</div>
+  </div>
+
+  <div class="stat-card">
+    <div class="stat-value text-upcoming">
+      ${formatCurrency(totalDue)}
+    </div>
+    <div class="stat-label">Still Due</div>
+  </div>
+</div>
+
+<div class="settings-footer" style="padding-top:0">
+  ${
+    monthlyIncomeSources.length
+      ? `Based on ${monthlyIncomeSources.length} recurring income source${
+          monthlyIncomeSources.length === 1 ? '' : 's'
+        }.`
+      : 'Add an income source in Settings to estimate monthly income.'
+  }
+</div>
         <div>
   <div class="dashboard-section-title-row">
     <div class="section-header">Spending Limit</div>
