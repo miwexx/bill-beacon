@@ -1720,8 +1720,7 @@ function renderSettings() {
     class="btn-secondary"
     style="width: 100%; margin-top: var(--space-3);"
     onclick="openIncomeSourceForm()">
-    ${svgIcon('plus', 18)}
-    Add Income Source
+       Add Income Source
    </button>
 </div>
 
