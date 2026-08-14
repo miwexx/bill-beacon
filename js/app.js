@@ -228,6 +228,35 @@ function getTotalMonthlyIncomeEstimate() {
     0
   );
 }
+function getIncomeForPayCycle(source, cycle) {
+  const amount = Number(source.expectedAmount) || 0;
+
+  switch (source.frequency) {
+    case 'Weekly':
+      return amount * (52 / 24);
+
+    case 'Biweekly':
+      return amount * (26 / 24);
+
+    case 'Twice monthly':
+      return amount;
+
+    case 'Monthly':
+      return cycle === 'first' ? amount : 0;
+
+    case 'Manual / irregular':
+    default:
+      return 0;
+  }
+}
+
+function getTotalIncomeForPayCycle(cycle) {
+  return Store.getIncomeSources().reduce(
+    (total, source) => total + getIncomeForPayCycle(source, cycle),
+    0
+  );
+}
+
 function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
   return num.toLocaleString(undefined, { style: 'currency', currency: Store.getSettings().currency || 'USD' });
@@ -862,7 +891,7 @@ if (cycleFilter === 'late') {
     </div>
     <div class="main-content fade-in">
       <div class="search-bar">
-        <input class="search-input" type="search" placeholder="Search bills" value="${escapeHtml(search)}"
+        <input class="search-input" type="search" placeholder="Search Bills" value="${escapeHtml(search)}"
           oninput="debouncedSearch(this.value)">
       </div>
      <div class="filter-bar cycle-filter-bar">
@@ -1471,24 +1500,49 @@ function renderInsights() {
   .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
   .slice(0, 5);
   const now = new Date();
-  const currentMonthBills = bills.filter(bill =>
-  isSameMonth(bill.dueDate, now)
-);
+  const today = new Date();
+const currentCycle = today.getDate() <= 15 ? 'first' : 'second';
 
-const scheduledThisMonth = currentMonthBills.reduce(
+const currentCycleLabel = currentCycle === 'first'
+  ? '1st–15th'
+  : '16th–end of month';
+
+const cycleBills = bills.filter(bill => {
+  const dueDate = new Date(bill.dueDate);
+
+  if (
+    dueDate.getMonth() !== today.getMonth() ||
+    dueDate.getFullYear() !== today.getFullYear()
+  ) {
+    return false;
+  }
+
+  const billCycle = bill.payCycle ||
+    (dueDate.getDate() <= 15 ? 'first' : 'second');
+
+  return billCycle === currentCycle;
+});
+
+const scheduledThisCycle = cycleBills.reduce(
   (total, bill) => total + (parseFloat(bill.amount) || 0),
   0
 );
 
-const estimatedLeftAfterBills =
-  totalMonthlyIncome - scheduledThisMonth;
+const estimatedIncomeThisCycle =
+  getTotalIncomeForPayCycle(currentCycle);
 
-const incomeCoveragePercent = totalMonthlyIncome > 0
-  ? Math.min((scheduledThisMonth / totalMonthlyIncome) * 100, 100)
+const estimatedLeftThisCycle =
+  estimatedIncomeThisCycle - scheduledThisCycle;
+
+const cycleCoveragePercent = estimatedIncomeThisCycle > 0
+  ? Math.min(
+      (scheduledThisCycle / estimatedIncomeThisCycle) * 100,
+      100
+    )
   : 0;
 
-const incomeCoversBills =
-  totalMonthlyIncome >= scheduledThisMonth;
+const incomeCoversCycleBills =
+  estimatedIncomeThisCycle >= scheduledThisCycle;
   // This month payments
   const monthPayments = payments.filter(p => isSameMonth(p.paidDate));
   const totalPaid = monthPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
@@ -1555,7 +1609,7 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
   </div>
 </div>
 
-<div class="settings-footer" style="padding-top:0">
+ <div class="settings-footer" style="padding-top:0">
   ${
     monthlyIncomeSources.length
       ? `Based on ${monthlyIncomeSources.length} recurring income source${
@@ -1563,20 +1617,23 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
         }.`
       : 'Add an income source in Settings to estimate monthly income.'
   }
-</div>
+</div> 
         <div>
-        <div>
-  <div class="section-header">Monthly Plan</div>
+      
+<div>
+  <div class="section-header">
+    Bill Schedule · ${currentCycleLabel}
+  </div>
 
   <div class="card card-pad">
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3)">
       <div>
         <div style="font-size:var(--text-sm);color:var(--text-muted)">
-          Bills scheduled this month
+          Bills in this cycle
         </div>
 
         <div style="font-size:var(--text-xl);font-weight:800;margin-top:4px">
-          ${formatCurrency(scheduledThisMonth)}
+          ${formatCurrency(scheduledThisCycle)}
         </div>
       </div>
 
@@ -1589,9 +1646,9 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
           font-size:var(--text-xl);
           font-weight:800;
           margin-top:4px;
-          color:${incomeCoversBills ? 'var(--paid)' : 'var(--overdue)'}
+          color:${incomeCoversCycleBills ? 'var(--paid)' : 'var(--overdue)'}
         ">
-          ${formatCurrency(estimatedLeftAfterBills)}
+          ${formatCurrency(estimatedLeftThisCycle)}
         </div>
       </div>
     </div>
@@ -1600,8 +1657,8 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
       <div
         class="dashboard-progress-fill"
         style="
-          width:${incomeCoveragePercent}%;
-          background:${incomeCoversBills ? 'var(--accent)' : 'var(--overdue)'}
+          width:${cycleCoveragePercent}%;
+          background:${incomeCoversCycleBills ? 'var(--accent)' : 'var(--overdue)'}
         "
       ></div>
     </div>
@@ -1614,18 +1671,18 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
       color:var(--text-muted)
     ">
       <span>
-        ${incomeCoversBills
-          ? 'Income covers scheduled bills'
-          : 'Scheduled bills exceed estimated income'}
+        ${incomeCoversCycleBills
+          ? 'Estimated income covers cycle bills'
+          : 'Cycle bills exceed estimated income'}
       </span>
 
-      <span>${incomeCoveragePercent.toFixed(0)}% of income</span>
+      <span>
+        ${cycleBills.length}
+        ${cycleBills.length === 1 ? 'bill' : 'bills'}
+      </span>
     </div>
   </div>
 </div>
-  <div class="dashboard-section-title-row">
-    <div class="section-header">Spending Limit</div>
-
     <button
       class="dashboard-see-all"
       onclick="editMonthlySpendingLimit()"
