@@ -199,6 +199,35 @@ function getPayCycleLabel(bill) {
   const dueDay = new Date(bill.dueDate).getDate();
   return dueDay <= 15 ? 'Early cycle' : 'Late cycle';
 }
+
+function getMonthlyIncomeEstimate(source) {
+  const amount = Number(source.expectedAmount) || 0;
+
+  switch (source.frequency) {
+    case 'Weekly':
+      return amount * 52 / 12;
+
+    case 'Biweekly':
+      return amount * 26 / 12;
+
+    case 'Twice monthly':
+      return amount * 2;
+
+    case 'Monthly':
+      return amount;
+
+    case 'Manual / irregular':
+    default:
+      return 0;
+  }
+}
+
+function getTotalMonthlyIncomeEstimate() {
+  return Store.getIncomeSources().reduce(
+    (total, source) => total + getMonthlyIncomeEstimate(source),
+    0
+  );
+}
 function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
   return num.toLocaleString(undefined, { style: 'currency', currency: Store.getSettings().currency || 'USD' });
