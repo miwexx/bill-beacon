@@ -1344,6 +1344,40 @@ function openDashboardStatusSheet(status) {
     document.getElementById('dashboardStatusSheet')?.classList.add('show');
   });
 }
+function getMonthlySpendingLimit() {
+  const settings = Store.getSettings();
+  return Number(settings.monthlySpendingLimit || 0);
+}
+
+function saveMonthlySpendingLimit(limit) {
+  const settings = Store.getSettings();
+
+  Store.saveSettings({
+    ...settings,
+    monthlySpendingLimit: Number(limit || 0),
+  });
+}
+
+function editMonthlySpendingLimit() {
+  const currentLimit = getMonthlySpendingLimit();
+
+  const value = prompt(
+    "Set your monthly spending limit. Enter 0 to remove it:",
+    currentLimit || ""
+  );
+
+  if (value === null) return;
+
+  const limit = Number(value);
+
+  if (Number.isNaN(limit) || limit < 0) {
+    alert("Please enter a valid amount.");
+    return;
+  }
+
+  saveMonthlySpendingLimit(limit);
+  render();
+}
 
 function renderInsights() {
   const bills = Store.getBills();
@@ -1360,6 +1394,14 @@ function renderInsights() {
   // This month payments
   const monthPayments = payments.filter(p => isSameMonth(p.paidDate));
   const totalPaid = monthPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
+
+  const monthlyLimit = getMonthlySpendingLimit();
+const remainingLimit = Math.max(monthlyLimit - totalPaid, 0);
+const limitPercent = monthlyLimit > 0
+  ? Math.min((totalPaid / monthlyLimit) * 100, 100)
+  : 0;
+
+const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
 
   // Unpaid
   const unpaid = bills.filter(b => getBillStatus(b) !== 'paid');
@@ -1409,7 +1451,55 @@ function renderInsights() {
             <div class="stat-label">Still Due</div>
           </div>
         </div>
+        <div>
+  <div class="dashboard-section-title-row">
+    <div class="section-header">Spending Limit</div>
 
+    <button
+      class="dashboard-see-all"
+      onclick="editMonthlySpendingLimit()"
+    >
+      ${monthlyLimit > 0 ? 'Edit' : 'Set limit'}
+    </button>
+  </div>
+
+  ${monthlyLimit > 0 ? `
+    <div class="card card-pad">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2);">
+        <div style="font-size: var(--text-lg); font-weight: 800;">
+          ${formatCurrency(totalPaid)}
+          <span style="font-size: var(--text-sm); color: var(--text-muted); font-weight: 500;">
+            of ${formatCurrency(monthlyLimit)}
+          </span>
+        </div>
+
+        <div style="font-size: var(--text-sm); color: ${isOverLimit ? 'var(--overdue)' : 'var(--text-muted)'}; font-weight: 700;">
+          ${isOverLimit
+            ? `${formatCurrency(totalPaid - monthlyLimit)} over`
+            : `${formatCurrency(remainingLimit)} left`}
+        </div>
+      </div>
+
+      <div class="dashboard-progress-track" style="margin-top: var(--space-3);">
+        <div
+          class="dashboard-progress-fill"
+          style="width: ${limitPercent}%; background: ${isOverLimit ? 'var(--overdue)' : 'var(--accent)'};"
+        ></div>
+      </div>
+    </div>
+  ` : `
+    <button
+      class="card card-pad"
+      onclick="editMonthlySpendingLimit()"
+      style="width: 100%; text-align: left; cursor: pointer;"
+    >
+      <div style="font-weight: 700;">Set a monthly spending limit</div>
+      <div style="font-size: var(--text-sm); color: var(--text-muted); margin-top: 4px;">
+        Track your monthly payments against one target.
+      </div>
+    </button>
+  `}
+</div>
         <div>
           <div class="section-header">Spending by Category</div>
           <div class="card card-pad">
