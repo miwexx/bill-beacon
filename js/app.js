@@ -1629,6 +1629,54 @@ function renderSettings() {
         </div>
 
         <div class="settings-section">
+  <div class="section-header">Income Sources</div>
+
+  <div class="card">
+    ${Store.getIncomeSources().length
+      ? Store.getIncomeSources().map(source => `
+        <div
+          class="form-row"
+          onclick="openIncomeSourceForm('${source.id}')"
+          style="cursor: pointer;"
+        >
+          <div>
+            <div class="form-label">${escapeHtml(source.name)}</div>
+
+            <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 3px;">
+              ${escapeHtml(source.frequency)} · Next: ${formatDate(source.nextPayDate, 'short')}
+            </div>
+          </div>
+
+          <div style="margin-left: auto; text-align: right;">
+            <div style="font-weight: 800;">
+              ${formatCurrency(source.expectedAmount)}
+            </div>
+
+            <div style="font-size: var(--text-xs); color: var(--text-muted);">
+              expected pay
+            </div>
+          </div>
+        </div>
+      `).join('')
+      : `
+        <div class="card-pad" style="font-size: var(--text-sm); color: var(--text-muted);">
+          Add an income source to plan future paychecks and fund bills.
+        </div>
+      `
+    }
+  </div>
+
+  <button
+    class="btn-secondary"
+    style="width: 100%; margin-top: var(--space-3);"
+    onclick="openIncomeSourceForm()"
+  >
+    ${svgIcon('plus', 18)}
+    Add income source
+  </button>
+</div>
+
+        <div class="settings-section">
           <div class="section-header">Data</div>
           <div class="card">
             <div class="form-row">
@@ -1991,6 +2039,209 @@ window.closeCalendarAddMenu = function() {
     document.getElementById('calendarAddMenuContainer')?.remove();
   }, 300);
 };
+let editingIncomeSourceId = null;
+
+function openIncomeSourceForm(sourceId = null) {
+  editingIncomeSourceId = sourceId;
+
+  const source = sourceId
+    ? Store.getIncomeSources().find(item => item.id === sourceId)
+    : null;
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const sheetHtml = `
+    <div
+      class="sheet-overlay"
+      id="incomeSourceOverlay"
+      onclick="closeIncomeSourceForm()"
+    ></div>
+
+    <div class="sheet" id="incomeSourceSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeIncomeSourceForm()">
+          Cancel
+        </button>
+
+        <div class="sheet-title">
+          ${source ? 'Edit Income' : 'Income Source'}
+        </div>
+
+        <button
+          class="nav-button"
+          onclick="saveIncomeSource()"
+          style="font-weight: 700;"
+        >
+          Save
+        </button>
+      </div>
+
+      <div style="padding: var(--space-4);" class="content-gap">
+        <div>
+          <div class="section-header">Income Details</div>
+
+          <div class="card">
+            <div class="form-row">
+              <div class="form-label">Name</div>
+
+              <input
+                class="form-input"
+                id="incomeSourceName"
+                type="text"
+                placeholder="Military pay"
+                value="${source ? escapeHtml(source.name) : ''}"
+                style="text-align: left;"
+              >
+            </div>
+
+            <div class="form-row">
+              <div class="form-label">Expected pay</div>
+
+              <input
+                class="form-input"
+                id="incomeSourceAmount"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value="${source ? source.expectedAmount : ''}"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-header">Schedule</div>
+
+          <div class="card">
+            <div class="form-row">
+              <div class="form-label">Frequency</div>
+
+              <select class="form-select" id="incomeSourceFrequency">
+                ${INCOME_FREQUENCIES.map(frequency => `
+                  <option
+                    value="${frequency}"
+                    ${source?.frequency === frequency ? 'selected' : ''}
+                  >
+                    ${frequency}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div class="form-row">
+              <div class="form-label">Next payday</div>
+
+              <input
+                class="form-input"
+                id="incomeSourceNextPayDate"
+                type="date"
+                value="${source ? source.nextPayDate.split('T')[0] : today}"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-footer">
+          Expected pay is used for planning. You can record a different actual amount for each paycheck later.
+        </div>
+
+        ${source ? `
+          <button
+            class="btn-danger"
+            onclick="confirmDeleteIncomeSource('${source.id}')"
+          >
+            ${svgIcon('trash', 16)}
+            Delete income source
+          </button>
+        ` : ''}
+      </div>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.id = 'incomeSourceContainer';
+  container.innerHTML = sheetHtml;
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => {
+    document.getElementById('incomeSourceOverlay')?.classList.add('show');
+    document.getElementById('incomeSourceSheet')?.classList.add('show');
+  });
+}
+
+function closeIncomeSourceForm() {
+  document.getElementById('incomeSourceOverlay')?.classList.remove('show');
+  document.getElementById('incomeSourceSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('incomeSourceContainer')?.remove();
+  }, 300);
+
+  editingIncomeSourceId = null;
+}
+
+function saveIncomeSource() {
+  const name = document.getElementById('incomeSourceName').value.trim();
+
+  const expectedAmount = Number(
+    document.getElementById('incomeSourceAmount').value
+  );
+
+  const frequency = document.getElementById('incomeSourceFrequency').value;
+
+  const nextPayDate = document.getElementById(
+    'incomeSourceNextPayDate'
+  ).value;
+
+  if (!name) {
+    alert('Please enter an income source name.');
+    return;
+  }
+
+  if (Number.isNaN(expectedAmount) || expectedAmount < 0) {
+    alert('Please enter a valid expected pay amount.');
+    return;
+  }
+
+  if (!nextPayDate) {
+    alert('Please choose the next payday.');
+    return;
+  }
+
+  const data = {
+    name,
+    expectedAmount,
+    frequency,
+    nextPayDate: new Date(`${nextPayDate}T12:00:00`).toISOString(),
+  };
+
+  if (editingIncomeSourceId) {
+    Store.updateIncomeSource(editingIncomeSourceId, data);
+  } else {
+    Store.addIncomeSource({
+      id: uid(),
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  closeIncomeSourceForm();
+  render();
+}
+
+function confirmDeleteIncomeSource(id) {
+  if (!confirm('Delete this income source?')) return;
+
+  Store.deleteIncomeSource(id);
+  closeIncomeSourceForm();
+  render();
+}
+
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
   const bill = billId ? Store.getBill(billId) : null;
