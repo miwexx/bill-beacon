@@ -32,6 +32,13 @@ const REMINDER_OFFSETS = [
 
 const PAYMENT_METHODS = ['', 'Credit Card', 'Debit Card', 'Bank Transfer', 'Cash', 'Apple Pay', 'Check'];
 
+const INCOME_FREQUENCIES = [
+  'Weekly',
+  'Biweekly',
+  'Twice monthly',
+  'Monthly',
+  'Manual / irregular',
+];
 const ICONS = {
   home: '<path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z" fill="currentColor"/>',
   bolt: '<path d="M13 2L3 14h7v8l10-12h-7V2z" fill="currentColor"/>',
@@ -108,6 +115,45 @@ const Store = {
   savePayments(payments) {
     localStorage.setItem('payments', JSON.stringify(payments));
   },
+  getIncomeSources() {
+  try {
+    return JSON.parse(localStorage.getItem('incomeSources')) || [];
+  } catch {
+    return [];
+  }
+},
+
+saveIncomeSources(sources) {
+  localStorage.setItem('incomeSources', JSON.stringify(sources));
+},
+
+addIncomeSource(source) {
+  const sources = this.getIncomeSources();
+  sources.push(source);
+  this.saveIncomeSources(sources);
+},
+
+updateIncomeSource(id, updates) {
+  const sources = this.getIncomeSources();
+  const index = sources.findIndex(source => source.id === id);
+
+  if (index < 0) return;
+
+  sources[index] = {
+    ...sources[index],
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  this.saveIncomeSources(sources);
+},
+
+deleteIncomeSource(id) {
+  const sources = this.getIncomeSources()
+    .filter(source => source.id !== id);
+
+  this.saveIncomeSources(sources);
+},
   addPayment(payment) {
     const payments = this.getPayments();
     payments.push(payment);
