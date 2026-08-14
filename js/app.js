@@ -39,6 +39,53 @@ const INCOME_FREQUENCIES = [
   'Monthly',
   'Manual / irregular',
 ];
+const BILL_BRANDS = [
+  // Phone, internet, and utilities
+  { terms: ['at&t', 'att', 'at&t wireless'], label: 'AT&T', domain: 'att.com' },
+  { terms: ['verizon'], label: 'Verizon', domain: 'verizon.com' },
+  { terms: ['t-mobile', 'tmobile'], label: 'T-Mobile', domain: 't-mobile.com' },
+  { terms: ['mint mobile'], label: 'Mint Mobile', domain: 'mintmobile.com' },
+  { terms: ['xfinity', 'xfinity internet', 'comcast'], label: 'Xfinity', domain: 'xfinity.com' },
+  { terms: ['spectrum'], label: 'Spectrum', domain: 'spectrum.com' },
+  { terms: ['cox communications'], label: 'Cox', domain: 'cox.com' },
+
+  // Streaming and subscriptions
+  { terms: ['netflix'], label: 'Netflix', domain: 'netflix.com' },
+  { terms: ['spotify'], label: 'Spotify', domain: 'spotify.com' },
+  { terms: ['hulu'], label: 'Hulu', domain: 'hulu.com' },
+  { terms: ['disney+', 'disney plus'], label: 'Disney+', domain: 'disneyplus.com' },
+  { terms: ['hbo max', 'max streaming'], label: 'Max', domain: 'max.com' },
+  { terms: ['youtube tv', 'youtube premium'], label: 'YouTube', domain: 'youtube.com' },
+  { terms: ['amazon prime', 'prime video'], label: 'Prime Video', domain: 'primevideo.com' },
+  { terms: ['ring camera', 'ring protect'], label: 'Ring', domain: 'ring.com' },
+
+  // Insurance
+  { terms: ['geico'], label: 'GEICO', domain: 'geico.com' },
+  { terms: ['progressive'], label: 'Progressive', domain: 'progressive.com' },
+  { terms: ['state farm'], label: 'State Farm', domain: 'statefarm.com' },
+  { terms: ['usaa'], label: 'USAA', domain: 'usaa.com' },
+  { terms: ['allstate'], label: 'Allstate', domain: 'allstate.com' },
+
+  // Banking, cards, loans, and auto
+  { terms: ['navy federal', 'nfcu'], label: 'Navy Federal', domain: 'navyfederal.org' },
+  { terms: ['credit one', 'creditone'], label: 'Credit One Bank', domain: 'creditonebank.com' },
+  { terms: ['fortiva', 'fortiva credit card'], label: 'Fortiva', domain: 'myfortiva.com' },
+  { terms: ['capital one'], label: 'Capital One', domain: 'capitalone.com' },
+  { terms: ['chase'], label: 'Chase', domain: 'chase.com' },
+  { terms: ['american express', 'amex'], label: 'American Express', domain: 'americanexpress.com' },
+  { terms: ['discover'], label: 'Discover', domain: 'discover.com' },
+  { terms: ['ally auto', 'ally financial'], label: 'Ally', domain: 'ally.com' },
+  { terms: ['avant loan', 'avant'], label: 'Avant', domain: 'avant.com' },
+
+  // Buy now, pay later
+  { terms: ['zip pay in 4', 'zip pay'], label: 'Zip', domain: 'zip.co' },
+  { terms: ['klarna', 'kl;;arna'], label: 'Klarna', domain: 'klarna.com' },
+  { terms: ['affirm'], label: 'Affirm', domain: 'affirm.com' },
+
+  // Government
+  { terms: ['irs', 'internal revenue service'], label: 'IRS', domain: 'irs.gov' },
+];
+
 const ICONS = {
   home: '<path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7H10v7H6a2 2 0 01-2-2v-9z" fill="currentColor"/>',
   bolt: '<path d="M13 2L3 14h7v8l10-12h-7V2z" fill="currentColor"/>',
@@ -187,6 +234,17 @@ deleteIncomeSource(id) {
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
+}
+function getBillBrand(billName) {
+  const normalizedName = String(billName || '').toLowerCase();
+
+  return BILL_BRANDS.find(brand =>
+    brand.terms.some(term => normalizedName.includes(term))
+  ) || null;
+}
+
+function billLogoUrl(brand) {
+  return `https://img.logo.dev/${brand.domain}?token=`;
 }
 
 function getCategory(id) {
