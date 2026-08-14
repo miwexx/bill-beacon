@@ -379,10 +379,6 @@ function getNotificationCount() {
 function renderToday() {
   const bills = Store.getBills();
   const payments = Store.getPayments();
-  const totalMonthlyIncome = getTotalMonthlyIncomeEstimate();
-const monthlyIncomeSources = Store.getIncomeSources().filter(
-  source => source.frequency !== 'Manual / irregular'
-);
   const now = new Date();
 
   const currentMonthLabel = formatDate(now.toISOString(), 'monthYear');
@@ -1462,6 +1458,11 @@ function editMonthlySpendingLimit() {
 function renderInsights() {
   const bills = Store.getBills();
   const payments = Store.getPayments();
+    const totalMonthlyIncome = getTotalMonthlyIncomeEstimate();
+
+  const monthlyIncomeSources = Store.getIncomeSources().filter(
+    source => source.frequency !== 'Manual / irregular'
+  );
   const recentPayments = payments
   .map(payment => ({
     ...payment,
