@@ -1345,7 +1345,7 @@ window.openCalendarDay = function(dateString) {
                         aria-label="View ${escapeHtml(bill.name)}"
                       >
                         <div class="bill-icon" style="background:var(--${category.color});color:white">
-  ${billVisual(bill, 26)}
+  ${billVisual(bill, 32)}
 </div>
 
                         <div class="bill-info">
@@ -2269,7 +2269,7 @@ function billRow(bill, clickable = false) {
     padding:${getBillBrand(bill.name) ? '3px' : '0'};
   "
 >
-  ${billVisual(bill, 26)}
+  ${billVisual(bill, 32)}
 </div>
 
       <div class="bill-info">
