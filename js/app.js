@@ -193,11 +193,11 @@ function getCategory(id) {
   return CATEGORIES.find(c => c.id === id) || CATEGORIES.find(c => c.id === 'other');
 }
 function getPayCycleLabel(bill) {
-  if (bill.payCycle === 'first') return 'Early cycle';
-  if (bill.payCycle === 'second') return 'Late cycle';
+  if (bill.payCycle === 'first') return 'Early Cycle';
+  if (bill.payCycle === 'second') return 'Late Cycle';
 
   const dueDay = new Date(bill.dueDate).getDate();
-  return dueDay <= 15 ? 'Early cycle' : 'Late cycle';
+  return dueDay <= 15 ? 'Early cycle' : 'Late Cycle';
 }
 
 function getMonthlyIncomeEstimate(source) {
@@ -1504,8 +1504,8 @@ function renderInsights() {
 const currentCycle = today.getDate() <= 15 ? 'first' : 'second';
 
 const currentCycleLabel = currentCycle === 'first'
-  ? '1st–15th'
-  : '16th–end of month';
+  ? 'Early Cycle'
+  : 'Late Cycle';
 
 const cycleBills = bills.filter(bill => {
   const dueDate = new Date(bill.dueDate);
