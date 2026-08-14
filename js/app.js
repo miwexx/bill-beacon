@@ -2230,6 +2230,8 @@ function saveIncomeSource() {
     });
   }
 
+  
+
   closeIncomeSourceForm();
   render();
 }
