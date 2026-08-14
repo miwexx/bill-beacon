@@ -1708,13 +1708,68 @@ function renderSettings() {
   <button
     class="btn-secondary"
     style="width: 100%; margin-top: var(--space-3);"
-    onclick="openIncomeSourceForm()"
-  >
+    onclick="openIncomeSourceForm()">
     ${svgIcon('plus', 18)}
     Add income source
   </button>
 </div>
+    <div class="settings-section">
+  <div class="section-header">Paychecks</div>
 
+  <div class="card">
+    ${
+      Store.getPaychecks().length
+        ? Store.getPaychecks()
+            .sort((a, b) => new Date(a.payDate) - new Date(b.payDate))
+            .map(paycheck => {
+              const source = Store.getIncomeSources()
+                .find(item => item.id === paycheck.incomeSourceId);
+
+              const amount = paycheck.actualAmount !== null &&
+                paycheck.actualAmount !== undefined
+                ? paycheck.actualAmount
+                : paycheck.expectedAmount;
+
+              const amountLabel = paycheck.actualAmount !== null &&
+                paycheck.actualAmount !== undefined
+                ? 'actual received'
+                : 'expected';
+
+              return `
+                <div class="form-row"
+                  onclick="openPaycheckForm('${paycheck.id}')"
+                  style="cursor:pointer">
+                  <div>
+                    <div class="form-label">
+                      ${escapeHtml(source ? source.name : 'Income source')}
+                    </div>
+                    <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:3px">
+                      ${formatDate(paycheck.payDate, 'short')} · ${amountLabel}
+                    </div>
+                  </div>
+
+                  <div style="margin-left:auto;text-align:right">
+                    <div style="font-weight:800">${formatCurrency(amount)}</div>
+                  </div>
+                </div>
+              `;
+            })
+            .join('')
+        : `
+          <div class="card-pad"
+            style="font-size:var(--text-sm);color:var(--text-muted)">
+            Add each upcoming payday to plan bills against the money expected to arrive.
+          </div>
+        `
+    }
+  </div>
+
+  <button class="btn-secondary"
+    style="width:100%;margin-top:var(--space-3)"
+    onclick="openPaycheckForm()">
+    ${svgIcon('plus', 18)} Add paycheck
+  </button>
+</div>
         <div class="settings-section">
           <div class="section-header">Data</div>
           <div class="card">
