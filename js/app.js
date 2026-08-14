@@ -1345,7 +1345,7 @@ window.openCalendarDay = function(dateString) {
                         aria-label="View ${escapeHtml(bill.name)}"
                       >
                         <div class="bill-icon" style="background:var(--${category.color});color:white">
-  ${billVisual(bill, 18)}
+  ${billVisual(bill, 26)}
 </div>
 
                         <div class="bill-info">
@@ -2262,11 +2262,15 @@ function billRow(bill, clickable = false) {
       }
     >
       <div
-        class="bill-icon"
-        style="background:var(--${cat.color});color:white"
-      >
-        ${billVisual(bill, 18)}
-      </div>
+  class="bill-icon"
+  style="
+    background:${getBillBrand(bill.name) ? 'white' : `var(--${cat.color})`};
+    color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
+    padding:${getBillBrand(bill.name) ? '3px' : '0'};
+  "
+>
+  ${billVisual(bill, 26)}
+</div>
 
       <div class="bill-info">
         <div class="bill-name">${escapeHtml(bill.name)}</div>
