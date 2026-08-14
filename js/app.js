@@ -197,7 +197,7 @@ function getPayCycleLabel(bill) {
   if (bill.payCycle === 'second') return 'Late Cycle';
 
   const dueDay = new Date(bill.dueDate).getDate();
-  return dueDay <= 15 ? 'Early cycle' : 'Late Cycle';
+  return dueDay <= 15 ? 'Early Cycle' : 'Late Cycle';
 }
 
 function getMonthlyIncomeEstimate(source) {
