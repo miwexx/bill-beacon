@@ -1471,7 +1471,24 @@ function renderInsights() {
   .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
   .slice(0, 5);
   const now = new Date();
+  const currentMonthBills = bills.filter(bill =>
+  isSameMonth(bill.dueDate, now)
+);
 
+const scheduledThisMonth = currentMonthBills.reduce(
+  (total, bill) => total + (parseFloat(bill.amount) || 0),
+  0
+);
+
+const estimatedLeftAfterBills =
+  totalMonthlyIncome - scheduledThisMonth;
+
+const incomeCoveragePercent = totalMonthlyIncome > 0
+  ? Math.min((scheduledThisMonth / totalMonthlyIncome) * 100, 100)
+  : 0;
+
+const incomeCoversBills =
+  totalMonthlyIncome >= scheduledThisMonth;
   // This month payments
   const monthPayments = payments.filter(p => isSameMonth(p.paidDate));
   const totalPaid = monthPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
@@ -1548,6 +1565,64 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
   }
 </div>
         <div>
+        <div>
+  <div class="section-header">Monthly Plan</div>
+
+  <div class="card card-pad">
+    <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3)">
+      <div>
+        <div style="font-size:var(--text-sm);color:var(--text-muted)">
+          Bills scheduled this month
+        </div>
+
+        <div style="font-size:var(--text-xl);font-weight:800;margin-top:4px">
+          ${formatCurrency(scheduledThisMonth)}
+        </div>
+      </div>
+
+      <div style="text-align:right">
+        <div style="font-size:var(--text-sm);color:var(--text-muted)">
+          Estimated left
+        </div>
+
+        <div style="
+          font-size:var(--text-xl);
+          font-weight:800;
+          margin-top:4px;
+          color:${incomeCoversBills ? 'var(--paid)' : 'var(--overdue)'}
+        ">
+          ${formatCurrency(estimatedLeftAfterBills)}
+        </div>
+      </div>
+    </div>
+
+    <div class="dashboard-progress-track" style="margin-top:var(--space-3)">
+      <div
+        class="dashboard-progress-fill"
+        style="
+          width:${incomeCoveragePercent}%;
+          background:${incomeCoversBills ? 'var(--accent)' : 'var(--overdue)'}
+        "
+      ></div>
+    </div>
+
+    <div style="
+      display:flex;
+      justify-content:space-between;
+      margin-top:8px;
+      font-size:var(--text-xs);
+      color:var(--text-muted)
+    ">
+      <span>
+        ${incomeCoversBills
+          ? 'Income covers scheduled bills'
+          : 'Scheduled bills exceed estimated income'}
+      </span>
+
+      <span>${incomeCoveragePercent.toFixed(0)}% of income</span>
+    </div>
+  </div>
+</div>
   <div class="dashboard-section-title-row">
     <div class="section-header">Spending Limit</div>
 
