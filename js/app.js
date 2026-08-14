@@ -1324,6 +1324,103 @@ function closeDashboardStatusSheet() {
   }, 300);
 }
 
+function openCycleBillsSheet(cycle, cycleLabel) {
+  const now = new Date();
+
+  const bills = Store.getBills()
+    .filter(bill => {
+      const dueDate = new Date(bill.dueDate);
+
+      if (
+        dueDate.getMonth() !== now.getMonth() ||
+        dueDate.getFullYear() !== now.getFullYear()
+      ) {
+        return false;
+      }
+
+      const billCycle = bill.payCycle ||
+        (dueDate.getDate() <= 15 ? 'first' : 'second');
+
+      return billCycle === cycle;
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const total = bills.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+  const container = document.createElement('div');
+  container.id = 'cycleBillsContainer';
+
+  container.innerHTML = `
+    <div class="sheet-overlay" id="cycleBillsOverlay"
+      onclick="closeCycleBillsSheet()"></div>
+
+    <div class="sheet" id="cycleBillsSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeCycleBillsSheet()">
+          Close
+        </button>
+
+        <div class="sheet-title">Cycle Bills</div>
+
+        <div style="width:54px"></div>
+      </div>
+
+      <div style="padding:var(--space-4)">
+        <div class="card" style="margin-bottom:var(--space-4)">
+          <div class="form-row">
+            <div>
+              <div class="form-label">${cycleLabel}</div>
+              <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:3px">
+                ${bills.length} ${bills.length === 1 ? 'bill' : 'bills'} scheduled
+              </div>
+            </div>
+
+            <div style="margin-left:auto;font-size:var(--text-lg);font-weight:800">
+              ${formatCurrency(total)}
+            </div>
+          </div>
+        </div>
+
+        ${
+          bills.length
+            ? `<div class="card">
+                ${bills.map(bill => billRow(bill, true)).join('')}
+              </div>`
+            : `<div class="empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon('checkCircle', 44)}
+                </div>
+                <div class="empty-state-title">No bills this cycle</div>
+                <div class="empty-state-text">
+                  Add bills or assign existing bills to this pay cycle.
+                </div>
+              </div>`
+        }
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => {
+    document.getElementById('cycleBillsOverlay')?.classList.add('show');
+    document.getElementById('cycleBillsSheet')?.classList.add('show');
+  });
+}
+
+function closeCycleBillsSheet() {
+  document.getElementById('cycleBillsOverlay')?.classList.remove('show');
+  document.getElementById('cycleBillsSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('cycleBillsContainer')?.remove();
+  }, 300);
+}
 function openDashboardStatusSheet(status) {
   const now = new Date();
   const currentMonthBills = Store.getBills().filter(bill => {
@@ -1625,7 +1722,11 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
     Bill Schedule · ${currentCycleLabel}
   </div>
 
-  <div class="card card-pad">
+  <button
+  class="card card-pad"
+  onclick="openCycleBillsSheet('${currentCycle}', '${currentCycleLabel}')"
+  style="width:100%;text-align:left;cursor:pointer"
+>
     <div style="display:flex;align-items:baseline;justify-content:space-between;gap:var(--space-3)">
       <div>
         <div style="font-size:var(--text-sm);color:var(--text-muted)">
@@ -1677,11 +1778,12 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
       </span>
 
       <span>
-        ${cycleBills.length}
-        ${cycleBills.length === 1 ? 'bill' : 'bills'}
-      </span>
+  View ${cycleBills.length}
+  ${cycleBills.length === 1 ? 'bill' : 'bills'}
+  ${svgIcon('chevronRight', 14)}
+</span>
     </div>
-  </div>
+  </button>
 </div>
     <button
       class="dashboard-see-all"
