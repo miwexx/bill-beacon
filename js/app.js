@@ -1710,7 +1710,7 @@ function renderSettings() {
     style="width: 100%; margin-top: var(--space-3);"
     onclick="openIncomeSourceForm()">
     ${svgIcon('plus', 18)}
-    Add income source
+    Add Income Source
   </button>
 </div>
     <div class="settings-section">
@@ -1767,7 +1767,7 @@ function renderSettings() {
   <button class="btn-secondary"
     style="width:100%;margin-top:var(--space-3)"
     onclick="openPaycheckForm()">
-    ${svgIcon('plus', 18)} Add paycheck
+    ${svgIcon('plus', 18)} Add Paycheck
   </button>
 </div>
         <div class="settings-section">
@@ -2133,6 +2133,232 @@ window.closeCalendarAddMenu = function() {
     document.getElementById('calendarAddMenuContainer')?.remove();
   }, 300);
 };
+
+let editingPaycheckId = null;
+
+function openPaycheckForm(paycheckId = null) {
+  const sources = Store.getIncomeSources();
+
+  if (!sources.length) {
+    alert('Add an income source before creating a paycheck.');
+    return;
+  }
+
+  editingPaycheckId = paycheckId;
+
+  const paycheck = paycheckId
+    ? Store.getPaychecks().find(item => item.id === paycheckId)
+    : null;
+
+  const defaultSource = paycheck
+    ? paycheck.incomeSourceId
+    : sources[0].id;
+
+  const selectedSource = sources.find(source => source.id === defaultSource);
+
+  const defaultExpectedAmount = paycheck
+    ? paycheck.expectedAmount
+    : selectedSource.expectedAmount;
+
+  const today = new Date().toISOString().split('T')[0];
+
+  const sheetHtml = `
+    <div class="sheet-overlay" id="paycheckOverlay"
+      onclick="closePaycheckForm()"></div>
+
+    <div class="sheet" id="paycheckSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closePaycheckForm()">
+          Cancel
+        </button>
+
+        <div class="sheet-title">
+          ${paycheck ? 'Edit Paycheck' : 'Add Paycheck'}
+        </div>
+
+        <button class="nav-button"
+          onclick="savePaycheck()"
+          style="font-weight:700">
+          Save
+        </button>
+      </div>
+
+      <div style="padding:var(--space-4)" class="content-gap">
+        <div>
+          <div class="section-header">Paycheck Details</div>
+
+          <div class="card">
+            <div class="form-row">
+              <div class="form-label">Income source</div>
+
+              <select class="form-select" id="paycheckIncomeSource">
+                ${sources.map(source => `
+                  <option value="${source.id}"
+                    ${source.id === defaultSource ? 'selected' : ''}>
+                    ${escapeHtml(source.name)}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+
+            <div class="form-row">
+              <div class="form-label">Pay date</div>
+
+              <input class="form-input"
+                id="paycheckPayDate"
+                type="date"
+                value="${paycheck
+                  ? paycheck.payDate.split('T')[0]
+                  : today}">
+            </div>
+
+            <div class="form-row">
+              <div class="form-label">Expected amount</div>
+
+              <input class="form-input"
+                id="paycheckExpectedAmount"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="0.00"
+                value="${defaultExpectedAmount}">
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-header">Received Amount</div>
+
+          <div class="card">
+            <div class="form-row">
+              <div style="flex:1">
+                <div class="form-label">Actual amount</div>
+
+                <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:3px">
+                  Leave blank until the deposit arrives.
+                </div>
+              </div>
+
+              <input class="form-input"
+                id="paycheckActualAmount"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                step="0.01"
+                placeholder="Not received"
+                value="${paycheck &&
+                  paycheck.actualAmount !== null &&
+                  paycheck.actualAmount !== undefined
+                    ? paycheck.actualAmount
+                    : ''}">
+            </div>
+          </div>
+        </div>
+
+        ${
+          paycheck
+            ? `
+              <button class="btn-danger"
+                onclick="confirmDeletePaycheck('${paycheck.id}')">
+                ${svgIcon('trash', 16)} Delete paycheck
+              </button>
+            `
+            : ''
+        }
+      </div>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.id = 'paycheckContainer';
+  container.innerHTML = sheetHtml;
+
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => {
+    document.getElementById('paycheckOverlay')?.classList.add('show');
+    document.getElementById('paycheckSheet')?.classList.add('show');
+  });
+}
+
+function closePaycheckForm() {
+  document.getElementById('paycheckOverlay')?.classList.remove('show');
+  document.getElementById('paycheckSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('paycheckContainer')?.remove();
+  }, 300);
+
+  editingPaycheckId = null;
+}
+
+function savePaycheck() {
+  const incomeSourceId = document.getElementById('paycheckIncomeSource').value;
+  const payDate = document.getElementById('paycheckPayDate').value;
+  const expectedAmount = Number(
+    document.getElementById('paycheckExpectedAmount').value
+  );
+
+  const actualInput = document
+    .getElementById('paycheckActualAmount')
+    .value
+    .trim();
+
+  const actualAmount = actualInput === '' ? null : Number(actualInput);
+
+  if (!incomeSourceId) {
+    alert('Please choose an income source.');
+    return;
+  }
+
+  if (!payDate) {
+    alert('Please choose a pay date.');
+    return;
+  }
+
+  if (Number.isNaN(expectedAmount) || expectedAmount < 0) {
+    alert('Please enter a valid expected amount.');
+    return;
+  }
+
+  if (actualAmount !== null &&
+      (Number.isNaN(actualAmount) || actualAmount < 0)) {
+    alert('Please enter a valid actual amount.');
+    return;
+  }
+
+  const data = {
+    incomeSourceId,
+    payDate: new Date(`${payDate}T12:00:00`).toISOString(),
+    expectedAmount,
+    actualAmount,
+  };
+
+  if (editingPaycheckId) {
+    Store.updatePaycheck(editingPaycheckId, data);
+  } else {
+    Store.addPaycheck({
+      id: uid(),
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  closePaycheckForm();
+  render();
+}
+
+function confirmDeletePaycheck(id) {
+  if (!confirm('Delete this paycheck?')) return;
+
+  Store.deletePaycheck(id);
+  closePaycheckForm();
+  render();
+}
 let editingIncomeSourceId = null;
 
 function openIncomeSourceForm(sourceId = null) {
