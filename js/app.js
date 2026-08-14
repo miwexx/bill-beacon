@@ -2160,7 +2160,22 @@ function renderBillDetail() {
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
         <div class="detail-header">
-          <div style="color:var(--${cat.color});margin-bottom:var(--space-2)">${svgIcon(cat.icon, 36)}</div>
+          <div
+  style="
+    width:52px;
+    height:52px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    border-radius:14px;
+    margin:0 auto var(--space-2);
+    background:${getBillBrand(bill.name) ? 'white' : `var(--${cat.color})`};
+    color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
+  "
+>
+  ${billVisual(bill, 46)}
+</div>
           <div class="detail-amount">${formatCurrency(bill.amount)}</div>
           <div class="detail-status">
             <span class="status-pill" style="background:var(--${status === 'paid' ? 'paid-bg' : status === 'overdue' ? 'overdue-bg' : 'upcoming-bg'});color:var(--${status === 'paid' ? 'paid' : status === 'overdue' ? 'overdue' : 'upcoming'})">
