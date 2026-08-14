@@ -246,6 +246,45 @@ function getBillBrand(billName) {
 function billLogoUrl(brand) {
   return `https://img.logo.dev/${brand.domain}?token=`;
 }
+function getBrandInitials(brand) {
+  return brand.label
+    .replace(/[^a-z0-9 ]/gi, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(word => word.charAt(0).toUpperCase())
+    .join('');
+}
+
+function billVisual(bill, size = 18) {
+  const brand = getBillBrand(bill.name);
+
+  if (brand) {
+    return `
+      <span
+        aria-label="${escapeHtml(brand.label)}"
+        title="${escapeHtml(brand.label)}"
+        style="
+          display:inline-flex;
+          width:${size}px;
+          height:${size}px;
+          align-items:center;
+          justify-content:center;
+          border-radius:5px;
+          background:rgba(255,255,255,0.92);
+          color:#1e1e2e;
+          font-size:${Math.max(8, Math.round(size * 0.42))}px;
+          font-weight:900;
+          letter-spacing:-0.4px;
+          line-height:1;
+        "
+      >${getBrandInitials(brand)}</span>
+    `;
+  }
+
+  const category = getCategory(bill.category);
+  return svgIcon(category.icon, size);
+}
 
 function getCategory(id) {
   return CATEGORIES.find(c => c.id === id) || CATEGORIES.find(c => c.id === 'other');
@@ -2221,7 +2260,7 @@ function billRow(bill, clickable = false) {
         class="bill-icon"
         style="background:var(--${cat.color});color:white"
       >
-        ${svgIcon(cat.icon, 18)}
+        ${billVisual(bill, 18)}
       </div>
 
       <div class="bill-info">
