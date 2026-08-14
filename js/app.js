@@ -244,7 +244,7 @@ function getBillBrand(billName) {
 }
 
 function billLogoUrl(brand) {
-  return `https://img.logo.dev/${brand.domain}?token=`;
+  return `https://img.logo.dev/${brand.domain}?token=pk_Oi2mTbJ_SOOVDVoEsRz5kg&size=64&format=png`;
 }
 function getBrandInitials(brand) {
   return brand.label
@@ -258,31 +258,36 @@ function getBrandInitials(brand) {
 
 function billVisual(bill, size = 18) {
   const brand = getBillBrand(bill.name);
+  const category = getCategory(bill.category);
 
   if (brand) {
     return `
-      <span
-        aria-label="${escapeHtml(brand.label)}"
+      <img
+        src="${billLogoUrl(brand)}"
+        alt="${escapeHtml(brand.label)} logo"
         title="${escapeHtml(brand.label)}"
+        width="${size}"
+        height="${size}"
         style="
-          display:inline-flex;
+          display:block;
           width:${size}px;
           height:${size}px;
-          align-items:center;
-          justify-content:center;
-          border-radius:5px;
-          background:rgba(255,255,255,0.92);
-          color:#1e1e2e;
-          font-size:${Math.max(8, Math.round(size * 0.42))}px;
-          font-weight:900;
-          letter-spacing:-0.4px;
-          line-height:1;
+          object-fit:contain;
+          border-radius:4px;
         "
-      >${getBrandInitials(brand)}</span>
+        onerror="
+          this.onerror=null;
+          this.replaceWith(
+            Object.assign(document.createElement('span'), {
+              textContent: '${getBrandInitials(brand)}',
+              style: 'display:inline-flex;width:${size}px;height:${size}px;align-items:center;justify-content:center;border-radius:5px;background:rgba(255,255,255,0.92);color:#1e1e2e;font-size:${Math.max(8, Math.round(size * 0.42))}px;font-weight:900;line-height:1;'
+            })
+          );
+        "
+      >
     `;
   }
 
-  const category = getCategory(bill.category);
   return svgIcon(category.icon, size);
 }
 
