@@ -748,29 +748,7 @@ const next7DaysTotal = next7DaysBills.reduce(
           </div>
         </button>
 
-        <div
-  style="
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:10px;
-    margin:10px 0 18px;
-    padding:11px 14px;
-    border:1px solid var(--border, rgba(255,255,255,0.12));
-    border-radius:999px;
-    background:var(--card, rgba(255,255,255,0.06));
-    font-size:13px;
-  "
->
-  <span style="color:var(--text-muted);">Next 7 days</span>
-  <strong>${formatCurrency(next7DaysTotal)}</strong>
-  <span style="color:var(--text-muted);">
-    ${next7DaysBills.length}
-    ${next7DaysBills.length === 1 ? "bill due" : "bills due"}
-  </span>
-</div>
-        ${
-          nextDueBill
+        ${nextDueBill
             ? `
               <button
                 class="next-due-card ${
@@ -1264,20 +1242,8 @@ function renderCalendar() {
           </div>
         </div>
 
-        ${
-          overdueBills.length
-            ? `<div class="card card-pad" style="border-color:color-mix(in srgb, var(--overdue) 38%, var(--border))">
-                <div style="display:flex;align-items:center;gap:var(--space-2);color:var(--overdue)">
-                  ${svgIcon('warning', 18)}
-                  <strong>${overdueBills.length} overdue ${overdueBills.length === 1 ? 'bill' : 'bills'}</strong>
-                  <span style="margin-left:auto;font-weight:800">${formatCurrency(overdueTotal)}</span>
-                </div>
-              </div>`
-            : ''
-        }
-
-        ${
-  monthBillsSorted.length
+        
+        ${monthBillsSorted.length
     ? `<div>
         <div class="section-header">This Month</div>
 
