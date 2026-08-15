@@ -1218,7 +1218,7 @@ function renderCalendar() {
       <div class="content-pad content-gap">
         <div
   class="card card-pad"
-  ontouchstart="calendarSwipeStart(event)"
+  <div class="card card-pad">
   ontouchend="calendarSwipeEnd(event, '${prevMonth}', '${nextMonth}')"
 >
           <div class="month-nav">
@@ -1326,36 +1326,7 @@ function renderCalendar() {
     </div>
   `;
 }
-let calendarSwipeStartX = 0;
-let calendarSwipeStartY = 0;
 
-window.calendarSwipeStart = function (event) {
-  if (event.touches.length !== 1) return;
-
-  const touch = event.touches[0];
-  calendarSwipeStartX = touch.clientX;
-  calendarSwipeStartY = touch.clientY;
-};
-
-window.calendarSwipeEnd = function (event, prevMonth, nextMonth) {
-  if (event.changedTouches.length !== 1) return;
-
-  const touch = event.changedTouches[0];
-  const deltaX = touch.clientX - calendarSwipeStartX;
-  const deltaY = touch.clientY - calendarSwipeStartY;
-  const minimumSwipeDistance = 50;
-
-  if (
-    Math.abs(deltaX) < minimumSwipeDistance ||
-    Math.abs(deltaX) <= Math.abs(deltaY)
-  ) {
-    return;
-  }
-
-  navigate('calendar', {
-    month: deltaX < 0 ? nextMonth : prevMonth,
-  });
-};
 window.closeCalendarDay = function () {
   const overlay = document.getElementById("calendarDayOverlay");
   const sheet = document.getElementById("calendarDaySheet");
