@@ -463,6 +463,46 @@ function escapeHtml(text) {
   div.textContent = text;
   return div.innerHTML;
 }
+function safePaymentUrl(value) {
+  let url = String(value || "").trim();
+
+  if (!url) return "";
+
+  if (!/^https?:\/\//i.test(url)) {
+    url = `https://${url}`;
+  }
+
+  try {
+    const parsed = new URL(url);
+
+    if (parsed.protocol !== "https:") {
+      return "";
+    }
+
+    return parsed.href;
+  } catch {
+    return "";
+  }
+}
+
+function openPaymentPage(billId) {
+  const bill = Store.getBill(billId);
+
+  if (!bill) {
+    alert("Bill not found.");
+    return;
+  }
+
+  const paymentUrl = safePaymentUrl(bill.paymentUrl);
+
+  if (!paymentUrl) {
+    alert("No payment link has been added for this bill.");
+    openBillForm(bill.id);
+    return;
+  }
+
+  window.open(paymentUrl, "_blank", "noopener,noreferrer");
+}
 
 // ====================================
 // THEME
@@ -2186,6 +2226,23 @@ function renderBillDetail() {
         </div>
 
         <div>
+        ${safePaymentUrl(bill.paymentUrl) ? `
+  <button
+    class="btn-primary"
+    style="width:100%; margin-top:var(--space-4);"
+    onclick="openPaymentPage('${bill.id}')"
+  >
+    Pay ${escapeHtml(bill.name)}
+  </button>
+` : `
+  <button
+    class="btn-secondary"
+    style="width:100%; margin-top:var(--space-4);"
+    onclick="openBillForm('${bill.id}')"
+  >
+    Add payment link
+  </button>
+`}
           <div class="section-header">Details</div>
           <div class="card">
             ${detailRow('Due Date', formatDate(bill.dueDate, 'full'))}
@@ -2777,7 +2834,7 @@ function openBillForm(billId = null, selectedDate = null) {
       class="form-input"
       id="billPaymentUrl"
       type="url"
-      placeholder="https://provider.com/pay"
+      placeholder="provider.com/pay"
       value="${bill ? escapeHtml(bill.paymentUrl || '') : ''}"
       style="text-align: left;"
     />
@@ -2819,7 +2876,25 @@ function openBillForm(billId = null, selectedDate = null) {
             </div>
             <div class="settings-footer">Reminders appear when you open the app. Enable notifications in Safari for best results.</div>
           </div>
+                  <div>
+  <div class="section-header">Payment Link</div>
 
+  <div class="card">
+    <input
+      class="form-input"
+      id="paymentUrl"
+      type="url"
+      inputmode="url"
+      placeholder="https://provider.com/pay"
+      value="${bill ? escapeHtml(bill.paymentUrl || '') : ''}"
+      style="text-align:left"
+    />
+  </div>
+
+  <div class="settings-footer">
+    Optional. Paste the company’s official payment or sign-in website.
+  </div>
+</div>
           <div>
             <div class="section-header">Notes</div>
             <div class="card">
@@ -2867,11 +2942,32 @@ function saveBill() {
   const amount = parseFloat(document.getElementById('billAmount').value) || 0;
 
   if (!name) {
-    alert('Please enter a bill name');
-    return;
+  alert('Please enter a bill name');
+  return;
+}
+
+let paymentUrl = document.getElementById('paymentUrl').value.trim();
+
+if (paymentUrl) {
+  if (!/^https?:\/\//i.test(paymentUrl)) {
+    paymentUrl = `https://${paymentUrl}`;
   }
 
-  const data = {
+  try {
+    const url = new URL(paymentUrl);
+
+    if (url.protocol !== 'https:') {
+      throw new Error('Payment link must use HTTPS');
+    }
+
+    paymentUrl = url.href;
+  } catch {
+    alert('Please enter a valid payment website, for example: verizon.com');
+    return;
+  }
+}
+
+const data = {
     name,
     amount: amount.toString(),
     dueDate: new Date(document.getElementById('billDueDate').value).toISOString(),
