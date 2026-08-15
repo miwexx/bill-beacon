@@ -214,11 +214,12 @@ deleteIncomeSource(id) {
     try {
       const s = JSON.parse(localStorage.getItem('settings') || '{}');
       return {
-        currency: s.currency || 'USD',
-        biometricLock: s.biometricLock || false,
-        theme: s.theme || 'dark',
-        ...s,
-      };
+  currency: 'USD',
+  biometricLock: false,
+  theme: 'dark',
+  currentPayCycle: 'auto',
+  ...s
+};
     } catch {
       return { currency: 'USD', biometricLock: false, theme: 'dark' };
     }
@@ -304,6 +305,29 @@ function getPayCycleLabel(bill) {
   return dueDay <= 15 ? 'Early Cycle' : 'Late Cycle';
 }
 
+function getCurrentPayCycle() {
+  const settings = Store.getSettings();
+
+  if (
+    settings.currentPayCycle === 'first' ||
+    settings.currentPayCycle === 'second'
+  ) {
+    return settings.currentPayCycle;
+  }
+
+  return new Date().getDate() <= 15 ? 'first' : 'second';
+}
+
+function setCurrentPayCycle(cycle) {
+  const settings = Store.getSettings();
+
+  Store.saveSettings({
+    ...settings,
+    currentPayCycle: cycle
+  });
+
+  render();
+}
 function getMonthlyIncomeEstimate(source) {
   const amount = Number(source.expectedAmount) || 0;
 
@@ -1742,7 +1766,7 @@ function renderInsights() {
   .slice(0, 5);
   const now = new Date();
   const today = new Date();
-const currentCycle = today.getDate() <= 15 ? 'first' : 'second';
+const currentCycle = getCurrentPayCycle();
 
 const currentCycleLabel = currentCycle === 'first'
   ? 'Early Cycle'
@@ -2101,7 +2125,45 @@ function renderSettings() {
        Add Income Source
    </button>
 </div>
+      <div class="settings-section">
+  <div class="section-header">Current Pay Cycle</div>
 
+  <div class="card">
+    <div
+      class="form-row"
+      onclick="setCurrentPayCycle('auto')"
+      style="cursor:pointer"
+    >
+      <div class="form-label">Automatic</div>
+      <div style="flex:1"></div>
+      ${settings.currentPayCycle === 'auto' ? svgIcon('check', 20) : ''}
+    </div>
+
+    <div
+      class="form-row"
+      onclick="setCurrentPayCycle('first')"
+      style="cursor:pointer"
+    >
+      <div class="form-label">Early Cycle</div>
+      <div style="flex:1"></div>
+      ${settings.currentPayCycle === 'first' ? svgIcon('check', 20) : ''}
+    </div>
+
+    <div
+      class="form-row"
+      onclick="setCurrentPayCycle('second')"
+      style="cursor:pointer"
+    >
+      <div class="form-label">Late Cycle</div>
+      <div style="flex:1"></div>
+      ${settings.currentPayCycle === 'second' ? svgIcon('check', 20) : ''}
+    </div>
+  </div>
+
+  <div class="settings-footer">
+    Choose a cycle manually when your paycheck arrives earlier or later than the normal schedule.
+  </div>
+</div>
         <div class="settings-section">
           <div class="section-header">Data</div>
 
