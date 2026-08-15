@@ -1610,14 +1610,16 @@ function openDashboardStatusSheet(status) {
   let icon = svgIcon('checkCircle', 18);
   let selectedBills = [];
 
-  if (status === 'paid') {
-    const paidBillIds = new Set(
-      Store.getPayments()
-        .filter(payment => isSameMonth(payment.paidDate, now))
-        .map(payment => payment.billId)
-    );
-    selectedBills = currentMonthBills.filter(bill => paidBillIds.has(bill.id));
-  }
+if (status === 'paid') {
+  const paidBillIds = new Set(
+    Store.getPayments()
+      .filter(payment => isSameMonth(payment.paidDate, now))
+      .map(payment => payment.billId)
+  );
+
+  selectedBills = Store.getBills()
+    .filter(bill => paidBillIds.has(bill.id));
+}
 
   if (status === 'due') {
     title = 'Due';

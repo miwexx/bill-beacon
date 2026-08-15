@@ -947,14 +947,19 @@ a { color: var(--accent); text-decoration: none; }
   z-index: 201;
   background: var(--bg);
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
-  max-height: 92dvh;
+  max-height: 85dvh;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   transform: translateY(100%);
   transition: transform var(--transition);
   padding-bottom: var(--safe-bottom);
   border-top: 1px solid var(--border-strong);
 }
-
+.sheet-overlay {
+  touch-action: none;
+  overscroll-behavior: none;
+}
 .sheet.show { transform: translateY(0); }
 
 .sheet-handle {
