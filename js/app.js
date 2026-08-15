@@ -747,20 +747,39 @@ const next7DaysTotal = next7DaysBills.reduce(
             ${paidCount} paid · ${unpaidMonthBills.length} still due
           </div>
         </button>
-   <div class="section-header">Bill Status · ${currentMonthLabel}</div>
+ 
+        ${
+          nextDueBill
+          <div class="section-header">Bill Status · ${currentMonthLabel}</div>
+
 <div class="dashboard-status-row">
-  <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
+  <button
+    class="dashboard-status-card status-paid-card"
+    onclick="openDashboardStatusSheet('paid')"
+    aria-label="View paid bills"
+  >
     <div class="dashboard-status-number text-paid">${paidCount}</div>
     <div class="dashboard-status-label">Paid</div>
   </button>
 
-  <button class="dashboard-status-card status-upcoming-card" onclick="openDashboardStatusSheet('due')" aria-label="View bills due">
+  <button
+    class="dashboard-status-card status-upcoming-card"
+    onclick="openDashboardStatusSheet('due')"
+    aria-label="View bills due"
+  >
     <div class="dashboard-status-number text-upcoming">${upcomingCount}</div>
     <div class="dashboard-status-label">Due</div>
   </button>
 
-        ${
-          nextDueBill
+  <button
+    class="dashboard-status-card status-overdue-card"
+    onclick="openDashboardStatusSheet('overdue')"
+    aria-label="View overdue bills"
+  >
+    <div class="dashboard-status-number text-overdue">${overdueCount}</div>
+    <div class="dashboard-status-label">Overdue</div>
+  </button>
+</div>
             ? `
               <button
                 class="next-due-card ${
