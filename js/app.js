@@ -1375,7 +1375,7 @@ window.openCalendarDay = function(dateString) {
         <div style="width:54px"></div>
       </div>
 
-      <div style="padding:var(--space-4)">
+      <div class="sheet-body">
         <div class="card" style="margin-bottom:var(--space-4)">
           <div class="form-row">
             <div>
@@ -1541,7 +1541,7 @@ function openCycleBillsSheet(cycle, cycleLabel) {
         <div style="width:54px"></div>
       </div>
 
-      <div style="padding:var(--space-4)">
+      <div class="sheet-body">
         <div class="card" style="margin-bottom:var(--space-4)">
           <div class="form-row">
             <div>
@@ -1662,7 +1662,7 @@ if (status === 'paid') {
         <div style="width: 54px"></div>
       </div>
 
-      <div style="padding: var(--space-4)">
+      <div class="sheet-body">
         <div class="card" style="margin-bottom: var(--space-4); overflow: hidden">
           <div class="form-row">
             <div style="display: flex; align-items: center; gap: var(--space-2); color: ${color}">
@@ -2828,7 +2828,7 @@ window.openCalendarAddMenu = function(dateString) {
         <div style="width:54px"></div>
       </div>
 
-      <div style="padding:var(--space-4)">
+      <div class="sheet-body">
         <div
           class="settings-footer"
           style="padding:0 0 var(--space-4)"
@@ -3106,7 +3106,7 @@ function openBillForm(billId = null, selectedDate = null) {
         <div class="sheet-title">${bill ? 'Edit Bill' : 'New Bill'}</div>
         <button class="nav-button" onclick="saveBill()" style="font-weight:700">Save</button>
       </div>
-      <div style="padding:var(--space-4)">
+      <div class="sheet-body">
         <div class="content-gap">
           <div>
             <div class="section-header">Bill Details</div>
@@ -3301,7 +3301,7 @@ function openPaymentLinkPopup(billId) {
         </button>
       </div>
 
-      <div style="padding:var(--space-4)">
+      <div class="sheet-body">
         <div class="section-header">${escapeHtml(bill.name)}</div>
 
         <div class="card">
