@@ -1216,11 +1216,7 @@ function renderCalendar() {
 
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
-        <div
-  class="card card-pad"
-  <div class="card card-pad">
-  ontouchend="calendarSwipeEnd(event, '${prevMonth}', '${nextMonth}')"
->
+        <div class="card card-pad">
           <div class="month-nav">
             <button class="month-nav-btn" onclick="navigate('calendar', { month: '${prevMonth}' })" aria-label="Previous month">
               ${svgIcon('chevronLeft', 22)}
