@@ -2823,7 +2823,7 @@ function openBillForm(billId = null, selectedDate = null) {
 
     <input
       class="form-input"
-      id="billPaymentUrl"
+      id="PaymentUrl"
       type="url"
       placeholder="provider.com/pay"
       value="${bill ? escapeHtml(bill.paymentUrl || '') : ''}"
@@ -2920,7 +2920,8 @@ function saveBill() {
   return;
 }
 
-let paymentUrl = document.getElementById('paymentUrl').value.trim();
+const paymentUrlInput = document.getElementById('paymentUrl');
+let paymentUrl = paymentUrlInput ? paymentUrlInput.value.trim() : '';
 
 if (paymentUrl) {
   if (!/^https?:\/\//i.test(paymentUrl)) {
