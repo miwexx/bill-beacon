@@ -2913,7 +2913,7 @@ function openIncomeSourceForm(sourceId = null) {
         </button>
       </div>
 
-      <div style="padding: var(--space-4);" class="content-gap">
+      <div class="sheet-body content-gap">
         <div>
           <div class="section-header">Income Details</div>
 
@@ -3014,9 +3014,10 @@ function closeIncomeSourceForm() {
   document.getElementById('incomeSourceOverlay')?.classList.remove('show');
   document.getElementById('incomeSourceSheet')?.classList.remove('show');
 
-  setTimeout(() => {
-    document.getElementById('incomeSourceContainer')?.remove();
-  }, 300);
+ setTimeout(() => {
+  document.getElementById('incomeSourceContainer')?.remove();
+  unlockBackgroundScroll();
+}, 300);
 
   editingIncomeSourceId = null;
 }
