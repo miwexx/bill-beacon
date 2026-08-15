@@ -2240,7 +2240,7 @@ function renderBillDetail() {
     style="width:100%; margin-top:var(--space-4);"
     onclick="openBillForm('${bill.id}')"
   >
-    Add payment link
+    onclick="openBillForm('${bill.id}')"
   </button>
 `}
           <div class="section-header">Details</div>
@@ -2911,7 +2911,97 @@ function closeBillForm() {
   editingBillId = null;
 }
 
+function openPaymentLinkPopup(billId) {
+  const bill = Store.getBill(billId);
 
+  if (!bill) {
+    alert('Bill not found.');
+    return;
+  }
+
+  const container = document.createElement('div');
+  container.id = 'paymentLinkPopupContainer';
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="paymentLinkPopupOverlay"
+      onclick="closePaymentLinkPopup()"
+    ></div>
+
+    <div class="sheet" id="paymentLinkPopupSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closePaymentLinkPopup()">
+          Cancel
+        </button>
+
+        <div class="sheet-title">Payment Link</div>
+
+        <button
+          class="nav-button"
+          onclick="savePaymentLinkPopup('${bill.id}')"
+          style="font-weight:700"
+        >
+          Save
+        </button>
+      </div>
+
+      <div style="padding:var(--space-4)">
+        <div class="section-header">${escapeHtml(bill.name)}</div>
+
+        <div class="card">
+          <div class="form-row">
+            <div class="form-label">Website</div>
+
+            <input
+              class="form-input"
+              id="quickPaymentUrl"
+              type="text"
+              inputmode="url"
+              placeholder="provider.com/pay"
+              value="${escapeHtml(bill.paymentUrl || '')}"
+              style="text-align:left"
+            />
+          </div>
+        </div>
+
+        <div class="settings-footer">
+          Optional. Paste the company’s payment or sign-in website.
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  requestAnimationFrame(() => {
+    document.getElementById('paymentLinkPopupOverlay')?.classList.add('show');
+    document.getElementById('paymentLinkPopupSheet')?.classList.add('show');
+
+    document.getElementById('quickPaymentUrl')?.focus();
+  });
+}
+
+function closePaymentLinkPopup() {
+  document.getElementById('paymentLinkPopupOverlay')?.classList.remove('show');
+  document.getElementById('paymentLinkPopupSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('paymentLinkPopupContainer')?.remove();
+  }, 300);
+}
+
+function savePaymentLinkPopup(billId) {
+  const input = document.getElementById('quickPaymentUrl');
+  const paymentUrl = input ? input.value.trim() : '';
+
+  Store.updateBill(billId, { paymentUrl });
+
+  closePaymentLinkPopup();
+  render();
+}
 function saveBill() {
   const name = document.getElementById('billName').value.trim();
   const amount = parseFloat(document.getElementById('billAmount').value) || 0;
