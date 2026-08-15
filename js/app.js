@@ -2876,25 +2876,7 @@ function openBillForm(billId = null, selectedDate = null) {
             </div>
             <div class="settings-footer">Reminders appear when you open the app. Enable notifications in Safari for best results.</div>
           </div>
-                  <div>
-  <div class="section-header">Payment Link</div>
-
-  <div class="card">
-    <input
-      class="form-input"
-      id="paymentUrl"
-      type="url"
-      inputmode="url"
-      placeholder="https://provider.com/pay"
-      value="${bill ? escapeHtml(bill.paymentUrl || '') : ''}"
-      style="text-align:left"
-    />
-  </div>
-
-  <div class="settings-footer">
-    Optional. Paste the company’s official payment or sign-in website.
-  </div>
-</div>
+                
           <div>
             <div class="section-header">Notes</div>
             <div class="card">
