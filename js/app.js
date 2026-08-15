@@ -2113,11 +2113,30 @@ function renderSettings() {
               </div>
             </div>
 
-            <div class="form-row" onclick="exportCSV()" style="cursor:pointer">
-              <div class="form-label">${svgIcon('export', 18)}</div>
-              <div style="flex:1;color:var(--accent)">Export Bills CSV</div>
-            </div>
-          </div>
+          <div class="form-row" onclick="exportCSV()" style="cursor:pointer">
+  <div class="form-label">${svgIcon('export', 18)}</div>
+  <div style="flex:1;color:var(--accent)">Export Bills CSV</div>
+</div>
+
+<div
+  class="form-row"
+  onclick="document.getElementById('billImportFile').click()"
+  style="cursor:pointer"
+>
+  <div class="form-label">${svgIcon('tray', 18)}</div>
+
+  <div style="flex:1;color:var(--accent)">
+    Import Bills CSV
+  </div>
+
+  <input
+    id="billImportFile"
+    type="file"
+    accept=".csv,text/csv"
+    style="display:none"
+    onchange="importBillsCSV(event)"
+  />
+</div>
 
           <div class="settings-footer">
             All data is stored on this device only. No cloud, no sync, no account.
@@ -2144,7 +2163,7 @@ function renderSettings() {
               <span class="about-label">Cost</span>
               <span class="about-value text-paid">Free</span>
             </div>
-            <div class="about-row">
+            <div             class="about-row">
               <span class="about-label">Ads</span>
               <span class="about-value">None</span>
             </div>
@@ -2178,7 +2197,269 @@ function renderSettings() {
     </div>
   `;
 }
+function parseCSV(text) {
+  const rows = [];
+  let row = [];
+  let cell = '';
+  let inQuotes = false;
 
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const next = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && next === '"') {
+        cell += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === ',' && !inQuotes) {
+      row.push(cell.trim());
+      cell = '';
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && next === '\n') i++;
+
+      row.push(cell.trim());
+      cell = '';
+
+      if (row.some(value => value !== '')) {
+        rows.push(row);
+      }
+
+      row = [];
+    } else {
+      cell += char;
+    }
+  }
+
+  row.push(cell.trim());
+
+  if (row.some(value => value !== '')) {
+    rows.push(row);
+  }
+
+  return rows;
+}
+
+function normaliseHeader(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function getImportedValue(row, headerMap, names) {
+  for (const name of names) {
+    const index = headerMap[normaliseHeader(name)];
+
+    if (index !== undefined) {
+      return String(row[index] || '').trim();
+    }
+  }
+
+  return '';
+}
+
+function categoryIdFromImport(value) {
+  const input = String(value || '').trim().toLowerCase();
+
+  const category = CATEGORIES.find(item =>
+    item.id.toLowerCase() === input ||
+    item.label.toLowerCase() === input
+  );
+
+  return category ? category.id : 'other';
+}
+
+function recurrenceFromImport(value) {
+  const input = String(value || '').trim().toLowerCase();
+
+  const match = RECURRENCE.find(item => item.toLowerCase() === input);
+
+  return match || 'None';
+}
+
+function payCycleFromImport(value, dueDate) {
+  const input = String(value || '').trim().toLowerCase();
+
+  if (input === 'first' || input === 'early' || input === 'early cycle') {
+    return 'first';
+  }
+
+  if (input === 'second' || input === 'late' || input === 'late cycle') {
+    return 'second';
+  }
+
+  const dueDay = new Date(`${dueDate}T12:00:00`).getDate();
+
+  return dueDay <= 15 ? 'first' : 'second';
+}
+
+function paymentMethodFromImport(value) {
+  const input = String(value || '').trim().toLowerCase();
+
+  const match = PAYMENT_METHODS.find(
+    item => item.toLowerCase() === input
+  );
+
+  return match || '';
+}
+
+function booleanFromImport(value) {
+  return ['yes', 'true', '1', 'on'].includes(
+    String(value || '').trim().toLowerCase()
+  );
+}
+
+function normaliseImportedDate(value) {
+  const input = String(value || '').trim();
+
+  if (!input) return '';
+
+  const directMatch = input.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (directMatch) {
+    return `${directMatch[1]}-${directMatch[2]}-${directMatch[3]}T12:00:00.000Z`;
+  }
+
+  const date = new Date(input);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toISOString();
+}
+
+function importBillsCSV(event) {
+  const file = event.target.files?.[0];
+
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    try {
+      const rows = parseCSV(String(reader.result || ''));
+
+      if (rows.length < 2) {
+        alert('The file needs a header row and at least one bill.');
+        return;
+      }
+
+      const headerMap = {};
+
+      rows[0].forEach((header, index) => {
+        headerMap[normaliseHeader(header)] = index;
+      });
+
+      const requiredHeaders = ['name', 'amount', 'duedate'];
+      const missingHeaders = requiredHeaders.filter(
+        header => headerMap[header] === undefined
+      );
+
+      if (missingHeaders.length) {
+        alert(
+          `Missing required column(s): ${missingHeaders.join(', ')}.`
+        );
+        return;
+      }
+
+      const importedBills = [];
+      const skippedRows = [];
+
+      rows.slice(1).forEach((row, rowIndex) => {
+        const name = getImportedValue(row, headerMap, ['Name']);
+        const amount = Number(
+          getImportedValue(row, headerMap, ['Amount'])
+            .replace(/[$,]/g, '')
+        );
+        const dueDate = normaliseImportedDate(
+          getImportedValue(row, headerMap, ['Due Date', 'DueDate'])
+        );
+
+        if (!name || !Number.isFinite(amount) || amount < 0 || !dueDate) {
+          skippedRows.push(rowIndex + 2);
+          return;
+        }
+
+        const category = categoryIdFromImport(
+          getImportedValue(row, headerMap, ['Category'])
+        );
+
+        const recurrence = recurrenceFromImport(
+          getImportedValue(row, headerMap, ['Recurrence'])
+        );
+
+        const payCycle = payCycleFromImport(
+          getImportedValue(row, headerMap, ['Pay Cycle', 'PayCycle']),
+          dueDate.slice(0, 10)
+        );
+
+        const paymentMethod = paymentMethodFromImport(
+          getImportedValue(row, headerMap, ['Payment Method', 'PaymentMethod'])
+        );
+
+        importedBills.push({
+          id: uid(),
+          name,
+          amount: amount.toString(),
+          dueDate,
+          category,
+          recurrence,
+          payCycle,
+          paymentMethod,
+          paymentUrl: getImportedValue(row, headerMap, [
+            'Payment Link',
+            'PaymentLink',
+            'Website'
+          ]),
+          autopay: booleanFromImport(
+            getImportedValue(row, headerMap, ['Autopay'])
+          ),
+          notes: getImportedValue(row, headerMap, ['Notes']),
+          reminderOffsets: [7, 1],
+          createdAt: new Date().toISOString()
+        });
+      });
+
+      if (!importedBills.length) {
+        alert('No valid bills were found. Check Name, Amount, and Due Date.');
+        return;
+      }
+
+      const existingBills = Store.getBills();
+
+      const confirmed = confirm(
+        `Import ${importedBills.length} bill(s) into this device?` +
+        (skippedRows.length
+          ? `\\n\\nSkipped row(s): ${skippedRows.join(', ')}.`
+          : '')
+      );
+
+      if (!confirmed) return;
+
+      Store.saveBills([...existingBills, ...importedBills]);
+
+      event.target.value = '';
+
+      alert(
+        `${importedBills.length} bill(s) imported successfully.` +
+        (skippedRows.length
+          ? `\\nSkipped row(s): ${skippedRows.join(', ')}.`
+          : '')
+      );
+
+      render();
+    } catch (error) {
+      console.error(error);
+      alert('Unable to import this CSV file. Please use the Bill Beacon template.');
+    }
+  };
+
+  reader.readAsText(file);
+}
 function renderBillDetail() {
   const bill = Store.getBill(routeParams.id);
   if (!bill) {
