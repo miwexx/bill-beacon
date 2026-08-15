@@ -3244,7 +3244,7 @@ function openBillForm(billId = null, selectedDate = null) {
   sheetContainer.id = 'sheetContainer';
   sheetContainer.innerHTML = sheetHtml;
   document.body.appendChild(sheetContainer);
-
+            lockBackgroundScroll();
   // Animate in
   requestAnimationFrame(() => {
     document.getElementById('sheetOverlay').classList.add('show');
@@ -3257,10 +3257,15 @@ function closeBillForm() {
   const sheet = document.getElementById('billSheet');
   if (overlay) overlay.classList.remove('show');
   if (sheet) sheet.classList.remove('show');
-  setTimeout(() => {
-    const container = document.getElementById('sheetContainer');
-    if (container) container.remove();
-  }, 300);
+ setTimeout(() => {
+  const container = document.getElementById('sheetContainer');
+
+  if (container) {
+    container.remove();
+  }
+
+  unlockBackgroundScroll();
+}, 300);
   editingBillId = null;
 }
 
@@ -5117,7 +5122,7 @@ function lockBackgroundScroll() {
 }
 
 function unlockBackgroundScroll() {
-  if (!document.body.classList.contains('popup-open')) return;
+  const scrollY = backgroundScrollY || 0;
 
   document.body.classList.remove('popup-open');
   document.body.style.position = '';
@@ -5126,9 +5131,17 @@ function unlockBackgroundScroll() {
   document.body.style.right = '';
   document.body.style.width = '';
 
-  window.scrollTo(0, backgroundScrollY);
-}
+  backgroundScrollY = 0;
 
+  requestAnimationFrame(() => {
+    window.scrollTo(0, scrollY);
+
+    const main = document.querySelector('.main-content');
+    if (main) {
+      main.scrollTop = 0;
+    }
+  });
+}
 document.addEventListener('DOMContentLoaded', () => {
   refreshNotificationInbox()
     .then(() => {
