@@ -2238,7 +2238,7 @@ function renderBillDetail() {
   <button
     class="btn-secondary"
     style="width:100%; margin-top:var(--space-4);"
-    onclick="openPaymentLinkForm('${bill.id}')"
+    onclick="openBillForm('${bill.id}')"
   >
     Add payment link
   </button>
@@ -2909,120 +2909,8 @@ function closeBillForm() {
   }, 300);
   editingBillId = null;
 }
-function openPaymentLinkForm(billId) {
-  const bill = Store.getBill(billId);
 
-  if (!bill) {
-    alert("Bill not found.");
-    return;
-  }
 
-  const container = document.createElement("div");
-  container.id = "paymentLinkSheetContainer";
-
-  container.innerHTML = `
-    <div
-      class="sheet-overlay"
-      id="paymentLinkSheetOverlay"
-      onclick="closePaymentLinkForm()"
-    ></div>
-
-    <div class="sheet" id="paymentLinkSheet">
-      <div class="sheet-handle"></div>
-
-      <div class="sheet-nav">
-        <button class="nav-button" onclick="closePaymentLinkForm()">
-          Cancel
-        </button>
-
-        <div class="sheet-title">Payment Link</div>
-
-        <button
-          class="nav-button"
-          onclick="savePaymentLink('${bill.id}')"
-          style="font-weight:700"
-        >
-          Save
-        </button>
-      </div>
-
-      <div style="padding:var(--space-4)">
-        <div class="content-gap">
-          <div>
-            <div class="section-header">${escapeHtml(bill.name)}</div>
-
-            <div class="card">
-              <div class="form-row">
-                <div class="form-label">Website</div>
-
-                <input
-                  class="form-input"
-                  id="quickPaymentUrl"
-                  type="url"
-                  inputmode="url"
-                  placeholder="provider.com/pay"
-                  value="${escapeHtml(bill.paymentUrl || "")}"
-                  style="text-align:left"
-                />
-              </div>
-            </div>
-
-            <div class="settings-footer">
-              Paste the provider’s official payment or sign-in website.
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-
-  requestAnimationFrame(() => {
-    document.getElementById("paymentLinkSheetOverlay")?.classList.add("show");
-    document.getElementById("paymentLinkSheet")?.classList.add("show");
-  });
-}
-
-function closePaymentLinkForm() {
-  const overlay = document.getElementById("paymentLinkSheetOverlay");
-  const sheet = document.getElementById("paymentLinkSheet");
-
-  overlay?.classList.remove("show");
-  sheet?.classList.remove("show");
-
-  setTimeout(() => {
-    document.getElementById("paymentLinkSheetContainer")?.remove();
-  }, 300);
-}
-
-function savePaymentLink(billId) {
-  let paymentUrl = document.getElementById("quickPaymentUrl").value.trim();
-
-  if (paymentUrl) {
-    if (!/^https?:\/\//i.test(paymentUrl)) {
-      paymentUrl = `https://${paymentUrl}`;
-    }
-
-    try {
-      const url = new URL(paymentUrl);
-
-      if (url.protocol !== "https:") {
-        throw new Error("Payment link must use HTTPS");
-      }
-
-      paymentUrl = url.href;
-    } catch {
-      alert("Please enter a valid payment website, for example: verizon.com");
-      return;
-    }
-  }
-
-  Store.updateBill(billId, { paymentUrl });
-
-  closePaymentLinkForm();
-  render();
-}
 
 function saveBill() {
   const name = document.getElementById('billName').value.trim();
