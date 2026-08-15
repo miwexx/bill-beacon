@@ -1594,6 +1594,29 @@ function closeCycleBillsSheet() {
   unlockBackgroundScroll();
 }, 300);
 }
+let dashboardSheetSwipeStartY = 0;
+let dashboardSheetSwipeStartX = 0;
+
+window.startDashboardSheetSwipe = function (event) {
+  if (event.touches.length !== 1) return;
+
+  const touch = event.touches[0];
+  dashboardSheetSwipeStartY = touch.clientY;
+  dashboardSheetSwipeStartX = touch.clientX;
+};
+
+window.endDashboardSheetSwipe = function (event) {
+  if (event.changedTouches.length !== 1) return;
+
+  const touch = event.changedTouches[0];
+  const deltaY = touch.clientY - dashboardSheetSwipeStartY;
+  const deltaX = touch.clientX - dashboardSheetSwipeStartX;
+
+  if (deltaY > 80 && Math.abs(deltaY) > Math.abs(deltaX)) {
+    closeDashboardStatusSheet();
+  }
+};
+
 function openDashboardStatusSheet(status) {
   const now = new Date();
   const currentMonthBills = Store.getBills().filter(bill => {
@@ -1650,7 +1673,11 @@ function openDashboardStatusSheet(status) {
     <div class="sheet-overlay" id="dashboardStatusOverlay" onclick="closeDashboardStatusSheet()"></div>
 
     <div class="sheet" id="dashboardStatusSheet">
-      <div class="sheet-handle"></div>
+      <div
+  class="sheet-handle"
+  ontouchstart="startDashboardSheetSwipe(event)"
+  ontouchend="endDashboardSheetSwipe(event)"
+></div>
 
       <div class="sheet-nav">
         <button class="nav-button" onclick="closeDashboardStatusSheet()">Close</button>
@@ -1678,7 +1705,7 @@ function openDashboardStatusSheet(status) {
                 ${selectedBills.map(bill => {
                   const category = getCategory(bill.category);
                   const dateLabel = status === 'paid'
-                    ? 'Paid this month'
+                    ? 'Paid This Month'
                     : `${formatDate(bill.dueDate, 'full')} · ${relativeDue(bill.dueDate)}`;
 
                   return `
@@ -1704,7 +1731,7 @@ function openDashboardStatusSheet(status) {
               </div>`
             : `<div class="empty-state">
                 <div class="empty-state-icon">${svgIcon('checkCircle', 44)}</div>
-                <div class="empty-state-title">No ${title.toLowerCase()} bills</div>
+                <div class="empty-state-title">No ${title.toLowerCase()} Bills</div>
                 <div class="empty-state-text">There is nothing to show for this month.</div>
               </div>`
         }
@@ -2010,7 +2037,7 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
             ${catEntries.length === 0 ? `
               <div class="empty-state">
                 <div class="empty-state-icon">${svgIcon('pieChart', 40)}</div>
-                <div class="empty-state-text">No payments this month yet.</div>
+                <div class="empty-state-text">No Payments This Month Yet.</div>
               </div>
             ` : catEntries.map(([catId, total]) => {
               const cat = getCategory(catId);
