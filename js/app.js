@@ -747,6 +747,12 @@ const next7DaysTotal = next7DaysBills.reduce(
             ${paidCount} paid · ${unpaidMonthBills.length} still due
           </div>
         </button>
+     <div class="section-header">Bill Status · ${currentMonthLabel}</div>
+        <div class="dashboard-status-row">
+        <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
+       <div class="dashboard-status-number text-paid">${paidCount}</div>
+    <div class="dashboard-status-label">Paid</div>
+  </button>
 
         ${nextDueBill
             ? `
@@ -807,13 +813,7 @@ const next7DaysTotal = next7DaysBills.reduce(
             `
         }
 
-        <div class="section-header">Bill Status · ${currentMonthLabel}</div>
-<div class="dashboard-status-row">
-  <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
-    <div class="dashboard-status-number text-paid">${paidCount}</div>
-    <div class="dashboard-status-label">Paid</div>
-  </button>
-
+       
   <button class="dashboard-status-card status-upcoming-card" onclick="openDashboardStatusSheet('due')" aria-label="View bills due">
     <div class="dashboard-status-number text-upcoming">${upcomingCount}</div>
     <div class="dashboard-status-label">Due</div>
