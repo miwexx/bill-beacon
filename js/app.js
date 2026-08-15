@@ -2235,13 +2235,13 @@ function renderBillDetail() {
     Pay ${escapeHtml(bill.name)}
   </button>
 ` : `
-  <button
-    class="btn-secondary"
-    style="width:100%; margin-top:var(--space-4);"
-    onclick="openBillForm('${bill.id}')"
-  >
-    onclick="openBillForm('${bill.id}')"
-  </button>
+ <button
+  class="btn-secondary"
+  style="width:100%; margin-top:var(--space-4);"
+  onclick="openPaymentLinkPopup('${bill.id}')"
+>
+  Add payment link
+</button>
 `}
           <div class="section-header">Details</div>
           <div class="card">
