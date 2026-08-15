@@ -1393,9 +1393,11 @@ a { color: var(--accent); text-decoration: none; }
   display: flex;
   color: var(--text-muted);
 }
+
 .dashboard-status-row {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
 }
 
 .dashboard-status-card {
