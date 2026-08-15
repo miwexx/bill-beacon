@@ -2911,7 +2911,6 @@ function closeBillForm() {
 }
 
 
-
 function saveBill() {
   const name = document.getElementById('billName').value.trim();
   const amount = parseFloat(document.getElementById('billAmount').value) || 0;
