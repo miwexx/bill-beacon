@@ -2112,8 +2112,7 @@ function renderSettings() {
                 ${billCount} bill${billCount === 1 ? '' : 's'} stored on device
               </div>
             </div>
-
-          <div class="form-row" onclick="exportCSV()" style="cursor:pointer">
+            <div class="form-row" onclick="exportCSV()" style="cursor:pointer">
   <div class="form-label">${svgIcon('export', 18)}</div>
   <div style="flex:1;color:var(--accent)">Export Bills CSV</div>
 </div>
@@ -2124,10 +2123,7 @@ function renderSettings() {
   style="cursor:pointer"
 >
   <div class="form-label">${svgIcon('tray', 18)}</div>
-
-  <div style="flex:1;color:var(--accent)">
-    Import Bills CSV
-  </div>
+  <div style="flex:1;color:var(--accent)">Import Bills CSV</div>
 
   <input
     id="billImportFile"
