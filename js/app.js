@@ -5141,3 +5141,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+document.addEventListener(
+  'touchmove',
+  function (event) {
+    if (!document.body.classList.contains('popup-open')) return;
+
+    const sheet = event.target.closest('.sheet');
+
+    if (!sheet) {
+      event.preventDefault();
+      return;
+    }
+
+    const canScroll = sheet.scrollHeight > sheet.clientHeight;
+
+    if (!canScroll) {
+      event.preventDefault();
+    }
+  },
+  { passive: false }
+);

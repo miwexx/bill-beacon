@@ -945,41 +945,23 @@ a { color: var(--accent); text-decoration: none; }
   right: 0;
   bottom: 0;
   z-index: 201;
-  display: flex;
-  flex-direction: column;
-  height: min(85dvh, 720px);
-  overflow: hidden;
   background: var(--bg);
-  border-top: 1px solid var(--border-strong);
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
-  padding-bottom: var(--safe-bottom);
+  max-height: 85dvh;
+  overflow-y: auto;
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: auto;
   transform: translateY(100%);
   transition: transform var(--transition);
-  touch-action: none;
+  padding-bottom: var(--safe-bottom);
+  border-top: 1px solid var(--border-strong);
+  touch-action: pan-y;
 }
 .sheet-overlay {
   touch-action: none;
   overscroll-behavior: none;
 }
 
-.sheet.show {
-  transform: translateY(0);
-}
-
-.sheet-nav,
-.sheet-handle {
-  touch-action: none;
-}
-
-.sheet-body {
-  flex: 1;
-  min-height: 0;
-  padding: var(--space-4);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-}
 .sheet.show { transform: translateY(0); }
 
 .sheet-handle {
