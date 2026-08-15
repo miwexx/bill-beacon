@@ -819,13 +819,7 @@ const next7DaysTotal = next7DaysBills.reduce(
     <div class="dashboard-status-label">Due</div>
   </button>
 
-  <button class="dashboard-status-card status-overdue-card" onclick="openDashboardStatusSheet('overdue')" aria-label="View overdue bills">
-    <div class="dashboard-status-number text-overdue">${overdueCount}</div>
-    <div class="dashboard-status-label">Overdue</div>
-  </button>
-</div>
-
-        <div>
+          <div>
           <div class="dashboard-section-title-row">
             <div class="section-header dashboard-section-header">
               Upcoming Bills
