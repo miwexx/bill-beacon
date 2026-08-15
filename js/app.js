@@ -2271,16 +2271,7 @@ function renderBillDetail() {
             </div>
           </div>
         ` : ''}
-                ${bill.paymentUrl ? `
-  <button
-    class="btn-secondary"
-    onclick="openBillPaymentLink('${bill.id}')"
-    style="margin-bottom: var(--space-3);"
-  >
-    ${svgIcon("export", 20)}
-    Open Payment Link
-  </button>
-` : ''}
+              
         ${status !== 'paid' ? `
           <button class="btn-primary" onclick="confirmMarkPaid('${bill.id}')">
             ${svgIcon('checkCircle', 22)}
