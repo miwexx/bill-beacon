@@ -2823,8 +2823,9 @@ function openBillForm(billId = null, selectedDate = null) {
 
     <input
       class="form-input"
-      id="PaymentUrl"
-      type="url"
+      id="paymentUrl"
+      type="text"
+      inputmode="url"
       placeholder="provider.com/pay"
       value="${bill ? escapeHtml(bill.paymentUrl || '') : ''}"
       style="text-align: left;"
