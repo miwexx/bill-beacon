@@ -819,7 +819,13 @@ const next7DaysTotal = next7DaysBills.reduce(
     <div class="dashboard-status-label">Due</div>
   </button>
 
-          <div>
+  <button class="dashboard-status-card status-overdue-card" onclick="openDashboardStatusSheet('overdue')" aria-label="View overdue bills">
+    <div class="dashboard-status-number text-overdue">${overdueCount}</div>
+    <div class="dashboard-status-label">Overdue</div>
+  </button>
+</div>
+
+        <div>
           <div class="dashboard-section-title-row">
             <div class="section-header dashboard-section-header">
               Upcoming Bills
@@ -1236,8 +1242,20 @@ function renderCalendar() {
           </div>
         </div>
 
-        
-        ${monthBillsSorted.length
+        ${
+          overdueBills.length
+            ? `<div class="card card-pad" style="border-color:color-mix(in srgb, var(--overdue) 38%, var(--border))">
+                <div style="display:flex;align-items:center;gap:var(--space-2);color:var(--overdue)">
+                  ${svgIcon('warning', 18)}
+                  <strong>${overdueBills.length} overdue ${overdueBills.length === 1 ? 'bill' : 'bills'}</strong>
+                  <span style="margin-left:auto;font-weight:800">${formatCurrency(overdueTotal)}</span>
+                </div>
+              </div>`
+            : ''
+        }
+
+        ${
+  monthBillsSorted.length
     ? `<div>
         <div class="section-header">This Month</div>
 
