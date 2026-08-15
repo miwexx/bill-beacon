@@ -2923,24 +2923,6 @@ function saveBill() {
 const paymentUrlInput = document.getElementById('paymentUrl');
 let paymentUrl = paymentUrlInput ? paymentUrlInput.value.trim() : '';
 
-if (paymentUrl) {
-  if (!/^https?:\/\//i.test(paymentUrl)) {
-    paymentUrl = `https://${paymentUrl}`;
-  }
-
-  try {
-    const url = new URL(paymentUrl);
-
-    if (url.protocol !== 'https:') {
-      throw new Error('Payment link must use HTTPS');
-    }
-
-    paymentUrl = url.href;
-  } catch {
-    alert('Please enter a valid payment website, for example: verizon.com');
-    return;
-  }
-}
 
 const data = {
     name,
@@ -2950,7 +2932,7 @@ const data = {
     recurrence: document.getElementById('billRecurrence').value,
     payCycle: document.getElementById('billPayCycle').value,
     paymentMethod: document.getElementById('billPaymentMethod').value,
-    paymentUrl: document.getElementById('billPaymentUrl').value.trim(),
+    paymentUrl: document.getElementById('paymentUrl')?.value.trim() || '',
     autopay: document.getElementById('billAutopay').checked,
     notes: document.getElementById('billNotes').value.trim(),
     reminderOffsets: Array.from(document.querySelectorAll('.reminder-toggle:checked')).map(cb => parseInt(cb.dataset.days)),
