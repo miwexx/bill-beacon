@@ -1464,7 +1464,7 @@ window.openCalendarDay = function(dateString) {
   `;
 
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document.getElementById('calendarDayOverlay')?.classList.add('show');
@@ -1491,6 +1491,7 @@ function closeDashboardStatusSheet() {
 
   setTimeout(() => {
     document.getElementById('dashboardStatusContainer')?.remove();
+    unlockBackgroundScroll();
   }, 300);
 }
 
@@ -1576,7 +1577,7 @@ function openCycleBillsSheet(cycle, cycleLabel) {
   `;
 
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document.getElementById('cycleBillsOverlay')?.classList.add('show');
@@ -1589,8 +1590,9 @@ function closeCycleBillsSheet() {
   document.getElementById('cycleBillsSheet')?.classList.remove('show');
 
   setTimeout(() => {
-    document.getElementById('cycleBillsContainer')?.remove();
-  }, 300);
+  document.getElementById('cycleBillsContainer')?.remove();
+  unlockBackgroundScroll();
+}, 300);
 }
 function openDashboardStatusSheet(status) {
   const now = new Date();
@@ -1711,7 +1713,7 @@ function openDashboardStatusSheet(status) {
   `;
 
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document.getElementById('dashboardStatusOverlay')?.classList.add('show');
@@ -2777,7 +2779,7 @@ function openAddMenu() {
   container.id = 'addMenuContainer';
   container.innerHTML = menuHtml;
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document.getElementById('addMenuOverlay').classList.add('show');
@@ -2851,7 +2853,7 @@ window.openCalendarAddMenu = function(dateString) {
   `;
 
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document.getElementById('calendarAddMenuOverlay')?.classList.add('show');
@@ -2995,7 +2997,7 @@ function openIncomeSourceForm(sourceId = null) {
   container.id = 'incomeSourceContainer';
   container.innerHTML = sheetHtml;
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
   
 
   requestAnimationFrame(() => {
@@ -3322,7 +3324,7 @@ function openPaymentLinkPopup(billId) {
   `;
 
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document.getElementById('paymentLinkPopupOverlay')?.classList.add('show');
@@ -3675,7 +3677,7 @@ function openNotificationCenter() {
   `;
 
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document
@@ -4676,7 +4678,7 @@ function openInstallmentPlanForm() {
   `;
 
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document.getElementById("installmentPlanOverlay")?.classList.add("show");
@@ -5082,7 +5084,7 @@ openNotificationCenter = async function () {
   `;
 
   document.body.appendChild(container);
-  unlockBackgroundScroll();
+  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document
