@@ -1594,28 +1594,7 @@ function closeCycleBillsSheet() {
   unlockBackgroundScroll();
 }, 300);
 }
-let dashboardSheetSwipeStartY = 0;
-let dashboardSheetSwipeStartX = 0;
 
-window.startDashboardSheetSwipe = function (event) {
-  if (event.touches.length !== 1) return;
-
-  const touch = event.touches[0];
-  dashboardSheetSwipeStartY = touch.clientY;
-  dashboardSheetSwipeStartX = touch.clientX;
-};
-
-window.endDashboardSheetSwipe = function (event) {
-  if (event.changedTouches.length !== 1) return;
-
-  const touch = event.changedTouches[0];
-  const deltaY = touch.clientY - dashboardSheetSwipeStartY;
-  const deltaX = touch.clientX - dashboardSheetSwipeStartX;
-
-  if (deltaY > 80 && Math.abs(deltaY) > Math.abs(deltaX)) {
-    closeDashboardStatusSheet();
-  }
-};
 
 function openDashboardStatusSheet(status) {
   const now = new Date();
@@ -1673,11 +1652,7 @@ function openDashboardStatusSheet(status) {
     <div class="sheet-overlay" id="dashboardStatusOverlay" onclick="closeDashboardStatusSheet()"></div>
 
     <div class="sheet" id="dashboardStatusSheet">
-      <div
-  class="sheet-handle"
-  ontouchstart="startDashboardSheetSwipe(event)"
-  ontouchend="endDashboardSheetSwipe(event)"
-></div>
+      <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
         <button class="nav-button" onclick="closeDashboardStatusSheet()">Close</button>
