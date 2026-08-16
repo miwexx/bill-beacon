@@ -2052,45 +2052,7 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
 </span>
     </div>
   </button>
-
-
-  ${monthlyLimit > 0 ? `
-    <div class="card card-pad">
-      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2);">
-        <div style="font-size: var(--text-lg); font-weight: 800;">
-          ${formatCurrency(totalPaid)}
-          <span style="font-size: var(--text-sm); color: var(--text-muted); font-weight: 500;">
-            of ${formatCurrency(monthlyLimit)}
-          </span>
-        </div>
-
-        <div style="font-size: var(--text-sm); color: ${isOverLimit ? 'var(--overdue)' : 'var(--text-muted)'}; font-weight: 700;">
-          ${isOverLimit
-            ? `${formatCurrency(totalPaid - monthlyLimit)} over`
-            : `${formatCurrency(remainingLimit)} left`}
-        </div>
-      </div>
-
-      <div class="dashboard-progress-track" style="margin-top: var(--space-3);">
-        <div
-          class="dashboard-progress-fill"
-          style="width: ${limitPercent}%; background: ${isOverLimit ? 'var(--overdue)' : 'var(--accent)'};"
-        ></div>
-      </div>
-    </div>
-  ` : `
-    <button
-      class="card card-pad"
-      onclick="editMonthlySpendingLimit()"
-      style="width: 100%; text-align: left; cursor: pointer;"
-    >
-      <div style="font-weight: 700;">Set a monthly spending limit</div>
-      <div style="font-size: var(--text-sm); color: var(--text-muted); margin-top: 4px;">
-        Track your monthly payments against one target.
-      </div>
-    </button>
-  `}
-</div>
+ 
         <div>
           <div class="section-header">Spending by Category</div>
           <div class="card card-pad">
