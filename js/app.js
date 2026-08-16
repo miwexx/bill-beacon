@@ -2698,30 +2698,7 @@ function renderBillDetail() {
             </div>
           </div>
         ` : ''}
-         
-        ${status !== 'paid' ? `
-          <button class="btn-primary" onclick="confirmMarkPaid('${bill.id}')">
-            ${svgIcon('checkCircle', 22)}
-            Mark as Paid
-          </button>
-        ` : ''}
-
-        <button class="btn-danger" onclick="confirmDeleteBill('${bill.id}')">
-          ${svgIcon('trash', 16)} Archive Bill
-        </button>
-      </div>
-    </div>
-  `;
-}
-
-function detailRow(label, value) {
-  return `
-    <div class="form-row">
-      <div class="form-label">${label}</div>
-      <div style="flex:1;text-align:right;font-weight:500">${escapeHtml(value)}</div>
-    </div>
-  `;
-       <div class="bill-details-disclosure">
+              <div class="bill-details-disclosure">
   <button
     type="button"
     class="bill-details-toggle"
@@ -2747,6 +2724,28 @@ function detailRow(label, value) {
     </div>
   </div>
 </div>
+        ${status !== 'paid' ? `
+          <button class="btn-primary" onclick="confirmMarkPaid('${bill.id}')">
+            ${svgIcon('checkCircle', 22)}
+            Mark as Paid
+          </button>
+        ` : ''}
+
+        <button class="btn-danger" onclick="confirmDeleteBill('${bill.id}')">
+          ${svgIcon('trash', 16)} Archive Bill
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function detailRow(label, value) {
+  return `
+    <div class="form-row">
+      <div class="form-label">${label}</div>
+      <div style="flex:1;text-align:right;font-weight:500">${escapeHtml(value)}</div>
+    </div>
+  `;
 }
 
 // ====================================
