@@ -2698,15 +2698,7 @@ function renderBillDetail() {
             </div>
           </div>
         ` : ''}
-             <button
-  type="button"
-  class="btn-secondary bill-show-details-button"
-  onclick="openBillDetailsSheet('${bill.id}')"
->
-  ${svgIcon('doc', 18)}
-  Show details
-  ${svgIcon('chevronRight', 18)}
-</button>
+             
         ${status !== 'paid' ? `
           <button class="btn-primary" onclick="confirmMarkPaid('${bill.id}')">
             ${svgIcon('checkCircle', 22)}
@@ -2717,6 +2709,16 @@ function renderBillDetail() {
         <button class="btn-danger" onclick="confirmDeleteBill('${bill.id}')">
           ${svgIcon('trash', 16)} Archive Bill
         </button>
+
+        <button
+  type="button"
+  class="btn-secondary bill-show-details-button"
+  onclick="openBillDetailsSheet('${bill.id}')"
+>
+  ${svgIcon('doc', 18)}
+  Show details
+  ${svgIcon('chevronRight', 18)}
+</button>
       </div>
     </div>
   `;
