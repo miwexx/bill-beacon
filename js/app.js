@@ -118,6 +118,9 @@ const ICONS = {
   tray: '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 2v8.59l-2.3-2.3-3.59 3.59-4-4L5 14.59V5h14zM7 9c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" fill="currentColor"/>',
   pieChart: '<path d="M11 2v20c5.52 0 10-4.48 10-10S16.52 2 11 2zm-1 7L4.6 7.3C3.6 8.8 3 10.6 3 12.5 3 17.2 6.8 21 11.5 21c1.9 0 3.7-.6 5.2-1.6L10 9z" fill="currentColor"/>',
   trendUp: '<path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" fill="currentColor"/>',
+  moreVertical: `
+  <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+`,
 };
 
 // ====================================
@@ -894,7 +897,7 @@ const overdueCount = cycleBills.filter(
                       return `
                         <button
                           class="upcoming-bill-card"
-                          onclick="navigate('detail', { id: '${bill.id}' })"
+                          onclick="openBillOverview('${bill.id}')"
                           aria-label="View ${escapeHtml(bill.name)} details"
                         >
                           <div
@@ -2694,7 +2697,7 @@ function billRow(bill, clickable = false) {
       class="bill-row"
       ${
         clickable
-          ? `onclick="navigate('detail', {id: '${bill.id}'})"`
+          ? `onclick="openBillOverview('${bill.id}')"
           : ''
       }
     >
@@ -3104,7 +3107,252 @@ function confirmDeleteIncomeSource(id) {
   closeIncomeSourceForm();
   render();
 }
+function closeBillQuickActions() {
+  document.getElementById('billQuickActionsOverlay')?.classList.remove('show');
+  document.getElementById('billQuickActionsSheet')?.classList.remove('show');
 
+  setTimeout(() => {
+    document.getElementById('billQuickActionsContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function openBillQuickActions(billId) {
+  const bill = Store.getBill(billId);
+  if (!bill) return;
+
+  const category = getCategory(bill.category);
+  const canMarkPaid = !isPaidThisMonth(bill);
+
+  const sheetHtml = `
+    <div
+      class="sheet-overlay"
+      id="billQuickActionsOverlay"
+      onclick="closeBillQuickActions()"
+    ></div>
+
+    <div class="sheet" id="billQuickActionsSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeBillQuickActions()">
+          Cancel
+        </button>
+        <div class="sheet-title">Bill actions</div>
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body">
+        <div class="bill-sheet-header">
+          <div
+            class="bill-sheet-logo"
+            style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
+          >
+            ${billVisual(bill, 32)}
+          </div>
+
+          <div class="bill-sheet-heading">
+            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
+            <div class="bill-sheet-subtitle">
+              ${formatCurrency(bill.amount)} · ${getPayCycleLabel(bill)}
+            </div>
+          </div>
+        </div>
+
+        <div class="bill-sheet-actions">
+          <button
+            class="bill-sheet-action"
+            onclick="closeBillQuickActions(); openBillForm('${bill.id}')"
+          >
+            <span>${svgIcon('gear', 20)}</span>
+            <span>Edit details</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
+
+          <button
+            class="bill-sheet-action"
+            ${canMarkPaid ? '' : 'disabled'}
+            onclick="closeBillQuickActions(); confirmMarkPaid('${bill.id}')"
+          >
+            <span>${svgIcon('checkCircle', 20)}</span>
+            <span>${canMarkPaid ? 'Mark as paid' : 'Already paid this month'}</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
+
+          <button
+            class="bill-sheet-action bill-sheet-action-danger"
+            onclick="closeBillQuickActions(); confirmDeleteBill('${bill.id}')"
+          >
+            <span>${svgIcon('trash', 20)}</span>
+            <span>Remove from list</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.id = 'billQuickActionsContainer';
+  container.innerHTML = sheetHtml;
+  document.body.appendChild(container);
+
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('billQuickActionsOverlay')?.classList.add('show');
+    document.getElementById('billQuickActionsSheet')?.classList.add('show');
+  });
+}
+function closeBillOverview() {
+  document.getElementById('billOverviewOverlay')?.classList.remove('show');
+  document.getElementById('billOverviewSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('billOverviewContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function openBillOverview(billId) {
+  const bill = Store.getBill(billId);
+  if (!bill) return;
+
+  const category = getCategory(bill.category);
+  const status = getBillStatus(bill);
+  const payments = Store.getPaymentsForBill(billId);
+
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  sixMonthsAgo.setHours(0, 0, 0, 0);
+
+  const paymentsInLastSixMonths = payments.filter((payment) => {
+    return new Date(payment.paidDate) >= sixMonthsAgo;
+  });
+
+  const spentLastSixMonths = paymentsInLastSixMonths.reduce(
+    (total, payment) => total + Number(payment.amount || 0),
+    0
+  );
+
+  const averagePayment = paymentsInLastSixMonths.length
+    ? spentLastSixMonths / paymentsInLastSixMonths.length
+    : 0;
+
+  const recentPayments = payments.slice(0, 6);
+
+  const statusLabel =
+    status === 'paid'
+      ? 'Paid'
+      : status === 'overdue'
+        ? 'Overdue'
+        : 'Upcoming';
+
+  const statusDetail =
+    status === 'paid'
+      ? 'Paid this month'
+      : `Due ${formatDate(bill.dueDate, 'full')}`;
+
+  const sheetHtml = `
+    <div
+      class="sheet-overlay"
+      id="billOverviewOverlay"
+      onclick="closeBillOverview()"
+    ></div>
+
+    <div class="sheet" id="billOverviewSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeBillOverview()">Close</button>
+        <div class="sheet-title">Bill overview</div>
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body">
+        <div class="bill-sheet-header">
+          <div
+            class="bill-sheet-logo"
+            style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
+          >
+            ${billVisual(bill, 32)}
+          </div>
+
+          <div class="bill-sheet-heading">
+            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
+            <div class="bill-sheet-subtitle">
+              ${escapeHtml(category.label)} · ${formatCurrency(bill.amount)}
+            </div>
+          </div>
+        </div>
+
+        <div class="bill-overview-status status-${status}">
+          <span>${statusLabel}</span>
+          <span>${statusDetail}</span>
+        </div>
+
+        <div class="bill-spending-grid">
+          <div class="bill-spending-stat">
+            <div class="bill-spending-label">Last 6 months</div>
+            <div class="bill-spending-value">
+              ${formatCurrency(spentLastSixMonths)}
+            </div>
+            <div class="bill-spending-note">
+              ${paymentsInLastSixMonths.length} payment${paymentsInLastSixMonths.length === 1 ? '' : 's'}
+            </div>
+          </div>
+
+          <div class="bill-spending-stat">
+            <div class="bill-spending-label">Average payment</div>
+            <div class="bill-spending-value">
+              ${formatCurrency(averagePayment)}
+            </div>
+            <div class="bill-spending-note">Based on recent history</div>
+          </div>
+        </div>
+
+        <div class="bill-history-heading">Payment history</div>
+
+        <div class="bill-history-list">
+          ${recentPayments.length
+            ? recentPayments.map((payment) => `
+              <div class="bill-history-row">
+                <div>
+                  <div class="bill-history-date">
+                    ${formatDate(payment.paidDate, 'full')}
+                  </div>
+                  <div class="bill-history-meta">Payment recorded</div>
+                </div>
+
+                <div class="bill-history-amount">
+                  ${formatCurrency(payment.amount)}
+                </div>
+              </div>
+            `).join('')
+            : `
+              <div class="bill-history-empty">
+                ${svgIcon('tray', 22)}
+                <span>No payments recorded yet</span>
+              </div>
+            `
+          }
+        </div>
+      </div>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.id = 'billOverviewContainer';
+  container.innerHTML = sheetHtml;
+  document.body.appendChild(container);
+
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('billOverviewOverlay')?.classList.add('show');
+    document.getElementById('billOverviewSheet')?.classList.add('show');
+  });
+}
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
   const bill = billId ? Store.getBill(billId) : null;
@@ -3119,6 +3367,7 @@ function openBillForm(billId = null, selectedDate = null) {
     ? 'first'
     : 'second'
 );
+
   const selectedReminders = bill ? (bill.reminderOffsets || [7, 1]) : [7, 1];
 
   const sheetHtml = `
