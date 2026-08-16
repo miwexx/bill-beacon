@@ -1851,7 +1851,7 @@ const currentCycleLabel = currentCycle === 'first'
   ? 'Early Cycle'
   : 'Late Cycle';
 
-const cycleBills = bills.filter(bill => {
+const unpaidCycleBills = bills.filter((bill) => {
   const dueDate = new Date(bill.dueDate);
 
   if (
@@ -1861,11 +1861,30 @@ const cycleBills = bills.filter(bill => {
     return false;
   }
 
-  const billCycle = bill.payCycle ||
+  const billCycle =
+    bill.payCycle ||
     (dueDate.getDate() <= 15 ? 'first' : 'second');
 
-  return billCycle === currentCycle;
+  return billCycle === currentCycle && !isPaidThisMonth(bill);
 });
+
+const paidCycleBills = bills.filter((bill) => {
+  const paymentThisMonth = Store.getPaymentsForBill(bill.id).find(
+    (payment) => isSameMonth(payment.paidDate, today)
+  );
+
+  if (!paymentThisMonth) return false;
+
+  const paidCycle =
+    bill.payCycle ||
+    (new Date(paymentThisMonth.paidDate).getDate() <= 15
+      ? 'first'
+      : 'second');
+
+  return paidCycle === currentCycle;
+});
+
+const cycleBills = [...paidCycleBills, ...unpaidCycleBills];
 
 const scheduledThisCycle = cycleBills.reduce(
   (total, bill) => total + (parseFloat(bill.amount) || 0),
