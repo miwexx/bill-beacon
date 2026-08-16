@@ -3198,7 +3198,7 @@ function openBillQuickActions(billId) {
             class="bill-sheet-logo"
             style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
           >
-            ${billVisual(bill, 32)}
+            ${billVisual(bill, 44)}
           </div>
 
           <div class="bill-sheet-heading">
