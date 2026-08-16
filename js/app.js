@@ -2681,9 +2681,7 @@ function renderBillDetail() {
 `}
           
         </div>
-
-      
-             
+                  
         ${status !== 'paid' ? `
           <button class="btn-primary" onclick="confirmMarkPaid('${bill.id}')">
             ${svgIcon('checkCircle', 22)}
@@ -2707,23 +2705,6 @@ function renderBillDetail() {
       </div>
     </div>
   `;
-
-    ${payments.length > 0 ? `
-          <div>
-            <div class="section-header">Payment History</div>
-            <div class="card">
-              ${payments.map(p => `
-                <div class="bill-row">
-                  ${svgIcon('checkCircle', 20)}
-                  <div class="bill-info">
-                    <div class="bill-name">${formatDate(p.paidDate, 'full')}</div>
-                  </div>
-                  <div class="bill-amount text-paid">${formatCurrency(p.amount)}</div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
 }
 
 function detailRow(label, value) {
@@ -3290,7 +3271,7 @@ function openBillDetailsSheet(billId) {
   if (!bill) return;
 
   const category = getCategory(bill.category);
-
+  const payments = Store.getPaymentsForBill(billId);
   const sheetHtml = `
     <div
       class="sheet-overlay"
@@ -3323,7 +3304,35 @@ function openBillDetailsSheet(billId) {
             </div>
           </div>
         </div>
+        ${payments.length > 0 ? `
+  <div class="section-header">Payment history</div>
 
+  <div class="card" style="margin-bottom:18px">
+    ${payments.map((payment) => `
+      <div class="bill-row">
+        ${svgIcon('checkCircle', 20)}
+
+        <div class="bill-info">
+          <div class="bill-name">
+            ${formatDate(payment.paidDate, 'full')}
+          </div>
+        </div>
+
+        <div class="bill-amount text-paid">
+          ${formatCurrency(payment.amount)}
+        </div>
+      </div>
+    `).join('')}
+  </div>
+` : `
+  <div class="section-header">Payment history</div>
+
+  <div class="card" style="margin-bottom:18px">
+    <div class="settings-footer">
+      No payments recorded yet.
+    </div>
+  </div>
+`}
         <div class="card">
           ${detailRow('Due date', formatDate(bill.dueDate, 'full'))}
           ${detailRow('Pay cycle', getPayCycleLabel(bill))}
