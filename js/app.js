@@ -897,7 +897,7 @@ const overdueCount = cycleBills.filter(
                       return `
                         <button
                           class="upcoming-bill-card"
-                          onclick="openBillOverview('${bill.id}')"
+                          onclick="navigate('detail', { id: '${bill.id}' })"
                           aria-label="View ${escapeHtml(bill.name)} details"
                         >
                           <div
@@ -2697,7 +2697,7 @@ function billRow(bill, clickable = false) {
       class="bill-row"
       ${
         clickable
-          ? `onclick="openBillOverview('${bill.id}')"
+          ? `onclick="navigate('detail', { id: '${bill.id}' })"
           : ''
       }
     >
