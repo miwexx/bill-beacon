@@ -1958,3 +1958,36 @@ a { color: var(--accent); text-decoration: none; }
 .bill-sheet-action-danger {
   color: var(--overdue);
 }
+.bill-details-disclosure {
+  margin-top: 22px;
+}
+
+.bill-details-toggle {
+  width: 100%;
+  min-height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.bill-details-toggle:hover,
+.bill-details-toggle:focus-visible {
+  background: var(--surface-hover);
+}
+
+.bill-details-content {
+  display: none;
+  margin-top: 12px;
+}
+
+.bill-details-content.is-open {
+  display: block;
+}

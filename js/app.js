@@ -2597,6 +2597,24 @@ function importBillsCSV(event) {
 
   reader.readAsText(file);
 }
+function toggleBillDetails() {
+  const content = document.getElementById('billDetailsContent');
+  const button = document.getElementById('billDetailsToggle');
+  const chevron = document.getElementById('billDetailsChevron');
+
+  if (!content || !button || !chevron) return;
+
+  const isOpen = content.classList.toggle('is-open');
+
+  button.setAttribute('aria-expanded', String(isOpen));
+  button.querySelector('span').textContent = isOpen
+    ? 'Hide details'
+    : 'Show details';
+
+  chevron.innerHTML = isOpen
+    ? svgIcon('chevronLeft', 18)
+    : svgIcon('chevronRight', 18);
+}
 function renderBillDetail() {
   const bill = Store.getBill(routeParams.id);
   if (!bill) {
@@ -2661,16 +2679,7 @@ function renderBillDetail() {
   Add payment link
 </button>
 `}
-          <div class="section-header">Details</div>
-          <div class="card">
-            ${detailRow('Due Date', formatDate(bill.dueDate, 'full'))}
-            ${detailRow('Pay Cycle', getPayCycleLabel(bill))}
-            ${detailRow('Category', cat.label)}
-            ${detailRow('Repeats', bill.recurrence)}
-            ${bill.paymentMethod ? detailRow('Payment Method', bill.paymentMethod) : ''}
-            ${detailRow('Autopay', bill.autopay ? 'On' : 'Off')}
-            ${bill.notes ? detailRow('Notes', bill.notes) : ''}
-          </div>
+          
         </div>
 
         ${payments.length > 0 ? `
@@ -2689,7 +2698,32 @@ function renderBillDetail() {
             </div>
           </div>
         ` : ''}
-              
+              <div class="bill-details-disclosure">
+  <button
+    type="button"
+    class="bill-details-toggle"
+    id="billDetailsToggle"
+    onclick="toggleBillDetails()"
+    aria-expanded="false"
+  >
+    <span>Show details</span>
+    <span id="billDetailsChevron">${svgIcon('chevronRight', 18)}</span>
+  </button>
+
+  <div class="bill-details-content" id="billDetailsContent">
+    <div class="section-header">Details</div>
+
+    <div class="card">
+      ${detailRow('Due Date', formatDate(bill.dueDate, 'full'))}
+      ${detailRow('Pay Cycle', getPayCycleLabel(bill))}
+      ${detailRow('Category', cat.label)}
+      ${detailRow('Repeats', bill.recurrence)}
+      ${bill.paymentMethod ? detailRow('Payment Method', bill.paymentMethod) : ''}
+      ${detailRow('Autopay', bill.autopay ? 'On' : 'Off')}
+      ${bill.notes ? detailRow('Notes', bill.notes) : ''}
+    </div>
+  </div>
+</div>
         ${status !== 'paid' ? `
           <button class="btn-primary" onclick="confirmMarkPaid('${bill.id}')">
             ${svgIcon('checkCircle', 22)}
