@@ -1919,8 +1919,10 @@ const limitPercent = monthlyLimit > 0
 const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
 
   // Unpaid
-  const unpaid = bills.filter(b => getBillStatus(b) !== 'paid');
-  const totalDue = unpaid.reduce((sum, b) => sum + parseFloat(b.amount), 0);
+  const totalDueThisCycle = unpaidCycleBills.reduce(
+  (sum, bill) => sum + parseFloat(bill.amount || 0),
+  0
+);
 
   // Spending by category
   const catTotals = {};
@@ -1966,9 +1968,9 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
 
   <div class="stat-card">
     <div class="stat-value text-upcoming">
-      ${formatCurrency(totalDue)}
-    </div>
-    <div class="stat-label">Still Due</div>
+  ${formatCurrency(totalDueThisCycle)}
+</div>
+<div class="stat-label">Still Due This Cycle</div>
   </div>
 </div>
 
