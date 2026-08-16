@@ -2052,14 +2052,7 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
 </span>
     </div>
   </button>
-</div>
-    <button
-      class="dashboard-see-all"
-      onclick="editMonthlySpendingLimit()"
-    >
-      ${monthlyLimit > 0 ? 'Edit' : 'Set limit'}
-    </button>
-  </div>
+
 
   ${monthlyLimit > 0 ? `
     <div class="card card-pad">
