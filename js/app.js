@@ -3107,103 +3107,7 @@ function confirmDeleteIncomeSource(id) {
   closeIncomeSourceForm();
   render();
 }
-function closeBillQuickActions() {
-  document.getElementById('billQuickActionsOverlay')?.classList.remove('show');
-  document.getElementById('billQuickActionsSheet')?.classList.remove('show');
 
-  setTimeout(() => {
-    document.getElementById('billQuickActionsContainer')?.remove();
-    unlockBackgroundScroll();
-  }, 300);
-}
-
-function openBillQuickActions(billId) {
-  const bill = Store.getBill(billId);
-  if (!bill) return;
-
-  const category = getCategory(bill.category);
-  const canMarkPaid = !isPaidThisMonth(bill);
-
-  const sheetHtml = `
-    <div
-      class="sheet-overlay"
-      id="billQuickActionsOverlay"
-      onclick="closeBillQuickActions()"
-    ></div>
-
-    <div class="sheet" id="billQuickActionsSheet">
-      <div class="sheet-handle"></div>
-
-      <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillQuickActions()">
-          Cancel
-        </button>
-        <div class="sheet-title">Bill actions</div>
-        <div style="width:54px"></div>
-      </div>
-
-      <div class="sheet-body">
-        <div class="bill-sheet-header">
-          <div
-            class="bill-sheet-logo"
-            style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
-          >
-            ${billVisual(bill, 32)}
-          </div>
-
-          <div class="bill-sheet-heading">
-            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
-            <div class="bill-sheet-subtitle">
-              ${formatCurrency(bill.amount)} · ${getPayCycleLabel(bill)}
-            </div>
-          </div>
-        </div>
-
-        <div class="bill-sheet-actions">
-          <button
-            class="bill-sheet-action"
-            onclick="closeBillQuickActions(); openBillForm('${bill.id}')"
-          >
-            <span>${svgIcon('gear', 20)}</span>
-            <span>Edit details</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-
-          <button
-            class="bill-sheet-action"
-            ${canMarkPaid ? '' : 'disabled'}
-            onclick="closeBillQuickActions(); confirmMarkPaid('${bill.id}')"
-          >
-            <span>${svgIcon('checkCircle', 20)}</span>
-            <span>${canMarkPaid ? 'Mark as paid' : 'Already paid this month'}</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-
-          <button
-            class="bill-sheet-action bill-sheet-action-danger"
-            onclick="closeBillQuickActions(); confirmDeleteBill('${bill.id}')"
-          >
-            <span>${svgIcon('trash', 20)}</span>
-            <span>Remove from list</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const container = document.createElement('div');
-  container.id = 'billQuickActionsContainer';
-  container.innerHTML = sheetHtml;
-  document.body.appendChild(container);
-
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document.getElementById('billQuickActionsOverlay')?.classList.add('show');
-    document.getElementById('billQuickActionsSheet')?.classList.add('show');
-  });
-}
 function closeBillOverview() {
   document.getElementById('billOverviewOverlay')?.classList.remove('show');
   document.getElementById('billOverviewSheet')?.classList.remove('show');
@@ -3359,16 +3263,20 @@ function openBillForm(billId = null, selectedDate = null) {
 
   const today = new Date().toISOString().split('T')[0];
   const dueDate = bill
-  ? bill.dueDate.split('T')[0]
-  : (selectedDate || today);
+    ? bill.dueDate.split('T')[0]
+    : (selectedDate || today);
 
   const defaultPayCycle = bill?.payCycle || (
-  new Date(`${dueDate}T12:00:00`).getDate() <= 15
-    ? 'first'
-    : 'second'
-);
+    new Date(`${dueDate}T12:00:00`).getDate() <= 15
+      ? 'first'
+      : 'second'
+  );
 
-  const selectedReminders = bill ? (bill.reminderOffsets || [7, 1]) : [7, 1];
+  const selectedReminders = bill
+    ? (bill.reminderOffsets || [7, 1])
+    : [7, 1];
+
+  const sheetHtml = `
 
   const sheetHtml = `
     <div class="sheet-overlay" id="sheetOverlay" onclick="closeBillForm()"></div>
