@@ -3304,6 +3304,16 @@ function openBillDetailsSheet(billId) {
             </div>
           </div>
         </div>
+
+        <div class="card">
+          ${detailRow('Due date', formatDate(bill.dueDate, 'full'))}
+          ${detailRow('Pay cycle', getPayCycleLabel(bill))}
+          ${detailRow('Category', category.label)}
+          ${detailRow('Repeats', bill.recurrence)}
+          ${bill.paymentMethod ? detailRow('Payment method', bill.paymentMethod) : ''}
+          ${detailRow('Autopay', bill.autopay ? 'On' : 'Off')}
+          ${bill.notes ? detailRow('Notes', bill.notes) : ''}
+        </div>
         ${payments.length > 0 ? `
   <div class="section-header">Payment history</div>
 
@@ -3333,15 +3343,7 @@ function openBillDetailsSheet(billId) {
     </div>
   </div>
 `}
-        <div class="card">
-          ${detailRow('Due date', formatDate(bill.dueDate, 'full'))}
-          ${detailRow('Pay cycle', getPayCycleLabel(bill))}
-          ${detailRow('Category', category.label)}
-          ${detailRow('Repeats', bill.recurrence)}
-          ${bill.paymentMethod ? detailRow('Payment method', bill.paymentMethod) : ''}
-          ${detailRow('Autopay', bill.autopay ? 'On' : 'Off')}
-          ${bill.notes ? detailRow('Notes', bill.notes) : ''}
-        </div>
+        
       </div>
     </div>
   `;
