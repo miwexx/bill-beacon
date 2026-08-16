@@ -675,10 +675,23 @@ const cycleBills = monthBills.filter((bill) => {
   return billCycle === currentCycle;
 });
 
-const paidCycleBills = cycleBills.filter((bill) =>
-  isPaidThisMonth(bill)
-);
+const paidCycleBills = bills.filter((bill) => {
+  if (!isPaidThisMonth(bill)) return false;
 
+  const paymentsForBill = Store.getPaymentsForBill(bill.id);
+  const latestPaymentThisMonth = paymentsForBill.find(
+    (payment) => isSameMonth(payment.paidDate, now)
+  );
+
+  if (!latestPaymentThisMonth) return false;
+
+  const paidDate = new Date(latestPaymentThisMonth.paidDate);
+  const paidCycle =
+    bill.payCycle ||
+    (paidDate.getDate() <= 15 ? 'first' : 'second');
+
+  return paidCycle === currentCycle;
+});
 const unpaidCycleBills = cycleBills.filter((bill) =>
   !isPaidThisMonth(bill)
 );
@@ -1665,9 +1678,23 @@ if (status === 'paid') {
     color = 'var(--overdue)';
     background = 'var(--overdue-bg)';
     icon = svgIcon('warning', 18);
-    selectedBills = cycleBills.filter(
-  bill => paidBillIds.has(bill.id)
-);
+    selectedBills = Store.getBills().filter((bill) => {
+  if (!paidBillIds.has(bill.id)) return false;
+
+  const paymentsForBill = Store.getPaymentsForBill(bill.id);
+  const latestPaymentThisMonth = paymentsForBill.find(
+    (payment) => isSameMonth(payment.paidDate, now)
+  );
+
+  if (!latestPaymentThisMonth) return false;
+
+  const paidDate = new Date(latestPaymentThisMonth.paidDate);
+  const paidCycle =
+    bill.payCycle ||
+    (paidDate.getDate() <= 15 ? 'first' : 'second');
+
+  return paidCycle === currentCycle;
+});
   }
 
   selectedBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
