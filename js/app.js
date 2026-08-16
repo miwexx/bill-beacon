@@ -1831,12 +1831,7 @@ function editMonthlySpendingLimit() {
 function renderInsights() {
   const bills = Store.getBills();
   const payments = Store.getPayments();
-    const totalMonthlyIncome = getTotalMonthlyIncomeEstimate();
-
-  const monthlyIncomeSources = Store.getIncomeSources().filter(
-    source => source.frequency !== 'Manual / irregular'
-  );
-  const recentPayments = payments
+   const recentPayments = payments
   .map(payment => ({
     ...payment,
     bill: Store.getBill(payment.billId),
@@ -1961,9 +1956,9 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
         <div class="stat-row">
   <div class="stat-card">
     <div class="stat-value text-paid">
-      ${formatCurrency(totalMonthlyIncome)}
-    </div>
-    <div class="stat-label">Est. Monthly Income</div>
+  ${formatCurrency(estimatedIncomeThisCycle)}
+</div>
+<div class="stat-label">Est. ${currentCycleLabel} Income</div>
   </div>
 
   <div class="stat-card">
