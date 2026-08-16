@@ -901,7 +901,7 @@ const overdueCount = cycleBills.filter(
                             class="upcoming-bill-icon"
                             style="background:var(--${category.color})"
                           >
-                            ${billVisual(bill, 24)}
+                            ${billVisual(bill, 32)}
                           </div>
 
                           <div class="upcoming-bill-name">
