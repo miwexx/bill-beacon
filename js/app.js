@@ -110,6 +110,7 @@ const ICONS = {
   chevronRight: '<path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" fill="currentColor"/>',
   close: '<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" fill="currentColor"/>',
   trash: '<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" fill="currentColor"/>',
+  moreVertical: ` <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 8c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>`,
   export: '<path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" fill="currentColor"/>',
   bell: '<path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" fill="currentColor"/>',
   lock: '<path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3-9H9V6c0-1.66 1.34-3 3-3s3 1.34 3 3v2z" fill="currentColor"/>',
@@ -2774,13 +2775,22 @@ function billRow(bill, clickable = false) {
         </div>
       </div>
 
-      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-        <div class="bill-amount">${formatCurrency(bill.amount)}</div>
-        <div
-          class="bill-status-dot"
-          style="background:var(--${statusColor})"
-        ></div>
-      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+    <div class="bill-amount">${formatCurrency(bill.amount)}</div>
+    <div class="bill-status-dot" style="background:var(--${statusColor})"></div>
+  </div>
+
+  <button
+    type="button"
+    class="bill-more-button"
+    aria-label="More options for ${escapeHtml(bill.name)}"
+    title="More options"
+    onclick="event.stopPropagation(); openBillQuickActions('${bill.id}')"
+  >
+    ${svgIcon('moreVertical', 22)}
+  </button>
+</div>
     </div>
   `;
 }
@@ -3149,7 +3159,101 @@ function confirmDeleteIncomeSource(id) {
   closeIncomeSourceForm();
   render();
 }
+function closeBillQuickActions() {
+  document.getElementById('billQuickActionsOverlay')?.classList.remove('show');
+  document.getElementById('billQuickActionsSheet')?.classList.remove('show');
 
+  setTimeout(() => {
+    document.getElementById('billQuickActionsContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function openBillQuickActions(billId) {
+  const bill = Store.getBill(billId);
+  if (!bill) return;
+
+  const category = getCategory(bill.category);
+  const canMarkPaid = !isPaidThisMonth(bill);
+
+  const sheetHtml = `
+    <div
+      class="sheet-overlay"
+      id="billQuickActionsOverlay"
+      onclick="closeBillQuickActions()"
+    ></div>
+
+    <div class="sheet" id="billQuickActionsSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeBillQuickActions()">Cancel</button>
+        <div class="sheet-title">Bill actions</div>
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body">
+        <div class="bill-sheet-header">
+          <div
+            class="bill-sheet-logo"
+            style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
+          >
+            ${billVisual(bill, 32)}
+          </div>
+
+          <div class="bill-sheet-heading">
+            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
+            <div class="bill-sheet-subtitle">
+              ${formatCurrency(bill.amount)} · ${getPayCycleLabel(bill)}
+            </div>
+          </div>
+        </div>
+
+        <div class="bill-sheet-actions">
+          <button
+            class="bill-sheet-action"
+            onclick="closeBillQuickActions(); openBillForm('${bill.id}')"
+          >
+            <span>${svgIcon('gear', 20)}</span>
+            <span>Edit details</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
+
+          <button
+            class="bill-sheet-action"
+            ${canMarkPaid ? '' : 'disabled'}
+            onclick="closeBillQuickActions(); confirmMarkPaid('${bill.id}')"
+          >
+            <span>${svgIcon('checkCircle', 20)}</span>
+            <span>${canMarkPaid ? 'Mark as paid' : 'Already paid this month'}</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
+
+          <button
+            class="bill-sheet-action bill-sheet-action-danger"
+            onclick="closeBillQuickActions(); confirmDeleteBill('${bill.id}')"
+          >
+            <span>${svgIcon('trash', 20)}</span>
+            <span>Remove from list</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.id = 'billQuickActionsContainer';
+  container.innerHTML = sheetHtml;
+  document.body.appendChild(container);
+
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('billQuickActionsOverlay')?.classList.add('show');
+    document.getElementById('billQuickActionsSheet')?.classList.add('show');
+  });
+}
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
   const bill = billId ? Store.getBill(billId) : null;
