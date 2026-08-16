@@ -2608,8 +2608,8 @@ function toggleBillDetails() {
 
   button.setAttribute('aria-expanded', String(isOpen));
   button.querySelector('span').textContent = isOpen
-    ? 'Hide details'
-    : 'Show details';
+    ? 'Hide Details'
+    : 'Show Details';
 
   chevron.innerHTML = isOpen
     ? svgIcon('chevronLeft', 18)
@@ -2715,9 +2715,9 @@ function renderBillDetail() {
   class="btn-secondary bill-show-details-button"
   onclick="openBillDetailsSheet('${bill.id}')"
 >
-  ${svgIcon('doc', 18)}
-  Show details
-  ${svgIcon('chevronRight', 18)}
+  ${svgIcon('doc', 24)}
+  Show Details
+  ${svgIcon('chevronRight', 24)}
 </button>
       </div>
     </div>
