@@ -661,6 +661,45 @@ const next7DaysTotal = next7DaysBills.reduce(
     .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
     .slice(0, 5);
 
+  const currentCycle = getCurrentPayCycle();
+const currentCycleLabel =
+  currentCycle === 'first' ? 'Early Cycle' : 'Late Cycle';
+
+const cycleBills = monthBills.filter((bill) => {
+  const dueDate = new Date(bill.dueDate);
+
+  const billCycle =
+    bill.payCycle ||
+    (dueDate.getDate() <= 15 ? 'first' : 'second');
+
+  return billCycle === currentCycle;
+});
+
+const paidCycleBills = cycleBills.filter((bill) =>
+  isPaidThisMonth(bill)
+);
+
+const unpaidCycleBills = cycleBills.filter((bill) =>
+  !isPaidThisMonth(bill)
+);
+
+const paidThisCycle = paidCycleBills.reduce(
+  (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+  0
+);
+
+const remainingThisCycle = unpaidCycleBills.reduce(
+  (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+  0
+);
+
+const totalThisCycle = paidThisCycle + remainingThisCycle;
+
+const paidCycleProgress =
+  totalThisCycle > 0
+    ? Math.min((paidThisCycle / totalThisCycle) * 100, 100)
+    : 0;
+
   const paidCount = paidBillIds.size;
   const upcomingCount = upcomingMonthBills.length;
   const overdueCount = overdueBills.length;
@@ -715,36 +754,36 @@ const next7DaysTotal = next7DaysBills.reduce(
 
         <button
           class="dashboard-month-card"
-          onclick="navigate('bills', { filter: 'unpaid' })"
+          onclick="navigate('bills', { cycle: '${currentCycle === 'first' ? 'early' : 'late'}' })"
           aria-label="View bills due this month"
         >
           <div class="dashboard-card-topline">
-            <span>Bills Due This Month</span>
-            <span>${currentMonthLabel}</span>
+            <span>Bills This Pay Cycle</span>
+            <span>${currentCycleLabel}</span>
           </div>
 
           <div class="dashboard-month-amount">
-            ${formatCurrency(totalThisMonth)}
+            ${formatCurrency(totalThisCycle)}
           </div>
 
           <div class="dashboard-progress-track">
             <div
               class="dashboard-progress-fill"
-              style="width: ${paidProgress}%"
+              style="width: ${paidCycleProgress}%"
             ></div>
           </div>
 
           <div class="dashboard-progress-meta">
             <span class="text-paid">
-              ${formatCurrency(paidThisMonth)} paid
+              ${formatCurrency(paidThisCycle)} paid
             </span>
             <span>
-              ${formatCurrency(remainingThisMonth)} remaining
+              ${formatCurrency(remainingThisCycle)} remaining
             </span>
           </div>
 
           <div class="dashboard-month-footer">
-            ${paidCount} paid · ${unpaidMonthBills.length} still due
+            ${paidCycleBills.length} paid · ${unpaidCycleBills.length} still due
           </div>
         </button>
            <div class="section-header">Bill Status · ${currentMonthLabel}</div>
