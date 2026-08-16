@@ -3311,7 +3311,7 @@ function openBillDetailsSheet(billId) {
             class="bill-sheet-logo"
             style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
           >
-            ${billVisual(bill, 46)}
+            ${billVisual(bill, 52)}
           </div>
 
           <div class="bill-sheet-heading">
