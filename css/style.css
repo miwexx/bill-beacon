@@ -2008,3 +2008,8 @@ a { color: var(--accent); text-decoration: none; }
 .bill-details-sheet-header {
   margin-bottom: 18px;
 }
+.bill-details-sheet .bill-sheet-logo {
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+}

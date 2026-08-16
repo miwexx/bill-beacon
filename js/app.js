@@ -3301,7 +3301,7 @@ function openBillDetailsSheet(billId) {
 
       <div class="sheet-nav">
         <button class="nav-button" onclick="closeBillDetailsSheet()">Close</button>
-        <div class="sheet-title">Bill details</div>
+        <div class="sheet-title">Bill Details</div>
         <div style="width:54px"></div>
       </div>
 
@@ -3311,7 +3311,7 @@ function openBillDetailsSheet(billId) {
             class="bill-sheet-logo"
             style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
           >
-            ${billVisual(bill, 36)}
+            ${billVisual(bill, 46)}
           </div>
 
           <div class="bill-sheet-heading">
