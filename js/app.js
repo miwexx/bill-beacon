@@ -2721,8 +2721,7 @@ function detailRow(label, value) {
       <div style="flex:1;text-align:right;font-weight:500">${escapeHtml(value)}</div>
     </div>
   `;
-}
-     <div class="bill-details-disclosure">
+       <div class="bill-details-disclosure">
   <button
     type="button"
     class="bill-details-toggle"
@@ -2748,6 +2747,8 @@ function detailRow(label, value) {
     </div>
   </div>
 </div>
+}
+
 // ====================================
 // COMPONENTS
 // ====================================
