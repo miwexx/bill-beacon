@@ -700,15 +700,15 @@ const paidCycleProgress =
     ? Math.min((paidThisCycle / totalThisCycle) * 100, 100)
     : 0;
 
-  const activeBillIds = new Set(bills.map((bill) => bill.id));
+  const paidCount = paidCycleBills.length;
 
-const paidCount = new Set(
-  monthPayments
-    .filter((payment) => activeBillIds.has(payment.billId))
-    .map((payment) => payment.billId)
-).size;
-  const upcomingCount = upcomingMonthBills.length;
-  const overdueCount = overdueBills.length;
+const upcomingCount = unpaidCycleBills.filter(
+  (bill) => getBillStatus(bill) === 'upcoming'
+).length;
+
+const overdueCount = cycleBills.filter(
+  (bill) => getBillStatus(bill) === 'overdue'
+).length;
   const notificationCount = getNotificationCount();
 
   return `
@@ -792,7 +792,7 @@ const paidCount = new Set(
             ${paidCycleBills.length} paid · ${unpaidCycleBills.length} still due
           </div>
         </button>
-           <div class="section-header">Bill Status · ${currentMonthLabel}</div>
+           <div class="section-header">Bill Status · ${currentCycleLabel}</div>
         <div class="dashboard-status-row">
   <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
     <div class="dashboard-status-number text-paid">${paidCount}</div>
