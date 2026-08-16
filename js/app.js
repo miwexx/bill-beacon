@@ -752,7 +752,7 @@ const next7DaysTotal = next7DaysBills.reduce(
   <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
     <div class="dashboard-status-number text-paid">${paidCount}</div>
     <div class="dashboard-status-label">Paid</div>
-  </button>
+  </button> 
 
   <button class="dashboard-status-card status-upcoming-card" onclick="openDashboardStatusSheet('due')" aria-label="View bills due">
     <div class="dashboard-status-number text-upcoming">${upcomingCount}</div>
