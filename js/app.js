@@ -1620,12 +1620,21 @@ function closeCycleBillsSheet() {
 
 function openDashboardStatusSheet(status) {
   const now = new Date();
-  const currentMonthBills = Store.getBills().filter(bill => {
-    const dueDate = new Date(bill.dueDate);
-    return dueDate.getMonth() === now.getMonth()
-      && dueDate.getFullYear() === now.getFullYear();
-  });
+const currentCycle = getCurrentPayCycle();
 
+const cycleBills = Store.getBills().filter((bill) => {
+  const dueDate = new Date(bill.dueDate);
+
+  const isDueThisMonth =
+    dueDate.getMonth() === now.getMonth() &&
+    dueDate.getFullYear() === now.getFullYear();
+
+  const billCycle =
+    bill.payCycle ||
+    (dueDate.getDate() <= 15 ? 'first' : 'second');
+
+  return isDueThisMonth && billCycle === currentCycle;
+});
   let title = 'Paid';
   let color = 'var(--paid)';
   let background = 'var(--paid-bg)';
@@ -1633,29 +1642,16 @@ function openDashboardStatusSheet(status) {
   let selectedBills = [];
 
 if (status === 'paid') {
-  const activeBills = Store.getBills();
-
-  const paidBillIds = new Set(
-    Store.getPayments()
-      .filter((payment) =>
-        isSameMonth(payment.paidDate, now) &&
-        activeBills.some((bill) => bill.id === payment.billId)
-      )
-      .map((payment) => payment.billId)
-  );
-
-  selectedBills = activeBills.filter((bill) =>
-    paidBillIds.has(bill.id)
-  );
+  selectedBills = cycleBills.filter((bill) => isPaidThisMonth(bill));
 }
   if (status === 'due') {
     title = 'Due';
     color = 'var(--upcoming)';
     background = 'var(--upcoming-bg)';
     icon = svgIcon('clock', 18);
-    selectedBills = currentMonthBills.filter(
-      bill => getBillStatus(bill) === 'upcoming'
-    );
+    selectedBills = cycleBills.filter(
+  (bill) => !isPaidThisMonth(bill) && getBillStatus(bill) === 'upcoming'
+);
   }
 
   if (status === 'overdue') {
@@ -1663,9 +1659,9 @@ if (status === 'paid') {
     color = 'var(--overdue)';
     background = 'var(--overdue-bg)';
     icon = svgIcon('warning', 18);
-    selectedBills = Store.getBills().filter(
-      bill => getBillStatus(bill) === 'overdue'
-    );
+    selectedBills = cycleBills.filter(
+  (bill) => getBillStatus(bill) === 'overdue'
+);
   }
 
   selectedBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
