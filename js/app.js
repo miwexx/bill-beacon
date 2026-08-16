@@ -2682,22 +2682,7 @@ function renderBillDetail() {
           
         </div>
 
-        ${payments.length > 0 ? `
-          <div>
-            <div class="section-header">Payment History</div>
-            <div class="card">
-              ${payments.map(p => `
-                <div class="bill-row">
-                  ${svgIcon('checkCircle', 20)}
-                  <div class="bill-info">
-                    <div class="bill-name">${formatDate(p.paidDate, 'full')}</div>
-                  </div>
-                  <div class="bill-amount text-paid">${formatCurrency(p.amount)}</div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
+      
              
         ${status !== 'paid' ? `
           <button class="btn-primary" onclick="confirmMarkPaid('${bill.id}')">
@@ -2722,6 +2707,23 @@ function renderBillDetail() {
       </div>
     </div>
   `;
+
+    ${payments.length > 0 ? `
+          <div>
+            <div class="section-header">Payment History</div>
+            <div class="card">
+              ${payments.map(p => `
+                <div class="bill-row">
+                  ${svgIcon('checkCircle', 20)}
+                  <div class="bill-info">
+                    <div class="bill-name">${formatDate(p.paidDate, 'full')}</div>
+                  </div>
+                  <div class="bill-amount text-paid">${formatCurrency(p.amount)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
 }
 
 function detailRow(label, value) {
