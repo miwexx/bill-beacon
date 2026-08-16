@@ -1975,14 +1975,7 @@ const isOverLimit = monthlyLimit > 0 && totalPaid > monthlyLimit;
 </div>
 
  <div class="settings-footer" style="padding-top:0">
-  ${
-    monthlyIncomeSources.length
-      ? `Based on ${monthlyIncomeSources.length} recurring income source${
-          monthlyIncomeSources.length === 1 ? '' : 's'
-        }.`
-      : 'Add an income source in Settings to estimate monthly income.'
-  }
-</div> 
+  </div> 
         <div>
       
 <div>
