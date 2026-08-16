@@ -910,11 +910,11 @@ const overdueCount = cycleBills.filter(
                           onclick="navigate('detail', { id: '${bill.id}' })"
                           aria-label="View ${escapeHtml(bill.name)} details"
                         >
-                          <div
-                            class="upcoming-bill-icon"
-                            style="background:var(--${category.color})"
-                          >
-                            ${svgIcon(category.icon, 20)}
+                         <div
+  class="upcoming-bill-icon"
+  style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
+>
+                            ${billVisual(bill, 32)}
                           </div>
 
                           <div class="upcoming-bill-name">
