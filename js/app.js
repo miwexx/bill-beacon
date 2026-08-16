@@ -700,15 +700,15 @@ const paidCycleProgress =
     ? Math.min((paidThisCycle / totalThisCycle) * 100, 100)
     : 0;
 
-  const paidCount = paidCycleBills.length;
+  const activeBillIds = new Set(bills.map((bill) => bill.id));
 
-const upcomingCount = unpaidCycleBills.filter(
-  (bill) => getBillStatus(bill) === 'upcoming'
-).length;
-
-const overdueCount = cycleBills.filter(
-  (bill) => getBillStatus(bill) === 'overdue'
-).length;
+const paidCount = new Set(
+  monthPayments
+    .filter((payment) => activeBillIds.has(payment.billId))
+    .map((payment) => payment.billId)
+).size;
+  const upcomingCount = upcomingMonthBills.length;
+  const overdueCount = overdueBills.length;
   const notificationCount = getNotificationCount();
 
   return `
@@ -792,7 +792,7 @@ const overdueCount = cycleBills.filter(
             ${paidCycleBills.length} paid · ${unpaidCycleBills.length} still due
           </div>
         </button>
-           <div class="section-header">Bill Status · ${currentCycleLabel}</div>
+           <div class="section-header">Bill Status · ${currentMonthLabel}</div>
         <div class="dashboard-status-row">
   <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
     <div class="dashboard-status-number text-paid">${paidCount}</div>
@@ -1620,21 +1620,12 @@ function closeCycleBillsSheet() {
 
 function openDashboardStatusSheet(status) {
   const now = new Date();
-const currentCycle = getCurrentPayCycle();
+  const currentMonthBills = Store.getBills().filter(bill => {
+    const dueDate = new Date(bill.dueDate);
+    return dueDate.getMonth() === now.getMonth()
+      && dueDate.getFullYear() === now.getFullYear();
+  });
 
-const cycleBills = Store.getBills().filter((bill) => {
-  const dueDate = new Date(bill.dueDate);
-
-  const isDueThisMonth =
-    dueDate.getMonth() === now.getMonth() &&
-    dueDate.getFullYear() === now.getFullYear();
-
-  const billCycle =
-    bill.payCycle ||
-    (dueDate.getDate() <= 15 ? 'first' : 'second');
-
-  return isDueThisMonth && billCycle === currentCycle;
-});
   let title = 'Paid';
   let color = 'var(--paid)';
   let background = 'var(--paid-bg)';
@@ -1642,21 +1633,16 @@ const cycleBills = Store.getBills().filter((bill) => {
   let selectedBills = [];
 
 if (status === 'paid') {
-  const activeBills = Store.getBills();
-
   const paidBillIds = new Set(
     Store.getPayments()
-      .filter((payment) =>
-        isSameMonth(payment.paidDate, now) &&
-        activeBills.some((bill) => bill.id === payment.billId)
-      )
-      .map((payment) => payment.billId)
+      .filter(payment => isSameMonth(payment.paidDate, now))
+      .map(payment => payment.billId)
   );
 
-  selectedBills = activeBills.filter((bill) =>
-    paidBillIds.has(bill.id)
-  );
+  selectedBills = Store.getBills()
+    .filter(bill => paidBillIds.has(bill.id));
 }
+
   if (status === 'due') {
     title = 'Due';
     color = 'var(--upcoming)';
