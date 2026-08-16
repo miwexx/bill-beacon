@@ -2676,7 +2676,7 @@ function renderBillDetail() {
   style="width:100%; margin-top:var(--space-4);"
   onclick="openPaymentLinkPopup('${bill.id}')"
 >
-  Add payment link
+  Add Payment Link
 </button>
 `}
           
@@ -2870,7 +2870,7 @@ function openAddMenu() {
 
         <button class="btn-secondary" style="margin-top: var(--space-3)" onclick="closeAddMenu(); openInstallmentPlanForm()">
           ${svgIcon('calendar', 20)}
-          Add payment plan
+          Add Payment Plan
         </button>
       </div>
     </div>
@@ -2947,7 +2947,7 @@ window.openCalendarAddMenu = function(dateString) {
           onclick="closeCalendarAddMenu(); openInstallmentPlanForm()"
         >
           ${svgIcon('calendar', 20)}
-          Add payment plan
+          Add Payment Plan
         </button>
       </div>
     </div>
