@@ -3273,6 +3273,80 @@ function openBillQuickActions(billId) {
     document.getElementById('billQuickActionsSheet')?.classList.add('show');
   });
 }
+function closeBillDetailsSheet() {
+  document.getElementById('billDetailsOverlay')?.classList.remove('show');
+  document.getElementById('billDetailsSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('billDetailsContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function openBillDetailsSheet(billId) {
+  const bill = Store.getBill(billId);
+  if (!bill) return;
+
+  const category = getCategory(bill.category);
+
+  const sheetHtml = `
+    <div
+      class="sheet-overlay"
+      id="billDetailsOverlay"
+      onclick="closeBillDetailsSheet()"
+    ></div>
+
+    <div class="sheet bill-details-sheet" id="billDetailsSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeBillDetailsSheet()">Close</button>
+        <div class="sheet-title">Bill details</div>
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body">
+        <div class="bill-sheet-header bill-details-sheet-header">
+          <div
+            class="bill-sheet-logo"
+            style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
+          >
+            ${billVisual(bill, 36)}
+          </div>
+
+          <div class="bill-sheet-heading">
+            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
+            <div class="bill-sheet-subtitle">
+              ${formatCurrency(bill.amount)} · ${getPayCycleLabel(bill)}
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          ${detailRow('Due date', formatDate(bill.dueDate, 'full'))}
+          ${detailRow('Pay cycle', getPayCycleLabel(bill))}
+          ${detailRow('Category', category.label)}
+          ${detailRow('Repeats', bill.recurrence)}
+          ${bill.paymentMethod ? detailRow('Payment method', bill.paymentMethod) : ''}
+          ${detailRow('Autopay', bill.autopay ? 'On' : 'Off')}
+          ${bill.notes ? detailRow('Notes', bill.notes) : ''}
+        </div>
+      </div>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.id = 'billDetailsContainer';
+  container.innerHTML = sheetHtml;
+  document.body.appendChild(container);
+
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('billDetailsOverlay')?.classList.add('show');
+    document.getElementById('billDetailsSheet')?.classList.add('show');
+  });
+}
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
   const bill = billId ? Store.getBill(billId) : null;

@@ -1991,3 +1991,20 @@ a { color: var(--accent); text-decoration: none; }
 .bill-details-content.is-open {
   display: block;
 }
+.bill-show-details-button {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 18px;
+}
+
+.bill-details-sheet {
+  max-height: min(72vh, 620px);
+}
+
+.bill-details-sheet-header {
+  margin-bottom: 18px;
+}
