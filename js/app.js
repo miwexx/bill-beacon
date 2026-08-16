@@ -1656,9 +1656,21 @@ const cycleBills = Store.getBills().filter((bill) => {
   let selectedBills = [];
 
 if (status === 'paid') {
-  selectedBills = cycleBills.filter(
-    (bill) => isPaidThisMonth(bill)
-  );
+  selectedBills = Store.getBills().filter((bill) => {
+    const paidThisMonth = Store.getPaymentsForBill(bill.id).find(
+      (payment) => isSameMonth(payment.paidDate, now)
+    );
+
+    if (!paidThisMonth) return false;
+
+    const paidCycle =
+      bill.payCycle ||
+      (new Date(paidThisMonth.paidDate).getDate() <= 15
+        ? 'first'
+        : 'second');
+
+    return paidCycle === currentCycle;
+  });
 }
 
   if (status === 'due') {
