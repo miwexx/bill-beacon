@@ -1107,11 +1107,11 @@ function renderBills() {
   );
   const groups = {};
   filtered.forEach(bill => {
-    const key = formatDate(bill.dueDate, 'monthYear');
+    const key = getCategory(bill.category).label;
     if (!groups[key]) groups[key] = [];
     groups[key].push(bill);
   });
-  const sortedKeys = Object.keys(groups).sort((a, b) => new Date(groups[a][0].dueDate) - new Date(groups[b][0].dueDate));
+  const sortedKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
   return `
     <div class="nav-bar"><div class="nav-bar-content">
       <div class="nav-title">Bills</div>
