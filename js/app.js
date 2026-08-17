@@ -1061,7 +1061,6 @@ function renderCompactRecurringCalendar() {
 }
 
 function renderRecurring() {
-  const cycleFilter = routeParams.cycle || 'all';
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   let recurring = Store.getBills().filter(bill => bill.recurrence !== 'None');
@@ -1070,10 +1069,6 @@ function renderRecurring() {
     const dueDate = new Date(bill.dueDate);
     return getBillStatus(bill) !== 'paid' && dueDate >= startOfToday;
   });
-  if (cycleFilter !== 'all') {
-    overdue = overdue.filter(bill => getCycleForBill(bill) === cycleFilter);
-    upcoming = upcoming.filter(bill => getCycleForBill(bill) === cycleFilter);
-  }
   const sortDue = (a, b) => new Date(a.dueDate) - new Date(b.dueDate);
   overdue.sort(sortDue);
   upcoming.sort(sortDue);
@@ -1086,13 +1081,6 @@ function renderRecurring() {
     <div class="main-content fade-in">
       <div class="content-pad recurring-content">
         ${renderCompactRecurringCalendar()}
-        <div class="filter-bar cycle-filter-bar recurring-cycle-filter">
-          ${[
-            { id: 'all', label: 'All cycles' },
-            { id: 'early', label: 'Early cycle' },
-            { id: 'late', label: 'Late cycle' },
-          ].map(item => `<button class="filter-pill ${cycleFilter === item.id ? 'active' : ''}" onclick="navigate('recurring', { cycle: '${item.id}' })">${item.label}</button>`).join('')}
-        </div>
         <div class="recurring-list-heading">
           <div><div class="section-header">Upcoming</div><div class="recurring-list-subtitle">Your recurring bills coming next</div></div>
           <span class="recurring-count">${visibleBills.length}</span>
