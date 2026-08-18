@@ -488,15 +488,6 @@ function openPostponeBillSheet(billId) {
   const minimumDate = new Date(originalDue);
   minimumDate.setDate(minimumDate.getDate() + 1);
 
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const plusThree = new Date();
-  plusThree.setDate(plusThree.getDate() + 3);
-
-  const plusSeven = new Date();
-  plusSeven.setDate(plusSeven.getDate() + 7);
-
   const container = document.createElement('div');
   container.id = 'postponeBillContainer';
 
@@ -532,52 +523,41 @@ function openPostponeBillSheet(billId) {
         </div>
 
         <div>
-          <div class="section-header">Choose a new due date</div>
+  <div class="section-header">New due date</div>
 
-          <div
-            style="
-              display:grid;
-              grid-template-columns:repeat(3,1fr);
-              gap:var(--space-2);
-              margin-bottom:var(--space-3)
-            "
-          >
-            <button
-              class="btn-secondary"
-              onclick="setPostponeDate('${dateInputValue(tomorrow)}')"
-            >
-              Tomorrow
-            </button>
+  <div class="card">
+    <div style="padding:var(--space-4)">
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:var(--space-2);
+          margin-bottom:var(--space-3);
+          color:var(--accent);
+          font-weight:800
+        "
+      >
+        ${svgIcon('calendar', 20)}
+        Choose a new date
+      </div>
 
-            <button
-              class="btn-secondary"
-              onclick="setPostponeDate('${dateInputValue(plusThree)}')"
-            >
-              +3 days
-            </button>
-
-            <button
-              class="btn-secondary"
-              onclick="setPostponeDate('${dateInputValue(plusSeven)}')"
-            >
-              +7 days
-            </button>
-          </div>
-
-          <div class="card">
-            <div class="form-row">
-              <div class="form-label">Custom date</div>
-              <input
-                class="form-input"
-                id="postponeBillDate"
-                type="date"
-                min="${dateInputValue(minimumDate)}"
-                value="${dateInputValue(plusThree)}"
-                style="max-width:165px;text-align:right"
-              >
-            </div>
-          </div>
-        </div>
+      <input
+        class="form-input"
+        id="postponeBillDate"
+        type="date"
+        min="${dateInputValue(minimumDate)}"
+        value="${dateInputValue(minimumDate)}"
+        style="
+          width:100%;
+          height:54px;
+          font-size:var(--text-base);
+          font-weight:700;
+          text-align:left;
+        "
+      >
+    </div>
+  </div>
+</div>
 
         <div class="settings-footer">
           This keeps the bill unpaid and moves its current due date.
@@ -612,11 +592,6 @@ function closePostponeBillSheet() {
     document.getElementById('postponeBillContainer')?.remove();
     unlockBackgroundScroll();
   }, 300);
-}
-
-function setPostponeDate(value) {
-  const input = document.getElementById('postponeBillDate');
-  if (input) input.value = value;
 }
 
 function confirmPostponeBill(billId) {
