@@ -1427,24 +1427,49 @@ function renderBills() {
         "
       >
         <button
-  class="btn-primary"
+  class="filter-pill"
   onclick="openBillSortSheet()"
   aria-label="Sort bills by ${sortOptions[billSort]}"
   style="
     display:inline-flex;
     align-items:center;
     justify-content:center;
-    gap:8px;
-    min-width:220px;
+    gap:9px;
+    min-width:230px;
     min-height:44px;
     margin:0;
-    padding:0 20px;
-    font-weight:800;
+    padding:0 18px;
+    border:1.5px solid transparent;
     border-radius:999px;
+    color:var(--text);
+    background:
+      linear-gradient(var(--bg), var(--bg)) padding-box,
+      linear-gradient(100deg, #7c3aed, #f97316) border-box;
+    box-shadow:0 4px 14px rgba(124,58,237,.14);
   "
 >
-  ${svgIcon('sort', 18)}
-  Sort: ${sortOptions[billSort]}
+  <span
+    style="
+      display:inline-flex;
+      color:#a855f7;
+    "
+  >
+    ${svgIcon('sort', 18)}
+  </span>
+
+  <span style="font-weight:750">
+    Sort: ${sortOptions[billSort]}
+  </span>
+
+  <span
+    style="
+      display:inline-flex;
+      margin-left:2px;
+      color:var(--text-muted);
+    "
+  >
+    ${svgIcon('chevronRight', 16)}
+  </span>
 </button>
       </div>
 
