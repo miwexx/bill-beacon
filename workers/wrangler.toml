@@ -1,0 +1,19 @@
+name = "bill-beacon-api"
+main = "src/index.js"
+compatibility_date = "2026-08-18"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "bill-beacon"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[[kv_namespaces]]
+binding = "AUTH_KV"
+id = "REPLACE_WITH_KV_NAMESPACE_ID"
+
+[vars]
+APP_ORIGIN = "https://bill-beacon.pages.dev"
+
+[triggers]
+crons = ["0 * * * *"]
