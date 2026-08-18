@@ -1427,23 +1427,25 @@ function renderBills() {
         "
       >
         <button
-          class="filter-pill"
-          onclick="openBillSortSheet()"
-          aria-label="Sort bills by ${sortOptions[billSort]}"
-          style="
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:8px;
-  min-width:220px;
-  min-height:42px;
-  padding:0 20px;
-  font-weight:700;
-"
-        >
-          ${svgIcon('sort', 17)}
-          Sort: ${sortOptions[billSort]}
-        </button>
+  class="btn-primary"
+  onclick="openBillSortSheet()"
+  aria-label="Sort bills by ${sortOptions[billSort]}"
+  style="
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-width:220px;
+    min-height:44px;
+    margin:0;
+    padding:0 20px;
+    font-weight:800;
+    border-radius:999px;
+  "
+>
+  ${svgIcon('sort', 18)}
+  Sort: ${sortOptions[billSort]}
+</button>
       </div>
 
       ${
