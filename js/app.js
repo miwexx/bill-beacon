@@ -119,6 +119,7 @@ const ICONS = {
   tray: '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 2v8.59l-2.3-2.3-3.59 3.59-4-4L5 14.59V5h14zM7 9c1.1 0 2 .9 2 2s-.9 2-2 2-2-.9-2-2 .9-2 2-2z" fill="currentColor"/>',
   pieChart: '<path d="M11 2v20c5.52 0 10-4.48 10-10S16.52 2 11 2zm-1 7L4.6 7.3C3.6 8.8 3 10.6 3 12.5 3 17.2 6.8 21 11.5 21c1.9 0 3.7-.6 5.2-1.6L10 9z" fill="currentColor"/>',
   trendUp: '<path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" fill="currentColor"/>',
+  sort: '<path d="M7 3h10v2H7V3zm-3 6h16v2H4V9zm3 6h10v2H7v-2zm3 6h4v2h-4v-2z" fill="currentColor"/>',
 };
 
 // ====================================
@@ -721,7 +722,9 @@ function initTheme() {
 // ====================================
 
 let currentRoute = 'today';
-let routeParams = {};
+let routeParams = {
+  billSort: 'dueDate',
+};
 
 function navigate(route, params = {}) {
   currentRoute = route;
@@ -1270,38 +1273,317 @@ function renderBills() {
   const bills = Store.getBills();
   const cycleFilter = routeParams.cycle || 'all';
   const search = routeParams.search || '';
+  const billSort = routeParams.billSort || 'dueDate';
+
+  const sortOptions = {
+    dueDate: 'Due date',
+    amountLow: 'Amount: low to high',
+    amountHigh: 'Amount: high to low',
+    name: 'Name: A–Z',
+    category: 'Type / category',
+  };
+
   let filtered = bills;
-  if (cycleFilter !== 'all') filtered = filtered.filter(bill => getCycleForBill(bill) === cycleFilter);
-  if (search) filtered = filtered.filter(bill =>
-    bill.name.toLowerCase().includes(search.toLowerCase()) ||
-    getCategory(bill.category).label.toLowerCase().includes(search.toLowerCase())
-  );
-  const groups = {};
-  filtered.forEach(bill => {
-    const key = getCategory(bill.category).label;
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(bill);
-  });
-  const sortedKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+  if (cycleFilter !== 'all') {
+    filtered = filtered.filter((bill) => getCycleForBill(bill) === cycleFilter);
+  }
+
+  if (search) {
+    const searchValue = search.toLowerCase();
+
+    filtered = filtered.filter((bill) =>
+      bill.name.toLowerCase().includes(searchValue) ||
+      getCategory(bill.category).label.toLowerCase().includes(searchValue)
+    );
+  }
+
+  const sortBills = (items) => {
+    const copy = [...items];
+
+    switch (billSort) {
+      case 'amountLow':
+        return copy.sort(
+          (a, b) => (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0)
+        );
+
+      case 'amountHigh':
+        return copy.sort(
+          (a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0)
+        );
+
+      case 'name':
+        return copy.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+
+      case 'category':
+        return copy.sort((a, b) => {
+          const categoryCompare = getCategory(a.category).label.localeCompare(
+            getCategory(b.category).label
+          );
+
+          return categoryCompare || new Date(a.dueDate) - new Date(b.dueDate);
+        });
+
+      case 'dueDate':
+      default:
+        return copy.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    }
+  };
+
+  const sortedBills = sortBills(filtered);
+
+  let billContent = '';
+
+  if (billSort === 'category') {
+    const groups = {};
+
+    sortedBills.forEach((bill) => {
+      const categoryName = getCategory(bill.category).label;
+
+      if (!groups[categoryName]) {
+        groups[categoryName] = [];
+      }
+
+      groups[categoryName].push(bill);
+    });
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+
+    billContent = sortedKeys
+      .map(
+        (categoryName) => `
+          <div>
+            <div class="section-header">${categoryName}</div>
+            <div class="card">
+              ${groups[categoryName]
+                .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+                .map((bill) => billRow(bill, true))
+                .join('')}
+            </div>
+          </div>
+        `
+      )
+      .join('');
+  } else {
+    billContent = `
+      <div class="card">
+        ${sortedBills.map((bill) => billRow(bill, true)).join('')}
+      </div>
+    `;
+  }
+
   return `
-    <div class="nav-bar"><div class="nav-bar-content">
-      <div class="nav-title">Bills</div>
-      <button class="nav-button" onclick="openAddMenu()" aria-label="Add a bill or payment plan">${svgIcon('plus', 18)}</button>
-    </div></div>
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <div class="nav-title">Bills</div>
+
+        <button
+          class="nav-button"
+          onclick="openAddMenu()"
+          aria-label="Add a bill or payment plan"
+        >
+          ${svgIcon('plus', 18)}
+        </button>
+      </div>
+    </div>
+
     <div class="main-content fade-in">
-      <div class="search-bar"><input class="search-input" type="search" placeholder="Search bills" value="${escapeHtml(search)}" oninput="debouncedSearch(this.value)"></div>
+      <div class="search-bar">
+        <input
+          class="search-input"
+          type="search"
+          placeholder="Search bills"
+          value="${escapeHtml(search)}"
+          oninput="debouncedSearch(this.value)"
+        >
+      </div>
+
       <div class="filter-bar cycle-filter-bar">
         ${[
           { id: 'all', label: 'All bills' },
           { id: 'early', label: 'Early cycle' },
           { id: 'late', label: 'Late cycle' },
-        ].map(item => `<button class="filter-pill ${cycleFilter === item.id ? 'active' : ''}" onclick="setCycleFilter('${item.id}')">${item.label}</button>`).join('')}
+        ]
+          .map(
+            (item) => `
+              <button
+                class="filter-pill ${cycleFilter === item.id ? 'active' : ''}"
+                onclick="setCycleFilter('${item.id}')"
+              >
+                ${item.label}
+              </button>
+            `
+          )
+          .join('')}
       </div>
-      ${filtered.length === 0 ? `<div class="empty-state"><div class="empty-state-icon">${svgIcon('tray', 48)}</div><div class="empty-state-title">No bills found</div><div class="empty-state-text">Try a different filter or add a new bill.</div></div>` : sortedKeys.map(key => `
-        <div><div class="section-header">${key}</div><div class="card">${groups[key].sort((a,b) => new Date(a.dueDate)-new Date(b.dueDate)).map(bill => billRow(bill, true)).join('')}</div></div>`).join('')}
-    </div>`;
+
+      <div
+        style="
+          display:flex;
+          justify-content:center;
+          margin:var(--space-3) 0 var(--space-4);
+        "
+      >
+        <button
+          class="filter-pill"
+          onclick="openBillSortSheet()"
+          aria-label="Sort bills by ${sortOptions[billSort]}"
+          style="
+            display:inline-flex;
+            align-items:center;
+            gap:7px;
+            min-height:38px;
+            padding:0 16px;
+          "
+        >
+          ${svgIcon('sort', 17)}
+          Sort: ${sortOptions[billSort]}
+        </button>
+      </div>
+
+      ${
+        filtered.length === 0
+          ? `
+            <div class="empty-state">
+              <div class="empty-state-icon">${svgIcon('tray', 48)}</div>
+              <div class="empty-state-title">No bills found</div>
+              <div class="empty-state-text">
+                Try a different filter or add a new bill.
+              </div>
+            </div>
+          `
+          : billContent
+      }
+    </div>
+  `;
+}
+function closeBillSortSheet() {
+  document.getElementById('billSortOverlay')?.classList.remove('show');
+  document.getElementById('billSortSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('billSortContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
 }
 
+function openBillSortSheet() {
+  const currentSort = routeParams.billSort || 'dueDate';
+
+  const options = [
+    { id: 'dueDate', label: 'Due date', icon: 'calendar' },
+    { id: 'amountLow', label: 'Amount: low to high', icon: 'trendUp' },
+    { id: 'amountHigh', label: 'Amount: high to low', icon: 'trendUp' },
+    { id: 'name', label: 'Name: A–Z', icon: 'doc' },
+    { id: 'category', label: 'Type / category', icon: 'tray' },
+  ];
+
+  const container = document.createElement('div');
+  container.id = 'billSortContainer';
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="billSortOverlay"
+      onclick="closeBillSortSheet()"
+    ></div>
+
+    <div class="sheet" id="billSortSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeBillSortSheet()">
+          Cancel
+        </button>
+
+        <div class="sheet-title">Sort bills</div>
+
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body">
+        <div class="card">
+          ${options
+            .map(
+              (option) => `
+                <button
+                  class="form-row"
+                  style="
+                    width:100%;
+                    text-align:left;
+                    cursor:pointer;
+                    background:transparent;
+                    color:inherit;
+                    border:0;
+                  "
+                  onclick="setBillSort('${option.id}')"
+                >
+                  <div
+                    style="
+                      display:flex;
+                      align-items:center;
+                      gap:var(--space-3);
+                      width:100%;
+                    "
+                  >
+                    <span
+                      style="
+                        display:inline-flex;
+                        color:${
+                          currentSort === option.id
+                            ? 'var(--accent)'
+                            : 'var(--text-muted)'
+                        };
+                      "
+                    >
+                      ${svgIcon(option.icon, 20)}
+                    </span>
+
+                    <span
+                      style="
+                        flex:1;
+                        font-weight:${
+                          currentSort === option.id ? '800' : '500'
+                        };
+                      "
+                    >
+                      ${option.label}
+                    </span>
+
+                    ${
+                      currentSort === option.id
+                        ? `<span style="color:var(--accent)">${svgIcon(
+                            'check',
+                            20
+                          )}</span>`
+                        : ''
+                    }
+                  </div>
+                </button>
+              `
+            )
+            .join('')}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('billSortOverlay')?.classList.add('show');
+    document.getElementById('billSortSheet')?.classList.add('show');
+  });
+}
+
+function setBillSort(sort) {
+  routeParams.billSort = sort;
+  closeBillSortSheet();
+  render();
+}
 function renderCalendar() {
   let viewDate = routeParams.month ? new Date(routeParams.month) : new Date();
 
