@@ -434,7 +434,203 @@ function nextDate(afterDateStr, recurrence) {
   }
   return d.toISOString();
 }
+function dateInputValue(date) {
+  const local = new Date(date);
+  local.setMinutes(local.getMinutes() - local.getTimezoneOffset());
+  return local.toISOString().slice(0, 10);
+}
 
+function dateFromInput(value) {
+  return new Date(`${value}T12:00:00`).toISOString();
+}
+
+function postponeBill(billId, newDueDate) {
+  const bill = Store.getBill(billId);
+
+  if (!bill || !newDueDate) return;
+
+  const previousDueDate = bill.dueDate;
+  const postponedDueDate = dateFromInput(newDueDate);
+
+  if (Number.isNaN(new Date(postponedDueDate).getTime())) {
+    alert('Please choose a valid new due date.');
+    return;
+  }
+
+  if (new Date(postponedDueDate) <= new Date(previousDueDate)) {
+    alert('Choose a date after the current due date.');
+    return;
+  }
+
+  const postponementHistory = Array.isArray(bill.postponementHistory)
+    ? bill.postponementHistory
+    : [];
+
+  Store.updateBill(billId, {
+    dueDate: postponedDueDate,
+    postponementHistory: [
+      ...postponementHistory,
+      {
+        id: uid(),
+        originalDueDate: previousDueDate,
+        postponedTo: postponedDueDate,
+        postponedAt: new Date().toISOString(),
+      },
+    ],
+  });
+}
+
+function openPostponeBillSheet(billId) {
+  const bill = Store.getBill(billId);
+  if (!bill) return;
+
+  const originalDue = new Date(bill.dueDate);
+  const minimumDate = new Date(originalDue);
+  minimumDate.setDate(minimumDate.getDate() + 1);
+
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const plusThree = new Date();
+  plusThree.setDate(plusThree.getDate() + 3);
+
+  const plusSeven = new Date();
+  plusSeven.setDate(plusSeven.getDate() + 7);
+
+  const container = document.createElement('div');
+  container.id = 'postponeBillContainer';
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="postponeBillOverlay"
+      onclick="closePostponeBillSheet()"
+    ></div>
+
+    <div class="sheet" id="postponeBillSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closePostponeBillSheet()">
+          Cancel
+        </button>
+
+        <div class="sheet-title">Postpone Bill</div>
+
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body content-gap">
+        <div class="card card-pad">
+          <div style="font-weight:800;font-size:var(--text-lg)">
+            ${escapeHtml(bill.name)}
+          </div>
+
+          <div style="font-size:var(--text-sm);color:var(--text-muted);margin-top:4px">
+            Currently due ${formatDate(bill.dueDate, 'full')}
+          </div>
+        </div>
+
+        <div>
+          <div class="section-header">Choose a new due date</div>
+
+          <div
+            style="
+              display:grid;
+              grid-template-columns:repeat(3,1fr);
+              gap:var(--space-2);
+              margin-bottom:var(--space-3)
+            "
+          >
+            <button
+              class="btn-secondary"
+              onclick="setPostponeDate('${dateInputValue(tomorrow)}')"
+            >
+              Tomorrow
+            </button>
+
+            <button
+              class="btn-secondary"
+              onclick="setPostponeDate('${dateInputValue(plusThree)}')"
+            >
+              +3 days
+            </button>
+
+            <button
+              class="btn-secondary"
+              onclick="setPostponeDate('${dateInputValue(plusSeven)}')"
+            >
+              +7 days
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="form-row">
+              <div class="form-label">Custom date</div>
+              <input
+                class="form-input"
+                id="postponeBillDate"
+                type="date"
+                min="${dateInputValue(minimumDate)}"
+                value="${dateInputValue(plusThree)}"
+                style="max-width:165px;text-align:right"
+              >
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-footer">
+          This keeps the bill unpaid and moves its current due date.
+        </div>
+
+        <button
+          class="btn-primary"
+          style="width:100%"
+          onclick="confirmPostponeBill('${bill.id}')"
+        >
+          ${svgIcon('calendar', 20)}
+          Confirm Postpone
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('postponeBillOverlay')?.classList.add('show');
+    document.getElementById('postponeBillSheet')?.classList.add('show');
+  });
+}
+
+function closePostponeBillSheet() {
+  document.getElementById('postponeBillOverlay')?.classList.remove('show');
+  document.getElementById('postponeBillSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('postponeBillContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function setPostponeDate(value) {
+  const input = document.getElementById('postponeBillDate');
+  if (input) input.value = value;
+}
+
+function confirmPostponeBill(billId) {
+  const input = document.getElementById('postponeBillDate');
+
+  if (!input?.value) {
+    alert('Choose a new due date.');
+    return;
+  }
+
+  postponeBill(billId, input.value);
+  closePostponeBillSheet();
+  render();
+}
 function getBillStatus(bill) {
   const payments = Store.getPaymentsForBill(bill.id);
   if (bill.recurrence === 'None' && payments.length > 0) return 'paid';
@@ -2635,11 +2831,38 @@ function renderBillDetail() {
         </div>
                   
         ${status !== 'paid' ? `
-          <button class="btn-primary" onclick="confirmMarkPaid('${bill.id}')">
-            ${svgIcon('checkCircle', 22)}
-            Mark as Paid
-          </button>
-        ` : ''}
+  <div
+    style="
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:var(--space-2);
+      margin-top:var(--space-4)
+    "
+  >
+    <button
+      class="btn-primary"
+      style="margin:0;min-width:0;padding-left:12px;padding-right:12px"
+      onclick="confirmMarkPaid('${bill.id}')"
+    >
+      ${svgIcon('checkCircle', 18)}
+      Pay
+    </button>
+
+    <button
+      class="btn-secondary"
+      style="
+        margin:0;
+        min-width:0;
+        color:var(--accent);
+        border-color:color-mix(in srgb, var(--accent) 48%, var(--border))
+      "
+      onclick="openPostponeBillSheet('${bill.id}')"
+    >
+      ${svgIcon('calendar', 18)}
+      Postpone
+    </button>
+  </div>
+` : ''}
 
         <button class="btn-danger" onclick="confirmDeleteBill('${bill.id}')">
           ${svgIcon('trash', 16)} Archive Bill
@@ -3265,6 +3488,28 @@ function openBillDetailsSheet(billId) {
           ${bill.paymentMethod ? detailRow('Payment method', bill.paymentMethod) : ''}
           ${detailRow('Autopay', bill.autopay ? 'On' : 'Off')}
           ${bill.notes ? detailRow('Notes', bill.notes) : ''}
+          ${Array.isArray(bill.postponementHistory) && bill.postponementHistory.length ? `
+  <div class="section-header">Postponement History</div>
+  <div class="card" style="margin-bottom:18px">
+    ${bill.postponementHistory
+      .slice()
+      .reverse()
+      .map(item => `
+        <div class="form-row">
+          <div>
+            <div class="form-label">
+              ${formatDate(item.originalDueDate, 'short')}
+              → ${formatDate(item.postponedTo, 'short')}
+            </div>
+            <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:3px">
+              Postponed ${formatDate(item.postponedAt, 'full')}
+            </div>
+          </div>
+        </div>
+      `)
+      .join('')}
+  </div>
+` : ''}
         </div>
         ${payments.length > 0 ? `
   <div class="section-header">Payment history</div>
