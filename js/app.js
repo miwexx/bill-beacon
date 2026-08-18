@@ -1431,12 +1431,15 @@ function renderBills() {
           onclick="openBillSortSheet()"
           aria-label="Sort bills by ${sortOptions[billSort]}"
           style="
-            display:inline-flex;
-            align-items:center;
-            gap:7px;
-            min-height:38px;
-            padding:0 16px;
-          "
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-width:220px;
+  min-height:42px;
+  padding:0 20px;
+  font-weight:700;
+"
         >
           ${svgIcon('sort', 17)}
           Sort: ${sortOptions[billSort]}
