@@ -1409,67 +1409,19 @@ function renderBills() {
           .map(
             (item) => `
               <button
-                class="filter-pill ${cycleFilter === item.id ? 'active' : ''}"
-                onclick="setCycleFilter('${item.id}')"
-              >
-                ${item.label}
-              </button>
-            `
-          )
-          .join('')}
-      </div>
-
-      <div
-        style="
-          display:flex;
-          justify-content:center;
-          margin:var(--space-3) 0 var(--space-4);
-        "
-      >
-        <button
-  class="filter-pill"
+  class="${cycleFilter === item.id ? 'bb-outline-pill' : 'bb-muted-pill'}"
+  onclick="setCycleFilter('${item.id}')"
+>
+  ${item.label}
+<button
+  class="bb-outline-pill"
   onclick="openBillSortSheet()"
   aria-label="Sort bills by ${sortOptions[billSort]}"
-  style="
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    gap:9px;
-    min-width:230px;
-    min-height:44px;
-    margin:0;
-    padding:0 18px;
-    border:1.5px solid transparent;
-    border-radius:999px;
-    color:var(--text);
-    background:
-      linear-gradient(var(--bg), var(--bg)) padding-box,
-      linear-gradient(100deg, #7c3aed, #f97316) border-box;
-    box-shadow:0 4px 14px rgba(124,58,237,.14);
-  "
+  style="min-width:230px"
 >
-  <span
-    style="
-      display:inline-flex;
-      color:#a855f7;
-    "
-  >
-    ${svgIcon('sort', 18)}
-  </span>
-
-  <span style="font-weight:750">
-    Sort: ${sortOptions[billSort]}
-  </span>
-
-  <span
-    style="
-      display:inline-flex;
-      margin-left:2px;
-      color:var(--text-muted);
-    "
-  >
-    ${svgIcon('chevronRight', 16)}
-  </span>
+  <span class="pill-icon">${svgIcon('sort', 18)}</span>
+  <span>Sort: ${sortOptions[billSort]}</span>
+  <span class="pill-chevron">${svgIcon('chevronRight', 16)}</span>
 </button>
       </div>
 
@@ -3136,18 +3088,18 @@ function renderBillDetail() {
     </button>
 
     <button
-      class="btn-secondary"
-      style="
-        margin:0;
-        min-width:0;
-        color:var(--accent);
-        border-color:color-mix(in srgb, var(--accent) 48%, var(--border))
-      "
-      onclick="openPostponeBillSheet('${bill.id}')"
-    >
-      ${svgIcon('calendar', 18)}
-      Postpone
-    </button>
+  class="bb-outline-pill"
+  style="
+    width:100%;
+    min-width:0;
+    margin:0;
+    padding:0 12px;
+  "
+  onclick="openPostponeBillSheet('${bill.id}')"
+>
+  <span class="pill-icon">${svgIcon('calendar', 18)}</span>
+  <span>Postpone</span>
+</button>
   </div>
 ` : ''}
 
