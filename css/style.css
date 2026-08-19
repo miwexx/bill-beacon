@@ -2165,3 +2165,12 @@ body {
 .bb-outline-pill .pill-icon {
   color: #a855f7 !important;
 }
+
+/* TEMPORARY: disable all motion to diagnose iPhone PWA bottom-bar jump */
+*,
+*::before,
+*::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

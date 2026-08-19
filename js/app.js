@@ -3335,10 +3335,8 @@ function closeAddMenu() {
   if (overlay) overlay.classList.remove('show');
   if (sheet) sheet.classList.remove('show');
 
-  setTimeout(() => {
-    document.getElementById('addMenuContainer')?.remove();
-    unlockBackgroundScroll();
-  }, 300);
+ document.getElementById('addMenuContainer')?.remove();
+unlockBackgroundScroll();
 }
 window.openCalendarAddMenu = function(dateString) {
   const selectedDate = dateString.split('T')[0];
