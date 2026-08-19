@@ -1469,13 +1469,7 @@ function renderBills() {
 }
 
 function closeBillSortSheet() {
-  document.getElementById('billSortOverlay')?.classList.remove('show');
-  document.getElementById('billSortSheet')?.classList.remove('show');
-
-  setTimeout(() => {
-    document.getElementById('billSortContainer')?.remove();
-    unlockBackgroundScroll();
-  }, 300);
+  document.getElementById('billSortContainer')?.remove();
 }
 
 function openBillSortSheet() {
