@@ -3796,7 +3796,7 @@ function openBillForm(billId = null, selectedDate = null) {
   new Date(`${dueDate}T12:00:00`).getDate() <= 15
     ? 'first'
     : 'second'
-);
+); 
 
 function updateBillDueDateField() {
   const recurrenceSelect = document.getElementById('billRecurrence');
