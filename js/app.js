@@ -3421,12 +3421,12 @@ function openIncomeSourceForm(sourceId = null) {
 
   const sheetHtml = `
     <div
-      class="sheet-overlay"
+      class="sheet-overlay show"
       id="incomeSourceOverlay"
       onclick="closeIncomeSourceForm()"
     ></div>
 
-    <div class="sheet" id="incomeSourceSheet">
+    <div class="sheet show" id="incomeSourceSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
