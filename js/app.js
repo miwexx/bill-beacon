@@ -3280,38 +3280,43 @@ function tabBar() {
 let editingBillId = null;
 function openAddMenu() {
   const menuHtml = `
-    <div class="sheet-overlay" id="addMenuOverlay" onclick="closeAddMenu()"></div>
-    <div class="sheet" id="addMenuSheet">
+    <div class="sheet-overlay show" id="addMenuOverlay" onclick="closeAddMenu()"></div>
+
+    <div class="sheet show" id="addMenuSheet">
       <div class="sheet-handle"></div>
+
       <div class="sheet-nav">
         <button class="nav-button" onclick="closeAddMenu()">Cancel</button>
         <div class="sheet-title">Add Recurring</div>
-        <div style="width: 54px"></div>
+        <div style="width:54px"></div>
       </div>
 
-      <div style="padding: var(--space-4)">
-        <div class="settings-footer" style="padding: 0 0 var(--space-4)">
+      <div class="sheet-body">
+        <div class="settings-footer" style="padding:0 0 var(--space-4)">
           Choose what you want to track.
         </div>
 
-        <button class="btn-primary" onclick="closeAddMenu(); openBillForm()">
+        <button
+          class="btn-primary"
+          onclick="closeAddMenu(); openBillForm()"
+        >
           ${svgIcon('plus', 20)}
           Add bill
         </button>
 
         <button
-  class="bb-outline-pill"
-  style="
-    width:100%;
-    min-height:46px;
-    margin-top:var(--space-3);
-  "
-  onclick="closeAddMenu(); openInstallmentPlanForm()"
->
-  <span class="pill-icon">${svgIcon('calendar', 18)}</span>
-  <span>Add Payment Plan</span>
-  <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
-</button>
+          class="bb-outline-pill"
+          style="
+            width:100%;
+            min-height:46px;
+            margin-top:var(--space-3);
+          "
+          onclick="closeAddMenu(); openInstallmentPlanForm()"
+        >
+          <span class="pill-icon">${svgIcon('calendar', 18)}</span>
+          <span>Add Payment Plan</span>
+          <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
+        </button>
       </div>
     </div>
   `;
@@ -3319,24 +3324,12 @@ function openAddMenu() {
   const container = document.createElement('div');
   container.id = 'addMenuContainer';
   container.innerHTML = menuHtml;
-  document.body.appendChild(container);
-  lockBackgroundScroll();
 
-  requestAnimationFrame(() => {
-    document.getElementById('addMenuOverlay').classList.add('show');
-    document.getElementById('addMenuSheet').classList.add('show');
-  });
+  document.body.appendChild(container);
 }
 
 function closeAddMenu() {
-  const overlay = document.getElementById('addMenuOverlay');
-  const sheet = document.getElementById('addMenuSheet');
-
-  if (overlay) overlay.classList.remove('show');
-  if (sheet) sheet.classList.remove('show');
-
- document.getElementById('addMenuContainer')?.remove();
-unlockBackgroundScroll();
+  document.getElementById('addMenuContainer')?.remove();
 }
 window.openCalendarAddMenu = function(dateString) {
   const selectedDate = dateString.split('T')[0];
