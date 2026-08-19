@@ -1809,27 +1809,10 @@ function renderCalendar() {
   `;
 }
 
-window.closeCalendarDay = function () {
-  const overlay = document.getElementById("calendarDayOverlay");
-  const sheet = document.getElementById("calendarDaySheet");
 
-  if (overlay) {
-    overlay.classList.remove("show");
-  }
-
-  if (sheet) {
-    sheet.classList.remove("show");
-  }
-
-  setTimeout(() => {
-    const container = document.getElementById("calendarDaySheetContainer");
-
-    if (container) {
-      container.remove();
-    }
-    unlockBackgroundScroll();
-  }, 300);
-}
+window.closeCalendarDay = function() {
+  document.getElementById('calendarDaySheetContainer')?.remove();
+};
 
 window.openCalendarDay = function(dateString) {
   const selectedDate = new Date(dateString);
@@ -1950,12 +1933,7 @@ window.openCalendarDay = function(dateString) {
   `;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
 
-  requestAnimationFrame(() => {
-    document.getElementById('calendarDayOverlay')?.classList.add('show');
-    document.getElementById('calendarDaySheet')?.classList.add('show');
-  });
 };
 
 window.markCalendarBillPaid = function(billId, dateString) {
