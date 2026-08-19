@@ -1064,11 +1064,17 @@ const overdueCount = cycleBills.filter(
             </div>
 
             <button
-              class="dashboard-see-all"
-              onclick="navigate('recurring')"
-            >
-              See all
-            </button>
+  class="bb-outline-pill"
+  style="
+    min-height:34px;
+    padding:0 12px;
+    font-size:var(--text-xs);
+  "
+  onclick="navigate('recurring')"
+>
+  <span>See all</span>
+  <span class="pill-chevron">${svgIcon('chevronRight', 14)}</span>
+</button>
           </div>
 
           ${
@@ -1129,11 +1135,17 @@ const overdueCount = cycleBills.filter(
               recentPayments.length
                 ? `
                   <button
-                    class="dashboard-see-all"
-                    onclick="navigate('history')"
-                  >
-                    See more
-                  </button>
+  class="bb-outline-pill"
+  style="
+    min-height:34px;
+    padding:0 12px;
+    font-size:var(--text-xs);
+  "
+  onclick="navigate('history')"
+>
+  <span>See all</span>
+  <span class="pill-chevron">${svgIcon('chevronRight', 14)}</span>
+</button>
                 `
                 : ''
             }
@@ -2599,11 +2611,17 @@ function renderSettings() {
   </div>
 
   <button
-    class="btn-secondary"
-    style="width: 100%; margin-top: var(--space-3);"
-    onclick="openIncomeSourceForm()">
-       Add Income Source
-   </button>
+  class="bb-outline-pill"
+  style="
+    width:100%;
+    min-height:46px;
+    margin-top:var(--space-3);
+  "
+  onclick="openIncomeSourceForm()"
+>
+  <span class="pill-icon">${svgIcon('plus', 18)}</span>
+  <span>Add Income Source</span>
+</button>
 </div>
       <div class="settings-section">
   <div class="section-header">Current Pay Cycle</div>
@@ -3073,17 +3091,11 @@ function renderBillDetail() {
   </button>
 ` : `
  <button
-  class="bb-outline-pill"
-  style="
-    width:100%;
-    min-height:46px;
-    margin-top:var(--space-3);
-  "
+  class="btn-secondary"
+  style="width:100%; margin-top:var(--space-4);"
   onclick="openPaymentLinkPopup('${bill.id}')"
 >
-  <span class="pill-icon">${svgIcon('plus', 18)}</span>
-  <span>Add Payment Link</span>
-  <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
+  Add Payment Link
 </button>
 `}
           
@@ -3122,10 +3134,6 @@ function renderBillDetail() {
 </button>
   </div>
 ` : ''}
-
-        <button class="btn-danger" onclick="confirmDeleteBill('${bill.id}')">
-          ${svgIcon('trash', 16)} Archive Bill
-        </button>
 
         <button
   type="button"
