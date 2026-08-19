@@ -2147,3 +2147,21 @@ body {
   animation: none !important;
   transform: none !important;
 }
+
+/* Restore and stabilize gradient-outline pills */
+.bb-outline-pill {
+  position: relative;
+  isolation: isolate;
+  border: 2px solid transparent !important;
+  border-radius: 999px;
+  background:
+    linear-gradient(var(--bg), var(--bg)) padding-box,
+    linear-gradient(100deg, #7c3aed 0%, #ec4899 50%, #f97316 100%) border-box !important;
+  background-clip: padding-box, border-box !important;
+  background-origin: border-box !important;
+  color: var(--text) !important;
+}
+
+.bb-outline-pill .pill-icon {
+  color: #a855f7 !important;
+}
