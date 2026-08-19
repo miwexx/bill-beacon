@@ -3647,13 +3647,7 @@ function openBillQuickActions(billId) {
  document.body.appendChild(container);
 }
 function closeBillDetailsSheet() {
-  document.getElementById('billDetailsOverlay')?.classList.remove('show');
-  document.getElementById('billDetailsSheet')?.classList.remove('show');
-
-  setTimeout(() => {
-    document.getElementById('billDetailsContainer')?.remove();
-    unlockBackgroundScroll();
-  }, 300);
+  document.getElementById('billDetailsContainer')?.remove();
 }
 
 function openBillDetailsSheet(billId) {
