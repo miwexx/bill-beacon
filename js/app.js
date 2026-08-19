@@ -3534,28 +3534,12 @@ function openIncomeSourceForm(sourceId = null) {
   const container = document.createElement('div');
   container.id = 'incomeSourceContainer';
   container.innerHTML = sheetHtml;
-  document.body.appendChild(container);
-  lockBackgroundScroll();
-  
-
-  requestAnimationFrame(() => {
-    document.getElementById('incomeSourceOverlay')?.classList.add('show');
-    document.getElementById('incomeSourceSheet')?.classList.add('show');
-  });
+ document.body.appendChild(container);
 }
 
 function closeIncomeSourceForm() {
-  document.getElementById('incomeSourceOverlay')?.classList.remove('show');
-  document.getElementById('incomeSourceSheet')?.classList.remove('show');
-
- setTimeout(() => {
   document.getElementById('incomeSourceContainer')?.remove();
-  unlockBackgroundScroll();
-}, 300);
-
-  editingIncomeSourceId = null;
 }
-
 function saveIncomeSource() {
   const name = document.getElementById('incomeSourceName').value.trim();
 
@@ -3616,13 +3600,7 @@ function confirmDeleteIncomeSource(id) {
   render();
 }
 function closeBillQuickActions() {
-  document.getElementById('billQuickActionsOverlay')?.classList.remove('show');
-  document.getElementById('billQuickActionsSheet')?.classList.remove('show');
-
-  setTimeout(() => {
-    document.getElementById('billQuickActionsContainer')?.remove();
-    unlockBackgroundScroll();
-  }, 300);
+  document.getElementById('billQuickActionsContainer')?.remove();
 }
 
 function openBillQuickActions(billId) {
@@ -3634,12 +3612,12 @@ function openBillQuickActions(billId) {
 
   const sheetHtml = `
     <div
-      class="sheet-overlay"
-      id="billQuickActionsOverlay"
-      onclick="closeBillQuickActions()"
-    ></div>
+  class="sheet-overlay show"
+  id="billQuickActionsOverlay"
+  onclick="closeBillQuickActions()"
+></div>
 
-    <div class="sheet" id="billQuickActionsSheet">
+<div class="sheet show" id="billQuickActionsSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
@@ -3701,14 +3679,7 @@ function openBillQuickActions(billId) {
   const container = document.createElement('div');
   container.id = 'billQuickActionsContainer';
   container.innerHTML = sheetHtml;
-  document.body.appendChild(container);
-
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document.getElementById('billQuickActionsOverlay')?.classList.add('show');
-    document.getElementById('billQuickActionsSheet')?.classList.add('show');
-  });
+ document.body.appendChild(container);
 }
 function closeBillDetailsSheet() {
   document.getElementById('billDetailsOverlay')?.classList.remove('show');
