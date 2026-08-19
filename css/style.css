@@ -2109,42 +2109,36 @@ body {
   max-height: 100dvh;
 }
 
-/* iPhone / PWA viewport stability */
-html {
-  height: 100%;
-  min-height: -webkit-fill-available;
-  background: var(--bg);
-}
-
+/* Stable iPhone PWA layout: do not lock the app shell */
+html,
 body {
   min-height: 100%;
-  min-height: -webkit-fill-available;
   background: var(--bg);
-  overscroll-behavior-y: none;
 }
 
 #app {
-  min-height: 100svh;
-  min-height: -webkit-fill-available;
-  background: var(--bg);
-  overflow: hidden;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-gradient);
+  overflow: visible;
 }
 
-/* Keep page content above the fixed bottom navigation */
 .main-content {
+  flex: 1 1 auto;
   min-height: 0;
-  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(100px + var(--safe-bottom));
 }
 
-/* Keep the tab bar anchored to the visible bottom edge */
 .tab-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-  will-change: transform;
+  margin-bottom: 0;
+  padding: var(--space-2) var(--space-4)
+    calc(var(--space-2) + var(--safe-bottom));
+  transform: translate3d(0, 0, 0);
+  -webkit-transform: translate3d(0, 0, 0);
   z-index: 100;
 }
