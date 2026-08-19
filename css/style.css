@@ -2037,8 +2037,6 @@ a { color: var(--accent); text-decoration: none; }
 .recurring-bills-card { overflow: hidden; }
 .recurring-empty-state { margin-top: var(--space-4); }
 
-
-=======
 /* Bill Beacon branded outline pill */
 .bb-outline-pill {
   display: inline-flex;
