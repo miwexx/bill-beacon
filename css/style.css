@@ -2089,3 +2089,22 @@ a { color: var(--accent); text-decoration: none; }
   font-weight: 650;
   cursor: pointer;
 }
+html,
+body {
+  min-height: 100%;
+  background: var(--bg);
+}
+
+#app {
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.sheet-overlay,
+.sheet {
+  overscroll-behavior: none;
+}
+
+.sheet {
+  max-height: 100dvh;
+}

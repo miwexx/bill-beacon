@@ -3298,10 +3298,19 @@ function openAddMenu() {
           Add bill
         </button>
 
-        <button class="btn-secondary" style="margin-top: var(--space-3)" onclick="closeAddMenu(); openInstallmentPlanForm()">
-          ${svgIcon('calendar', 20)}
-          Add Payment Plan
-        </button>
+        <button
+  class="bb-outline-pill"
+  style="
+    width:100%;
+    min-height:46px;
+    margin-top:var(--space-3);
+  "
+  onclick="closeAddMenu(); openInstallmentPlanForm()"
+>
+  <span class="pill-icon">${svgIcon('calendar', 18)}</span>
+  <span>Add Payment Plan</span>
+  <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
+</button>
       </div>
     </div>
   `;
@@ -3372,13 +3381,18 @@ window.openCalendarAddMenu = function(dateString) {
         </button>
 
         <button
-          class="btn-secondary"
-          style="margin-top:var(--space-3)"
-          onclick="closeCalendarAddMenu(); openInstallmentPlanForm()"
-        >
-          ${svgIcon('calendar', 20)}
-          Add Payment Plan
-        </button>
+  class="bb-outline-pill"
+  style="
+    width:100%;
+    min-height:46px;
+    margin-top:var(--space-3);
+  "
+  onclick="closeAddMenu(); openInstallmentPlanForm()"
+>
+  <span class="pill-icon">${svgIcon('calendar', 18)}</span>
+  <span>Add Payment Plan</span>
+  <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
+</button>
       </div>
     </div>
   `;
