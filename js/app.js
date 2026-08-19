@@ -3073,11 +3073,17 @@ function renderBillDetail() {
   </button>
 ` : `
  <button
-  class="btn-secondary"
-  style="width:100%; margin-top:var(--space-4);"
+  class="bb-outline-pill"
+  style="
+    width:100%;
+    min-height:46px;
+    margin-top:var(--space-3);
+  "
   onclick="openPaymentLinkPopup('${bill.id}')"
 >
-  Add Payment Link
+  <span class="pill-icon">${svgIcon('plus', 18)}</span>
+  <span>Add Payment Link</span>
+  <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
 </button>
 `}
           
@@ -3123,12 +3129,17 @@ function renderBillDetail() {
 
         <button
   type="button"
-  class="btn-secondary bill-show-details-button"
+  class="bb-outline-pill bill-show-details-button"
+  style="
+    width:100%;
+    min-height:46px;
+    margin-top:var(--space-3);
+  "
   onclick="openBillDetailsSheet('${bill.id}')"
 >
-  ${svgIcon('doc', 24)}
-  Show Details
-  ${svgIcon('chevronRight', 24)}
+  <span class="pill-icon">${svgIcon('doc', 20)}</span>
+  <span>Show Details</span>
+  <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
 </button>
       </div>
     </div>
