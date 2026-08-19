@@ -1578,14 +1578,7 @@ function openBillSortSheet() {
       </div>
     </div>
   `;
-
-  document.body.appendChild(container);
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document.getElementById('billSortOverlay')?.classList.add('show');
-    document.getElementById('billSortSheet')?.classList.add('show');
-  });
+document.body.appendChild(container);
 }
 
 function setBillSort(sort) {
