@@ -2108,3 +2108,43 @@ body {
 .sheet {
   max-height: 100dvh;
 }
+
+/* iPhone / PWA viewport stability */
+html {
+  height: 100%;
+  min-height: -webkit-fill-available;
+  background: var(--bg);
+}
+
+body {
+  min-height: 100%;
+  min-height: -webkit-fill-available;
+  background: var(--bg);
+  overscroll-behavior-y: none;
+}
+
+#app {
+  min-height: 100svh;
+  min-height: -webkit-fill-available;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+/* Keep page content above the fixed bottom navigation */
+.main-content {
+  min-height: 0;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Keep the tab bar anchored to the visible bottom edge */
+.tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  will-change: transform;
+  z-index: 100;
+}
