@@ -441,6 +441,7 @@ function dateInputValue(date) {
   return local.toISOString().slice(0, 10);
 }
 
+
 function dateFromInput(value) {
   return new Date(`${value}T12:00:00`).toISOString();
 }
@@ -3336,6 +3337,7 @@ function closeAddMenu() {
 
   setTimeout(() => {
     document.getElementById('addMenuContainer')?.remove();
+    unlockBackgroundScroll();
   }, 300);
 }
 window.openCalendarAddMenu = function(dateString) {

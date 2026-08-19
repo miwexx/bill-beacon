@@ -2037,6 +2037,8 @@ a { color: var(--accent); text-decoration: none; }
 .recurring-bills-card { overflow: hidden; }
 .recurring-empty-state { margin-top: var(--space-4); }
 
+
+=======
 /* Bill Beacon branded outline pill */
 .bb-outline-pill {
   display: inline-flex;
@@ -2141,4 +2143,9 @@ body {
   transform: translate3d(0, 0, 0);
   -webkit-transform: translate3d(0, 0, 0);
   z-index: 100;
+}
+/* Prevent iPhone fixed-tab jump during page re-renders */
+.fade-in {
+  animation: none !important;
+  transform: none !important;
 }
