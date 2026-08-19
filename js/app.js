@@ -3664,12 +3664,12 @@ function openBillDetailsSheet(billId) {
   const payments = Store.getPaymentsForBill(billId);
   const sheetHtml = `
     <div
-      class="sheet-overlay"
-      id="billDetailsOverlay"
-      onclick="closeBillDetailsSheet()"
-    ></div>
+  class="sheet-overlay show"
+  id="billDetailsOverlay"
+  onclick="closeBillDetailsSheet()"
+></div>
 
-    <div class="sheet bill-details-sheet" id="billDetailsSheet">
+<div class="sheet bill-details-sheet show" id="billDetailsSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
@@ -3764,13 +3764,6 @@ function openBillDetailsSheet(billId) {
   container.id = 'billDetailsContainer';
   container.innerHTML = sheetHtml;
   document.body.appendChild(container);
-
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document.getElementById('billDetailsOverlay')?.classList.add('show');
-    document.getElementById('billDetailsSheet')?.classList.add('show');
-  });
 }
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
