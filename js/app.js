@@ -5150,20 +5150,7 @@ render = function () {
 ============================================ */
 
 function closeInstallmentPlanForm() {
-  const overlay = document.getElementById("installmentPlanOverlay");
-  const sheet = document.getElementById("installmentPlanSheet");
-
-  if (overlay) {
-    overlay.classList.remove("show");
-  }
-
-  if (sheet) {
-    sheet.classList.remove("show");
-  }
-
-  setTimeout(() => {
-    document.getElementById("installmentPlanContainer")?.remove();
-  }, 300);
+  document.getElementById('installmentPlanContainer')?.remove();
 }
 
 function updateInstallmentFirstPaymentLabel() {
@@ -5188,12 +5175,12 @@ function openInstallmentPlanForm() {
 
   container.innerHTML = `
     <div
-      class="sheet-overlay"
-      id="installmentPlanOverlay"
-      onclick="closeInstallmentPlanForm()"
-    ></div>
+  class="sheet-overlay show"
+  id="installmentPlanOverlay"
+  onclick="closeInstallmentPlanForm()"
+></div>
 
-    <div class="sheet" id="installmentPlanSheet">
+<div class="sheet show" id="installmentPlanSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
@@ -5366,12 +5353,6 @@ function openInstallmentPlanForm() {
   `;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document.getElementById("installmentPlanOverlay")?.classList.add("show");
-    document.getElementById("installmentPlanSheet")?.classList.add("show");
-  });
 }
 
 function getNextInstallmentDate(date, frequencyDays) {

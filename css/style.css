@@ -2207,3 +2207,23 @@ body {
   inset: 0 !important;
   z-index: 200 !important;
 }
+/* Global no-motion mode: disable every UI animation and transition */
+*,
+*::before,
+*::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+/* Ensure every sheet is immediately visible and stays at screen bottom */
+.sheet,
+.sheet.show {
+  transform: translate3d(0, 0, 0) !important;
+  -webkit-transform: translate3d(0, 0, 0) !important;
+}
+
+.sheet-overlay,
+.sheet-overlay.show {
+  opacity: 1 !important;
+}
