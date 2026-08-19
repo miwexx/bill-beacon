@@ -3783,7 +3783,42 @@ function openBillDetailsSheet(billId) {
   container.innerHTML = sheetHtml;
   document.body.appendChild(container);
 }
+function openBillForm(billId = null, selectedDate = null) {
+  editingBillId = billId;
+  const bill = billId ? Store.getBill(billId) : null;
 
+  const today = new Date().toISOString().split('T')[0];
+  const dueDate = bill
+  ? bill.dueDate.split('T')[0]
+  : (selectedDate || today);
+
+  const defaultPayCycle = bill?.payCycle || (
+  new Date(`${dueDate}T12:00:00`).getDate() <= 15
+    ? 'first'
+    : 'second'
+);
+
+function updateBillDueDateField() {
+  const recurrenceSelect = document.getElementById('billRecurrence');
+  const dueDateInput = document.getElementById('billDueDate');
+  const dueDaySelect = document.getElementById('billDueDay');
+  const dueDateLabel = document.getElementById('billDueDateLabel');
+
+  if (
+    !recurrenceSelect ||
+    !dueDateInput ||
+    !dueDaySelect ||
+    !dueDateLabel
+  ) {
+    return;
+  }
+
+  const isMonthly = recurrenceSelect.value === 'Monthly';
+
+  dueDateInput.style.display = isMonthly ? 'none' : '';
+  dueDaySelect.style.display = isMonthly ? '' : 'none';
+  dueDateLabel.textContent = isMonthly ? 'Due Day' : 'Due Date';
+}
   const selectedReminders = bill ? (bill.reminderOffsets || [7, 1]) : [7, 1];
 
   const sheetHtml = `
