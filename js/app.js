@@ -3061,6 +3061,7 @@ function toggleBillDetails() {
 }
 function renderBillDetail() {
   const bill = Store.getBill(routeParams.id);
+
   if (!bill) {
     navigate('bills');
     return '';
@@ -3073,129 +3074,168 @@ function renderBillDetail() {
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <button class="nav-button" onclick="navigate('bills')">${svgIcon('chevronLeft', 22)} Bills</button>
-        <button class="nav-button" onclick="openBillForm('${bill.id}')">Edit</button>
+        <button class="nav-button" onclick="navigate('bills')">
+          ${svgIcon('chevronLeft', 22)} Bills
+        </button>
+
+        <button class="nav-button" onclick="openBillForm('${bill.id}')">
+          Edit
+        </button>
       </div>
     </div>
+
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
+
         <div class="detail-header">
           <div
-  style="
-    width:52px;
-    height:52px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    overflow:hidden;
-    border-radius:14px;
-    margin:0 auto var(--space-2);
-    background:${getBillBrand(bill.name) ? 'white' : `var(--${cat.color})`};
-    color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
-  "
->
-  ${billVisual(bill, 46)}
-</div>
-<div style="flex:1; min-width:0; margin-left:12px;">
-  <div style="font-size:var(--text-xl); font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
-    ${escapeHtml(bill.name)}
-  </div>
+            style="
+              width:52px;
+              height:52px;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              overflow:hidden;
+              border-radius:14px;
+              margin:0 auto var(--space-2);
+              background:${getBillBrand(bill.name) ? 'white' : `var(--${cat.color})`};
+              color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
+            "
+          >
+            ${billVisual(bill, 46)}
+          </div>
 
-  <div style="font-size:var(--text-sm); color:var(--text-muted); margin-top:4px;">
-    ${cat.label}
-  </div>
-</div>
-          <div class="detail-amount">${formatCurrency(bill.amount)}</div>
+          <div style="flex:1; min-width:0; margin-left:12px;">
+            <div
+              style="
+                font-size:var(--text-xl);
+                font-weight:800;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+              "
+            >
+              ${escapeHtml(bill.name)}
+            </div>
+
+            <div
+              style="
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+                margin-top:4px;
+              "
+            >
+              ${cat.label}
+            </div>
+          </div>
+
+          <div class="detail-amount">
+            ${formatCurrency(bill.amount)}
+          </div>
+
           <div class="detail-status">
-            <span class="status-pill" style="background:var(--${status === 'paid' ? 'paid-bg' : status === 'overdue' ? 'overdue-bg' : 'upcoming-bg'});color:var(--${status === 'paid' ? 'paid' : status === 'overdue' ? 'overdue' : 'upcoming'})">
-              ${status === 'paid' ? svgIcon('checkCircle', 12) : status === 'overdue' ? svgIcon('warning', 12) : svgIcon('clock', 12)}
-              ${status === 'paid' ? 'Paid' : relativeDue(bill.dueDate).charAt(0).toUpperCase() + relativeDue(bill.dueDate).slice(1)}
+            <span
+              class="status-pill"
+              style="
+                background:var(--${status === 'paid'
+                  ? 'paid-bg'
+                  : status === 'overdue'
+                    ? 'overdue-bg'
+                    : 'upcoming-bg'});
+                color:var(--${status === 'paid'
+                  ? 'paid'
+                  : status === 'overdue'
+                    ? 'overdue'
+                    : 'upcoming'});
+              "
+            >
+              ${status === 'paid'
+                ? svgIcon('checkCircle', 12)
+                : status === 'overdue'
+                  ? svgIcon('warning', 12)
+                  : svgIcon('clock', 12)}
+
+              ${status === 'paid'
+                ? 'Paid'
+                : relativeDue(bill.dueDate).charAt(0).toUpperCase() +
+                  relativeDue(bill.dueDate).slice(1)}
             </span>
           </div>
         </div>
 
         <div>
-        ${safePaymentUrl(bill.paymentUrl) ? `
-  <button
-    class="btn-primary"
-    style="width:100%; margin-top:var(--space-4);"
-    onclick="openPaymentPage('${bill.id}')"
-  >
-     Make a Payment
-  </button>
-` : `
- <button
-  class="btn-secondary"
-  style="width:100%; margin-top:var(--space-4);"
-  onclick="openPaymentLinkPopup('${bill.id}')"
->
-  Add Payment Link
-</button>
-`}
-          
+          ${safePaymentUrl(bill.paymentUrl) ? `
+            <button
+              class="btn-primary"
+              style="width:100%; margin-top:var(--space-4);"
+              onclick="openPaymentPage('${bill.id}')"
+            >
+              Make a Payment
+            </button>
+          ` : `
+            <button
+              class="btn-secondary"
+              style="width:100%; margin-top:var(--space-4);"
+              onclick="openPaymentLinkPopup('${bill.id}')"
+            >
+              Add Payment Link
+            </button>
+          `}
         </div>
-                  
-        ${!isPaidThisMonth(bill) ? `
-  <div
-    style="
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:var(--space-2);
-      margin-top:var(--space-4);
-    "
-  >
-    <button
-      class="btn-primary"
-      style="margin:0; min-width:0; padding-left:12px; padding-right:12px"
-      onclick="confirmMarkPaid('${bill.id}')"
-    >
-      ${svgIcon('checkCircle', 18)}
-      Mark as Paid
-    </button>
 
-    <button
-      class="bb-outline-pill"
-      style="width:100%; min-width:0; margin:0; padding:0 12px"
-      onclick="openPostponeBillSheet('${bill.id}')"
-    >
-      ${svgIcon('calendar', 18)}
-      <span>Postpone</span>
-    </button>
-  </div>
-` : `
-  <button
-    class="bb-outline-pill"
-    style="width:100%; min-height:46px; margin-top:var(--space-4);"
-    onclick="markBillUnpaid('${bill.id}')"
-  >
-    ${svgIcon('close', 18)}
-    <span>Mark as Unpaid</span>
-  </button>
-`}
-  <button
-    class="bb-outline-pill"
-    style="width:100%; min-height:46px; margin-top:var(--space-4);"
-    onclick="markBillUnpaid('${bill.id}')"
-  >
-    ${svgIcon('close', 18)}
-    <span>Mark as Unpaid</span>
-  </button>
-`}
+        ${!isPaidThisMonth(bill) ? `
+          <div
+            style="
+              display:grid;
+              grid-template-columns:1fr 1fr;
+              gap:var(--space-2);
+              margin-top:var(--space-4);
+            "
+          >
+            <button
+              class="btn-primary"
+              style="margin:0; min-width:0; padding-left:12px; padding-right:12px"
+              onclick="confirmMarkPaid('${bill.id}')"
+            >
+              ${svgIcon('checkCircle', 18)}
+              Mark as Paid
+            </button>
+
+            <button
+              class="bb-outline-pill"
+              style="width:100%; min-width:0; margin:0; padding:0 12px"
+              onclick="openPostponeBillSheet('${bill.id}')"
+            >
+              ${svgIcon('calendar', 18)}
+              <span>Postpone</span>
+            </button>
+          </div>
+        ` : `
+          <button
+            class="bb-outline-pill"
+            style="width:100%; min-height:46px; margin-top:var(--space-4);"
+            onclick="markBillUnpaid('${bill.id}')"
+          >
+            ${svgIcon('close', 18)}
+            <span>Mark as Unpaid</span>
+          </button>
+        `}
 
         <button
-  type="button"
-  class="bb-outline-pill bill-show-details-button"
-  style="
-    width:100%;
-    min-height:46px;
-    margin-top:var(--space-3);
-  "
-  onclick="openBillDetailsSheet('${bill.id}')"
->
-  <span class="pill-icon">${svgIcon('doc', 20)}</span>
-  <span>Show Details</span>
-  <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
-</button>
+          type="button"
+          class="bb-outline-pill bill-show-details-button"
+          style="
+            width:100%;
+            min-height:46px;
+            margin-top:var(--space-3);
+          "
+          onclick="openBillDetailsSheet('${bill.id}')"
+        >
+          <span class="pill-icon">${svgIcon('doc', 20)}</span>
+          <span>Show Details</span>
+          <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
+        </button>
+
       </div>
     </div>
   `;
