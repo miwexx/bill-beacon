@@ -972,39 +972,53 @@ const overdueCount = cycleBills.filter(
       <div class="content-pad dashboard-content">
 
         <button
-          class="dashboard-month-card"
-          onclick="navigate('recurring', { cycle: '${currentCycle === 'first' ? 'early' : 'late'}' })"
-          aria-label="View bills due this month"
-        >
-          <div class="dashboard-card-topline">
-            <span>Bills This Pay Cycle</span>
-            <span>${currentCycleLabel}</span>
-          </div>
+  class="dashboard-month-card"
+  onclick="navigate('recurring', {
+    cycle: currentCycle === 'first' ? 'early' : 'late'
+  })"
+  aria-label="View bills for the ${currentCycleLabel}"
+>
+  <div class="dashboard-card-topline">
+    <span>This Pay Cycle</span>
+    <span>${currentCycleLabel}</span>
+  </div>
 
-          <div class="dashboard-month-amount">
-            ${formatCurrency(totalThisCycle)}
-          </div>
+  <div class="dashboard-month-amount">
+    ${formatCurrency(remainingThisCycle)}
+  </div>
 
-          <div class="dashboard-progress-track">
-            <div
-              class="dashboard-progress-fill"
-              style="width: ${paidCycleProgress}%"
-            ></div>
-          </div>
+  <div
+    style="
+      font-size:var(--text-sm);
+      color:var(--text-muted);
+      margin-top:2px;
+      font-weight:600;
+    "
+  >
+    Still to pay
+  </div>
 
-          <div class="dashboard-progress-meta">
-            <span class="text-paid">
-              ${formatCurrency(paidThisCycle)} paid
-            </span>
-            <span>
-              ${formatCurrency(remainingThisCycle)} remaining
-            </span>
-          </div>
+  <div class="dashboard-progress-track" style="margin-top:var(--space-3);">
+    <div
+      class="dashboard-progress-fill"
+      style="width:${paidCycleProgress}%"
+    ></div>
+  </div>
 
-          <div class="dashboard-month-footer">
-            ${paidCycleBills.length} paid · ${unpaidCycleBills.length} still due
-          </div>
-        </button>
+  <div class="dashboard-progress-meta">
+    <span class="text-paid">
+      ${formatCurrency(paidThisCycle)} paid
+    </span>
+    <span>
+      of ${formatCurrency(totalThisCycle)} scheduled
+    </span>
+  </div>
+
+  <div class="dashboard-month-footer">
+    <span>${unpaidCycleBills.length} bill${unpaidCycleBills.length === 1 ? '' : 's'} left</span>
+    <span>View bills ${svgIcon('chevronRight', 14)}</span>
+  </div>
+</button>
            <div class="section-header">Bill Status · ${currentCycleLabel}</div>
         <div class="dashboard-status-row">
   <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
