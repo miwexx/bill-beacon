@@ -276,7 +276,7 @@ function billVisual(bill, size = 32) {
           width:${size}px;
           height:${size}px;
           object-fit:contain;
-transform:scale(1.28);
+transform:scale(1.30);
 padding:0;
 border-radius:0;
         "
