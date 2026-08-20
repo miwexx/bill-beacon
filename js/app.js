@@ -3047,6 +3047,15 @@ function renderBillDetail() {
 >
   ${billVisual(bill, 46)}
 </div>
+<div style="flex:1; min-width:0; margin-left:12px;">
+  <div style="font-size:var(--text-xl); font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+    ${escapeHtml(bill.name)}
+  </div>
+
+  <div style="font-size:var(--text-sm); color:var(--text-muted); margin-top:4px;">
+    ${cat.label}
+  </div>
+</div>
           <div class="detail-amount">${formatCurrency(bill.amount)}</div>
           <div class="detail-status">
             <span class="status-pill" style="background:var(--${status === 'paid' ? 'paid-bg' : status === 'overdue' ? 'overdue-bg' : 'upcoming-bg'});color:var(--${status === 'paid' ? 'paid' : status === 'overdue' ? 'overdue' : 'upcoming'})">
