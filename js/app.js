@@ -4346,6 +4346,8 @@ function openBillPaymentLink(billId) {
 function confirmMarkPaid(billId) {
   if (confirm('Mark this bill as paid?')) {
     markBillPaid(billId);
+    closeDashboardStatusSheet();
+navigate('today');
     render();
   }
 }
