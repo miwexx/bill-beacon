@@ -973,9 +973,7 @@ const overdueCount = cycleBills.filter(
 
         <button
   class="dashboard-month-card"
-  onclick="navigate('recurring', {
-    cycle: currentCycle === 'first' ? 'early' : 'late'
-  })"
+  onclick="navigate('bills', { cycle: currentCycle === 'first' ? 'early' : 'late' })"
   aria-label="View bills for the ${currentCycleLabel}"
 >
   <div class="dashboard-card-topline">
