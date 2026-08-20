@@ -2063,6 +2063,11 @@ function closeCycleBillsSheet() {
 
 function openDashboardStatusSheet(status) {
   const now = new Date();
+  const paidBillIds = new Set(
+  Store.getPayments()
+    .filter(payment => isSameMonth(payment.paidDate, now))
+    .map(payment => payment.billId)
+);
 const currentCycle = getCurrentPayCycle();
 
 const cycleBills = Store.getBills().filter((bill) => {
