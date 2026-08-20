@@ -2136,24 +2136,7 @@ if (status === 'paid') {
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
-  if (!paidBillIds.has(bill.id)) return false;
-
-  const paymentsForBill = Store.getPaymentsForBill(bill.id);
-  const latestPaymentThisMonth = paymentsForBill.find(
-    (payment) => isSameMonth(payment.paidDate, now)
-  );
-
-  if (!latestPaymentThisMonth) return false;
-
-  const paidDate = new Date(latestPaymentThisMonth.paidDate);
-  const paidCycle =
-    bill.payCycle ||
-    (paidDate.getDate() <= 15 ? 'first' : 'second');
-
-  return paidCycle === currentCycle;
-});
-  }
-
+  
   selectedBills.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   const total = selectedBills.reduce(
