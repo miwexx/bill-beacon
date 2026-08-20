@@ -259,7 +259,7 @@ function getBrandInitials(brand) {
     .join('');
 }
 
-function billVisual(bill, size = 24) {
+function billVisual(bill, size = 32) {
   const brand = getBillBrand(bill.name);
   const category = getCategory(bill.category);
 
