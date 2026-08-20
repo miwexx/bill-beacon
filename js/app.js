@@ -247,7 +247,7 @@ function getBillBrand(billName) {
 }
 
 function billLogoUrl(brand) {
-  return `https://img.logo.dev/${brand.domain}?token=pk_Oi2mTbJ_SOOVDVoEsRz5kg&size=64&format=png`;
+  return `https://img.logo.dev/${brand.domain}?token=pk_Oi2mTbJ_SOOVDVoEsRz5kg&size=256&format=png`;
 }
 function getBrandInitials(brand) {
   return brand.label
@@ -276,7 +276,7 @@ function billVisual(bill, size = 18) {
           width:${size}px;
           height:${size}px;
           object-fit:cover;
-transform:scale(1.32);
+transform:scale(1.08);
 padding:0;
 border-radius:4px;
         "
