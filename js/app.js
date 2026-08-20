@@ -973,9 +973,9 @@ const overdueCount = cycleBills.filter(
 
         <button
   class="dashboard-month-card"
-  onclick="navigate('recurring', {
-    cycle: currentCycle === 'first' ? 'early' : 'late'
-  })"
+  onclick="navigate('bills', {
+  cycle: currentCycle === 'first' ? 'early' : 'late'
+})"
   aria-label="View bills for the ${currentCycleLabel}"
 >
   <div class="dashboard-card-topline">
@@ -983,22 +983,22 @@ const overdueCount = cycleBills.filter(
     <span>${currentCycleLabel}</span>
   </div>
 
-  <div class="dashboard-month-amount">
-    ${formatCurrency(remainingThisCycle)}
-  </div>
-
   <div
-    style="
-      font-size:var(--text-sm);
-      color:var(--text-muted);
-      margin-top:2px;
-      font-weight:600;
-    "
-  >
-    Still to pay
-  </div>
+  style="
+    font-size:var(--text-sm);
+    color:var(--text-muted);
+    margin-top:var(--space-3);
+    font-weight:700;
+  "
+>
+  Still to pay this cycle
+</div>
 
-  <div class="dashboard-progress-track" style="margin-top:var(--space-3);">
+<div class="dashboard-month-amount" style="margin-top:2px;">
+  ${formatCurrency(remainingThisCycle)}
+</div>
+
+<div class="dashboard-progress-track" style="margin-top:var(--space-4);">
     <div
       class="dashboard-progress-fill"
       style="width:${paidCycleProgress}%"
