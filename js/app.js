@@ -979,46 +979,85 @@ const overdueCount = cycleBills.filter(
   aria-label="View bills for the ${currentCycleLabel}"
 >
   <div class="dashboard-card-topline">
-    <span>This Pay Cycle</span>
-    <span>${currentCycleLabel}</span>
+  <span>This Pay Cycle</span>
+  <span>${cycleDateRange}</span>
+</div>
+
+<div style="margin-top:var(--space-4);">
+  <div
+    style="
+      font-size:var(--text-2xl);
+      font-weight:900;
+      letter-spacing:-0.03em;
+      line-height:1;
+    "
+  >
+    ${formatCurrency(remainingThisCycle)}
+    <span
+      style="
+        font-size:var(--text-base);
+        font-weight:700;
+        letter-spacing:0;
+        color:var(--text-muted);
+      "
+    >
+      remaining
+    </span>
   </div>
 
   <div
+    style="
+      color:var(--text-muted);
+      font-size:var(--text-sm);
+      margin-top:6px;
+    "
+  >
+    of ${formatCurrency(totalThisCycle)} scheduled
+  </div>
+</div>
+
+<div
+  class="dashboard-progress-track"
+  style="margin-top:var(--space-4);"
+>
+  <div
+    class="dashboard-progress-fill"
+    style="width:${paidCycleProgress}%"
+  ></div>
+</div>
+
+<div
   style="
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top:8px;
     font-size:var(--text-sm);
-    color:var(--text-muted);
-    margin-top:var(--space-3);
-    font-weight:700;
   "
 >
-  Still to pay this cycle
+  <span class="text-paid">
+    ${formatCurrency(paidThisCycle)} paid
+  </span>
+
+  <span style="color:var(--text-muted);">
+    ${unpaidCycleBills.length} bill${unpaidCycleBills.length === 1 ? '' : 's'} left
+  </span>
 </div>
 
-<div class="dashboard-month-amount" style="margin-top:2px;">
-  ${formatCurrency(remainingThisCycle)}
-</div>
-
-<div class="dashboard-progress-track" style="margin-top:var(--space-4);">
-    <div
-      class="dashboard-progress-fill"
-      style="width:${paidCycleProgress}%"
-    ></div>
-  </div>
-
-  <div class="dashboard-progress-meta">
-    <span class="text-paid">
-      ${formatCurrency(paidThisCycle)} paid
-    </span>
-    <span>
-      of ${formatCurrency(totalThisCycle)} scheduled
-    </span>
-  </div>
-
-  <div class="dashboard-month-footer">
-    <span>${unpaidCycleBills.length} bill${unpaidCycleBills.length === 1 ? '' : 's'} left</span>
-    <span>View bills ${svgIcon('chevronRight', 14)}</span>
-  </div>
-</button>
+<div
+  style="
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+    gap:4px;
+    color:var(--accent);
+    font-size:var(--text-sm);
+    font-weight:800;
+    margin-top:var(--space-3);
+  "
+>
+  View bills ${svgIcon('chevronRight', 16)}
+</div> </button>
            <div class="section-header">Bill Status · ${currentCycleLabel}</div>
         <div class="dashboard-status-row">
   <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
