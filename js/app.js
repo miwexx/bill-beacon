@@ -1057,7 +1057,8 @@ const overdueCount = cycleBills.filter(
   "
 >
   View bills ${svgIcon('chevronRight', 16)}
-</div> </button>
+</div> 
+</button>
            <div class="section-header">Bill Status · ${currentCycleLabel}</div>
         <div class="dashboard-status-row">
   <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
