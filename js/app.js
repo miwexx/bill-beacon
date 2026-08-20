@@ -3785,18 +3785,321 @@ function openBillDetailsSheet(billId) {
 }
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
-  const bill = billId ? Store.getBill(billId) : null;
 
+  const bill = billId ? Store.getBill(billId) : null;
   const today = new Date().toISOString().split('T')[0];
+
   const dueDate = bill
-  ? bill.dueDate.split('T')[0]
-  : (selectedDate || today);
+    ? bill.dueDate.split('T')[0]
+    : (selectedDate || today);
 
   const defaultPayCycle = bill?.payCycle || (
-  new Date(`${dueDate}T12:00:00`).getDate() <= 15
-    ? 'first'
-    : 'second'
-); 
+    new Date(`${dueDate}T12:00:00`).getDate() <= 15
+      ? 'first'
+      : 'second'
+  );
+
+  const selectedReminders = bill
+    ? (bill.reminderOffsets || [7, 1])
+    : [7, 1];
+
+  const currentDueDay = bill?.dueDay
+    ? Number(bill.dueDay)
+    : new Date(`${dueDate}T12:00:00`).getDate();
+
+  const sheetHtml = `
+    <div class="sheet-overlay" id="sheetOverlay" onclick="closeBillForm()"></div>
+
+    <div class="sheet" id="billSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeBillForm()">Cancel</button>
+
+        <div class="sheet-title">${bill ? 'Edit Bill' : 'New Bill'}</div>
+
+        <button
+          class="nav-button"
+          onclick="saveBill()"
+          style="font-weight:700"
+        >
+          Save
+        </button>
+      </div>
+
+      <div class="sheet-body">
+        <div class="content-gap">
+
+          <div>
+            <div class="section-header">Bill Details</div>
+
+            <div class="card">
+              <div class="form-row">
+                <div class="form-label">Name</div>
+
+                <input
+                  class="form-input"
+                  id="billName"
+                  type="text"
+                  placeholder="Electricity"
+                  value="${bill ? escapeHtml(bill.name) : ''}"
+                  style="text-align:left"
+                >
+              </div>
+
+              <div class="form-row">
+                <div class="form-label">Amount</div>
+
+                <input
+                  class="form-input"
+                  id="billAmount"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value="${bill ? bill.amount : ''}"
+                >
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">Category</div>
+
+            <div class="card">
+              <select
+                class="form-select"
+                id="billCategory"
+                style="width:100%;height:48px;padding:0 var(--space-4);border:none;background:transparent;font-size:var(--text-base);-webkit-appearance:none"
+              >
+                ${CATEGORIES.map(category => `
+                  <option
+                    value="${category.id}"
+                    ${bill && bill.category === category.id ? 'selected' : ''}
+                  >
+                    ${category.label}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">Due Date & Recurrence</div>
+
+            <div class="card">
+              <div class="form-row">
+                <div class="form-label" id="billDueDateLabel">Due Date</div>
+
+                <input
+                  class="form-input"
+                  id="billDueDate"
+                  type="date"
+                  value="${dueDate}"
+                >
+
+                <select
+                  class="form-select"
+                  id="billDueDay"
+                  style="display:none"
+                >
+                  ${Array.from({ length: 31 }, (_, index) => {
+                    const day = index + 1;
+
+                    return `
+                      <option
+                        value="${day}"
+                        ${currentDueDay === day ? 'selected' : ''}
+                      >
+                        ${day}
+                      </option>
+                    `;
+                  }).join('')}
+                </select>
+              </div>
+
+              <div class="form-row">
+                <div class="form-label">Repeats</div>
+
+                <select
+                  class="form-select"
+                  id="billRecurrence"
+                  onchange="updateBillDueDateField()"
+                >
+                  ${RECURRENCE.map(recurrence => `
+                    <option
+                      value="${recurrence}"
+                      ${bill && bill.recurrence === recurrence ? 'selected' : ''}
+                    >
+                      ${recurrence}
+                    </option>
+                  `).join('')}
+                </select>
+              </div>
+
+              <div class="form-row">
+                <div class="form-label">Pay Cycle</div>
+
+                <select class="form-select" id="billPayCycle">
+                  <option
+                    value="first"
+                    ${defaultPayCycle === 'first' ? 'selected' : ''}
+                  >
+                    Early Cycle
+                  </option>
+
+                  <option
+                    value="second"
+                    ${defaultPayCycle === 'second' ? 'selected' : ''}
+                  >
+                    Late Cycle
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">Payment Method</div>
+
+            <div class="card">
+              <select
+                class="form-select"
+                id="billPaymentMethod"
+                style="width:100%;height:48px;padding:0 var(--space-4);border:none;background:transparent;font-size:var(--text-base);-webkit-appearance:none"
+              >
+                ${PAYMENT_METHODS.map(method => `
+                  <option
+                    value="${method}"
+                    ${bill && bill.paymentMethod === method ? 'selected' : ''}
+                  >
+                    ${method || 'None'}
+                  </option>
+                `).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">Payment Link</div>
+
+            <div class="card">
+              <div class="form-row">
+                <div class="form-label">Website</div>
+
+                <input
+                  class="form-input"
+                  id="paymentUrl"
+                  type="text"
+                  inputmode="url"
+                  placeholder="provider.com/pay"
+                  value="${bill ? escapeHtml(bill.paymentUrl || '') : ''}"
+                  style="text-align:left"
+                >
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">Autopay</div>
+
+            <div class="card">
+              <div class="form-row">
+                <div class="form-label">Pay automatically</div>
+                <div style="flex:1"></div>
+
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    id="billAutopay"
+                    ${bill && bill.autopay ? 'checked' : ''}
+                  >
+
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-footer">
+              Autopay bills are paid automatically by your bank or card.
+              You will still receive a reminder before the payment date.
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">Reminders</div>
+
+            <div class="card">
+              ${REMINDER_OFFSETS.map(reminder => `
+                <div class="form-row">
+                  <div class="form-label">${reminder.label}</div>
+                  <div style="flex:1"></div>
+
+                  <label class="toggle">
+                    <input
+                      type="checkbox"
+                      class="reminder-toggle"
+                      data-days="${reminder.days}"
+                      ${selectedReminders.includes(reminder.days) ? 'checked' : ''}
+                    >
+
+                    <div class="toggle-track">
+                      <div class="toggle-thumb"></div>
+                    </div>
+                  </label>
+                </div>
+              `).join('')}
+            </div>
+
+            <div class="settings-footer">
+              Reminders appear when you open the app. Enable notifications
+              in Safari for best results.
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">Notes</div>
+
+            <div class="card">
+              <textarea
+                class="form-textarea"
+                id="billNotes"
+                placeholder="Optional notes"
+              >${bill ? escapeHtml(bill.notes || '') : ''}</textarea>
+            </div>
+          </div>
+
+          ${bill ? `
+            <button
+              class="btn-danger"
+              onclick="confirmDeleteBill('${bill.id}', true)"
+            >
+              ${svgIcon('trash', 16)}
+              Archive Bill
+            </button>
+          ` : ''}
+
+        </div>
+      </div>
+    </div>
+  `;
+
+  const sheetContainer = document.createElement('div');
+  sheetContainer.id = 'sheetContainer';
+  sheetContainer.innerHTML = sheetHtml;
+  document.body.appendChild(sheetContainer);
+
+  updateBillDueDateField();
+
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('sheetOverlay')?.classList.add('show');
+    document.getElementById('billSheet')?.classList.add('show');
+  });
+}
+
 
 function updateBillDueDateField() {
   const recurrenceSelect = document.getElementById('billRecurrence');
@@ -3819,207 +4122,22 @@ function updateBillDueDateField() {
   dueDaySelect.style.display = isMonthly ? '' : 'none';
   dueDateLabel.textContent = isMonthly ? 'Due Day' : 'Due Date';
 }
-  const selectedReminders = bill ? (bill.reminderOffsets || [7, 1]) : [7, 1];
 
-  const sheetHtml = `
-    <div class="sheet-overlay" id="sheetOverlay" onclick="closeBillForm()"></div>
-    <div class="sheet" id="billSheet">
-      <div class="sheet-handle"></div>
-      <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillForm()">Cancel</button>
-        <div class="sheet-title">${bill ? 'Edit Bill' : 'New Bill'}</div>
-        <button class="nav-button" onclick="saveBill()" style="font-weight:700">Save</button>
-      </div>
-      <div class="sheet-body">
-        <div class="content-gap">
-          <div>
-            <div class="section-header">Bill Details</div>
-            <div class="card">
-              <div class="form-row">
-                <div class="form-label">Name</div>
-                <input class="form-input" id="billName" type="text" placeholder="Electricity" value="${bill ? escapeHtml(bill.name) : ''}" style="text-align:left">
-              </div>
-              <div class="form-row">
-                <div class="form-label">Amount</div>
-                <input class="form-input" id="billAmount" type="number" step="0.01" placeholder="0.00" value="${bill ? bill.amount : ''}">
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div class="section-header">Category</div>
-            <div class="card">
-              <select class="form-select" id="billCategory" style="width:100%;height:48px;padding:0 var(--space-4);border:none;background:transparent;font-size:var(--text-base);-webkit-appearance:none">
-                ${CATEGORIES.map(c => `<option value="${c.id}" ${bill && bill.category === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <div class="section-header">Due Date & Recurrence</div>
-            <div class="card">
-              <div class="form-row">
-  <div class="form-label" id="billDueDateLabel">Due Date</div>
-
-  <input
-    class="form-input"
-    id="billDueDate"
-    type="date"
-    value="${dueDate}"
-  >
-
-  <select
-    class="form-select"
-    id="billDueDay"
-    style="display:none"
-  >
-    ${Array.from({ length: 31 }, (_, index) => {
-      const day = index + 1;
-      const selected =
-        bill?.recurrence === 'Monthly' &&
-        getMonthlyDueDay(bill) === day
-          ? 'selected'
-          : '';
-
-      return `<option value="${day}" ${selected}>${day}</option>`;
-    }).join('')}
-  </select>
-</div>
-              <div class="form-row">
-                <div class="form-label">Repeats</div>
-                <div class="form-row">
-  <div class="form-label">Pay Cycle</div>
-
-  <select class="form-select" id="billPayCycle">
-    <option value="first" ${defaultPayCycle === 'first' ? 'selected' : ''}>
-      Early Cycle
-    </option>
-
-    <option value="second" ${defaultPayCycle === 'second' ? 'selected' : ''}>
-      Late Cycle
-    </option>
-  </select>
-</div>
-                <select
-  class="form-select"
-  id="billRecurrence"
-  onchange="updateBillDueDateField()"
->
-                  ${RECURRENCE.map(r => `<option value="${r}" ${bill && bill.recurrence === r ? 'selected' : ''}>${r}</option>`).join('')}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <div class="section-header">Payment Method</div>
-            <div class="card">
-              <select class="form-select" id="billPaymentMethod" style="width:100%;height:48px;padding:0 var(--space-4);border:none;background:transparent;font-size:var(--text-base);-webkit-appearance:none">
-                ${PAYMENT_METHODS.map(m => `<option value="${m}" ${bill && bill.paymentMethod === m ? 'selected' : ''}>${m || 'None'}</option>`).join('')}
-              </select>
-            </div>
-          </div>
-    <div class="section-header">Payment Link</div>
-
-<div class="card">
-  <div class="form-row">
-    <div class="form-label">Website</div>
-
-    <input
-      class="form-input"
-      id="paymentUrl"
-      type="text"
-      inputmode="url"
-      placeholder="provider.com/pay"
-      value="${bill ? escapeHtml(bill.paymentUrl || '') : ''}"
-      style="text-align: left;"
-    />
-  </div>
-</div>
-          <div>
-            <div class="section-header">Autopay</div>
-<div class="card">
-  <div class="form-row">
-    <div class="form-label">Pay automatically</div>
-    <div style="flex: 1;"></div>
-    <label class="toggle">
-      <input
-        type="checkbox"
-        id="billAutopay"
-        ${bill && bill.autopay ? "checked" : ""}
-      >
-      <div class="toggle-track">
-        <div class="toggle-thumb"></div>
-      </div>
-    </label>
-  </div>
-</div>
-<div class="settings-footer">
-  Autopay bills are paid automatically by your bank or card. You will still receive a reminder before the payment date.
-</div>
-            <div class="section-header">Reminders</div>
-            <div class="card">
-              ${REMINDER_OFFSETS.map(r => `
-                <div class="form-row">
-                  <div class="form-label">${r.label}</div>
-                  <div style="flex:1"></div>
-                  <label class="toggle">
-                    <input type="checkbox" class="reminder-toggle" data-days="${r.days}" ${selectedReminders.includes(r.days) ? 'checked' : ''}>
-                    <div class="toggle-track"><div class="toggle-thumb"></div></div>
-                  </label>
-                </div>
-              `).join('')}
-            </div>
-            <div class="settings-footer">Reminders appear when you open the app. Enable notifications in Safari for best results.</div>
-          </div>
-                
-          <div>
-            <div class="section-header">Notes</div>
-            <div class="card">
-              <textarea class="form-textarea" id="billNotes" placeholder="Optional notes">${bill ? escapeHtml(bill.notes || '') : ''}</textarea>
-            </div>
-          </div>
-
-          ${bill ? `
-            <button class="btn-danger" onclick="confirmDeleteBill('${bill.id}', true)">
-              ${svgIcon('trash', 16)} Archive Bill
-            </button>
-          ` : ''}
-        </div>
-      </div>
-    </div>
-  `;
-
-  // Append sheet to body
-  const sheetContainer = document.createElement('div');
-  sheetContainer.id = 'sheetContainer';
-  sheetContainer.innerHTML = sheetHtml;
-  document.body.appendChild(sheetContainer);
-            lockBackgroundScroll();
-  // Animate in
-  requestAnimationFrame(() => {
-    document.getElementById('sheetOverlay').classList.add('show');
-    document.getElementById('billSheet').classList.add('show');
-  });
-}
 
 function closeBillForm() {
   const overlay = document.getElementById('sheetOverlay');
   const sheet = document.getElementById('billSheet');
+
   if (overlay) overlay.classList.remove('show');
   if (sheet) sheet.classList.remove('show');
- setTimeout(() => {
-  const container = document.getElementById('sheetContainer');
 
-  if (container) {
-    container.remove();
-  }
+  setTimeout(() => {
+    document.getElementById('sheetContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
 
-  unlockBackgroundScroll();
-}, 300);
   editingBillId = null;
 }
-
 function openPaymentLinkPopup(billId) {
   const bill = Store.getBill(billId);
 
