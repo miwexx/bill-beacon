@@ -3063,7 +3063,7 @@ function renderBillDetail() {
     style="width:100%; margin-top:var(--space-4);"
     onclick="openPaymentPage('${bill.id}')"
   >
-    Pay ${escapeHtml(bill.name)}
+     Make a Payment
   </button>
 ` : `
  <button
@@ -3092,7 +3092,7 @@ function renderBillDetail() {
       onclick="confirmMarkPaid('${bill.id}')"
     >
       ${svgIcon('checkCircle', 18)}
-      Pay
+      Mark as Paid
     </button>
 
     <button
