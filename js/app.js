@@ -2121,11 +2121,21 @@ if (status === 'paid') {
   }
 
   if (status === 'overdue') {
-    title = 'Overdue';
-    color = 'var(--overdue)';
-    background = 'var(--overdue-bg)';
-    icon = svgIcon('warning', 18);
-    selectedBills = Store.getBills().filter((bill) => {
+  title = 'Overdue';
+  color = 'var(--overdue)';
+  background = 'var(--overdue-bg)';
+  icon = svgIcon('warning', 18);
+
+  selectedBills = Store.getBills()
+    .filter((bill) => {
+      if (isPaidThisMonth(bill)) {
+        return false;
+      }
+
+      return getBillStatus(bill) === 'overdue';
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
   if (!paidBillIds.has(bill.id)) return false;
 
   const paymentsForBill = Store.getPaymentsForBill(bill.id);
