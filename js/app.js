@@ -1958,18 +1958,8 @@ window.markCalendarBillPaid = function(billId, dateString) {
   }, 320);
 };
 function closeDashboardStatusSheet() {
-  const overlay = document.getElementById('dashboardStatusOverlay');
-  const sheet = document.getElementById('dashboardStatusSheet');
-
-  if (overlay) overlay.classList.remove('show');
-  if (sheet) sheet.classList.remove('show');
-
-  setTimeout(() => {
-    document.getElementById('dashboardStatusContainer')?.remove();
-    unlockBackgroundScroll();
-  }, 300);
+  document.getElementById('dashboardStatusContainer')?.remove();
 }
-
 function openCycleBillsSheet(cycle, cycleLabel) {
   const now = new Date();
 
@@ -2159,9 +2149,13 @@ if (status === 'paid') {
   const container = document.createElement('div');
   container.id = 'dashboardStatusContainer';
   container.innerHTML = `
-    <div class="sheet-overlay" id="dashboardStatusOverlay" onclick="closeDashboardStatusSheet()"></div>
+    <div
+  class="sheet-overlay show"
+  id="dashboardStatusOverlay"
+  onclick="closeDashboardStatusSheet()"
+></div>
 
-    <div class="sheet" id="dashboardStatusSheet">
+<div class="sheet show" id="dashboardStatusSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
@@ -2225,12 +2219,6 @@ if (status === 'paid') {
   `;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document.getElementById('dashboardStatusOverlay')?.classList.add('show');
-    document.getElementById('dashboardStatusSheet')?.classList.add('show');
-  });
 }
 function getMonthlySpendingLimit() {
   const settings = Store.getSettings();
