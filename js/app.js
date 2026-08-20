@@ -987,18 +987,7 @@ const overdueCount = cycleBills.filter(
     ${formatCurrency(remainingThisCycle)}
   </div>
 
-  <div
-    style="
-      font-size:var(--text-sm);
-      color:var(--text-muted);
-      margin-top:2px;
-      font-weight:600;
-    "
-  >
-    Still to pay
-  </div>
-
-  <div class="dashboard-progress-track" style="margin-top:var(--space-3);">
+    <div class="dashboard-progress-track" style="margin-top:var(--space-3);">
     <div
       class="dashboard-progress-fill"
       style="width:${paidCycleProgress}%"
