@@ -3887,6 +3887,25 @@ function openBillForm(billId = null, selectedDate = null) {
             <div class="section-header">Due Date & Recurrence</div>
 
             <div class="card">
+
+            <div class="form-row">
+                <div class="form-label">Repeats</div>
+
+                <select
+                  class="form-select"
+                  id="billRecurrence"
+                  onchange="updateBillDueDateField()"
+                >
+                  ${RECURRENCE.map(recurrence => `
+                    <option
+                      value="${recurrence}"
+                      ${bill && bill.recurrence === recurrence ? 'selected' : ''}
+                    >
+                      ${recurrence}
+                    </option>
+                  `).join('')}
+                </select>
+              </div>
               <div class="form-row">
                 <div class="form-label" id="billDueDateLabel">Due Date</div>
 
@@ -3916,26 +3935,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   }).join('')}
                 </select>
               </div>
-
-              <div class="form-row">
-                <div class="form-label">Repeats</div>
-
-                <select
-                  class="form-select"
-                  id="billRecurrence"
-                  onchange="updateBillDueDateField()"
-                >
-                  ${RECURRENCE.map(recurrence => `
-                    <option
-                      value="${recurrence}"
-                      ${bill && bill.recurrence === recurrence ? 'selected' : ''}
-                    >
-                      ${recurrence}
-                    </option>
-                  `).join('')}
-                </select>
-              </div>
-
+              
               <div class="form-row">
                 <div class="form-label">Pay Cycle</div>
 
