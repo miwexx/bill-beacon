@@ -658,19 +658,23 @@ function markBillPaid(billId) {
   const bill = Store.getBill(billId);
   if (!bill) return;
 
-  // Create payment record
+  const paidForDueDate = bill.dueDate;
+
   Store.addPayment({
     id: uid(),
-    billId: billId,
+    billId,
     paidDate: new Date().toISOString(),
     amount: bill.amount,
+    paidForDueDate
   });
 
-  // Advance due date for recurring bills
   if (bill.recurrence !== 'None') {
     const next = nextDate(bill.dueDate, bill.recurrence);
+
     if (next) {
-      Store.updateBill(billId, { dueDate: next });
+      Store.updateBill(billId, {
+        dueDate: next
+      });
     }
   }
 }
