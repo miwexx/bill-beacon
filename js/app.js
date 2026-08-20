@@ -276,9 +276,9 @@ function billVisual(bill, size = 18) {
           width:${size}px;
           height:${size}px;
           object-fit:cover;
-transform:scale(1.08);
+transform:scale(1.);
 padding:0;
-border-radius:0;
+border-radius:4px;
         "
         onerror="
           this.onerror=null;
@@ -3041,8 +3041,8 @@ function renderBillDetail() {
     overflow:hidden;
     border-radius:14px;
     margin:0 auto var(--space-2);
-    background:${`var(--${cat.color})`};
-color:white;
+    background:${getBillBrand(bill.name) ? 'white' : `var(--${cat.color})`};
+    color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
   "
 >
   ${billVisual(bill, 46)}
