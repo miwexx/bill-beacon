@@ -979,7 +979,7 @@ const overdueCount = cycleBills.filter(
   aria-label="View bills for the ${currentCycleLabel}"
 >
   <div class="dashboard-card-topline">
-    <span>Total Amount Due</span> <span>${cycleDateRange}</span>                   
+    <span>Total Amount Due</span> 
     <span>${currentCycleLabel}</span>
   </div>
 
@@ -995,7 +995,7 @@ const overdueCount = cycleBills.filter(
       font-weight:600;
     "
   >
-  
+    Still to pay
   </div>
 
   <div class="dashboard-progress-track" style="margin-top:var(--space-3);">
