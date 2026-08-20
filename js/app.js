@@ -674,7 +674,52 @@ function markBillPaid(billId) {
     }
   }
 }
+function markBillUnpaid(billId) {
+  const bill = Store.getBill(billId);
+  if (!bill) return;
 
+  const payments = Store.getPayments();
+
+  const paymentToRemove = payments
+    .filter((payment) => payment.billId === billId)
+    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))[0];
+
+  if (!paymentToRemove) {
+    alert('No payment record was found for this bill.');
+    return;
+  }
+
+  if (!confirm(`Mark ${bill.name} as unpaid?`)) return;
+
+  Store.savePayments(
+    payments.filter((payment) => payment.id !== paymentToRemove.id)
+  );
+
+  if (bill.recurrence !== 'None') {
+    const restoredDueDate = new Date(bill.dueDate);
+
+    switch (bill.recurrence) {
+      case 'Weekly':
+        restoredDueDate.setDate(restoredDueDate.getDate() - 7);
+        break;
+      case 'Monthly':
+        restoredDueDate.setMonth(restoredDueDate.getMonth() - 1);
+        break;
+      case 'Quarterly':
+        restoredDueDate.setMonth(restoredDueDate.getMonth() - 3);
+        break;
+      case 'Yearly':
+        restoredDueDate.setFullYear(restoredDueDate.getFullYear() - 1);
+        break;
+    }
+
+    Store.updateBill(billId, {
+      dueDate: restoredDueDate.toISOString()
+    });
+  }
+
+  navigate('today');
+}
 function svgIcon(name, size = 20) {
   const path = ICONS[name] || ICONS.doc;
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="fill:currentColor">${path}</svg>`;
@@ -3091,17 +3136,10 @@ function renderBillDetail() {
         </div>
                   
         ${status !== 'paid' ? `
-  <div
-    style="
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:var(--space-2);
-      margin-top:var(--space-4)
-    "
-  >
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-2); margin-top:var(--space-4);">
     <button
       class="btn-primary"
-      style="margin:0;min-width:0;padding-left:12px;padding-right:12px"
+      style="margin:0; min-width:0; padding-left:12px; padding-right:12px"
       onclick="confirmMarkPaid('${bill.id}')"
     >
       ${svgIcon('checkCircle', 18)}
@@ -3109,20 +3147,24 @@ function renderBillDetail() {
     </button>
 
     <button
-  class="bb-outline-pill"
-  style="
-    width:100%;
-    min-width:0;
-    margin:0;
-    padding:0 12px;
-  "
-  onclick="openPostponeBillSheet('${bill.id}')"
->
-  <span class="pill-icon">${svgIcon('calendar', 18)}</span>
-  <span>Postpone</span>
-</button>
+      class="bb-outline-pill"
+      style="width:100%; min-width:0; margin:0; padding:0 12px"
+      onclick="openPostponeBillSheet('${bill.id}')"
+    >
+      ${svgIcon('calendar', 18)}
+      <span>Postpone</span>
+    </button>
   </div>
-` : ''}
+` : `
+  <button
+    class="bb-outline-pill"
+    style="width:100%; min-height:46px; margin-top:var(--space-4);"
+    onclick="markBillUnpaid('${bill.id}')"
+  >
+    ${svgIcon('close', 18)}
+    <span>Mark as Unpaid</span>
+  </button>
+`}
 
         <button
   type="button"
