@@ -3135,7 +3135,7 @@ function renderBillDetail() {
           
         </div>
                   
-        ${status !== 'paid' ? `
+        ${!isPaidThisMonth(bill) ? `
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-2); margin-top:var(--space-4);">
     <button
       class="btn-primary"
@@ -3156,6 +3156,16 @@ function renderBillDetail() {
     </button>
   </div>
 ` : `
+` : `
+  <button
+    class="bb-outline-pill"
+    style="width:100%; min-height:46px; margin-top:var(--space-4);"
+    onclick="markBillUnpaid('${bill.id}')"
+  >
+    ${svgIcon('close', 18)}
+    <span>Mark as Unpaid</span>
+  </button>
+`}
   <button
     class="bb-outline-pill"
     style="width:100%; min-height:46px; margin-top:var(--space-4);"
