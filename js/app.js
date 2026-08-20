@@ -973,7 +973,7 @@ const overdueCount = cycleBills.filter(
 
         <button
   class="dashboard-month-card"
-  onclick="navigate('bills', { cycle: currentCycle === 'first' ? 'early' : 'late' })"
+  onclick="openCurrentCycleBills()"
   aria-label="View bills for the ${currentCycleLabel}"
 >
   <div class="dashboard-card-topline">
@@ -4295,7 +4295,13 @@ function setCycleFilter(cycle) {
   routeParams.cycle = cycle;
   render();
 }
+function openCurrentCycleBills() {
+  const currentCycle = getCurrentPayCycle();
 
+  navigate('bills', {
+    cycle: currentCycle === 'first' ? 'early' : 'late'
+  });
+}
 function setStatusFilter(status) {
   routeParams.status = status;
   delete routeParams.filter;
