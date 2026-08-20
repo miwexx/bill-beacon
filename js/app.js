@@ -2284,7 +2284,10 @@ const currentCycle = getCurrentPayCycle();
 const currentCycleLabel = currentCycle === 'first'
   ? 'Early Cycle'
   : 'Late Cycle';
-
+const cycleDateRange =
+  currentCycle === 'first'
+    ? '1st–15th'
+    : '16th–end of month';
 const unpaidCycleBills = bills.filter((bill) => {
   const dueDate = new Date(bill.dueDate);
 
