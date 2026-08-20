@@ -971,7 +971,40 @@ const overdueCount = cycleBills.filter(
     <div class="main-content fade-in">
       <div class="content-pad dashboard-content">
 
-      
+        <button
+          class="dashboard-month-card"
+          onclick="navigate('recurring', { cycle: '${currentCycle === 'first' ? 'early' : 'late'}' })"
+          aria-label="View bills due this month"
+        >
+          <div class="dashboard-card-topline">
+            <span>Bills This Pay Cycle</span>
+            <span>${currentCycleLabel}</span>
+          </div>
+
+          <div class="dashboard-month-amount">
+            ${formatCurrency(totalThisCycle)}
+          </div>
+
+          <div class="dashboard-progress-track">
+            <div
+              class="dashboard-progress-fill"
+              style="width: ${paidCycleProgress}%"
+            ></div>
+          </div>
+
+          <div class="dashboard-progress-meta">
+            <span class="text-paid">
+              ${formatCurrency(paidThisCycle)} paid
+            </span>
+            <span>
+              ${formatCurrency(remainingThisCycle)} remaining
+            </span>
+          </div>
+
+          <div class="dashboard-month-footer">
+            ${paidCycleBills.length} paid · ${unpaidCycleBills.length} still due
+          </div>
+        </button>
            <div class="section-header">Bill Status · ${currentCycleLabel}</div>
         <div class="dashboard-status-row">
   <button class="dashboard-status-card status-paid-card" onclick="openDashboardStatusSheet('paid')" aria-label="View paid bills">
