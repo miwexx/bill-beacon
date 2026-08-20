@@ -3136,7 +3136,14 @@ function renderBillDetail() {
         </div>
                   
         ${!isPaidThisMonth(bill) ? `
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-2); margin-top:var(--space-4);">
+  <div
+    style="
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:var(--space-2);
+      margin-top:var(--space-4);
+    "
+  >
     <button
       class="btn-primary"
       style="margin:0; min-width:0; padding-left:12px; padding-right:12px"
@@ -3155,7 +3162,6 @@ function renderBillDetail() {
       <span>Postpone</span>
     </button>
   </div>
-` : `
 ` : `
   <button
     class="bb-outline-pill"
