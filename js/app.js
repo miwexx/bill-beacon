@@ -860,10 +860,15 @@ const next7DaysTotal = next7DaysBills.reduce(
     }))
     .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
     .slice(0, 5);
+const currentCycle = getCurrentPayCycle();
 
-  const currentCycle = getCurrentPayCycle();
 const currentCycleLabel =
   currentCycle === 'first' ? 'Early Cycle' : 'Late Cycle';
+
+const cycleDateRange =
+  currentCycle === 'first'
+    ? '1st–15th'
+    : '16th–end of month';
 
 const cycleBills = monthBills.filter((bill) => {
   const dueDate = new Date(bill.dueDate);
@@ -1001,7 +1006,7 @@ const overdueCount = cycleBills.filter(
         color:var(--text-muted);
       "
     >
-      remaining
+      Still Due
     </span>
   </div>
 
