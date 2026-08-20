@@ -860,15 +860,10 @@ const next7DaysTotal = next7DaysBills.reduce(
     }))
     .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
     .slice(0, 5);
-const currentCycle = getCurrentPayCycle();
 
+  const currentCycle = getCurrentPayCycle();
 const currentCycleLabel =
   currentCycle === 'first' ? 'Early Cycle' : 'Late Cycle';
-
-const cycleDateRange =
-  currentCycle === 'first'
-    ? '1st–15th'
-    : '16th–end of month';
 
 const cycleBills = monthBills.filter((bill) => {
   const dueDate = new Date(bill.dueDate);
@@ -978,91 +973,51 @@ const overdueCount = cycleBills.filter(
 
         <button
   class="dashboard-month-card"
-  onclick="navigate('bills', {
-  cycle: currentCycle === 'first' ? 'early' : 'late'
-})"
+  onclick="navigate('recurring', {
+    cycle: currentCycle === 'first' ? 'early' : 'late'
+  })"
   aria-label="View bills for the ${currentCycleLabel}"
 >
   <div class="dashboard-card-topline">
-  <span>This Pay Cycle</span>
-  <span>${cycleDateRange}</span>
-</div>
+    <span>This Pay Cycle</span>
+    <span>${currentCycleLabel}</span>
+  </div>
 
-<div style="margin-top:var(--space-4);">
+  <div class="dashboard-month-amount">
+    ${formatCurrency(remainingThisCycle)}
+  </div>
+
   <div
     style="
-      font-size:var(--text-2xl);
-      font-weight:900;
-      letter-spacing:-0.03em;
-      line-height:1;
+      font-size:var(--text-sm);
+      color:var(--text-muted);
+      margin-top:2px;
+      font-weight:600;
     "
   >
-    ${formatCurrency(remainingThisCycle)}
-    <span
-      style="
-        font-size:var(--text-base);
-        font-weight:700;
-        letter-spacing:0;
-        color:var(--text-muted);
-      "
-    >
-      Still Due
+    Still to pay
+  </div>
+
+  <div class="dashboard-progress-track" style="margin-top:var(--space-3);">
+    <div
+      class="dashboard-progress-fill"
+      style="width:${paidCycleProgress}%"
+    ></div>
+  </div>
+
+  <div class="dashboard-progress-meta">
+    <span class="text-paid">
+      ${formatCurrency(paidThisCycle)} paid
+    </span>
+    <span>
+      of ${formatCurrency(totalThisCycle)} scheduled
     </span>
   </div>
 
-  <div
-    style="
-      color:var(--text-muted);
-      font-size:var(--text-sm);
-      margin-top:6px;
-    "
-  >
-    of ${formatCurrency(totalThisCycle)} scheduled
+  <div class="dashboard-month-footer">
+    <span>${unpaidCycleBills.length} bill${unpaidCycleBills.length === 1 ? '' : 's'} left</span>
+    <span>View bills ${svgIcon('chevronRight', 14)}</span>
   </div>
-</div>
-
-<div
-  class="dashboard-progress-track"
-  style="margin-top:var(--space-4);"
->
-  <div
-    class="dashboard-progress-fill"
-    style="width:${paidCycleProgress}%"
-  ></div>
-</div>
-
-<div
-  style="
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
-    margin-top:8px;
-    font-size:var(--text-sm);
-  "
->
-  <span class="text-paid">
-    ${formatCurrency(paidThisCycle)} paid
-  </span>
-
-  <span style="color:var(--text-muted);">
-    ${unpaidCycleBills.length} bill${unpaidCycleBills.length === 1 ? '' : 's'} left
-  </span>
-</div>
-
-<div
-  style="
-    display:flex;
-    justify-content:flex-end;
-    align-items:center;
-    gap:4px;
-    color:var(--accent);
-    font-size:var(--text-sm);
-    font-weight:800;
-    margin-top:var(--space-3);
-  "
->
-  View bills ${svgIcon('chevronRight', 16)}
-</div> 
 </button>
            <div class="section-header">Bill Status · ${currentCycleLabel}</div>
         <div class="dashboard-status-row">
