@@ -275,10 +275,10 @@ function billVisual(bill, size = 32) {
           display:block;
           width:${size}px;
           height:${size}px;
-          object-fit:cover;
-transform:scale(1.08);
+          object-fit:contain;
+transform:scale(1);
 padding:0;
-border-radius:4px;
+border-radius:0;
         "
         onerror="
           this.onerror=null;
