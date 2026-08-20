@@ -3884,74 +3884,77 @@ function openBillForm(billId = null, selectedDate = null) {
           </div>
 
           <div>
-           <div class="form-row">
-  <div class="form-label">Repeats</div>
+            <div class="section-header">Due Date & Recurrence</div>
 
-  <select
-    class="form-select"
-    id="billRecurrence"
-    onchange="updateBillDueDateField()"
-  >
-    ${RECURRENCE.map(recurrence => `
-      <option
-        value="${recurrence}"
-        ${bill && bill.recurrence === recurrence ? 'selected' : ''}
-      >
-        ${recurrence}
-      </option>
-    `).join('')}
-  </select>
-</div>
+            <div class="card">
+              <div class="form-row">
+                <div class="form-label" id="billDueDateLabel">Due Date</div>
 
-<div class="form-row">
-  <div class="form-label" id="billDueDateLabel">Due Date</div>
+                <input
+                  class="form-input"
+                  id="billDueDate"
+                  type="date"
+                  value="${dueDate}"
+                >
 
-  <input
-    class="form-input"
-    id="billDueDate"
-    type="date"
-    value="${dueDate}"
-  >
+                <select
+                  class="form-select"
+                  id="billDueDay"
+                  style="display:none"
+                >
+                  ${Array.from({ length: 31 }, (_, index) => {
+                    const day = index + 1;
 
-  <select
-    class="form-select"
-    id="billDueDay"
-    style="display:none"
-  >
-    ${Array.from({ length: 31 }, (_, index) => {
-      const day = index + 1;
+                    return `
+                      <option
+                        value="${day}"
+                        ${currentDueDay === day ? 'selected' : ''}
+                      >
+                        ${day}
+                      </option>
+                    `;
+                  }).join('')}
+                </select>
+              </div>
 
-      return `
-        <option
-          value="${day}"
-          ${currentDueDay === day ? 'selected' : ''}
-        >
-          ${day}
-        </option>
-      `;
-    }).join('')}
-  </select>
-</div>
+              <div class="form-row">
+                <div class="form-label">Repeats</div>
 
-<div class="form-row">
-  <div class="form-label">Pay Cycle</div>
+                <select
+                  class="form-select"
+                  id="billRecurrence"
+                  onchange="updateBillDueDateField()"
+                >
+                  ${RECURRENCE.map(recurrence => `
+                    <option
+                      value="${recurrence}"
+                      ${bill && bill.recurrence === recurrence ? 'selected' : ''}
+                    >
+                      ${recurrence}
+                    </option>
+                  `).join('')}
+                </select>
+              </div>
 
-  <select class="form-select" id="billPayCycle">
-    <option
-      value="first"
-      ${defaultPayCycle === 'first' ? 'selected' : ''}
-    >
-      Early Cycle
-    </option>
+              <div class="form-row">
+                <div class="form-label">Pay Cycle</div>
 
-    <option
-      value="second"
-      ${defaultPayCycle === 'second' ? 'selected' : ''}
-    >
-      Late Cycle
-    </option>
-  </select>
-</div>
+                <select class="form-select" id="billPayCycle">
+                  <option
+                    value="first"
+                    ${defaultPayCycle === 'first' ? 'selected' : ''}
+                  >
+                    Early Cycle
+                  </option>
+
+                  <option
+                    value="second"
+                    ${defaultPayCycle === 'second' ? 'selected' : ''}
+                  >
+                    Late Cycle
+                  </option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -4229,90 +4232,11 @@ function savePaymentLinkPopup(billId) {
 }
 function saveBill() {
   const name = document.getElementById('billName').value.trim();
-  const amount = parseFloat(
-    document.getElementById('billAmount').value || 0
-  );
+  const amount = parseFloat(document.getElementById('billAmount').value) || 0;
 
   if (!name) {
-    alert('Please enter a bill name.');
-    return;
-  }
-
-  if (!Number.isFinite(amount) || amount <= 0) {
-    alert('Please enter a valid bill amount.');
-    return;
-  }
-
-  const recurrence = document.getElementById('billRecurrence').value;
-  const dueDateInput = document.getElementById('billDueDate');
-  const dueDayInput = document.getElementById('billDueDay');
-
-  const isMonthly = recurrence === 'Monthly';
-  const dueDay = isMonthly ? Number(dueDayInput.value) : null;
-
-  if (
-    isMonthly &&
-    (!Number.isInteger(dueDay) || dueDay < 1 || dueDay > 31)
-  ) {
-    alert('Please choose a valid due day.');
-    return;
-  }
-
-  let dueDate;
-
-  if (isMonthly) {
-    const today = new Date();
-    const lastDayThisMonth = new Date(
-      today.getFullYear(),
-      today.getMonth() + 1,
-      0
-    ).getDate();
-
-    dueDate = new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      Math.min(dueDay, lastDayThisMonth),
-      12
-    ).toISOString();
-  } else {
-    if (!dueDateInput.value) {
-      alert('Please choose a due date.');
-      return;
-    }
-
-    dueDate = new Date(`${dueDateInput.value}T12:00:00`).toISOString();
-  }
-
-  const data = {
-    name,
-    amount: amount.toString(),
-    dueDate,
-    dueDay: isMonthly ? dueDay : undefined,
-    category: document.getElementById('billCategory').value,
-    recurrence,
-    payCycle: document.getElementById('billPayCycle').value,
-    paymentMethod: document.getElementById('billPaymentMethod').value,
-    paymentUrl: document.getElementById('paymentUrl')?.value.trim() || '',
-    autopay: document.getElementById('billAutopay').checked,
-    notes: document.getElementById('billNotes').value.trim(),
-    reminderOffsets: Array.from(
-      document.querySelectorAll('.reminder-toggle:checked')
-    ).map(checkbox => parseInt(checkbox.dataset.days, 10))
-  };
-
-  if (editingBillId) {
-    Store.updateBill(editingBillId, data);
-  } else {
-    Store.addBill({
-      id: uid(),
-      ...data,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-  }
-
-  closeBillForm();
-  render();
+  alert('Please enter a bill name');
+  return;
 }
 
 const paymentUrlInput = document.getElementById('paymentUrl');
