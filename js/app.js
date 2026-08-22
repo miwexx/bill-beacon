@@ -2746,6 +2746,31 @@ function renderSettings() {
     onchange="importBillsCSV(event)"
   />
 </div>
+<div
+  class="form-row"
+  onclick="loadTestBills()"
+  style="cursor:pointer"
+>
+  <div class="form-label">
+    ${svgIcon('tray', 18)}
+    <div style="flex:1; color:var(--accent)">
+      Load 5 test bills
+    </div>
+  </div>
+</div>
+
+<div
+  class="form-row"
+  onclick="clearAllAppData()"
+  style="cursor:pointer"
+>
+  <div class="form-label">
+    ${svgIcon('trash', 18)}
+    <div style="flex:1; color:var(--overdue)">
+      Clear all app data
+    </div>
+  </div>
+</div>
 
           <div class="settings-footer">
             All data is stored on this device only. No cloud, no sync, no account.
@@ -4531,6 +4556,139 @@ function confirmDeleteBill(billId, fromForm = false) {
       navigate('bills');
     }
   }
+}
+function loadTestBills() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  const makeDate = (day) =>
+    new Date(year, month, day, 12, 0, 0).toISOString();
+
+  const testBills = [
+    {
+      id: uid(),
+      name: 'Test Rent',
+      amount: '1200',
+      dueDate: makeDate(3),
+      category: 'housing',
+      recurrence: 'Monthly',
+      payCycle: 'first',
+      paymentMethod: 'Bank Transfer',
+      paymentUrl: '',
+      autopay: false,
+      notes: 'Test bill: unpaid',
+      reminderOffsets: [7, 1],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    },
+    {
+      id: uid(),
+      name: 'Test Electric',
+      amount: '95',
+      dueDate: makeDate(8),
+      category: 'utilities',
+      recurrence: 'Monthly',
+      payCycle: 'first',
+      paymentMethod: 'Credit Card',
+      paymentUrl: '',
+      autopay: false,
+      notes: 'Test bill: unpaid',
+      reminderOffsets: [7, 1],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    },
+    {
+      id: uid(),
+      name: 'Test Internet',
+      amount: '70',
+      dueDate: makeDate(15),
+      category: 'internet',
+      recurrence: 'Monthly',
+      payCycle: 'first',
+      paymentMethod: 'Credit Card',
+      paymentUrl: '',
+      autopay: false,
+      notes: 'Test bill: paid',
+      reminderOffsets: [7, 1],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    },
+    {
+      id: uid(),
+      name: 'Test Phone',
+      amount: '60',
+      dueDate: makeDate(22),
+      category: 'phone',
+      recurrence: 'Monthly',
+      payCycle: 'second',
+      paymentMethod: 'Debit Card',
+      paymentUrl: '',
+      autopay: false,
+      notes: 'Test bill: unpaid',
+      reminderOffsets: [7, 1],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    },
+    {
+      id: uid(),
+      name: 'Test Streaming',
+      amount: '18',
+      dueDate: makeDate(27),
+      category: 'subscriptions',
+      recurrence: 'Monthly',
+      payCycle: 'second',
+      paymentMethod: 'Credit Card',
+      paymentUrl: '',
+      autopay: false,
+      notes: 'Test bill: paid',
+      reminderOffsets: [7, 1],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString()
+    }
+  ];
+
+  const paidBills = [testBills[2], testBills[4]];
+
+  const testPayments = paidBills.map(bill => ({
+    id: uid(),
+    billId: bill.id,
+    paidDate: now.toISOString(),
+    amount: bill.amount,
+    paidForDueDate: bill.dueDate,
+    status: 'active',
+    voidedAt: null
+  }));
+
+  localStorage.setItem('bills', JSON.stringify(testBills));
+  localStorage.setItem('payments', JSON.stringify(testPayments));
+  localStorage.setItem('incomeSources', JSON.stringify([]));
+  localStorage.setItem('archivedBills', JSON.stringify([]));
+  localStorage.setItem('initialized', 'true');
+
+  alert('Test data loaded: 5 bills, including 2 paid bills.');
+  navigate('today');
+}
+
+function clearAllAppData() {
+  const confirmed = confirm(
+    'Clear all Bill Tracker data?\n\n' +
+    'This permanently deletes bills, payments, income sources, archives, and settings stored on this device.'
+  );
+
+  if (!confirmed) return;
+
+  localStorage.removeItem('bills');
+  localStorage.removeItem('payments');
+  localStorage.removeItem('incomeSources');
+  localStorage.removeItem('archivedBills');
+  localStorage.removeItem('settings');
+  localStorage.removeItem('initialized');
+  localStorage.removeItem('billTrackerAdminToken');
+  localStorage.removeItem('billTrackerSubscriptionId');
+
+  alert('All Bill Tracker data has been cleared.');
+  navigate('today');
 }
 
 function exportCSV() {
