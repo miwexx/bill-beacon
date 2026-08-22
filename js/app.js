@@ -1029,7 +1029,7 @@ function renderToday() {
     ${formatCurrency(totalPaidThisMonth)}
   </div>
 </div>
-
+</div>
   <div
     class="dashboard-progress-track"
     style="margin-top:var(--space-4)"
