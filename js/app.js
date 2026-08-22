@@ -2199,60 +2199,79 @@ function openDashboardStatusSheet(status) {
     );
   };
 
-  let title = 'Paid';
-  let color = 'var(--paid)';
-  let icon = svgIcon('checkCircle', 18);
-  let selectedBills = [];
+  let title = "Paid Bills";
+let color = "var(--paid)";
+let icon = svgIcon("checkCircle", 18);
+let selectedBills = [];
 
-  if (status === 'paid') {
-    selectedBills = Store.getBills()
-      .filter(bill => {
-        if (!isDueThisMonth(bill)) return false;
-
-        return Store.getPaymentsForBill(bill.id).some(
-          payment =>
-            payment.status !== 'voided' &&
-            isSameMonth(payment.paidDate, now)
-        );
-      })
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  }
-
-  if (status === 'unpaid') {
-    title = 'Unpaid';
-    color = 'var(--upcoming)';
-    icon = svgIcon('clock', 18);
-
-    selectedBills = Store.getBills()
-      .filter(bill => isDueThisMonth(bill) && !isPaidThisMonth(bill, now))
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  }
-if (status === 'upcoming') {
-  title = 'Upcoming bills';
-  color = 'var(--upcoming)';
-  icon = svgIcon('clock', 18);
-
+if (status === "paid") {
   selectedBills = Store.getBills()
-    .filter(bill => {
-      const billStatus = getBillStatus(bill);
+    .filter((bill) => {
+      if (!isDueThisMonth(bill)) return false;
 
-      return billStatus === 'overdue' || billStatus === 'upcoming';
+      return Store.getPaymentsForBill(bill.id).some(
+        (payment) =>
+          payment.status !== "voided" &&
+          isSameMonth(payment.paidDate, now)
+      );
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
-  if (status === 'due') {
-    title = 'Due';
-    color = 'var(--upcoming)';
-    icon = svgIcon('clock', 18);
 
-    selectedBills = Store.getBills()
-      .filter(bill =>
+if (status === "unpaid") {
+  title = "Unpaid Bills";
+  color = "var(--upcoming)";
+  icon = svgIcon("clock", 18);
+
+  selectedBills = Store.getBills()
+    .filter(
+      (bill) => isDueThisMonth(bill) && !isPaidThisMonth(bill, now)
+    )
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+if (status === "upcoming") {
+  title = "Upcoming Bills";
+  color = "var(--upcoming)";
+  icon = svgIcon("clock", 18);
+
+  selectedBills = Store.getBills()
+    .filter((bill) => {
+      const billStatus = getBillStatus(bill);
+
+      return billStatus === "overdue" || billStatus === "upcoming";
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+if (status === "due") {
+  title = "Due Bills";
+  color = "var(--upcoming)";
+  icon = svgIcon("clock", 18);
+
+  selectedBills = Store.getBills()
+    .filter(
+      (bill) =>
         isDueThisMonth(bill) &&
         !isPaidThisMonth(bill, now) &&
-        getBillStatus(bill) === 'upcoming'
-      )
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  }
+        getBillStatus(bill) === "upcoming"
+    )
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+if (status === "overdue") {
+  title = "Overdue Bills";
+  color = "var(--overdue)";
+  icon = svgIcon("warning", 18);
+
+  selectedBills = Store.getBills()
+    .filter(
+      (bill) =>
+        !isPaidThisMonth(bill, now) &&
+        getBillStatus(bill) === "overdue"
+    )
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
 
   if (status === 'overdue') {
     title = 'Overdue';
@@ -2293,7 +2312,7 @@ if (status === 'upcoming') {
           Close
         </button>
 
-        <div class="sheet-title">${title} bills</div>
+        <div class="sheet-title">${title}</div>
         <div style="width:54px"></div>
       </div>
 
