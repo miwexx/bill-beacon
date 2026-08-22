@@ -721,7 +721,7 @@ function markBillUnpaid(billId) {
     voidedAt: new Date().toISOString()
   });
 
-  render();
+  navigate('today');
 }
 function svgIcon(name, size = 20) {
   const path = ICONS[name] || ICONS.doc;
@@ -890,10 +890,12 @@ function renderToday() {
   const nextDueBill = [...upcomingMonthBills, ...overdueBills]
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
 
-  const upcomingBills = upcomingMonthBills
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-    .slice(0, 6);
-
+  const upcomingBills = [
+  ...overdueBills,
+  ...upcomingMonthBills
+]
+  .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+  .slice(0, 6);
   const recentPayments = payments
     .map(payment => ({
       ...payment,
@@ -960,49 +962,53 @@ function renderToday() {
 
     <div class="main-content fade-in">
       <div class="content-pad dashboard-content">
-        <button
-          class="dashboard-month-card"
-          onclick="openDashboardStatusSheet('due')"
-          aria-label="View all bills still due this month"
-        >
-          <div class="dashboard-card-topline">
-            <span>Total Amount Due</span>
-            <span>This Month</span>
-          </div>
+       <button
+  class="dashboard-month-card"
+  onclick="openDashboardStatusSheet('due')"
+  aria-label="View bills still due this month"
+>
+  <div class="dashboard-card-topline">
+    <span>This Month</span>
+    <span>
+      ${paidThisMonthBills.length} of ${monthBills.length} bills paid
+    </span>
+  </div>
 
-          <div class="dashboard-month-amount">
-            ${formatCurrency(totalDueThisMonth)}
-          </div>
+  <div class="dashboard-month-amount">
+    ${Math.round(monthPaymentProgress)}%
+  </div>
 
-          <div
-            class="dashboard-progress-track"
-            style="margin-top:var(--space-3)"
-          >
-            <div
-              class="dashboard-progress-fill"
-              style="width:${monthPaymentProgress}%"
-            ></div>
-          </div>
+  <div
+    class="dashboard-progress-track"
+    style="margin-top:var(--space-3)"
+  >
+    <div
+      class="dashboard-progress-fill"
+      style="width:${monthPaymentProgress}%"
+    ></div>
+  </div>
 
-          <div class="dashboard-progress-meta">
-            <span class="text-paid">
-              ${formatCurrency(totalPaidThisMonth)} paid
-            </span>
-            <span>
-              of ${formatCurrency(totalScheduledThisMonth)}
-            </span>
-          </div>
+  <div class="dashboard-progress-meta">
+    <span class="text-paid">
+      ${formatCurrency(totalPaidThisMonth)} paid
+    </span>
 
-          <div class="dashboard-month-footer">
-            <span>
-              ${unpaidThisMonthBills.length}
-              bill${unpaidThisMonthBills.length === 1 ? '' : 's'} left
-            </span>
-            <span>
-              View bills ${svgIcon('chevronRight', 14)}
-            </span>
-          </div>
-        </button>
+    <span>
+      ${formatCurrency(totalDueThisMonth)} remaining
+    </span>
+  </div>
+
+  <div class="dashboard-month-footer">
+    <span>
+      ${unpaidThisMonthBills.length}
+      bill${unpaidThisMonthBills.length === 1 ? '' : 's'} left
+    </span>
+
+    <span>
+      View unpaid bills ${svgIcon('chevronRight', 14)}
+    </span>
+  </div>
+</button>
 
         <div class="section-header">Bill Status · This Month</div>
 
@@ -1158,10 +1164,17 @@ function renderToday() {
                           ${formatCurrency(bill.amount)}
                         </div>
 
-                        <div class="upcoming-bill-date">
-                          ${formatDate(bill.dueDate)} ·
-                          ${relativeDue(bill.dueDate)}
-                        </div>
+                        <div
+  class="upcoming-bill-date"
+  style="color:${
+    getBillStatus(bill) === 'overdue'
+      ? 'var(--overdue)'
+      : ''
+  }"
+>
+  ${formatDate(bill.dueDate)} ·
+  ${relativeDue(bill.dueDate)}
+</div>
                       </button>
                     `;
                   }).join('')}
