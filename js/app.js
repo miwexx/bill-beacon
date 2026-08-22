@@ -2369,7 +2369,7 @@ if (status === "overdue") {
                       style="width:100%; text-align:left"
                       aria-label="View ${escapeHtml(bill.name)}"
                     >
-                      // AFTER:
+                
 <div
   class="bill-icon"
   style="
