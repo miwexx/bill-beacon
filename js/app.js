@@ -1502,44 +1502,105 @@ function getCycleForBill(bill) {
 }
 
 function renderCompactRecurringCalendar() {
-  const viewDate = routeParams.month ? new Date(routeParams.month) : new Date();
+  const viewDate = routeParams.month
+    ? new Date(`${routeParams.month.slice(0, 10)}T12:00:00`)
+    : new Date();
+
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const firstDay = new Date(year, month, 1);
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
-  const bills = Store.getBills().filter(bill => bill.recurrence !== 'None');
-  const monthBills = bills.filter(bill => {
-    const dueDate = new Date(bill.dueDate);
-    return dueDate.getMonth() === month && dueDate.getFullYear() === year;
-  });
+
+  const monthBills = getRecurringOccurrencesForMonth(viewDate);
+
   const cells = [];
-  for (let i = 0; i < firstDay.getDay(); i++) cells.push('<div class="recurring-calendar-day is-empty"></div>');
-  for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month, day);
-    const dayBills = monthBills.filter(bill => new Date(bill.dueDate).getDate() === day);
-    const isToday = date.toDateString() === today.toDateString();
-    const hasOverdue = dayBills.some(bill => getBillStatus(bill) === 'overdue');
-    const hasUpcoming = dayBills.some(bill => getBillStatus(bill) === 'upcoming');
-    cells.push(`
-      <button class="recurring-calendar-day ${isToday ? 'is-today' : ''} ${hasOverdue ? 'has-overdue' : ''}"
-        onclick="openCalendarDay('${date.toISOString()}')" aria-label="View bills for ${formatDate(date.toISOString(), 'full')}">
-        <span>${day}</span>
-        ${dayBills.length ? `<i class="recurring-calendar-marker ${hasOverdue ? 'overdue' : hasUpcoming ? 'upcoming' : 'paid'}"></i>` : ''}
-      </button>`);
+
+  for (let i = 0; i < firstDay.getDay(); i += 1) {
+    cells.push('<div class="recurring-calendar-day is-empty"></div>');
   }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(year, month, day);
+
+    const dayBills = monthBills.filter((bill) => {
+      return new Date(bill.dueDate).getDate() === day;
+    });
+
+    const isToday = date.toDateString() === today.toDateString();
+
+    const hasOverdue = dayBills.some(
+      (bill) => getCalendarBillStatus(bill) === "overdue"
+    );
+
+    const hasUpcoming = dayBills.some(
+      (bill) => getCalendarBillStatus(bill) === "upcoming"
+    );
+
+    const hasPaid = dayBills.some(isCalendarBillPaid);
+
+    let marker = "";
+
+    if (dayBills.length) {
+      const markerClass = hasOverdue
+        ? "overdue"
+        : hasUpcoming
+          ? "upcoming"
+          : "paid";
+
+      marker = `<i class="recurring-calendar-marker ${markerClass}"></i>`;
+    }
+
+    cells.push(`
+      <button
+        class="recurring-calendar-day ${
+          isToday ? "is-today" : ""
+        } ${hasOverdue ? "has-overdue" : ""}"
+        onclick="openCalendarDay('${date.toISOString()}')"
+        aria-label="View bills for ${formatDate(date.toISOString(), "full")}"
+      >
+        <span>${day}</span>
+        ${marker}
+      </button>
+    `);
+  }
+
   const prevMonth = new Date(year, month - 1, 1).toISOString();
   const nextMonth = new Date(year, month + 1, 1).toISOString();
+
   return `
     <section class="recurring-calendar-card" aria-label="Recurring bills calendar">
       <div class="recurring-calendar-heading">
-        <button class="month-nav-btn" onclick="navigate('recurring', { month: '${prevMonth}' })" aria-label="Previous month">${svgIcon('chevronLeft', 18)}</button>
-        <strong>${formatDate(viewDate.toISOString(), 'monthYear')}</strong>
-        <button class="month-nav-btn" onclick="navigate('recurring', { month: '${nextMonth}' })" aria-label="Next month">${svgIcon('chevronRight', 18)}</button>
+        <button
+          class="month-nav-btn"
+          onclick="navigate('recurring', { month: '${prevMonth}' })"
+          aria-label="Previous month"
+        >
+          ${svgIcon("chevronLeft", 18)}
+        </button>
+
+        <strong>${formatDate(viewDate.toISOString(), "monthYear")}</strong>
+
+        <button
+          class="month-nav-btn"
+          onclick="navigate('recurring', { month: '${nextMonth}' })"
+          aria-label="Next month"
+        >
+          ${svgIcon("chevronRight", 18)}
+        </button>
       </div>
-      <div class="recurring-calendar-weekdays">${['S','M','T','W','T','F','S'].map(day => `<span>${day}</span>`).join('')}</div>
-      <div class="recurring-calendar-grid">${cells.join('')}</div>
-    </section>`;
+
+      <div class="recurring-calendar-weekdays">
+        ${["S", "M", "T", "W", "T", "F", "S"]
+          .map((day) => `<span>${day}</span>`)
+          .join("")}
+      </div>
+
+      <div class="recurring-calendar-grid">
+        ${cells.join("")}
+      </div>
+    </section>
+  `;
 }
 
 function renderRecurring() {
