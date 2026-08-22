@@ -964,7 +964,7 @@ function renderToday() {
       <div class="content-pad dashboard-content">
       <button
   class="dashboard-month-card"
-  onclick="openDashboardUnpaidSheet()"
+  onclick="openDashboardStatusSheet('unpaid')"
   aria-label="View bills still due this month"
 >
   <div class="dashboard-card-topline">
@@ -2207,7 +2207,23 @@ function openDashboardStatusSheet(status) {
       })
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   }
+if (status === 'unpaid') {
+  title = 'Unpaid';
+  color = 'var(--upcoming)';
+  icon = svgIcon('clock', 18);
 
+  selectedBills = Store.getBills()
+    .filter(bill => {
+      const dueDate = new Date(bill.dueDate);
+
+      const isDueThisMonth =
+        dueDate.getMonth() === now.getMonth() &&
+        dueDate.getFullYear() === now.getFullYear();
+
+      return isDueThisMonth && !isPaidThisMonth(bill, now);
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
   if (status === 'due') {
     title = 'Due';
     color = 'var(--upcoming)';
@@ -2284,16 +2300,24 @@ function openDashboardStatusSheet(status) {
           selectedBills.length
             ? `
               <div class="card">
-                ${selectedBills.map(bill => {
-                  const payment = status === 'paid'
-                    ? getLatestActivePaymentForBill(bill.id)
-                    : null;
+                const payment = status === 'paid'
+  ? getLatestActivePaymentForBill(bill.id)
+  : null;
 
-                  const dateLabel = status === 'paid' && payment
-                    ? `Paid ${formatDate(payment.paidDate, 'full')}`
-                    : `${formatDate(bill.dueDate, 'full')} · ${relativeDue(bill.dueDate)}`;
+const billStatus = getBillStatus(bill);
 
-                  const category = getCategory(bill.category);
+const rowColor =
+  status === 'unpaid' && billStatus === 'overdue'
+    ? 'var(--overdue)'
+    : color;
+
+const dateLabel = status === 'paid' && payment
+  ? `Paid ${formatDate(payment.paidDate, 'full')}`
+  : billStatus === 'overdue'
+    ? `Overdue · ${formatDate(bill.dueDate, 'full')}`
+    : `${formatDate(bill.dueDate, 'full')} · ${relativeDue(bill.dueDate)}`;
+
+const category = getCategory(bill.category);
 
                   return `
                     <button
@@ -2311,7 +2335,7 @@ function openDashboardStatusSheet(status) {
 
                       <div class="bill-info">
                         <div class="bill-name">${escapeHtml(bill.name)}</div>
-                        <div class="bill-meta" style="color:${color}">
+                        <div class="bill-meta" style="color:${rowColor}">
                           ${dateLabel}
                         </div>
                       </div>
