@@ -3414,7 +3414,7 @@ function billRow(bill, clickable = false) {
   };
 
   const scheduleText = bill.recurrence && bill.recurrence !== 'None'
-    ? `Due on the ${ordinal(dueDay)} of each month`
+    ? `Due on the ${ordinal(dueDay)}`
     : `Due on ${formatDate(bill.dueDate, 'full')}`;
 
   const payCycleClass =
