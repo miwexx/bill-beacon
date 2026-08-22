@@ -2441,7 +2441,7 @@ if (status === 'paid') {
   `;
 
   document.body.appendChild(container);
-}
+
 function getMonthlySpendingLimit() {
   const settings = Store.getSettings();
   return Number(settings.monthlySpendingLimit || 0);
