@@ -914,10 +914,62 @@ const next7DaysTotal = next7DaysBills.reduce(
   }))
   .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
   .slice(0, 5);
+const unpaidThisMonthBills = monthBills.filter(
+  bill => !isPaidThisMonth(bill, now)
+);
 
+const totalDueThisMonth = unpaidThisMonthBills.reduce(
+  (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+  0
+);
+
+const totalPaidThisMonth = monthBills
+  .filter(bill => isPaidThisMonth(bill, now))
+  .reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+const totalScheduledThisMonth =
+  totalDueThisMonth + totalPaidThisMonth;
+
+const monthPaymentProgress =
+  totalScheduledThisMonth > 0
+    ? Math.min(
+        (totalPaidThisMonth / totalScheduledThisMonth) * 100,
+        100
+      )
+    : 0;
   const currentCycle = getCurrentPayCycle();
 const currentCycleLabel =
   currentCycle === 'first' ? 'Early Cycle' : 'Late Cycle';
+
+  const unpaidThisMonthBills = monthBills.filter(
+  (bill) => !isPaidThisMonth(bill, now)
+);
+
+const totalDueThisMonth = unpaidThisMonthBills.reduce(
+  (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+  0
+);
+
+const totalPaidThisMonth = monthBills
+  .filter((bill) => isPaidThisMonth(bill, now))
+  .reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+const totalScheduledThisMonth =
+  totalDueThisMonth + totalPaidThisMonth;
+
+const monthPaymentProgress =
+  totalScheduledThisMonth > 0
+    ? Math.min(
+        (totalPaidThisMonth / totalScheduledThisMonth) * 100,
+        100
+      )
+    : 0;
 
 const cycleBills = monthBills.filter((bill) => {
   const dueDate = new Date(bill.dueDate);
@@ -1029,38 +1081,38 @@ const overdueCount = bills.filter(bill =>
     <div class="main-content fade-in">
       <div class="content-pad dashboard-content">
 
-        <button
+      <button
   class="dashboard-month-card"
-  onclick="openCurrentCycleBills()"
-  aria-label="View bills for the ${currentCycleLabel}"
+  onclick="openDashboardStatusSheet('due')"
+  aria-label="View all bills still due this month"
 >
   <div class="dashboard-card-topline">
-    <span>Total Amount Due</span> 
-    <span>${currentCycleLabel}</span>
+    <span>Total Amount Due</span>
+    <span>This Month</span>
   </div>
 
   <div class="dashboard-month-amount">
-    ${formatCurrency(remainingThisCycle)}
+    ${formatCurrency(totalDueThisMonth)}
   </div>
 
-    <div class="dashboard-progress-track" style="margin-top:var(--space-3);">
+  <div class="dashboard-progress-track" style="margin-top:var(--space-3);">
     <div
       class="dashboard-progress-fill"
-      style="width:${paidCycleProgress}%"
+      style="width:${monthPaymentProgress}%"
     ></div>
   </div>
 
   <div class="dashboard-progress-meta">
     <span class="text-paid">
-      ${formatCurrency(paidThisCycle)} paid
+      ${formatCurrency(totalPaidThisMonth)} paid
     </span>
     <span>
-      of ${formatCurrency(totalThisCycle)}
+      of ${formatCurrency(totalScheduledThisMonth)}
     </span>
   </div>
 
   <div class="dashboard-month-footer">
-    <span>${unpaidCycleBills.length} bill${unpaidCycleBills.length === 1 ? '' : 's'} left</span>
+    <span>${unpaidThisMonthBills.length} bill${unpaidThisMonthBills.length === 1 ? '' : 's'} left</span>
     <span>View bills ${svgIcon('chevronRight', 14)}</span>
   </div>
 </button>
@@ -1154,7 +1206,7 @@ const overdueCount = bills.filter(bill =>
     padding:0 12px;
     font-size:var(--text-xs);
   "
-  onclick="navigate('recurring')"
+  onclick="openDashboardStatusSheet('due')"
 >
   <span>See all</span>
   <span class="pill-chevron">${svgIcon('chevronRight', 14)}</span>
@@ -5554,20 +5606,21 @@ function renderPaymentHistory() {
   const allBills = [...activeBills, ...archivedBills];
 
   const payments = Store.getPayments()
-    .map((payment) => ({
+    .map(payment => ({
       ...payment,
-      bill: allBills.find((bill) => bill.id === payment.billId),
+      bill: allBills.find(bill => bill.id === payment.billId)
     }))
     .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
 
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <button class="nav-button" onclick="navigate('bills')">
-          ${svgIcon("chevronLeft", 22)} Bills
+        <button class="nav-button" onclick="navigate('today')">
+          ${svgIcon('chevronLeft', 22)}
         </button>
+
         <div class="nav-title">Payment History</div>
-        <div style="width: 54px;"></div>
+        <div style="width:54px"></div>
       </div>
     </div>
 
@@ -5577,46 +5630,77 @@ function renderPaymentHistory() {
           payments.length
             ? `
               <div class="section-header">All Payments</div>
+
               <div class="card">
-                ${payments
-                  .map(
-                    (payment) => `
-                      <div class="bill-row">
-                        <div class="bill-icon" style="background: var(--paid-bg); color: var(--paid);">
-                          ${svgIcon("checkCircle", 18)}
+                ${payments.map(payment => {
+                  const isVoided = payment.status === 'voided';
+
+                  const billName = payment.bill
+                    ? escapeHtml(payment.bill.name)
+                    : 'Archived bill';
+
+                  const shownDate = isVoided
+                    ? payment.voidedAt || payment.paidDate
+                    : payment.paidDate;
+
+                  return `
+                    <div
+                      class="bill-row"
+                      style="
+                        ${isVoided
+                          ? 'opacity:.58; text-decoration:line-through;'
+                          : ''
+                        }
+                      "
+                    >
+                      <div
+                        class="bill-icon"
+                        style="
+                          background:${isVoided ? 'var(--surface-2)' : 'var(--paid-bg)'};
+                          color:${isVoided ? 'var(--text-muted)' : 'var(--paid)'};
+                        "
+                      >
+                        ${svgIcon(isVoided ? 'close' : 'checkCircle', 18)}
+                      </div>
+
+                      <div class="bill-info">
+                        <div class="bill-name">
+                          ${billName}${isVoided ? ' · Voided' : ''}
                         </div>
 
-                        <div class="bill-info">
-                          <div class="bill-name">
-                            ${escapeHtml(
-                              payment.bill ? payment.bill.name : "Archived bill"
-                            )}
-                          </div>
-                          <div class="bill-meta">
-                            ${formatDate(payment.paidDate, "full")}
-                            ${
-                              payment.bill?.autopay
-                                ? " · Autopay"
-                                : ""
-                            }
-                          </div>
-                        </div>
-
-                        <div class="bill-amount text-paid">
-                          ${formatCurrency(payment.amount)}
+                        <div
+                          class="bill-meta"
+                          style="color:${isVoided ? 'var(--text-muted)' : 'var(--paid)'}"
+                        >
+                          ${isVoided
+                            ? `Voided ${formatDate(shownDate, 'full')}`
+                            : `Paid ${formatDate(shownDate, 'full')}`
+                          }
                         </div>
                       </div>
-                    `
-                  )
-                  .join("")}
+
+                      <div
+                        class="bill-amount"
+                        style="
+                          color:${isVoided ? 'var(--text-muted)' : 'var(--paid)'};
+                          ${isVoided ? 'text-decoration:line-through;' : ''}
+                        "
+                      >
+                        ${formatCurrency(payment.amount)}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
               </div>
             `
             : `
               <div class="empty-state">
                 <div class="empty-state-icon">
-                  ${svgIcon("tray", 48)}
+                  ${svgIcon('tray', 48)}
                 </div>
+
                 <div class="empty-state-title">No payment history yet</div>
+
                 <div class="empty-state-text">
                   Payments you mark as paid will appear here.
                 </div>
@@ -5627,7 +5711,6 @@ function renderPaymentHistory() {
     </div>
   `;
 }
-
 const renderWithArchiveHistory = render;
 
 render = function () {
