@@ -902,12 +902,12 @@ const next7DaysTotal = next7DaysBills.reduce(
     .slice(0, 6);
 
   const recentPayments = payments
-    .map((payment) => ({
-      ...payment,
-      bill: Store.getBill(payment.billId),
-    }))
-    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
-    .slice(0, 5);
+  .map(payment => ({
+    ...payment,
+    bill: Store.getBill(payment.billId)
+  }))
+  .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
+  .slice(0, 5);
 
   const currentCycle = getCurrentPayCycle();
 const currentCycleLabel =
@@ -961,14 +961,16 @@ const paidCycleProgress =
     ? Math.min((paidThisCycle / totalThisCycle) * 100, 100)
     : 0;
 
-  const paidCount = paidCycleBills.length;
+  const paidCount = monthBills.filter(bill => isPaidThisMonth(bill, now)).length;
 
-const upcomingCount = unpaidCycleBills.filter(
-  (bill) => getBillStatus(bill) === 'upcoming'
+const upcomingCount = monthBills.filter(bill =>
+  !isPaidThisMonth(bill, now) &&
+  getBillStatus(bill) === 'upcoming'
 ).length;
 
-const overdueCount = cycleBills.filter(
-  (bill) => getBillStatus(bill) === 'overdue'
+const overdueCount = bills.filter(bill =>
+  !isPaidThisMonth(bill, now) &&
+  getBillStatus(bill) === 'overdue'
 ).length;
   const notificationCount = getNotificationCount();
 
@@ -1225,48 +1227,48 @@ const overdueCount = cycleBills.filter(
             }
           </div>
 
-          ${
-            recentPayments.length
-              ? `
-                <div class="card">
-                  ${recentPayments
-                    .map((payment) => {
-                      const billName = payment.bill
-                        ? escapeHtml(payment.bill.name)
-                        : 'Archived bill';
+          ${recentPayments.map(payment => {
+  const billName = payment.bill
+    ? escapeHtml(payment.bill.name)
+    : 'Archived bill';
 
-                      return `
-                        <button
-                          class="recent-payment-row"
-                          onclick="navigate('detail', { id: '${payment.billId}' })"
-                        >
-                          <div class="recent-payment-icon">
-                            ${svgIcon('checkCircle', 18)}
-                          </div>
+  const isVoided = payment.status === 'voided';
 
-                          <div class="bill-info">
-                            <div class="bill-name">${billName}</div>
-                            <div class="bill-meta">
-                              Paid ${formatDate(payment.paidDate, 'full')}
-                            </div>
-                          </div>
+  return `
+    <button
+      class="recent-payment-row"
+      onclick="navigate('detail', { id: '${payment.billId}' })"
+      ${isVoided ? 'style="opacity:.58; text-decoration:line-through"' : ''}
+    >
+      <div
+        class="recent-payment-icon"
+        style="color:${isVoided ? 'var(--text-muted)' : 'var(--paid)'}"
+      >
+        ${svgIcon(isVoided ? 'close' : 'checkCircle', 18)}
+      </div>
 
-                          <div class="recent-payment-amount">
-                            ${formatCurrency(payment.amount)}
-                          </div>
-                        </button>
-                      `;
-                    })
-                    .join('')}
-                </div>
-              `
-              : `
-                <div class="dashboard-empty-card">
-                  ${svgIcon('tray', 22)}
-                  <span>Payments you mark as paid will appear here</span>
-                </div>
-              `
+      <div class="bill-info">
+        <div class="bill-name">
+          ${billName}${isVoided ? ' · Voided' : ''}
+        </div>
+
+        <div class="bill-meta">
+          ${isVoided
+            ? `Payment voided ${formatDate(payment.voidedAt || payment.paidDate, 'full')}`
+            : `Paid ${formatDate(payment.paidDate, 'full')}`
           }
+        </div>
+      </div>
+
+      <div
+        class="recent-payment-amount"
+        style="${isVoided ? 'text-decoration:line-through; color:var(--text-muted)' : ''}"
+      >
+        ${formatCurrency(payment.amount)}
+      </div>
+    </button>
+  `;
+}).join('')}
         </div>
 
       </div>
@@ -2112,32 +2114,25 @@ function closeCycleBillsSheet() {
 
 function openDashboardStatusSheet(status) {
   const now = new Date();
-  const currentCycle = getCurrentPayCycle();
 
-  const isCurrentCycleBill = (bill) => {
+  const isDueThisMonth = (bill) => {
     const dueDate = new Date(bill.dueDate);
 
-    const isDueThisMonth =
+    return (
       dueDate.getMonth() === now.getMonth() &&
-      dueDate.getFullYear() === now.getFullYear();
-
-    const billCycle = bill.payCycle || (
-      dueDate.getDate() <= 15 ? 'first' : 'second'
+      dueDate.getFullYear() === now.getFullYear()
     );
-
-    return isDueThisMonth && billCycle === currentCycle;
   };
 
   let title = 'Paid';
   let color = 'var(--paid)';
-  let background = 'var(--paid-bg)';
   let icon = svgIcon('checkCircle', 18);
   let selectedBills = [];
 
   if (status === 'paid') {
     selectedBills = Store.getBills()
       .filter(bill => {
-        if (!isCurrentCycleBill(bill)) return false;
+        if (!isDueThisMonth(bill)) return false;
 
         return Store.getPaymentsForBill(bill.id).some(payment =>
           payment.status !== 'voided' &&
@@ -2150,12 +2145,11 @@ function openDashboardStatusSheet(status) {
   if (status === 'due') {
     title = 'Due';
     color = 'var(--upcoming)';
-    background = 'var(--upcoming-bg)';
     icon = svgIcon('clock', 18);
 
     selectedBills = Store.getBills()
       .filter(bill =>
-        isCurrentCycleBill(bill) &&
+        isDueThisMonth(bill) &&
         !isPaidThisMonth(bill) &&
         getBillStatus(bill) === 'upcoming'
       )
@@ -2165,7 +2159,6 @@ function openDashboardStatusSheet(status) {
   if (status === 'overdue') {
     title = 'Overdue';
     color = 'var(--overdue)';
-    background = 'var(--overdue-bg)';
     icon = svgIcon('warning', 18);
 
     selectedBills = Store.getBills()
@@ -2195,10 +2188,7 @@ function openDashboardStatusSheet(status) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button
-          class="nav-button"
-          onclick="closeDashboardStatusSheet()"
-        >
+        <button class="nav-button" onclick="closeDashboardStatusSheet()">
           Close
         </button>
 
@@ -2207,10 +2197,7 @@ function openDashboardStatusSheet(status) {
       </div>
 
       <div class="sheet-body">
-        <div
-          class="card"
-          style="margin-bottom:var(--space-4); overflow:hidden"
-        >
+        <div class="card" style="margin-bottom:var(--space-4); overflow:hidden">
           <div class="form-row">
             <div style="display:flex; align-items:center; gap:var(--space-2); color:${color}">
               ${icon}
@@ -2221,9 +2208,7 @@ function openDashboardStatusSheet(status) {
 
             <div style="flex:1"></div>
 
-            <div
-              style="font-size:var(--text-lg); font-weight:800; color:${color}"
-            >
+            <div style="font-size:var(--text-lg); font-weight:800; color:${color}">
               ${formatCurrency(total)}
             </div>
           </div>
