@@ -836,15 +836,21 @@ function renderToday() {
   const monthBills = bills.filter((bill) => isSameMonth(bill.dueDate, now));
 
   const monthPayments = payments.filter((payment) =>
-    isSameMonth(payment.paidDate, now)
-  );
+  isSameMonth(payment.paidDate, now)
+);
 
-  const paidBillIds = new Set(monthPayments.map((payment) => payment.billId));
+const activeMonthPayments = monthPayments.filter(
+  (payment) => payment.status !== 'voided'
+);
 
-  const paidThisMonth = monthPayments.reduce(
-    (sum, payment) => sum + (parseFloat(payment.amount) || 0),
-    0
-  );
+const paidBillIds = new Set(
+  activeMonthPayments.map((payment) => payment.billId)
+);
+
+const paidThisMonth = activeMonthPayments.reduce(
+  (sum, payment) => sum + (parseFloat(payment.amount) || 0),
+  0
+);
 
   const unpaidMonthBills = monthBills.filter(
     (bill) => !paidBillIds.has(bill.id)
@@ -928,8 +934,10 @@ const paidCycleBills = bills.filter((bill) => {
 
   const paymentsForBill = Store.getPaymentsForBill(bill.id);
   const latestPaymentThisMonth = paymentsForBill.find(
-    (payment) => isSameMonth(payment.paidDate, now)
-  );
+  (payment) =>
+    payment.status !== 'voided' &&
+    isSameMonth(payment.paidDate, now)
+);
 
   if (!latestPaymentThisMonth) return false;
 
