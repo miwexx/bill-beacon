@@ -4396,224 +4396,90 @@ function openBillDetailsSheet(billId) {
       : "";
 
   const sheetHtml = `
-  <div
-    class="sheet-overlay show"
-    id="billDetailsOverlay"
-    onclick="closeBillDetailsSheet()"
-    style="transition:none"
-  ></div>
-
-  <div
-    class="sheet bill-details-sheet show"
-    id="billDetailsSheet"
-    style="
-      position:fixed;
-      inset:0;
-      width:100%;
-      max-width:none;
-      height:100dvh;
-      max-height:none;
-      border-radius:0;
-      transform:none;
-      transition:none;
-      z-index:1000;
-      overflow-y:auto;
-      padding-bottom:calc(28px + env(safe-area-inset-bottom));
-    "
-  >
-    <button
-      type="button"
-      onclick="openBillQuickActions('${bill.id}')"
-      aria-label="More bill actions"
-      style="
-        position:absolute;
-        top:calc(14px + env(safe-area-inset-top));
-        left:16px;
-        z-index:2;
-        width:42px;
-        height:42px;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        border:0;
-        border-radius:50%;
-        background:var(--surface-2);
-        color:var(--text);
-        cursor:pointer;
-      "
-    >
-      ${svgIcon('moreVertical', 22)}
-    </button>
-
-    <button
-      type="button"
-      onclick="closeBillDetailsSheet()"
-      aria-label="Close bill details"
-      style="
-        position:absolute;
-        top:calc(14px + env(safe-area-inset-top));
-        right:16px;
-        z-index:2;
-        width:42px;
-        height:42px;
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        border:0;
-        border-radius:50%;
-        background:var(--surface-2);
-        color:var(--text);
-        cursor:pointer;
-      "
-    >
-      ${svgIcon('close', 22)}
-    </button>
+    <div
+  class="sheet-overlay show"
+  id="billDetailsOverlay"
+  onclick="closeBillDetailsSheet()"
+  style="transition:none"
+></div>
 
     <div
-      style="
-        position:absolute;
-        top:calc(60px + env(safe-area-inset-top));
-        right:14px;
-        z-index:2;
-        max-width:110px;
-        padding:6px 9px;
-        border-radius:999px;
-        background:var(--surface-2);
-        color:var(--text-muted);
-        font-size:11px;
-        font-weight:800;
-        line-height:1.15;
-        text-align:center;
-        pointer-events:none;
-      "
-    >
-      ${escapeHtml(
-        bill.recurrence === 'None'
-          ? 'One-time payment'
-          : `${bill.recurrence} payment`
-      )}
-    </div>
+  class="sheet bill-details-sheet show"
+  id="billDetailsSheet"
+  style="
+    position:fixed;
+    inset:0;
+    width:100%;
+    max-width:none;
+    height:100dvh;
+    max-height:none;
+    border-radius:0;
+    transform:none;
+    transition:none;
+    z-index:1000;
+  "
+>
+      <div class="sheet-handle"></div>
 
-    <div
-      style="
-        min-height:100%;
-        padding:
-          calc(28px + env(safe-area-inset-top))
-          var(--space-4)
-          calc(32px + env(safe-area-inset-bottom));
-      "
-    >
-      <div
-        style="
-          display:flex;
-          flex-direction:column;
-          align-items:center;
-          text-align:center;
-          padding:var(--space-3) 42px var(--space-5);
-        "
-      >
-        <div
-          style="
-            width:76px;
-            height:76px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            overflow:hidden;
-            border-radius:22px;
-            background:${
+      <div class="sheet-nav">
+        <button class="nav-button" onclick="closeBillDetailsSheet()">
+          Close
+        </button>
+
+        <div class="sheet-title">Bill Details</div>
+
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body">
+        <div class="bill-sheet-header bill-details-sheet-header">
+          <div
+            class="bill-sheet-logo"
+            style="background:${
               getBillBrand(bill.name)
-                ? '#fff'
+                ? "#fff"
                 : `var(--${category.color})`
-            };
-            color:white;
-            margin-bottom:14px;
-            box-shadow:0 10px 26px rgba(0,0,0,.16);
-          "
-        >
-          ${billVisual(bill, 54)}
+            }"
+          >
+            ${billVisual(bill, 52)}
+          </div>
+
+          <div class="bill-sheet-heading">
+            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
+
+            <div class="bill-sheet-subtitle">
+              ${formatCurrency(bill.amount)} · ${getPayCycleLabel(bill)}
+            </div>
+          </div>
         </div>
 
-        <div
-          style="
-            font-size:var(--text-2xl);
-            font-weight:850;
-            line-height:1.15;
-            max-width:100%;
-            overflow-wrap:anywhere;
-          "
-        >
-          ${escapeHtml(bill.name)}
+        <div class="card" style="margin-bottom:18px">
+          ${detailRow("Due date", formatDate(bill.dueDate, "full"))}
+          ${detailRow("Pay cycle", getPayCycleLabel(bill))}
+          ${detailRow("Category", category.label)}
+          ${detailRow("Repeats", bill.recurrence)}
+
+          ${
+            bill.paymentMethod
+              ? detailRow("Payment method", bill.paymentMethod)
+              : ""
+          }
+
+          ${detailRow("Autopay", bill.autopay ? "On" : "Off")}
+
+          ${
+            bill.notes
+              ? detailRow("Notes", escapeHtml(bill.notes))
+              : ""
+          }
         </div>
 
-        <div
-          style="
-            margin-top:6px;
-            color:var(--text-muted);
-            font-size:var(--text-sm);
-            font-weight:650;
-          "
-        >
-          ${escapeHtml(category.label)}
-        </div>
+        ${postponementHistoryHtml}
 
-        <div
-          style="
-            margin-top:14px;
-            font-size:var(--text-2xl);
-            font-weight:850;
-            color:var(--text);
-          "
-        >
-          ${formatCurrency(bill.amount)}
-        </div>
-
-        <div
-          aria-label="Expected payment date"
-          style="
-            margin-top:14px;
-            display:inline-flex;
-            align-items:center;
-            gap:7px;
-            min-height:34px;
-            padding:0 13px;
-            border-radius:999px;
-            background:var(--surface-2);
-            color:var(--text-muted);
-            font-size:var(--text-sm);
-            font-weight:750;
-            pointer-events:none;
-          "
-        >
-          ${svgIcon('calendar', 16)}
-          <span>Expected ${formatDate(bill.dueDate, 'full')}</span>
-        </div>
+        ${paymentHistoryHtml}
       </div>
-
-      <div class="card" style="margin-bottom:18px">
-        ${detailRow("Repeats", bill.recurrence)}
-
-        ${
-          bill.paymentMethod
-            ? detailRow("Payment method", bill.paymentMethod)
-            : ""
-        }
-
-        ${detailRow("Autopay", bill.autopay ? "On" : "Off")}
-
-        ${
-          bill.notes
-            ? detailRow("Notes", escapeHtml(bill.notes))
-            : ""
-        }
-      </div>
-
-      ${postponementHistoryHtml}
-
-      ${paymentHistoryHtml}
     </div>
-  </div>
-`;
+  `;
 
   const container = document.createElement("div");
   container.id = "billDetailsContainer";
