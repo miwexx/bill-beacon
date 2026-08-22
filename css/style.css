@@ -2227,3 +2227,32 @@ body {
 .sheet-overlay.show {
   opacity: 1 !important;
 }
+.dashboard-status-row {
+  align-items:stretch;
+}
+
+.dashboard-status-card {
+  min-height:92px;
+  display:flex;
+  flex:1;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+}
+
+.dashboard-status-number {
+  min-height:34px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:28px;
+  line-height:1;
+  font-weight:800;
+}
+
+.dashboard-status-label {
+  margin-top:7px;
+  font-size:13px;
+  line-height:1;
+  font-weight:700;
+}
