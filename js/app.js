@@ -4397,12 +4397,28 @@ function openBillDetailsSheet(billId) {
 
   const sheetHtml = `
     <div
-      class="sheet-overlay show"
-      id="billDetailsOverlay"
-      onclick="closeBillDetailsSheet()"
-    ></div>
+  class="sheet-overlay show"
+  id="billDetailsOverlay"
+  onclick="closeBillDetailsSheet()"
+  style="transition:none"
+></div>
 
-    <div class="sheet bill-details-sheet show" id="billDetailsSheet">
+    <div
+  class="sheet bill-details-sheet show"
+  id="billDetailsSheet"
+  style="
+    position:fixed;
+    inset:0;
+    width:100%;
+    max-width:none;
+    height:100dvh;
+    max-height:none;
+    border-radius:0;
+    transform:none;
+    transition:none;
+    z-index:1000;
+  "
+>
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
@@ -4470,7 +4486,6 @@ function openBillDetailsSheet(billId) {
   container.innerHTML = sheetHtml;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
 }
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
