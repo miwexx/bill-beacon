@@ -2200,30 +2200,25 @@ function openDashboardStatusSheet(status) {
       .filter(bill => {
         if (!isDueThisMonth(bill)) return false;
 
-        return Store.getPaymentsForBill(bill.id).some(payment =>
-          payment.status !== 'voided' &&
-          isSameMonth(payment.paidDate, now)
+        return Store.getPaymentsForBill(bill.id).some(
+          payment =>
+            payment.status !== 'voided' &&
+            isSameMonth(payment.paidDate, now)
         );
       })
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   }
-if (status === 'unpaid') {
-  title = 'Unpaid';
-  color = 'var(--upcoming)';
-  icon = svgIcon('clock', 18);
 
-  selectedBills = Store.getBills()
-    .filter(bill => {
-      const dueDate = new Date(bill.dueDate);
+  if (status === 'unpaid') {
+    title = 'Unpaid';
+    color = 'var(--upcoming)';
+    icon = svgIcon('clock', 18);
 
-      const isDueThisMonth =
-        dueDate.getMonth() === now.getMonth() &&
-        dueDate.getFullYear() === now.getFullYear();
+    selectedBills = Store.getBills()
+      .filter(bill => isDueThisMonth(bill) && !isPaidThisMonth(bill, now))
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
 
-      return isDueThisMonth && !isPaidThisMonth(bill, now);
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-}
   if (status === 'due') {
     title = 'Due';
     color = 'var(--upcoming)';
@@ -2232,7 +2227,7 @@ if (status === 'unpaid') {
     selectedBills = Store.getBills()
       .filter(bill =>
         isDueThisMonth(bill) &&
-        !isPaidThisMonth(bill) &&
+        !isPaidThisMonth(bill, now) &&
         getBillStatus(bill) === 'upcoming'
       )
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
@@ -2245,14 +2240,14 @@ if (status === 'unpaid') {
 
     selectedBills = Store.getBills()
       .filter(bill =>
-        !isPaidThisMonth(bill) &&
+        !isPaidThisMonth(bill, now) &&
         getBillStatus(bill) === 'overdue'
       )
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   }
 
   const total = selectedBills.reduce(
-    (sum, bill) => sum + parseFloat(bill.amount || 0),
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
   );
 
@@ -2270,7 +2265,10 @@ if (status === 'unpaid') {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeDashboardStatusSheet()">
+        <button
+          class="nav-button"
+          onclick="closeDashboardStatusSheet()"
+        >
           Close
         </button>
 
@@ -2279,18 +2277,35 @@ if (status === 'unpaid') {
       </div>
 
       <div class="sheet-body">
-        <div class="card" style="margin-bottom:var(--space-4); overflow:hidden">
+        <div
+          class="card"
+          style="margin-bottom:var(--space-4); overflow:hidden"
+        >
           <div class="form-row">
-            <div style="display:flex; align-items:center; gap:var(--space-2); color:${color}">
+            <div
+              style="
+                display:flex;
+                align-items:center;
+                gap:var(--space-2);
+                color:${color};
+              "
+            >
               ${icon}
               <span style="font-weight:700">
-                ${selectedBills.length} ${selectedBills.length === 1 ? 'bill' : 'bills'}
+                ${selectedBills.length}
+                ${selectedBills.length === 1 ? 'bill' : 'bills'}
               </span>
             </div>
 
             <div style="flex:1"></div>
 
-            <div style="font-size:var(--text-lg); font-weight:800; color:${color}">
+            <div
+              style="
+                font-size:var(--text-lg);
+                font-weight:800;
+                color:${color};
+              "
+            >
               ${formatCurrency(total)}
             </div>
           </div>
@@ -2300,24 +2315,25 @@ if (status === 'unpaid') {
           selectedBills.length
             ? `
               <div class="card">
-                const payment = status === 'paid'
-  ? getLatestActivePaymentForBill(bill.id)
-  : null;
+                ${selectedBills.map(bill => {
+                  const payment = status === 'paid'
+                    ? getLatestActivePaymentForBill(bill.id)
+                    : null;
 
-const billStatus = getBillStatus(bill);
+                  const billStatus = getBillStatus(bill);
 
-const rowColor =
-  status === 'unpaid' && billStatus === 'overdue'
-    ? 'var(--overdue)'
-    : color;
+                  const rowColor =
+                    status === 'unpaid' && billStatus === 'overdue'
+                      ? 'var(--overdue)'
+                      : color;
 
-const dateLabel = status === 'paid' && payment
-  ? `Paid ${formatDate(payment.paidDate, 'full')}`
-  : billStatus === 'overdue'
-    ? `Overdue · ${formatDate(bill.dueDate, 'full')}`
-    : `${formatDate(bill.dueDate, 'full')} · ${relativeDue(bill.dueDate)}`;
+                  const dateLabel = status === 'paid' && payment
+                    ? `Paid ${formatDate(payment.paidDate, 'full')}`
+                    : billStatus === 'overdue'
+                      ? `Overdue · ${formatDate(bill.dueDate, 'full')}`
+                      : `${formatDate(bill.dueDate, 'full')} · ${relativeDue(bill.dueDate)}`;
 
-const category = getCategory(bill.category);
+                  const category = getCategory(bill.category);
 
                   return `
                     <button
@@ -2334,8 +2350,14 @@ const category = getCategory(bill.category);
                       </div>
 
                       <div class="bill-info">
-                        <div class="bill-name">${escapeHtml(bill.name)}</div>
-                        <div class="bill-meta" style="color:${rowColor}">
+                        <div class="bill-name">
+                          ${escapeHtml(bill.name)}
+                        </div>
+
+                        <div
+                          class="bill-meta"
+                          style="color:${rowColor}"
+                        >
                           ${dateLabel}
                         </div>
                       </div>
@@ -2354,7 +2376,10 @@ const category = getCategory(bill.category);
                   ${svgIcon('checkCircle', 44)}
                 </div>
 
-                <div class="empty-state-title">No ${title.toLowerCase()} bills</div>
+                <div class="empty-state-title">
+                  No ${title.toLowerCase()} bills
+                </div>
+
                 <div class="empty-state-text">
                   There is nothing to show for this month.
                 </div>
