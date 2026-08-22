@@ -1512,7 +1512,18 @@ function renderCompactRecurringCalendar() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
 
-  const monthBills = getRecurringOccurrencesForMonth(viewDate);
+  const currentMonthStart = new Date(
+  today.getFullYear(),
+  today.getMonth(),
+  1
+);
+
+const viewedMonthStart = new Date(year, month, 1);
+
+const monthBills =
+  viewedMonthStart < currentMonthStart
+    ? []
+    : getRecurringOccurrencesForMonth(viewDate);
 
   const cells = [];
 
