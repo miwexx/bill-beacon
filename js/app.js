@@ -964,7 +964,7 @@ function renderToday() {
       <div class="content-pad dashboard-content">
       <button
   class="dashboard-month-card"
-  onclick="openDashboardStatusSheet('due')"
+  onclick="openDashboardUnpaidSheet()"
   aria-label="View bills still due this month"
 >
   <div class="dashboard-card-topline">
