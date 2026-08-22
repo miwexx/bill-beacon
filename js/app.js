@@ -3389,77 +3389,95 @@ function detailRow(label, value) {
 
 function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
-  const status = getBillStatus(bill);
-
-  const statusColor =
-    status === 'paid'
-      ? 'paid'
-      : status === 'overdue'
-        ? 'overdue'
-        : 'upcoming';
-
-  const meta = `${formatDate(bill.dueDate)} · ${
-    bill.recurrence === 'None' ? 'One-time' : bill.recurrence
-  } · ${relativeDue(bill.dueDate)}`;
-
   const payCycleLabel = getPayCycleLabel(bill);
+
+  const dueDate = new Date(bill.dueDate);
+  const dueDay = dueDate.getDate();
+
+  const ordinal = (day) => {
+    const mod100 = day % 100;
+
+    if (mod100 >= 11 && mod100 <= 13) {
+      return `${day}th`;
+    }
+
+    switch (day % 10) {
+      case 1:
+        return `${day}st`;
+      case 2:
+        return `${day}nd`;
+      case 3:
+        return `${day}rd`;
+      default:
+        return `${day}th`;
+    }
+  };
+
+  const scheduleText = bill.recurrence && bill.recurrence !== 'None'
+    ? `Due on the ${ordinal(dueDay)} of each month`
+    : `Due on ${formatDate(bill.dueDate, 'full')}`;
+
+  const payCycleClass =
+    bill.payCycle === 'first' ||
+    (!bill.payCycle && dueDay <= 15)
+      ? 'pay-cycle-first'
+      : 'pay-cycle-second';
 
   return `
     <div
       class="bill-row"
-      ${
-        clickable
-          ? `onclick="navigate('detail', {id: '${bill.id}'})"`
-          : ''
-      }
+      ${clickable ? `onclick="navigate('detail', { id: '${bill.id}' })"` : ''}
     >
       <div
-  class="bill-icon"
-  style="
-    background:${getBillBrand(bill.name) ? 'white' : `var(--${cat.color})`};
-    color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
-    padding:${getBillBrand(bill.name) ? '3px' : '0'};
-    overflow:hidden;
-  "
->
-  ${billVisual(bill, 32)}
-</div>
+        class="bill-icon"
+        style="
+          background:${getBillBrand(bill.name) ? '#fff' : `var(--${cat.color})`};
+          color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
+          padding:${getBillBrand(bill.name) ? '3px' : '0'};
+          overflow:hidden;
+        "
+      >
+        ${billVisual(bill, 32)}
+      </div>
 
       <div class="bill-info">
         <div class="bill-name">${escapeHtml(bill.name)}</div>
 
         <div class="bill-meta-row">
-          <div class="bill-meta text-${statusColor}">
-            ${meta}
+          <div class="bill-meta">
+            ${scheduleText}
           </div>
 
-          <span class="pay-cycle-pill ${
-  bill.payCycle === 'first' ||
-  (!bill.payCycle && new Date(bill.dueDate).getDate() <= 15)
-    ? 'pay-cycle-first'
-    : 'pay-cycle-second'
-}">
-  ${payCycleLabel}
-</span>
+          <span class="pay-cycle-pill ${payCycleClass}">
+            ${payCycleLabel}
+          </span>
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:6px">
-  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-    <div class="bill-amount">${formatCurrency(bill.amount)}</div>
-    <div class="bill-status-dot" style="background:var(--${statusColor})"></div>
-  </div>
+      <div style="display:flex; align-items:center; gap:6px">
+        <div
+          style="
+            display:flex;
+            flex-direction:column;
+            align-items:flex-end;
+            gap:4px;
+          "
+        >
+          <div class="bill-amount">
+            ${formatCurrency(bill.amount)}
+          </div>
+        </div>
 
-  <button
-    type="button"
-    class="bill-more-button"
-    aria-label="More options for ${escapeHtml(bill.name)}"
-    title="More options"
-    onclick="event.stopPropagation(); openBillQuickActions('${bill.id}')"
-  >
-    ${svgIcon('moreVertical', 22)}
-  </button>
-</div>
+        <button
+          type="button"
+          class="bill-more-button"
+          aria-label="More options for ${escapeHtml(bill.name)}"
+          title="More options"
+          onclick="event.stopPropagation(); openBillQuickActions('${bill.id}')"
+        >
+          ${svgIcon('moreVertical', 22)}
+        </button>
+      </div>
     </div>
   `;
 }
