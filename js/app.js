@@ -205,10 +205,25 @@ deleteIncomeSource(id) {
 },
   
   addPayment(payment) {
-    const payments = this.getPayments();
-    payments.push(payment);
-    this.savePayments(payments);
-  },
+  const payments = this.getPayments();
+  payments.push(payment);
+  this.savePayments(payments);
+},
+
+updatePayment(paymentId, updates) {
+  const payments = this.getPayments();
+  const index = payments.findIndex(payment => payment.id === paymentId);
+
+  if (index === -1) return null;
+
+  payments[index] = {
+    ...payments[index],
+    ...updates
+  };
+
+  this.savePayments(payments);
+  return payments[index];
+},
   getPaymentsForBill(billId) {
     return this.getPayments().filter(p => p.billId === billId).sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
   },
@@ -633,14 +648,16 @@ function confirmPostponeBill(billId) {
   render();
 }
 function getBillStatus(bill) {
-  const payments = Store.getPaymentsForBill(bill.id);
-  if (bill.recurrence === 'None' && payments.length > 0) return 'paid';
-  if (bill.recurrence !== 'None') {
-    // Recurring: always show as unpaid (active bill = next due date)
-    if (daysUntil(bill.dueDate) < 0) return 'overdue';
-    return 'upcoming';
+  const activePayment = getLatestActivePaymentForBill(bill.id);
+
+  if (activePayment) {
+    return 'paid';
   }
-  if (daysUntil(bill.dueDate) < 0) return 'overdue';
+
+  if (daysUntil(bill.dueDate) < 0) {
+    return 'overdue';
+  }
+
   return 'upcoming';
 }
 
@@ -648,81 +665,63 @@ function isPaidThisCycle(bill) {
   return getBillStatus(bill) === 'paid';
 }
 
-function isPaidThisMonth(bill) {
-  return Store.getPaymentsForBill(bill.id).some((payment) =>
-    isSameMonth(payment.paidDate)
-  );
+function getLatestActivePaymentForBill(billId) {
+  return Store.getPaymentsForBill(billId)
+    .filter(payment => payment.status !== 'voided')
+    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))[0] || null;
+}
+function isPaidThisMonth(bill, referenceDate = new Date()) {
+  return Store.getPaymentsForBill(bill.id).some(payment => {
+    if (payment.status === 'voided') return false;
+    return isSameMonth(payment.paidDate, referenceDate);
+  });
 }
 
 function markBillPaid(billId) {
   const bill = Store.getBill(billId);
   if (!bill) return;
 
-  const paidForDueDate = bill.dueDate;
+  const existingActivePayment = Store.getPaymentsForBill(billId)
+    .find(payment => payment.status !== 'voided');
+
+  if (existingActivePayment) return;
 
   Store.addPayment({
     id: uid(),
     billId,
     paidDate: new Date().toISOString(),
     amount: bill.amount,
-    paidForDueDate
+    paidForDueDate: bill.dueDate,
+    status: 'active',
+    voidedAt: null
   });
 
-  if (bill.recurrence !== 'None') {
-    const next = nextDate(bill.dueDate, bill.recurrence);
-
-    if (next) {
-      Store.updateBill(billId, {
-        dueDate: next
-      });
-    }
-  }
+  render();
 }
 function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
   if (!bill) return;
 
-  const payments = Store.getPayments();
+  const payment = getLatestActivePaymentForBill(billId);
 
-  const paymentToRemove = payments
-    .filter((payment) => payment.billId === billId)
-    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))[0];
-
-  if (!paymentToRemove) {
-    alert('No payment record was found for this bill.');
+  if (!payment) {
+    alert('This bill does not have an active payment to reverse.');
     return;
   }
 
-  if (!confirm(`Mark ${bill.name} as unpaid?`)) return;
-
-  Store.savePayments(
-    payments.filter((payment) => payment.id !== paymentToRemove.id)
+  const confirmed = confirm(
+    `Mark "${bill.name}" as unpaid?\n\n` +
+    `${formatCurrency(payment.amount)} will be added back to bills still due.`
   );
 
-  if (bill.recurrence !== 'None') {
-    const restoredDueDate = new Date(bill.dueDate);
+  if (!confirmed) return;
 
-    switch (bill.recurrence) {
-      case 'Weekly':
-        restoredDueDate.setDate(restoredDueDate.getDate() - 7);
-        break;
-      case 'Monthly':
-        restoredDueDate.setMonth(restoredDueDate.getMonth() - 1);
-        break;
-      case 'Quarterly':
-        restoredDueDate.setMonth(restoredDueDate.getMonth() - 3);
-        break;
-      case 'Yearly':
-        restoredDueDate.setFullYear(restoredDueDate.getFullYear() - 1);
-        break;
-    }
+  Store.updatePayment(payment.id, {
+    status: 'voided',
+    voidedAt: new Date().toISOString()
+  });
 
-    Store.updateBill(billId, {
-      dueDate: restoredDueDate.toISOString()
-    });
-  }
-
-  navigate('today');
+  render();
 }
 function svgIcon(name, size = 20) {
   const path = ICONS[name] || ICONS.doc;
@@ -3698,16 +3697,48 @@ function openBillQuickActions(billId) {
   if (!bill) return;
 
   const category = getCategory(bill.category);
-  const canMarkPaid = !isPaidThisMonth(bill);
+  const activePayment = getLatestActivePaymentForBill(bill.id);
+  const isPaid = Boolean(activePayment);
+
+  const paymentAction = isPaid
+    ? `
+      <button
+        class="bill-sheet-action"
+        onclick="closeBillQuickActions(); markBillUnpaid('${bill.id}')"
+      >
+        <span>${svgIcon('close', 20)}</span>
+        <span>Mark as unpaid</span>
+        <span>${svgIcon('chevronRight', 18)}</span>
+      </button>
+    `
+    : `
+      <button
+        class="bill-sheet-action"
+        onclick="closeBillQuickActions(); confirmMarkPaid('${bill.id}')"
+      >
+        <span>${svgIcon('checkCircle', 20)}</span>
+        <span>Mark as paid</span>
+        <span>${svgIcon('chevronRight', 18)}</span>
+      </button>
+
+      <button
+        class="bill-sheet-action"
+        onclick="closeBillQuickActions(); openPostponeBillSheet('${bill.id}')"
+      >
+        <span>${svgIcon('calendar', 20)}</span>
+        <span>Postpone</span>
+        <span>${svgIcon('chevronRight', 18)}</span>
+      </button>
+    `;
 
   const sheetHtml = `
     <div
-  class="sheet-overlay show"
-  id="billQuickActionsOverlay"
-  onclick="closeBillQuickActions()"
-></div>
+      class="sheet-overlay show"
+      id="billQuickActionsOverlay"
+      onclick="closeBillQuickActions()"
+    ></div>
 
-<div class="sheet show" id="billQuickActionsSheet">
+    <div class="sheet show" id="billQuickActionsSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
@@ -3743,15 +3774,7 @@ function openBillQuickActions(billId) {
             <span>${svgIcon('chevronRight', 18)}</span>
           </button>
 
-          <button
-            class="bill-sheet-action"
-            ${canMarkPaid ? '' : 'disabled'}
-            onclick="closeBillQuickActions(); confirmMarkPaid('${bill.id}')"
-          >
-            <span>${svgIcon('checkCircle', 20)}</span>
-            <span>${canMarkPaid ? 'Mark as paid' : 'Already paid this month'}</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
+          ${paymentAction}
 
           <button
             class="bill-sheet-action bill-sheet-action-danger"
@@ -3769,7 +3792,7 @@ function openBillQuickActions(billId) {
   const container = document.createElement('div');
   container.id = 'billQuickActionsContainer';
   container.innerHTML = sheetHtml;
- document.body.appendChild(container);
+  document.body.appendChild(container);
 }
 function closeBillDetailsSheet() {
   document.getElementById('billDetailsContainer')?.remove();
