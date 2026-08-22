@@ -969,7 +969,7 @@ function renderToday() {
 >
   <div class="dashboard-card-topline">
     <span>This Month</span>
-
+ 
     <span>
       ${paidThisMonthBills.length} of ${monthBills.length} bills paid
     </span>
