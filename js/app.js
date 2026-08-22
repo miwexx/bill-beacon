@@ -1856,7 +1856,9 @@ function setBillSort(sort) {
   render();
 }
 function renderCalendar() {
-  let viewDate = routeParams.month ? new Date(routeParams.month) : new Date();
+  const viewDate = routeParams.month
+    ? new Date(routeParams.month)
+    : new Date();
 
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
@@ -1864,26 +1866,22 @@ function renderCalendar() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const startWeekday = firstDay.getDay();
   const today = new Date();
-  const bills = Store.getBills();
 
-  const monthBills = bills.filter(bill => {
-    const dueDate = new Date(bill.dueDate);
-    return dueDate.getMonth() === month && dueDate.getFullYear() === year;
-  });
+  const monthBills = getCalendarBillsForMonth(viewDate);
 
   const monthTotal = monthBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
   );
 
-  const paidBills = monthBills.filter(bill => isPaidThisMonth(bill));
+  const paidBills = monthBills.filter(isCalendarBillPaid);
   const paidTotal = paidBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
   );
 
   const dueBills = monthBills.filter(
-    bill => !isPaidThisMonth(bill) && getBillStatus(bill) === 'upcoming'
+    (bill) => getCalendarBillStatus(bill) === "upcoming"
   );
 
   const dueTotal = dueBills.reduce(
@@ -1891,55 +1889,78 @@ function renderCalendar() {
     0
   );
 
-  const overdueBills = bills.filter(bill => getBillStatus(bill) === 'overdue');
+  const overdueBills = monthBills.filter(
+    (bill) => getCalendarBillStatus(bill) === "overdue"
+  );
+
   const overdueTotal = overdueBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
   );
 
-  const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  const weekdays = ["S", "M", "T", "W", "T", "F", "S"];
   const dayCells = [];
 
-  for (let i = 0; i < startWeekday; i++) {
+  for (let i = 0; i < startWeekday; i += 1) {
     dayCells.push('<div class="calendar-day calendar-day-empty"></div>');
   }
 
-  for (let day = 1; day <= daysInMonth; day++) {
+  for (let day = 1; day <= daysInMonth; day += 1) {
     const date = new Date(year, month, day);
-    const dayBills = monthBills.filter(bill => {
+
+    const dayBills = monthBills.filter((bill) => {
       const dueDate = new Date(bill.dueDate);
+
       return dueDate.getDate() === day;
     });
 
     const isToday = date.toDateString() === today.toDateString();
-    const hasPaid = dayBills.some(bill => isPaidThisMonth(bill));
+    const hasPaid = dayBills.some(isCalendarBillPaid);
+
     const hasUpcoming = dayBills.some(
-      bill => !isPaidThisMonth(bill) && getBillStatus(bill) === 'upcoming'
-    );
-    const hasOverdue = dayBills.some(
-      bill => getBillStatus(bill) === 'overdue'
+      (bill) => getCalendarBillStatus(bill) === "upcoming"
     );
 
-       let dots = '';
+    const hasOverdue = dayBills.some(
+      (bill) => getCalendarBillStatus(bill) === "overdue"
+    );
+
+    let dots = "";
+
     if (dayBills.length) {
       dots = `
         <div class="calendar-dot-row">
-          ${hasPaid ? '<div class="calendar-dot" style="background:var(--paid)"></div>' : ''}
-          ${hasUpcoming ? '<div class="calendar-dot" style="background:var(--upcoming)"></div>' : ''}
-          ${hasOverdue ? '<div class="calendar-dot" style="background:var(--overdue)"></div>' : ''}
+          ${
+            hasPaid
+              ? '<div class="calendar-dot" style="background:var(--paid)"></div>'
+              : ""
+          }
+          ${
+            hasUpcoming
+              ? '<div class="calendar-dot" style="background:var(--upcoming)"></div>'
+              : ""
+          }
+          ${
+            hasOverdue
+              ? '<div class="calendar-dot" style="background:var(--overdue)"></div>'
+              : ""
+          }
         </div>
       `;
     }
 
-   
     dayCells.push(`
       <button
-        class="calendar-day calendar-day-clickable ${isToday ? 'today' : ''} ${hasOverdue ? 'calendar-day-overdue' : ''}"
+        class="calendar-day calendar-day-clickable ${
+          isToday ? "today" : ""
+        } ${hasOverdue ? "calendar-day-overdue" : ""}"
         onclick="openCalendarDay('${date.toISOString()}')"
-        aria-label="View ${dayBills.length ? `${dayBills.length} bills due on ` : ''}${formatDate(date.toISOString(), 'full')}"
+        aria-label="View ${
+          dayBills.length ? `${dayBills.length} bills due on ` : ""
+        }${formatDate(date.toISOString(), "full")}"
       >
         <span>${day}</span>
-               ${dots}
+        ${dots}
       </button>
     `);
   }
@@ -1947,11 +1968,13 @@ function renderCalendar() {
   const monthBillsSorted = [...monthBills].sort(
     (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
   );
+
   const visibleMonthBills = monthBillsSorted.slice(0, 5);
   const hiddenMonthBills = monthBillsSorted.slice(5);
+
   const prevMonth = new Date(year, month - 1, 1).toISOString();
   const nextMonth = new Date(year, month + 1, 1).toISOString();
-  const thisMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString();
+
   const viewingCurrentMonth =
     today.getFullYear() === year && today.getMonth() === month;
 
@@ -1966,135 +1989,174 @@ function renderCalendar() {
       <div class="content-pad content-gap">
         <div class="card card-pad">
           <div class="month-nav">
-            <button class="month-nav-btn" onclick="navigate('calendar', { month: '${prevMonth}' })" aria-label="Previous month">
-              ${svgIcon('chevronLeft', 22)}
+            <button
+              class="month-nav-btn"
+              onclick="navigate('calendar', { month: '${prevMonth}' })"
+              aria-label="Previous month"
+            >
+              ${svgIcon("chevronLeft", 22)}
             </button>
 
-            <div class="month-nav-title">${formatDate(viewDate.toISOString(), 'monthYear')}</div>
+            <div class="month-nav-title">
+              ${formatDate(viewDate.toISOString(), "monthYear")}
+            </div>
 
-            <button class="month-nav-btn" onclick="navigate('calendar', { month: '${nextMonth}' })" aria-label="Next month">
-              ${svgIcon('chevronRight', 22)}
+            <button
+              class="month-nav-btn"
+              onclick="navigate('calendar', { month: '${nextMonth}' })"
+              aria-label="Next month"
+            >
+              ${svgIcon("chevronRight", 22)}
             </button>
           </div>
 
           ${
             !viewingCurrentMonth
-              ? `<button class="btn-secondary" style="width:100%;margin:var(--space-2) 0 var(--space-4)" onclick="navigate('calendar')">
-                  ${svgIcon('calendar', 18)}
+              ? `
+                <button
+                  class="btn-secondary"
+                  style="width:100%;margin:var(--space-2) 0 var(--space-4)"
+                  onclick="navigate('calendar')"
+                >
+                  ${svgIcon("calendar", 18)}
                   Today
-                </button>`
-              : ''
+                </button>
+              `
+              : ""
           }
 
           <div class="calendar-grid">
-            ${weekdays.map(day => `<div class="calendar-weekday">${day}</div>`).join('')}
-            ${dayCells.join('')}
+            ${weekdays
+              .map((day) => `<div class="calendar-weekday">${day}</div>`)
+              .join("")}
+            ${dayCells.join("")}
           </div>
         </div>
 
         <div class="calendar-summary">
           <div class="calendar-summary-item">
             <div class="calendar-summary-label">Scheduled</div>
-            <div class="calendar-summary-value">${formatCurrency(monthTotal)}</div>
-            <div class="calendar-summary-meta">${monthBills.length} ${monthBills.length === 1 ? 'bill' : 'bills'}</div>
+            <div class="calendar-summary-value">
+              ${formatCurrency(monthTotal)}
+            </div>
+            <div class="calendar-summary-meta">
+              ${monthBills.length} ${monthBills.length === 1 ? "bill" : "bills"}
+            </div>
           </div>
 
           <div class="calendar-summary-item">
             <div class="calendar-summary-label">Still due</div>
-            <div class="calendar-summary-value text-upcoming">${formatCurrency(dueTotal)}</div>
-            <div class="calendar-summary-meta">${dueBills.length} ${dueBills.length === 1 ? 'bill' : 'bills'}</div>
+            <div class="calendar-summary-value text-upcoming">
+              ${formatCurrency(dueTotal)}
+            </div>
+            <div class="calendar-summary-meta">
+              ${dueBills.length} ${dueBills.length === 1 ? "bill" : "bills"}
+            </div>
           </div>
 
           <div class="calendar-summary-item">
             <div class="calendar-summary-label">Paid</div>
-            <div class="calendar-summary-value text-paid">${formatCurrency(paidTotal)}</div>
-            <div class="calendar-summary-meta">${paidBills.length} ${paidBills.length === 1 ? 'bill' : 'bills'}</div>
+            <div class="calendar-summary-value text-paid">
+              ${formatCurrency(paidTotal)}
+            </div>
+            <div class="calendar-summary-meta">
+              ${paidBills.length} ${paidBills.length === 1 ? "bill" : "bills"}
+            </div>
           </div>
         </div>
 
         ${
-  overdueBills.length
-    ? `
-      <button
-        class="card card-pad"
-        onclick="openDashboardStatusSheet('overdue')"
-        style="
-          width:100%;
-          text-align:left;
-          cursor:pointer;
-          border-color:color-mix(
-            in srgb,
-            var(--overdue) 38%,
-            var(--border)
-          );
-        "
-        aria-label="View overdue bills"
-      >
-        <div
-          style="
-            display:flex;
-            align-items:center;
-            gap:var(--space-2);
-            color:var(--overdue);
-          "
-        >
-          ${svgIcon('warning', 18)}
-
-          <strong>
-            ${overdueBills.length}
-            overdue ${overdueBills.length === 1 ? 'bill' : 'bills'}
-          </strong>
-
-          <span style="margin-left:auto; font-weight:800">
-            ${formatCurrency(overdueTotal)}
-          </span>
-        </div>
-      </button>
-    `
-    : ''
-}
-        ${
-  monthBillsSorted.length
-    ? `<div>
-        <div class="section-header">This Month</div>
-
-        <div class="card">
-          ${visibleMonthBills.map(bill => billRow(bill, true)).join('')}
-
-          ${
-            hiddenMonthBills.length
-              ? `<div id="moreMonthBills" class="more-month-bills">
-                  ${hiddenMonthBills.map(bill => billRow(bill, true)).join('')}
-                </div>
-
-                <button
-                  id="toggleMonthBills"
-                  class="show-more-bills-button"
-                  onclick="toggleMonthBills()"
+          overdueBills.length
+            ? `
+              <button
+                class="card card-pad"
+                onclick="openDashboardStatusSheet('overdue')"
+                style="
+                  width:100%;
+                  text-align:left;
+                  cursor:pointer;
+                  border-color:color-mix(
+                    in srgb,
+                    var(--overdue) 38%,
+                    var(--border)
+                  );
+                "
+                aria-label="View overdue bills"
+              >
+                <div
+                  style="
+                    display:flex;
+                    align-items:center;
+                    gap:var(--space-2);
+                    color:var(--overdue);
+                  "
                 >
-                  Show all ${monthBillsSorted.length} bills
-                  ${svgIcon('chevronRight', 18)}
-                </button>`
-              : ''
-          }
-        </div>
-      </div>`
-    : `<div class="empty-state">
-        <div class="empty-state-icon">${svgIcon('calendar', 44)}</div>
-        <div class="empty-state-title">No bills this month</div>
-        <div class="empty-state-text">
-          Add a bill to begin planning this month’s payments.
-        </div>
-        <button
-          class="btn-primary"
-          style="margin-top:var(--space-4)"
-          onclick="openBillForm()"
-        >
-          ${svgIcon('plus', 18)}
-          Add bill
-        </button>
-      </div>`
-}
+                  ${svgIcon("warning", 18)}
+                  <strong>
+                    ${overdueBills.length}
+                    overdue ${overdueBills.length === 1 ? "bill" : "bills"}
+                  </strong>
+                  <span style="margin-left:auto;font-weight:800">
+                    ${formatCurrency(overdueTotal)}
+                  </span>
+                </div>
+              </button>
+            `
+            : ""
+        }
+
+        ${
+          monthBillsSorted.length
+            ? `
+              <div>
+                <div class="section-header">This Month</div>
+
+                <div class="card">
+                  ${visibleMonthBills
+                    .map((bill) => billRow(bill, true))
+                    .join("")}
+
+                  ${
+                    hiddenMonthBills.length
+                      ? `
+                        <div id="moreMonthBills" class="more-month-bills">
+                          ${hiddenMonthBills
+                            .map((bill) => billRow(bill, true))
+                            .join("")}
+                        </div>
+
+                        <button
+                          id="toggleMonthBills"
+                          class="show-more-bills-button"
+                          onclick="toggleMonthBills()"
+                        >
+                          Show all ${monthBillsSorted.length} bills
+                          ${svgIcon("chevronRight", 18)}
+                        </button>
+                      `
+                      : ""
+                  }
+                </div>
+              </div>
+            `
+            : `
+              <div class="empty-state">
+                <div class="empty-state-icon">${svgIcon("calendar", 44)}</div>
+                <div class="empty-state-title">No bills this month</div>
+                <div class="empty-state-text">
+                  Add a bill to begin planning this month’s payments.
+                </div>
+                <button
+                  class="btn-primary"
+                  style="margin-top:var(--space-4)"
+                  onclick="openBillForm()"
+                >
+                  ${svgIcon("plus", 18)}
+                  Add bill
+                </button>
+              </div>
+            `
+        }
       </div>
     </div>
   `;
