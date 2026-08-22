@@ -1066,7 +1066,7 @@ function renderToday() {
 
           <button
             class="dashboard-status-card status-upcoming-card"
-            onclick="openDashboardStatusSheet('due')"
+            onclick="openDashboardUnpaidSheet()"
             aria-label="View bills due"
           >
             <div class="dashboard-status-number text-upcoming">
