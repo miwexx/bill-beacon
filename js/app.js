@@ -1425,39 +1425,99 @@ function renderRecurring() {
 
 function renderBills() {
   const bills = Store.getBills();
+  const billSort = routeParams.billSort || 'dueDate';
 
-  const groups = {};
+  const sortOptions = {
+    dueDate: 'Due date',
+    amountLow: 'Amount: low to high',
+    amountHigh: 'Amount: high to low',
+    name: 'Name: A–Z',
+    category: 'Type / category'
+  };
 
-  bills.forEach((bill) => {
-    const categoryName = getCategory(bill.category).label;
+  const sortBills = (items) => {
+    const copy = [...items];
 
-    if (!groups[categoryName]) {
-      groups[categoryName] = [];
+    switch (billSort) {
+      case 'amountLow':
+        return copy.sort(
+          (a, b) => (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0)
+        );
+
+      case 'amountHigh':
+        return copy.sort(
+          (a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0)
+        );
+
+      case 'name':
+        return copy.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, {
+            sensitivity: 'base'
+          })
+        );
+
+      case 'category':
+        return copy.sort((a, b) => {
+          const categoryCompare = getCategory(a.category).label.localeCompare(
+            getCategory(b.category).label
+          );
+
+          return categoryCompare ||
+            new Date(a.dueDate) - new Date(b.dueDate);
+        });
+
+      case 'dueDate':
+      default:
+        return copy.sort(
+          (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+        );
     }
+  };
 
-    groups[categoryName].push(bill);
-  });
+  const sortedBills = sortBills(bills);
 
-  const sortedCategoryNames = Object.keys(groups).sort((a, b) =>
-    a.localeCompare(b)
-  );
+  let billContent = '';
 
-  const billContent = sortedCategoryNames
-    .map(
-      (categoryName) => `
-        <div>
-          <div class="section-header">${categoryName}</div>
+  if (billSort === 'category') {
+    const groups = {};
 
-          <div class="card">
-            ${groups[categoryName]
-              .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-              .map((bill) => billRow(bill, true))
-              .join('')}
+    sortedBills.forEach((bill) => {
+      const categoryName = getCategory(bill.category).label;
+
+      if (!groups[categoryName]) {
+        groups[categoryName] = [];
+      }
+
+      groups[categoryName].push(bill);
+    });
+
+    const sortedCategoryNames = Object.keys(groups).sort((a, b) =>
+      a.localeCompare(b)
+    );
+
+    billContent = sortedCategoryNames
+      .map(
+        (categoryName) => `
+          <div>
+            <div class="section-header">${categoryName}</div>
+
+            <div class="card">
+              ${groups[categoryName]
+                .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+                .map((bill) => billRow(bill, true))
+                .join('')}
+            </div>
           </div>
-        </div>
-      `
-    )
-    .join('');
+        `
+      )
+      .join('');
+  } else {
+    billContent = `
+      <div class="card">
+        ${sortedBills.map((bill) => billRow(bill, true)).join('')}
+      </div>
+    `;
+  }
 
   return `
     <div class="nav-bar">
@@ -1501,10 +1561,24 @@ function renderBills() {
           `
           : `
             <div
-              class="settings-footer"
-              style="padding:var(--space-3) var(--space-4) 0"
+              style="
+                display:flex;
+                justify-content:center;
+                margin:var(--space-3) 0 var(--space-4);
+              "
             >
-              Bills are grouped by category and ordered by due date.
+              <button
+                class="bb-outline-pill"
+                onclick="openBillSortSheet()"
+                aria-label="Sort bills by ${sortOptions[billSort]}"
+                style="min-width:230px"
+              >
+                <span class="pill-icon">${svgIcon('sort', 18)}</span>
+                <span>Sort: ${sortOptions[billSort]}</span>
+                <span class="pill-chevron">
+                  ${svgIcon('chevronRight', 16)}
+                </span>
+              </button>
             </div>
 
             <div class="content-pad content-gap">
