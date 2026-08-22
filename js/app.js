@@ -2424,7 +2424,7 @@ window.openCalendarDay = function (dateString) {
                   Add Bill
                 </button>
               </div>
-            `
+            ` 
         }
       </div>
     </div>
