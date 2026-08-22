@@ -1859,17 +1859,46 @@ function renderCalendar() {
         </div>
 
         ${
-          overdueBills.length
-            ? `<div class="card card-pad" style="border-color:color-mix(in srgb, var(--overdue) 38%, var(--border))">
-                <div style="display:flex;align-items:center;gap:var(--space-2);color:var(--overdue)">
-                  ${svgIcon('warning', 18)}
-                  <strong>${overdueBills.length} overdue ${overdueBills.length === 1 ? 'bill' : 'bills'}</strong>
-                  <span style="margin-left:auto;font-weight:800">${formatCurrency(overdueTotal)}</span>
-                </div>
-              </div>`
-            : ''
-        }
+  overdueBills.length
+    ? `
+      <button
+        class="card card-pad"
+        onclick="openDashboardStatusSheet('overdue')"
+        style="
+          width:100%;
+          text-align:left;
+          cursor:pointer;
+          border-color:color-mix(
+            in srgb,
+            var(--overdue) 38%,
+            var(--border)
+          );
+        "
+        aria-label="View overdue bills"
+      >
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            gap:var(--space-2);
+            color:var(--overdue);
+          "
+        >
+          ${svgIcon('warning', 18)}
 
+          <strong>
+            ${overdueBills.length}
+            overdue ${overdueBills.length === 1 ? 'bill' : 'bills'}
+          </strong>
+
+          <span style="margin-left:auto; font-weight:800">
+            ${formatCurrency(overdueTotal)}
+          </span>
+        </div>
+      </button>
+    `
+    : ''
+}
         ${
   monthBillsSorted.length
     ? `<div>
