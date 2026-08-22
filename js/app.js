@@ -4428,18 +4428,53 @@ function openBillDetailsSheet(billId) {
     overscroll-behavior:contain;
   "
 >
-      <div class="sheet-handle"></div>
+      <div
+  style="
+    position:sticky;
+    top:0;
+    z-index:3;
+    height:calc(56px + env(safe-area-inset-top));
+    padding-top:env(safe-area-inset-top);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:var(--bg);
+  "
+>
+  <div
+    style="
+      font-size:var(--text-lg);
+      font-weight:800;
+      line-height:56px;
+    "
+  >
+    Bill Details
+  </div>
 
-      <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillDetailsSheet()">
-          Close
-        </button>
-
-        <div class="sheet-title">Bill Details</div>
-
-        <div style="width:54px"></div>
-      </div>
-
+  <button
+    type="button"
+    onclick="closeBillDetailsSheet()"
+    aria-label="Close bill details"
+    style="
+      position:absolute;
+      top:env(safe-area-inset-top);
+      right:12px;
+      width:56px;
+      height:56px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:0;
+      border:0;
+      background:transparent;
+      color:var(--text);
+      cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+    "
+  >
+    ${svgIcon('close', 24)}
+  </button>
+</div>
       <div class="sheet-body">
         <div class="bill-sheet-header bill-details-sheet-header">
           <div
