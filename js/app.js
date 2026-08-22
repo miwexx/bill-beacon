@@ -2112,11 +2112,186 @@ function closeCycleBillsSheet() {
 
 function openDashboardStatusSheet(status) {
   const now = new Date();
-  const paidBillIds = new Set(
-  Store.getPayments()
-    .filter(payment => isSameMonth(payment.paidDate, now))
-    .map(payment => payment.billId)
-);
+  const currentCycle = getCurrentPayCycle();
+
+  const isCurrentCycleBill = (bill) => {
+    const dueDate = new Date(bill.dueDate);
+
+    const isDueThisMonth =
+      dueDate.getMonth() === now.getMonth() &&
+      dueDate.getFullYear() === now.getFullYear();
+
+    const billCycle = bill.payCycle || (
+      dueDate.getDate() <= 15 ? 'first' : 'second'
+    );
+
+    return isDueThisMonth && billCycle === currentCycle;
+  };
+
+  let title = 'Paid';
+  let color = 'var(--paid)';
+  let background = 'var(--paid-bg)';
+  let icon = svgIcon('checkCircle', 18);
+  let selectedBills = [];
+
+  if (status === 'paid') {
+    selectedBills = Store.getBills()
+      .filter(bill => {
+        if (!isCurrentCycleBill(bill)) return false;
+
+        return Store.getPaymentsForBill(bill.id).some(payment =>
+          payment.status !== 'voided' &&
+          isSameMonth(payment.paidDate, now)
+        );
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
+
+  if (status === 'due') {
+    title = 'Due';
+    color = 'var(--upcoming)';
+    background = 'var(--upcoming-bg)';
+    icon = svgIcon('clock', 18);
+
+    selectedBills = Store.getBills()
+      .filter(bill =>
+        isCurrentCycleBill(bill) &&
+        !isPaidThisMonth(bill) &&
+        getBillStatus(bill) === 'upcoming'
+      )
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
+
+  if (status === 'overdue') {
+    title = 'Overdue';
+    color = 'var(--overdue)';
+    background = 'var(--overdue-bg)';
+    icon = svgIcon('warning', 18);
+
+    selectedBills = Store.getBills()
+      .filter(bill =>
+        !isPaidThisMonth(bill) &&
+        getBillStatus(bill) === 'overdue'
+      )
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
+
+  const total = selectedBills.reduce(
+    (sum, bill) => sum + parseFloat(bill.amount || 0),
+    0
+  );
+
+  const container = document.createElement('div');
+  container.id = 'dashboardStatusContainer';
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay show"
+      id="dashboardStatusOverlay"
+      onclick="closeDashboardStatusSheet()"
+    ></div>
+
+    <div class="sheet show" id="dashboardStatusSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button
+          class="nav-button"
+          onclick="closeDashboardStatusSheet()"
+        >
+          Close
+        </button>
+
+        <div class="sheet-title">${title} bills</div>
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body">
+        <div
+          class="card"
+          style="margin-bottom:var(--space-4); overflow:hidden"
+        >
+          <div class="form-row">
+            <div style="display:flex; align-items:center; gap:var(--space-2); color:${color}">
+              ${icon}
+              <span style="font-weight:700">
+                ${selectedBills.length} ${selectedBills.length === 1 ? 'bill' : 'bills'}
+              </span>
+            </div>
+
+            <div style="flex:1"></div>
+
+            <div
+              style="font-size:var(--text-lg); font-weight:800; color:${color}"
+            >
+              ${formatCurrency(total)}
+            </div>
+          </div>
+        </div>
+
+        ${
+          selectedBills.length
+            ? `
+              <div class="card">
+                ${selectedBills.map(bill => {
+                  const payment = status === 'paid'
+                    ? getLatestActivePaymentForBill(bill.id)
+                    : null;
+
+                  const dateLabel = status === 'paid' && payment
+                    ? `Paid ${formatDate(payment.paidDate, 'full')}`
+                    : `${formatDate(bill.dueDate, 'full')} · ${relativeDue(bill.dueDate)}`;
+
+                  const category = getCategory(bill.category);
+
+                  return `
+                    <button
+                      class="bill-row"
+                      onclick="closeDashboardStatusSheet(); navigate('detail', { id: '${bill.id}' })"
+                      style="width:100%; text-align:left"
+                      aria-label="View ${escapeHtml(bill.name)}"
+                    >
+                      <div
+                        class="bill-icon"
+                        style="background:var(--${category.color}); color:white"
+                      >
+                        ${billVisual(bill, 18)}
+                      </div>
+
+                      <div class="bill-info">
+                        <div class="bill-name">${escapeHtml(bill.name)}</div>
+                        <div class="bill-meta" style="color:${color}">
+                          ${dateLabel}
+                        </div>
+                      </div>
+
+                      <div class="bill-amount">
+                        ${formatCurrency(bill.amount)}
+                      </div>
+                    </button>
+                  `;
+                }).join('')}
+              </div>
+            `
+            : `
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon('checkCircle', 44)}
+                </div>
+
+                <div class="empty-state-title">No ${title.toLowerCase()} bills</div>
+                <div class="empty-state-text">
+                  There is nothing to show for this month.
+                </div>
+              </div>
+            `
+        }
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+}
 const currentCycle = getCurrentPayCycle();
 
 const cycleBills = Store.getBills().filter((bill) => {
