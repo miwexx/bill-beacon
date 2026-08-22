@@ -2432,14 +2432,58 @@ window.openCalendarDay = function (dateString) {
 
   document.body.appendChild(container);
 };
-window.markCalendarBillPaid = function(billId, dateString) {
-  markBillPaid(billId);
+window.markCalendarBillPaid = function (billId, dateString) {
+  const bill = Store.getBill(billId);
+
+  if (!bill) {
+    alert("Bill not found.");
+    return;
+  }
+
+  const dueDate = new Date(dateString);
+
+  if (Number.isNaN(dueDate.getTime())) {
+    alert("This bill occurrence has an invalid due date.");
+    return;
+  }
+
+  const occurrenceDueDate = new Date(
+    dueDate.getFullYear(),
+    dueDate.getMonth(),
+    dueDate.getDate(),
+    12,
+    0,
+    0
+  ).toISOString();
+
+  const alreadyPaid = Store.getPayments().some((payment) => {
+    return (
+      payment.billId === billId &&
+      payment.status !== "voided" &&
+      payment.paidForDueDate === occurrenceDueDate
+    );
+  });
+
+  if (alreadyPaid) {
+    alert("This bill occurrence is already marked as paid.");
+    return;
+  }
+
+  Store.addPayment({
+    id: uid(),
+    billId,
+    paidDate: new Date().toISOString(),
+    amount: bill.amount,
+    paidForDueDate: occurrenceDueDate,
+    status: "active",
+    voidedAt: null
+  });
 
   closeCalendarDay();
 
   setTimeout(() => {
-    openCalendarDay(dateString);
     render();
+    openCalendarDay(occurrenceDueDate);
   }, 320);
 };
 function closeDashboardStatusSheet() {
