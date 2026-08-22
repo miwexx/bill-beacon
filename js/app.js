@@ -1047,7 +1047,7 @@ function renderToday() {
     </span>
 
     <span>
-      View unpaid bills ${svgIcon('chevronRight', 14)}
+      View Unpaid Bills ${svgIcon('chevronRight', 14)}
     </span>
   </div>
 </button>
@@ -1067,7 +1067,7 @@ function renderToday() {
           <button
             class="dashboard-status-card status-upcoming-card"
             onclick="openDashboardStatusSheet('due')"
-            aria-label="View bills due"
+            aria-label="View Bills Due"
           >
             <div class="dashboard-status-number text-upcoming">
               ${upcomingCount}
@@ -1078,7 +1078,7 @@ function renderToday() {
           <button
             class="dashboard-status-card status-overdue-card"
             onclick="openDashboardStatusSheet('overdue')"
-            aria-label="View overdue bills"
+            aria-label="View Overdue Bills"
           >
             <div class="dashboard-status-number text-overdue">
               ${overdueCount}
@@ -1145,7 +1145,7 @@ function renderToday() {
                 <div class="next-due-copy">
                   <div class="next-due-label">Next Due</div>
                   <div class="next-due-name">
-                    You are all caught up
+                    You Are All Caught Up
                   </div>
                 </div>
               </div>
@@ -1165,9 +1165,9 @@ function renderToday() {
                 padding:0 12px;
                 font-size:var(--text-xs);
               "
-              onclick="openDashboardStatusSheet('due')"
+              onclick="openDashboardStatusSheet('upcoming')"
             >
-              <span>See all</span>
+              <span>See All</span>
               <span class="pill-chevron">
                 ${svgIcon('chevronRight', 14)}
               </span>
@@ -1249,7 +1249,7 @@ function renderToday() {
                     "
                     onclick="navigate('history')"
                   >
-                    <span>See all</span>
+                    <span>See All</span>
                     <span class="pill-chevron">
                       ${svgIcon('chevronRight', 14)}
                     </span>
@@ -2227,7 +2227,19 @@ function openDashboardStatusSheet(status) {
       .filter(bill => isDueThisMonth(bill) && !isPaidThisMonth(bill, now))
       .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
   }
+if (status === 'upcoming') {
+  title = 'Upcoming bills';
+  color = 'var(--upcoming)';
+  icon = svgIcon('clock', 18);
 
+  selectedBills = Store.getBills()
+    .filter(bill => {
+      const billStatus = getBillStatus(bill);
+
+      return billStatus === 'overdue' || billStatus === 'upcoming';
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
   if (status === 'due') {
     title = 'Due';
     color = 'var(--upcoming)';
