@@ -983,52 +983,52 @@ function renderToday() {
       margin-top:var(--space-4);
     "
   >
-    <div>
-      <div
-        style="
-          font-size:var(--text-xs);
-          color:var(--text-muted);
-          margin-bottom:4px;
-        "
-      >
-        Paid
-      </div>
-
-      <div
-        class="text-paid"
-        style="
-          font-size:var(--text-2xl);
-          font-weight:800;
-          line-height:1.1;
-        "
-      >
-        ${formatCurrency(totalPaidThisMonth)}
-      </div>
-    </div>
-
-    <div style="text-align:right">
-      <div
-        style="
-          font-size:var(--text-xs);
-          color:var(--text-muted);
-          margin-bottom:4px;
-        "
-      >
-        Remaining
-      </div>
-
-      <div
-        class="text-upcoming"
-        style="
-          font-size:var(--text-2xl);
-          font-weight:800;
-          line-height:1.1;
-        "
-      >
-        ${formatCurrency(totalDueThisMonth)}
-      </div>
-    </div>
+    
+<div>
+  <div
+    style="
+      font-size:var(--text-xs);
+      color:var(--text-muted);
+      margin-bottom:4px;
+    "
+  >
+    Remaining
   </div>
+
+  <div
+    class="text-upcoming"
+    style="
+      font-size:var(--text-2xl);
+      font-weight:800;
+      line-height:1.1;
+    "
+  >
+    ${formatCurrency(totalDueThisMonth)}
+  </div>
+</div>
+
+<div style="text-align:right">
+  <div
+    style="
+      font-size:var(--text-xs);
+      color:var(--text-muted);
+      margin-bottom:4px;
+    "
+  >
+    Paid
+  </div>
+
+  <div
+    class="text-paid"
+    style="
+      font-size:var(--text-2xl);
+      font-weight:800;
+      line-height:1.1;
+    "
+  >
+    ${formatCurrency(totalPaidThisMonth)}
+  </div>
+</div>
 
   <div
     class="dashboard-progress-track"
