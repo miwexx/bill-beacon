@@ -582,6 +582,63 @@ function getRecurringOccurrencesForNextMonths(
     (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
   );
 }
+function getCalendarBillsForMonth(referenceDate = new Date()) {
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+
+  const oneTimeBills = Store.getBills().filter((bill) => {
+    if (isRecurringBill(bill)) return false;
+
+    const dueDate = new Date(bill.dueDate);
+
+    return (
+      dueDate.getFullYear() === year &&
+      dueDate.getMonth() === month
+    );
+  });
+
+  return [
+    ...oneTimeBills,
+    ...getRecurringOccurrencesForMonth(referenceDate)
+  ].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+function getCalendarBillsForDay(dateString) {
+  const selectedDate = new Date(dateString);
+
+  return getCalendarBillsForMonth(selectedDate).filter((bill) => {
+    const dueDate = new Date(bill.dueDate);
+
+    return (
+      dueDate.getFullYear() === selectedDate.getFullYear() &&
+      dueDate.getMonth() === selectedDate.getMonth() &&
+      dueDate.getDate() === selectedDate.getDate()
+    );
+  });
+}
+
+function isCalendarBillPaid(bill) {
+  if (!bill) return false;
+
+  if (!bill.isOccurrence) {
+    return isPaidThisMonth(bill);
+  }
+
+  return Store.getPayments().some((payment) => {
+    return (
+      payment.billId === bill.sourceBillId &&
+      payment.paidForDueDate === bill.dueDate
+    );
+  });
+}
+
+function getCalendarBillStatus(bill) {
+  if (isCalendarBillPaid(bill)) return "paid";
+
+  if (daysUntil(bill.dueDate) < 0) return "overdue";
+
+  return "upcoming";
+}
 function postponeBill(billId, newDueDate) {
   const bill = Store.getBill(billId);
 
