@@ -4235,23 +4235,183 @@ function closeBillDetailsSheet() {
 
 function openBillDetailsSheet(billId) {
   const bill = Store.getBill(billId);
+
   if (!bill) return;
 
   const category = getCategory(bill.category);
-  const payments = Store.getPaymentsForBill(billId);
+
+  // Important: includes both active and voided payments.
+  const payments = Store.getPaymentsForBill(billId).sort((a, b) => {
+    const aDate = new Date(
+      a.voidedAt || a.paidDate || a.createdAt || 0
+    ).getTime();
+
+    const bDate = new Date(
+      b.voidedAt || b.paidDate || b.createdAt || 0
+    ).getTime();
+
+    return bDate - aDate;
+  });
+
+  const paymentHistoryHtml = payments.length
+    ? `
+      <div class="section-header">Payment History</div>
+
+      <div class="card" style="margin-bottom:18px">
+        ${payments
+          .map((payment) => {
+            const isVoided = payment.status === "voided";
+
+            const paidDate = payment.paidDate;
+            const voidedDate = payment.voidedAt || payment.updatedAt;
+
+            return `
+              <div
+                class="bill-row"
+                style="${
+                  isVoided
+                    ? "opacity:.62; background:rgba(255,255,255,.02)"
+                    : ""
+                }"
+              >
+                <div
+                  class="bill-icon"
+                  style="
+                    background:${
+                      isVoided ? "var(--surface-2)" : "var(--paid-bg)"
+                    };
+                    color:${
+                      isVoided ? "var(--text-muted)" : "var(--paid)"
+                    };
+                  "
+                >
+                  ${svgIcon(isVoided ? "close" : "checkCircle", 20)}
+                </div>
+
+                <div class="bill-info">
+                  <div
+                    class="bill-name"
+                    style="${
+                      isVoided
+                        ? "text-decoration:line-through; color:var(--text-muted)"
+                        : ""
+                    }"
+                  >
+                    ${isVoided ? "Payment voided" : "Payment made"}
+                  </div>
+
+                  <div
+                    class="bill-meta"
+                    style="color:${
+                      isVoided ? "var(--text-muted)" : "var(--paid)"
+                    }"
+                  >
+                    ${
+                      isVoided
+                        ? `Originally paid ${formatDate(
+                            paidDate,
+                            "full"
+                          )}${
+                            voidedDate
+                              ? ` · Voided ${formatDate(voidedDate, "full")}`
+                              : ""
+                          }`
+                        : `Paid ${formatDate(paidDate, "full")}`
+                    }
+                  </div>
+                </div>
+
+                <div
+                  class="bill-amount"
+                  style="${
+                    isVoided
+                      ? "color:var(--text-muted); text-decoration:line-through"
+                      : "color:var(--paid)"
+                  }"
+                >
+                  ${formatCurrency(payment.amount)}
+
+                  <div
+                    style="
+                      margin-top:3px;
+                      font-size:var(--text-xs);
+                      font-weight:800;
+                      color:${
+                        isVoided ? "var(--overdue)" : "var(--paid)"
+                      };
+                    "
+                  >
+                    ${isVoided ? "VOIDED" : "PAID"}
+                  </div>
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    `
+    : `
+      <div class="section-header">Payment History</div>
+
+      <div class="card" style="margin-bottom:18px">
+        <div class="settings-footer">No payments recorded yet.</div>
+      </div>
+    `;
+
+  const postponementHistoryHtml =
+    Array.isArray(bill.postponementHistory) &&
+    bill.postponementHistory.length
+      ? `
+        <div class="section-header">Postponement History</div>
+
+        <div class="card" style="margin-bottom:18px">
+          ${bill.postponementHistory
+            .slice()
+            .reverse()
+            .map(
+              (item) => `
+                <div class="form-row">
+                  <div>
+                    <div class="form-label">
+                      ${formatDate(item.originalDueDate, "short")} →
+                      ${formatDate(item.postponedTo, "short")}
+                    </div>
+
+                    <div
+                      style="
+                        font-size:var(--text-xs);
+                        color:var(--text-muted);
+                        margin-top:3px;
+                      "
+                    >
+                      Postponed ${formatDate(item.postponedAt, "full")}
+                    </div>
+                  </div>
+                </div>
+              `
+            )
+            .join("")}
+        </div>
+      `
+      : "";
+
   const sheetHtml = `
     <div
-  class="sheet-overlay show"
-  id="billDetailsOverlay"
-  onclick="closeBillDetailsSheet()"
-></div>
+      class="sheet-overlay show"
+      id="billDetailsOverlay"
+      onclick="closeBillDetailsSheet()"
+    ></div>
 
-<div class="sheet bill-details-sheet show" id="billDetailsSheet">
+    <div class="sheet bill-details-sheet show" id="billDetailsSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillDetailsSheet()">Close</button>
+        <button class="nav-button" onclick="closeBillDetailsSheet()">
+          Close
+        </button>
+
         <div class="sheet-title">Bill Details</div>
+
         <div style="width:54px"></div>
       </div>
 
@@ -4259,88 +4419,58 @@ function openBillDetailsSheet(billId) {
         <div class="bill-sheet-header bill-details-sheet-header">
           <div
             class="bill-sheet-logo"
-            style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
+            style="background:${
+              getBillBrand(bill.name)
+                ? "#fff"
+                : `var(--${category.color})`
+            }"
           >
             ${billVisual(bill, 52)}
           </div>
 
           <div class="bill-sheet-heading">
             <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
+
             <div class="bill-sheet-subtitle">
               ${formatCurrency(bill.amount)} · ${getPayCycleLabel(bill)}
             </div>
           </div>
         </div>
 
-        <div class="card">
-          ${detailRow('Due date', formatDate(bill.dueDate, 'full'))}
-          ${detailRow('Pay cycle', getPayCycleLabel(bill))}
-          ${detailRow('Category', category.label)}
-          ${detailRow('Repeats', bill.recurrence)}
-          ${bill.paymentMethod ? detailRow('Payment method', bill.paymentMethod) : ''}
-          ${detailRow('Autopay', bill.autopay ? 'On' : 'Off')}
-          ${bill.notes ? detailRow('Notes', bill.notes) : ''}
-          ${Array.isArray(bill.postponementHistory) && bill.postponementHistory.length ? `
-  <div class="section-header">Postponement History</div>
-  <div class="card" style="margin-bottom:18px">
-    ${bill.postponementHistory
-      .slice()
-      .reverse()
-      .map(item => `
-        <div class="form-row">
-          <div>
-            <div class="form-label">
-              ${formatDate(item.originalDueDate, 'short')}
-              → ${formatDate(item.postponedTo, 'short')}
-            </div>
-            <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:3px">
-              Postponed ${formatDate(item.postponedAt, 'full')}
-            </div>
-          </div>
-        </div>
-      `)
-      .join('')}
-  </div>
-` : ''}
-        </div>
-        ${payments.length > 0 ? `
-  <div class="section-header">Payment history</div>
+        <div class="card" style="margin-bottom:18px">
+          ${detailRow("Due date", formatDate(bill.dueDate, "full"))}
+          ${detailRow("Pay cycle", getPayCycleLabel(bill))}
+          ${detailRow("Category", category.label)}
+          ${detailRow("Repeats", bill.recurrence)}
 
-  <div class="card" style="margin-bottom:18px">
-    ${payments.map((payment) => `
-      <div class="bill-row">
-        ${svgIcon('checkCircle', 20)}
+          ${
+            bill.paymentMethod
+              ? detailRow("Payment method", bill.paymentMethod)
+              : ""
+          }
 
-        <div class="bill-info">
-          <div class="bill-name">
-            ${formatDate(payment.paidDate, 'full')}
-          </div>
+          ${detailRow("Autopay", bill.autopay ? "On" : "Off")}
+
+          ${
+            bill.notes
+              ? detailRow("Notes", escapeHtml(bill.notes))
+              : ""
+          }
         </div>
 
-        <div class="bill-amount text-paid">
-          ${formatCurrency(payment.amount)}
-        </div>
-      </div>
-    `).join('')}
-  </div>
-` : `
-  <div class="section-header">Payment history</div>
+        ${postponementHistoryHtml}
 
-  <div class="card" style="margin-bottom:18px">
-    <div class="settings-footer">
-      No payments recorded yet.
-    </div>
-  </div>
-`}
-        
+        ${paymentHistoryHtml}
       </div>
     </div>
   `;
 
-  const container = document.createElement('div');
-  container.id = 'billDetailsContainer';
+  const container = document.createElement("div");
+  container.id = "billDetailsContainer";
   container.innerHTML = sheetHtml;
+
   document.body.appendChild(container);
+  lockBackgroundScroll();
 }
 function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
