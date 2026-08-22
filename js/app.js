@@ -914,10 +914,38 @@ const next7DaysTotal = next7DaysBills.reduce(
   }))
   .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
   .slice(0, 5);
+<<<<<<< HEAD
+const unpaidThisMonthBills = monthBills.filter(
+  (bill) => !isPaidThisMonth(bill, now)
+);
+=======
 const unpaidThisMonthBills = monthBills.filter(
   bill => !isPaidThisMonth(bill, now)
 );
+>>>>>>> 8f9d5a68c279210146964d8243b99b292b59122e
 
+const totalDueThisMonth = unpaidThisMonthBills.reduce(
+  (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+  0
+);
+
+const totalPaidThisMonth = monthBills
+  .filter((bill) => isPaidThisMonth(bill, now))
+  .reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+const totalScheduledThisMonth =
+  totalDueThisMonth + totalPaidThisMonth;
+
+const monthPaymentProgress =
+  totalScheduledThisMonth > 0
+    ? Math.min(
+        (totalPaidThisMonth / totalScheduledThisMonth) * 100,
+        100
+      )
+    : 0;
 const totalDueThisMonth = unpaidThisMonthBills.reduce(
   (sum, bill) => sum + (parseFloat(bill.amount) || 0),
   0
