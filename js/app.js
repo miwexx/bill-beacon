@@ -962,40 +962,82 @@ function renderToday() {
 
     <div class="main-content fade-in">
       <div class="content-pad dashboard-content">
-       <button
+      <button
   class="dashboard-month-card"
   onclick="openDashboardStatusSheet('due')"
   aria-label="View bills still due this month"
 >
   <div class="dashboard-card-topline">
     <span>This Month</span>
+
     <span>
       ${paidThisMonthBills.length} of ${monthBills.length} bills paid
     </span>
   </div>
 
-  <div class="dashboard-month-amount">
-    ${Math.round(monthPaymentProgress)}%
+  <div
+    style="
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:var(--space-3);
+      margin-top:var(--space-4);
+    "
+  >
+    <div>
+      <div
+        style="
+          font-size:var(--text-xs);
+          color:var(--text-muted);
+          margin-bottom:4px;
+        "
+      >
+        Paid
+      </div>
+
+      <div
+        class="text-paid"
+        style="
+          font-size:var(--text-2xl);
+          font-weight:800;
+          line-height:1.1;
+        "
+      >
+        ${formatCurrency(totalPaidThisMonth)}
+      </div>
+    </div>
+
+    <div style="text-align:right">
+      <div
+        style="
+          font-size:var(--text-xs);
+          color:var(--text-muted);
+          margin-bottom:4px;
+        "
+      >
+        Remaining
+      </div>
+
+      <div
+        class="text-upcoming"
+        style="
+          font-size:var(--text-2xl);
+          font-weight:800;
+          line-height:1.1;
+        "
+      >
+        ${formatCurrency(totalDueThisMonth)}
+      </div>
+    </div>
   </div>
 
   <div
     class="dashboard-progress-track"
-    style="margin-top:var(--space-3)"
+    style="margin-top:var(--space-4)"
   >
     <div
       class="dashboard-progress-fill"
       style="width:${monthPaymentProgress}%"
     ></div>
-  </div>
-
-  <div class="dashboard-progress-meta">
-    <span class="text-paid">
-      ${formatCurrency(totalPaidThisMonth)} paid
-    </span>
-
-    <span>
-      ${formatCurrency(totalDueThisMonth)} remaining
-    </span>
   </div>
 
   <div class="dashboard-month-footer">
