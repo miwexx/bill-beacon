@@ -485,6 +485,103 @@ function getBillOccurrenceDate(bill, year, month) {
 
   return bill.dueDate;
 }
+function getOccurrenceKey(templateId, dueDate) {
+  const date = new Date(dueDate);
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${templateId}:${year}-${month}-${day}`;
+}
+
+function isRecurringBill(bill) {
+  return Boolean(bill && bill.recurrence && bill.recurrence !== "None");
+}
+
+function getRecurringTemplateId(bill) {
+  if (!bill) return null;
+
+  return bill.recurringTemplateId || bill.id;
+}
+
+function getOccurrenceDueDate(bill, year, month) {
+  if (!bill) return null;
+
+  if (bill.recurrence === "Monthly") {
+    return getMonthlyOccurrenceDate(bill, year, month);
+  }
+
+  return getBillOccurrenceDate(bill, year, month);
+}
+
+function createBillOccurrence(bill, year, month) {
+  if (!bill) return null;
+
+  const dueDate = getOccurrenceDueDate(bill, year, month);
+
+  if (!dueDate) return null;
+
+  const templateId = getRecurringTemplateId(bill);
+  const occurrenceKey = getOccurrenceKey(templateId, dueDate);
+
+  return {
+    id: occurrenceKey,
+    occurrenceKey,
+    templateId,
+    sourceBillId: bill.id,
+    name: bill.name,
+    amount: bill.amount,
+    category: bill.category,
+    dueDate,
+    recurrence: bill.recurrence,
+    paymentMethod: bill.paymentMethod || "",
+    paymentUrl: bill.paymentUrl || "",
+    autopay: Boolean(bill.autopay),
+    notes: bill.notes || "",
+    reminderOffsets: Array.isArray(bill.reminderOffsets)
+      ? [...bill.reminderOffsets]
+      : [],
+    isOccurrence: true
+  };
+}
+
+function getRecurringOccurrencesForMonth(referenceDate = new Date()) {
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+
+  return Store.getBills()
+    .filter(isRecurringBill)
+    .map((bill) => createBillOccurrence(bill, year, month))
+    .filter(Boolean);
+}
+
+function getRecurringOccurrencesForNextMonths(
+  startDate = new Date(),
+  monthCount = 3
+) {
+  const occurrences = [];
+  const seen = new Set();
+
+  for (let offset = 0; offset < monthCount; offset += 1) {
+    const monthDate = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth() + offset,
+      1
+    );
+
+    getRecurringOccurrencesForMonth(monthDate).forEach((occurrence) => {
+      if (seen.has(occurrence.occurrenceKey)) return;
+
+      seen.add(occurrence.occurrenceKey);
+      occurrences.push(occurrence);
+    });
+  }
+
+  return occurrences.sort(
+    (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+  );
+}
 function postponeBill(billId, newDueDate) {
   const bill = Store.getBill(billId);
 
