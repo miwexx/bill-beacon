@@ -4404,19 +4404,28 @@ function openBillDetailsSheet(billId) {
 ></div>
 
     <div
-  class="sheet bill-details-sheet show"
+  class="bill-details-sheet"
   id="billDetailsSheet"
   style="
     position:fixed;
-    inset:0;
-    width:100%;
-    max-width:none;
+    top:0;
+    right:0;
+    bottom:0;
+    left:0;
+    width:100vw;
     height:100dvh;
+    max-width:none;
     max-height:none;
+    margin:0;
+    padding:0;
+    border:0;
     border-radius:0;
+    background:var(--bg);
     transform:none;
     transition:none;
     z-index:1000;
+    overflow-y:auto;
+    overscroll-behavior:contain;
   "
 >
       <div class="sheet-handle"></div>
