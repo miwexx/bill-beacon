@@ -2355,7 +2355,7 @@ function openDashboardStatusSheet(status) {
                         class="bill-icon"
                         style="background:var(--${category.color}); color:white"
                       >
-                        ${billVisual(bill, 18)}
+                        ${billVisual(bill, 32)}
                       </div>
 
                       <div class="bill-info">
