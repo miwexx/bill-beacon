@@ -620,15 +620,43 @@ function getCalendarBillsForDay(dateString) {
 function isCalendarBillPaid(bill) {
   if (!bill) return false;
 
+  const payments = Store.getPayments().filter(
+    (payment) => payment.status !== "voided"
+  );
+
   if (!bill.isOccurrence) {
-    return isPaidThisMonth(bill);
+    return payments.some((payment) => {
+      return (
+        payment.billId === bill.id &&
+        isSameMonth(payment.paidDate, new Date(bill.dueDate))
+      );
+    });
   }
 
-  return Store.getPayments().some((payment) => {
+  const occurrenceDate = new Date(bill.dueDate);
+
+  const exactOccurrencePayment = payments.some((payment) => {
     return (
       payment.billId === bill.sourceBillId &&
       payment.paidForDueDate === bill.dueDate
     );
+  });
+
+  if (exactOccurrencePayment) {
+    return true;
+  }
+
+  /*
+   * Backward compatibility:
+   * Older payment records did not include paidForDueDate.
+   * Treat a legacy payment made in the same occurrence month
+   * as payment for that month’s recurring occurrence.
+   */
+  return payments.some((payment) => {
+    if (payment.billId !== bill.sourceBillId) return false;
+    if (payment.paidForDueDate) return false;
+
+    return isSameMonth(payment.paidDate, occurrenceDate);
   });
 }
 
