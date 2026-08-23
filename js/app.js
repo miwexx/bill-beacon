@@ -618,54 +618,11 @@ function getCalendarBillsForDay(dateString) {
 }
 
 function isCalendarBillPaid(bill) {
-  if (!bill) return false;
-
-  const payments = Store.getPayments().filter(
-    (payment) => payment.status !== "voided"
-  );
-
-  if (!bill.isOccurrence) {
-    return payments.some((payment) => {
-      return (
-        payment.billId === bill.id &&
-        isSameMonth(payment.paidDate, new Date(bill.dueDate))
-      );
-    });
-  }
-
-  const occurrenceDate = new Date(bill.dueDate);
-
-  const exactOccurrencePayment = payments.some((payment) => {
-    return (
-      payment.billId === bill.sourceBillId &&
-      payment.paidForDueDate === bill.dueDate
-    );
-  });
-
-  if (exactOccurrencePayment) {
-    return true;
-  }
-
-  /*
-   * Backward compatibility:
-   * Older payment records did not include paidForDueDate.
-   * Treat a legacy payment made in the same occurrence month
-   * as payment for that month’s recurring occurrence.
-   */
-  return payments.some((payment) => {
-    if (payment.billId !== bill.sourceBillId) return false;
-    if (payment.paidForDueDate) return false;
-
-    return isSameMonth(payment.paidDate, occurrenceDate);
-  });
+  return isOccurrencePaid(bill, new Date(bill.dueDate));
 }
 
 function getCalendarBillStatus(bill) {
-  if (isCalendarBillPaid(bill)) return "paid";
-
-  if (daysUntil(bill.dueDate) < 0) return "overdue";
-
-  return "upcoming";
+  return getOccurrenceStatus(bill, new Date(bill.dueDate));
 }
 function postponeBill(billId, newDueDate) {
   const bill = Store.getBill(billId);
@@ -829,18 +786,96 @@ function confirmPostponeBill(billId) {
   closePostponeBillSheet();
   render();
 }
+function getLocalDateKey(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getBillPaymentId(bill) {
+  if (!bill) return null;
+  return bill.isOccurrence ? bill.sourceBillId : bill.id;
+}
+
+function getBillOccurrenceDueDate(bill, referenceDate = new Date()) {
+  if (!bill) return null;
+
+  if (bill.isOccurrence) {
+    return bill.dueDate;
+  }
+
+  if (isRecurringBill(bill)) {
+    return getOccurrenceDueDate(
+      bill,
+      referenceDate.getFullYear(),
+      referenceDate.getMonth()
+    );
+  }
+
+  return bill.dueDate;
+}
+
+function getActivePaymentForOccurrence(bill, referenceDate = new Date()) {
+  const billId = getBillPaymentId(bill);
+  const occurrenceDueDate = getBillOccurrenceDueDate(bill, referenceDate);
+
+  if (!billId || !occurrenceDueDate) {
+    return null;
+  }
+
+  const dueDateKey = getLocalDateKey(occurrenceDueDate);
+
+  const payments = Store.getPaymentsForBill(billId)
+    .filter((payment) => payment.status !== "voided")
+    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
+
+  const exactPayment = payments.find((payment) => {
+    return (
+      payment.paidForDueDate &&
+      getLocalDateKey(payment.paidForDueDate) === dueDateKey
+    );
+  });
+
+  if (exactPayment) {
+    return exactPayment;
+  }
+
+  return (
+    payments.find((payment) => {
+      if (payment.paidForDueDate) return false;
+
+      return isSameMonth(payment.paidDate, new Date(occurrenceDueDate));
+    }) || null
+  );
+}
+
+function isOccurrencePaid(bill, referenceDate = new Date()) {
+  return Boolean(getActivePaymentForOccurrence(bill, referenceDate));
+}
+
+function getOccurrenceStatus(bill, referenceDate = new Date()) {
+  const occurrenceDueDate = getBillOccurrenceDueDate(bill, referenceDate);
+
+  if (!occurrenceDueDate) {
+    return "upcoming";
+  }
+
+  if (isOccurrencePaid(bill, referenceDate)) {
+    return "paid";
+  }
+
+  return daysUntil(occurrenceDueDate) < 0 ? "overdue" : "upcoming";
+}
 function getBillStatus(bill) {
-  const activePayment = getLatestActivePaymentForBill(bill.id);
-
-  if (activePayment) {
-    return 'paid';
-  }
-
-  if (daysUntil(bill.dueDate) < 0) {
-    return 'overdue';
-  }
-
-  return 'upcoming';
+  return getOccurrenceStatus(bill, new Date());
 }
 
 function isPaidThisCycle(bill) {
@@ -853,28 +888,44 @@ function getLatestActivePaymentForBill(billId) {
     .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))[0] || null;
 }
 function isPaidThisMonth(bill, referenceDate = new Date()) {
-  return Store.getPaymentsForBill(bill.id).some(payment => {
-    if (payment.status === 'voided') return false;
-    return isSameMonth(payment.paidDate, referenceDate);
-  });
+  return isOccurrencePaid(bill, referenceDate);
 }
 
 function markBillPaid(billId) {
   const bill = Store.getBill(billId);
-  if (!bill) return;
 
-  const existingActivePayment = Store.getPaymentsForBill(billId)
-    .find(payment => payment.status !== 'voided');
+  if (!bill) {
+    return;
+  }
 
-  if (existingActivePayment) return;
+  const today = new Date();
+
+  const dueDate = isRecurringBill(bill)
+    ? getOccurrenceDueDate(
+        bill,
+        today.getFullYear(),
+        today.getMonth()
+      )
+    : bill.dueDate;
+
+  const occurrenceBill = {
+    ...bill,
+    sourceBillId: bill.id,
+    dueDate,
+    isOccurrence: isRecurringBill(bill)
+  };
+
+  if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) {
+    return;
+  }
 
   Store.addPayment({
     id: uid(),
-    billId,
+    billId: bill.id,
     paidDate: new Date().toISOString(),
     amount: bill.amount,
-    paidForDueDate: bill.dueDate,
-    status: 'active',
+    paidForDueDate: dueDate,
+    status: "active",
     voidedAt: null
   });
 
@@ -882,28 +933,53 @@ function markBillPaid(billId) {
 }
 function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
-  if (!bill) return;
 
-  const payment = getLatestActivePaymentForBill(billId);
+  if (!bill) {
+    return;
+  }
+
+  const today = new Date();
+
+  const dueDate = isRecurringBill(bill)
+    ? getOccurrenceDueDate(
+        bill,
+        today.getFullYear(),
+        today.getMonth()
+      )
+    : bill.dueDate;
+
+  const occurrenceBill = {
+    ...bill,
+    sourceBillId: bill.id,
+    dueDate,
+    isOccurrence: isRecurringBill(bill)
+  };
+
+  const payment = getActivePaymentForOccurrence(
+    occurrenceBill,
+    new Date(dueDate)
+  );
 
   if (!payment) {
-    alert('This bill does not have an active payment to reverse.');
+    alert("This bill occurrence does not have an active payment to reverse.");
     return;
   }
 
   const confirmed = confirm(
-    `Mark "${bill.name}" as unpaid?\n\n` +
+    `Mark ${bill.name} as unpaid for ${formatDate(dueDate, "full")}? ` +
     `${formatCurrency(payment.amount)} will be added back to bills still due.`
   );
 
-  if (!confirmed) return;
+  if (!confirmed) {
+    return;
+  }
 
   Store.updatePayment(payment.id, {
-    status: 'voided',
+    status: "voided",
     voidedAt: new Date().toISOString()
   });
 
-  navigate('today');
+  render();
 }
 function svgIcon(name, size = 20) {
   const path = ICONS[name] || ICONS.doc;
@@ -2484,22 +2560,21 @@ window.markCalendarBillPaid = function (billId, dateString) {
     0
   ).toISOString();
 
-  const alreadyPaid = Store.getPayments().some((payment) => {
-    return (
-      payment.billId === billId &&
-      payment.status !== "voided" &&
-      payment.paidForDueDate === occurrenceDueDate
-    );
-  });
+  const occurrenceBill = {
+    ...bill,
+    sourceBillId: bill.id,
+    dueDate: occurrenceDueDate,
+    isOccurrence: true
+  };
 
-  if (alreadyPaid) {
+  if (isOccurrencePaid(occurrenceBill, new Date(occurrenceDueDate))) {
     alert("This bill occurrence is already marked as paid.");
     return;
   }
 
   Store.addPayment({
     id: uid(),
-    billId,
+    billId: bill.id,
     paidDate: new Date().toISOString(),
     amount: bill.amount,
     paidForDueDate: occurrenceDueDate,
