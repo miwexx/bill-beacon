@@ -617,8 +617,56 @@ function getCalendarBillsForDay(dateString) {
   });
 }
 
+function isCalendarBillPaid(bill) {
+  if (!bill) return false;
 
+  const payments = Store.getPayments().filter(
+    (payment) => payment.status !== "voided"
+  );
 
+  if (!bill.isOccurrence) {
+    return payments.some((payment) => {
+      return (
+        payment.billId === bill.id &&
+        isSameMonth(payment.paidDate, new Date(bill.dueDate))
+      );
+    });
+  }
+
+  const occurrenceDate = new Date(bill.dueDate);
+
+  const exactOccurrencePayment = payments.some((payment) => {
+    return (
+      payment.billId === bill.sourceBillId &&
+      payment.paidForDueDate === bill.dueDate
+    );
+  });
+
+  if (exactOccurrencePayment) {
+    return true;
+  }
+
+  /*
+   * Backward compatibility:
+   * Older payment records did not include paidForDueDate.
+   * Treat a legacy payment made in the same occurrence month
+   * as payment for that month’s recurring occurrence.
+   */
+  return payments.some((payment) => {
+    if (payment.billId !== bill.sourceBillId) return false;
+    if (payment.paidForDueDate) return false;
+
+    return isSameMonth(payment.paidDate, occurrenceDate);
+  });
+}
+
+function getCalendarBillStatus(bill) {
+  if (isCalendarBillPaid(bill)) return "paid";
+
+  if (daysUntil(bill.dueDate) < 0) return "overdue";
+
+  return "upcoming";
+}
 function postponeBill(billId, newDueDate) {
   const bill = Store.getBill(billId);
 
@@ -803,6 +851,12 @@ function getLatestActivePaymentForBill(billId) {
   return Store.getPaymentsForBill(billId)
     .filter(payment => payment.status !== 'voided')
     .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))[0] || null;
+}
+function isPaidThisMonth(bill, referenceDate = new Date()) {
+  return Store.getPaymentsForBill(bill.id).some(payment => {
+    if (payment.status === 'voided') return false;
+    return isSameMonth(payment.paidDate, referenceDate);
+  });
 }
 
 function markBillPaid(billId) {
