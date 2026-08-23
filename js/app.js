@@ -4666,7 +4666,9 @@ function billRow(bill, clickable = false) {
   const detailDueDate = bill.isOccurrence
     ? bill.dueDate
     : '';
-
+  const quickActionArgs = bill.isOccurrence
+    ? `'${detailBillId}', '${detailDueDate}'`
+    : `'${detailBillId}'`;
   const rowClick = clickable
     ? `onclick="navigate('detail', {
         id: '${detailBillId}',
@@ -4719,7 +4721,18 @@ function billRow(bill, clickable = false) {
           class="bill-more-button"
           aria-label="More options for ${escapeHtml(bill.name)}"
           title="More options"
-          onclick="event.stopPropagation();openBillQuickActions('${detailBillId}')"
+          onclick="
+  event.stopPropagation();
+  ${
+    bill.isOccurrence
+      ? `navigate('detail', {
+          id: '${detailBillId}',
+          occurrenceDueDate: '${detailDueDate}',
+          returnRoute: 'recurring'
+        })`
+      : `openBillQuickActions('${detailBillId}')`
+  }
+"
         >
           ${svgIcon('moreVertical', 22)}
         </button>
