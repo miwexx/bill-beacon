@@ -1802,175 +1802,37 @@ const monthBills =
 
 function renderRecurring() {
   const now = new Date();
-
-  const viewDate = routeParams.month
-    ? new Date(`${routeParams.month.slice(0, 10)}T12:00:00`)
-    : new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        1,
-        12,
-        0,
-        0
-      );
-
-  const viewYear = viewDate.getFullYear();
-  const viewMonth = viewDate.getMonth();
-
-  const selectedMonthStart = new Date(
-    viewYear,
-    viewMonth,
-    1,
-    12,
-    0,
-    0
-  );
-
-  const selectedMonthBills = getRecurringOccurrencesForMonth(viewDate)
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-  /*
-   * Count only unpaid bills from the immediately previous month.
-   * This keeps the Recurring tab clean and prevents old historical
-   * occurrences from creating a large backlog list.
-   */
-  const previousMonthDate = new Date(
-    viewYear,
-    viewMonth - 1,
-    1,
-    12,
-    0,
-    0
-  );
-
-  const previousMonthBills = getRecurringOccurrencesForMonth(
-    previousMonthDate
-  );
-
-  const carryoverCount = previousMonthBills.filter((bill) => {
-    return (
-      new Date(bill.dueDate) < selectedMonthStart &&
-      getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
-    );
-  }).length;
-
-  const selectedMonthLabel = formatDate(
-    selectedMonthStart.toISOString(),
-    "monthYear"
-  );
-
-  const selectedMonthSubtitle =
-    viewYear === now.getFullYear() && viewMonth === now.getMonth()
-      ? "Bills scheduled for this month"
-      : `Bills scheduled for ${selectedMonthLabel}`;
-
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let recurring = Store.getBills().filter(bill => bill.recurrence !== 'None');
+  let overdue = recurring.filter(bill => getBillStatus(bill) === 'overdue');
+  let upcoming = recurring.filter(bill => {
+    const dueDate = new Date(bill.dueDate);
+    return getBillStatus(bill) !== 'paid' && dueDate >= startOfToday;
+  });
+  const sortDue = (a, b) => new Date(a.dueDate) - new Date(b.dueDate);
+  overdue.sort(sortDue);
+  upcoming.sort(sortDue);
+  const visibleBills = [...overdue, ...upcoming];
   return `
-    <div class="nav-bar">
-      <div class="nav-bar-content">
-        <div class="nav-title">Recurring</div>
-
-        <button
-          class="nav-button"
-          onclick="openAddMenu()"
-          aria-label="Add a recurring bill"
-        >
-          ${svgIcon("plus", 18)}
-        </button>
-      </div>
-    </div>
-
+    <div class="nav-bar"><div class="nav-bar-content">
+      <div class="nav-title">Recurring</div>
+      <button class="nav-button" onclick="openAddMenu()" aria-label="Add a recurring bill">${svgIcon('plus', 18)}</button>
+    </div></div>
     <div class="main-content fade-in">
       <div class="content-pad recurring-content">
         ${renderCompactRecurringCalendar()}
-
-        ${
-          carryoverCount > 0
-            ? `
-              <div
-                class="card"
-                style="
-                  display:flex;
-                  align-items:center;
-                  gap:var(--space-2);
-                  margin:var(--space-4) 0 0;
-                  padding:var(--space-3) var(--space-4);
-                  border-color:color-mix(
-                    in srgb,
-                    var(--overdue) 38%,
-                    var(--border)
-                  );
-                "
-              >
-                <div style="color:var(--overdue)">
-                  ${svgIcon("warning", 18)}
-                </div>
-
-                <div style="flex:1">
-                  <div style="font-weight:800">
-                    ${carryoverCount}
-                    overdue bill${carryoverCount === 1 ? "" : "s"}
-                    from the previous month
-                  </div>
-
-                  <div
-                    style="
-                      font-size:var(--text-xs);
-                      color:var(--text-muted);
-                      margin-top:2px;
-                    "
-                  >
-                    They remain visible in the Dashboard overdue section.
-                  </div>
-                </div>
-              </div>
-            `
-            : ""
-        }
-
         <div class="recurring-list-heading">
-          <div>
-            <div class="section-header">
-              ${selectedMonthLabel} Bills
-            </div>
-
-            <div class="recurring-list-subtitle">
-              ${selectedMonthSubtitle}
-            </div>
-          </div>
-
-          <span class="recurring-count">
-            ${selectedMonthBills.length}
-          </span>
+          <div><div class="section-header">Upcoming</div><div class="recurring-list-subtitle">Your recurring bills coming next</div></div>
+          <span class="recurring-count">${visibleBills.length}</span>
         </div>
-
-        ${
-          selectedMonthBills.length
-            ? `
-              <div class="card recurring-bills-card">
-                ${selectedMonthBills
-                  .map((bill) => billRow(bill, true))
-                  .join("")}
-              </div>
-            `
-            : `
-              <div class="empty-state recurring-empty-state">
-                <div class="empty-state-icon">
-                  ${svgIcon("checkCircle", 48)}
-                </div>
-
-                <div class="empty-state-title">
-                  No bills scheduled
-                </div>
-
-                <div class="empty-state-text">
-                  There are no recurring bills scheduled for ${selectedMonthLabel}.
-                </div>
-              </div>
-            `
-        }
+        ${visibleBills.length ? `<div class="card recurring-bills-card">${visibleBills.map(bill => billRow(bill, true)).join('')}</div>` : `
+          <div class="empty-state recurring-empty-state">
+            <div class="empty-state-icon">${svgIcon('checkCircle', 48)}</div>
+            <div class="empty-state-title">Nothing upcoming</div>
+            <div class="empty-state-text">Your recurring bills are all caught up.</div>
+          </div>`}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderBills() {
