@@ -1808,12 +1808,12 @@ function renderRecurring() {
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <div class="nav-title">Recurring</div>
+        <div class="nav-title">Upcoming</div>
 
         <button
           class="nav-button"
           onclick="openAddMenu()"
-          aria-label="Add a recurring bill"
+          aria-label="Add A Bill"
         >
           ${svgIcon('plus', 18)}
         </button>
