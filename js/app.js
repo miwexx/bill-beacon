@@ -1802,37 +1802,208 @@ const monthBills =
 
 function renderRecurring() {
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let recurring = Store.getBills().filter(bill => bill.recurrence !== 'None');
-  let overdue = recurring.filter(bill => getBillStatus(bill) === 'overdue');
-  let upcoming = recurring.filter(bill => {
-    const dueDate = new Date(bill.dueDate);
-    return getBillStatus(bill) !== 'paid' && dueDate >= startOfToday;
+
+  const viewDate = routeParams.month
+    ? new Date(`${routeParams.month.slice(0, 10)}T12:00:00`)
+    : new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        1,
+        12,
+        0,
+        0
+      );
+
+  const viewYear = viewDate.getFullYear();
+  const viewMonth = viewDate.getMonth();
+
+  const selectedMonthStart = new Date(
+    viewYear,
+    viewMonth,
+    1,
+    12,
+    0,
+    0
+  );
+
+  const selectedMonthEnd = new Date(
+    viewYear,
+    viewMonth + 1,
+    0,
+    23,
+    59,
+    59
+  );
+
+  const selectedMonthBills = getRecurringOccurrencesForMonth(viewDate)
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  /*
+   * Build unpaid carryover occurrences month by month.
+   * We begin at the earliest recurring template start month and stop
+   * before the month currently shown in the compact calendar.
+   */
+  const recurringTemplates = Store.getBills().filter(isRecurringBill);
+
+  let earliestTemplateDate = null;
+
+  recurringTemplates.forEach((bill) => {
+    const templateDate = new Date(bill.dueDate);
+
+    if (
+      !Number.isNaN(templateDate.getTime()) &&
+      (!earliestTemplateDate || templateDate < earliestTemplateDate)
+    ) {
+      earliestTemplateDate = templateDate;
+    }
   });
-  const sortDue = (a, b) => new Date(a.dueDate) - new Date(b.dueDate);
-  overdue.sort(sortDue);
-  upcoming.sort(sortDue);
-  const visibleBills = [...overdue, ...upcoming];
+
+  const overdueCarryover = [];
+
+  if (earliestTemplateDate) {
+    let cursor = new Date(
+      earliestTemplateDate.getFullYear(),
+      earliestTemplateDate.getMonth(),
+      1,
+      12,
+      0,
+      0
+    );
+
+    while (cursor < selectedMonthStart) {
+      getRecurringOccurrencesForMonth(cursor).forEach((occurrence) => {
+        const occurrenceDate = new Date(occurrence.dueDate);
+
+        if (
+          occurrenceDate < selectedMonthStart &&
+          getOccurrenceStatus(
+            occurrence,
+            new Date(occurrence.dueDate)
+          ) === "overdue"
+        ) {
+          overdueCarryover.push(occurrence);
+        }
+      });
+
+      cursor = new Date(
+        cursor.getFullYear(),
+        cursor.getMonth() + 1,
+        1,
+        12,
+        0,
+        0
+      );
+    }
+  }
+
+  overdueCarryover.sort(
+    (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+  );
+
+  const selectedMonthLabel = formatDate(
+    selectedMonthStart.toISOString(),
+    "monthYear"
+  );
+
+  const selectedMonthSubtitle =
+    viewYear === now.getFullYear() && viewMonth === now.getMonth()
+      ? "Bills scheduled for this month"
+      : `Bills scheduled for ${selectedMonthLabel}`;
+
+  const totalVisibleBills =
+    overdueCarryover.length + selectedMonthBills.length;
+
   return `
-    <div class="nav-bar"><div class="nav-bar-content">
-      <div class="nav-title">Recurring</div>
-      <button class="nav-button" onclick="openAddMenu()" aria-label="Add a recurring bill">${svgIcon('plus', 18)}</button>
-    </div></div>
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <div class="nav-title">Recurring</div>
+
+        <button
+          class="nav-button"
+          onclick="openAddMenu()"
+          aria-label="Add a recurring bill"
+        >
+          ${svgIcon("plus", 18)}
+        </button>
+      </div>
+    </div>
+
     <div class="main-content fade-in">
       <div class="content-pad recurring-content">
         ${renderCompactRecurringCalendar()}
+
+        ${
+          overdueCarryover.length
+            ? `
+              <div class="recurring-list-heading">
+                <div>
+                  <div class="section-header">
+                    Overdue from Earlier Months
+                  </div>
+
+                  <div class="recurring-list-subtitle">
+                    These bill occurrences still need attention.
+                  </div>
+                </div>
+
+                <span class="recurring-count">
+                  ${overdueCarryover.length}
+                </span>
+              </div>
+
+              <div class="card recurring-bills-card">
+                ${overdueCarryover
+                  .map((bill) => billRow(bill, true))
+                  .join("")}
+              </div>
+            `
+            : ""
+        }
+
         <div class="recurring-list-heading">
-          <div><div class="section-header">Upcoming</div><div class="recurring-list-subtitle">Your recurring bills coming next</div></div>
-          <span class="recurring-count">${visibleBills.length}</span>
+          <div>
+            <div class="section-header">
+              ${selectedMonthLabel} Bills
+            </div>
+
+            <div class="recurring-list-subtitle">
+              ${selectedMonthSubtitle}
+            </div>
+          </div>
+
+          <span class="recurring-count">
+            ${selectedMonthBills.length}
+          </span>
         </div>
-        ${visibleBills.length ? `<div class="card recurring-bills-card">${visibleBills.map(bill => billRow(bill, true)).join('')}</div>` : `
-          <div class="empty-state recurring-empty-state">
-            <div class="empty-state-icon">${svgIcon('checkCircle', 48)}</div>
-            <div class="empty-state-title">Nothing upcoming</div>
-            <div class="empty-state-text">Your recurring bills are all caught up.</div>
-          </div>`}
+
+        ${
+          selectedMonthBills.length
+            ? `
+              <div class="card recurring-bills-card">
+                ${selectedMonthBills
+                  .map((bill) => billRow(bill, true))
+                  .join("")}
+              </div>
+            `
+            : `
+              <div class="empty-state recurring-empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon("checkCircle", 48)}
+                </div>
+
+                <div class="empty-state-title">
+                  No bills scheduled
+                </div>
+
+                <div class="empty-state-text">
+                  There are no recurring bills scheduled for ${selectedMonthLabel}.
+                </div>
+              </div>
+            `
+        }
       </div>
-    </div>`;
+    </div>
+  `;
 }
 
 function renderBills() {
