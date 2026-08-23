@@ -1519,10 +1519,10 @@ function renderToday() {
 
                       return `
                         <button
-                          class="upcoming-bill-card"
                           onclick="navigate('detail', {
   id: '${getSourceBillId(bill)}',
-  occurrenceDueDate: '${bill.dueDate}'
+  occurrenceDueDate: '${bill.dueDate}',
+  returnRoute: 'today'
 })"
                           aria-label="View ${escapeHtml(bill.name)} details"
                         >
@@ -2469,8 +2469,14 @@ window.openCalendarDay = function (dateString) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeCalendarDay()">Close</button>
-        <div class="sheet-title">${formatDate(dateString, "full")}</div>
+        <button class="nav-button" onclick="closeCalendarDay()">
+          Close
+        </button>
+
+        <div class="sheet-title">
+          ${formatDate(dateString, "full")}
+        </div>
+
         <div style="width:54px"></div>
       </div>
 
@@ -2482,7 +2488,7 @@ window.openCalendarDay = function (dateString) {
                 style="
                   font-size:var(--text-xs);
                   color:var(--text-muted);
-                  margin-top:2px
+                  margin-top:2px;
                 "
               >
                 ${billsForDay.length}
@@ -2494,7 +2500,7 @@ window.openCalendarDay = function (dateString) {
               style="
                 margin-left:auto;
                 font-size:var(--text-lg);
-                font-weight:800
+                font-weight:800;
               "
             >
               ${formatCurrency(dayTotal)}
@@ -2531,7 +2537,11 @@ window.openCalendarDay = function (dateString) {
                     return `
                       <div class="bill-row">
                         <button
-                          onclick="closeCalendarDay();navigate('detail',{id:'${sourceBillId}',occurrenceDueDate:'${bill.dueDate}'})"
+                          onclick="closeCalendarDay();navigate('detail',{
+                            id:'${sourceBillId}',
+                            occurrenceDueDate:'${bill.dueDate}',
+                            returnRoute:'recurring'
+                          })"
                           style="display:contents;text-align:left"
                           aria-label="View ${escapeHtml(bill.name)}"
                         >
@@ -2539,7 +2549,7 @@ window.openCalendarDay = function (dateString) {
                             class="bill-icon"
                             style="
                               background:var(--${category.color});
-                              color:white
+                              color:white;
                             "
                           >
                             ${billVisual(bill, 32)}
@@ -2615,7 +2625,7 @@ window.openCalendarDay = function (dateString) {
                   Add Bill
                 </button>
               </div>
-            ` 
+            `
         }
       </div>
     </div>
@@ -4134,7 +4144,7 @@ function renderBillDetail() {
   }
 
   const occurrenceDueDate = routeParams.occurrenceDueDate || null;
-
+const returnRoute = routeParams.returnRoute || null;
   const detailBill = occurrenceDueDate
     ? {
         ...bill,
@@ -4162,9 +4172,21 @@ const status = payment
   const sourceBillId = bill.id;
   const isCalendarOccurrence = Boolean(occurrenceDueDate);
 
-  const backAction = isCalendarOccurrence
-    ? `navigate('recurring',{month:'${detailBill.dueDate}'})`
-    : `navigate('bills')`;
+  const backRoute = returnRoute || (
+  isCalendarOccurrence ? 'recurring' : 'bills'
+);
+
+const backParams = backRoute === 'recurring' && isCalendarOccurrence
+  ? `{ month: '${detailBill.dueDate}' }`
+  : '{}';
+
+const backAction = `navigate('${backRoute}', ${backParams})`;
+
+const backLabel = backRoute === 'today'
+  ? 'Dashboard'
+  : backRoute === 'recurring'
+    ? 'Recurring'
+    : 'Bills';
 
   const paymentAction = !payment
     ? `
@@ -4232,7 +4254,7 @@ const status = payment
       <div class="nav-bar-content">
         <button class="nav-button" onclick="${backAction}">
           ${svgIcon("chevronLeft", 22)}
-          ${isCalendarOccurrence ? "Recurring" : "Bills"}
+          ${backLabel}
         </button>
 
         <button class="nav-button" onclick="openBillForm('${sourceBillId}')">
