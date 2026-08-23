@@ -5756,23 +5756,44 @@ function saveBill() {
   alert('Please enter a bill name');
   return;
 }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert('Please enter an amount greater than 0.');
+    return;
+  }
 
+  const recurrence = document.getElementById('billRecurrence').value;
+  const selectedDueDay = Number(
+    document.getElementById('billDueDay')?.value
+  );
 const paymentUrlInput = document.getElementById('paymentUrl');
 let paymentUrl = paymentUrlInput ? paymentUrlInput.value.trim() : '';
 
 
-const data = {
+  const data = {
     name,
     amount: amount.toString(),
-    dueDate: new Date(document.getElementById('billDueDate').value).toISOString(),
+    dueDate: dateFromInput(
+      document.getElementById('billDueDate').value
+    ),
+    dueDay:
+      recurrence === 'Monthly' &&
+      Number.isInteger(selectedDueDay) &&
+      selectedDueDay >= 1 &&
+      selectedDueDay <= 31
+        ? selectedDueDay
+        : new Date(
+            document.getElementById('billDueDate').value + 'T12:00:00'
+          ).getDate(),
     category: document.getElementById('billCategory').value,
-    recurrence: document.getElementById('billRecurrence').value,
+    recurrence,
     payCycle: document.getElementById('billPayCycle').value,
     paymentMethod: document.getElementById('billPaymentMethod').value,
     paymentUrl: document.getElementById('paymentUrl')?.value.trim() || '',
     autopay: document.getElementById('billAutopay').checked,
     notes: document.getElementById('billNotes').value.trim(),
-    reminderOffsets: Array.from(document.querySelectorAll('.reminder-toggle:checked')).map(cb => parseInt(cb.dataset.days)),
+    reminderOffsets: Array.from(
+      document.querySelectorAll('.reminder-toggle:checked')
+    ).map(cb => parseInt(cb.dataset.days, 10))
   };
 
   if (editingBillId) {
