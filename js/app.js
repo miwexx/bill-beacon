@@ -981,6 +981,91 @@ function markBillUnpaid(billId) {
 
   render();
 }
+function confirmMarkPaidOccurrence(billId, dueDate) {
+  const bill = Store.getBill(billId);
+
+  if (!bill) {
+    alert("Bill not found.");
+    return;
+  }
+
+  const confirmed = confirm(
+    `Mark ${bill.name} as paid for ${formatDate(dueDate, "full")}?\n\n` +
+    `${formatCurrency(bill.amount)} will be recorded for this occurrence.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const occurrenceBill = {
+    ...bill,
+    id: getOccurrenceKey(bill.id, dueDate),
+    sourceBillId: bill.id,
+    dueDate,
+    isOccurrence: true
+  };
+
+  if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) {
+    alert("This occurrence is already marked as paid.");
+    return;
+  }
+
+  Store.addPayment({
+    id: uid(),
+    billId: bill.id,
+    paidDate: new Date().toISOString(),
+    amount: bill.amount,
+    paidForDueDate: dueDate,
+    status: "active",
+    voidedAt: null
+  });
+
+  render();
+}
+
+function markBillOccurrenceUnpaid(billId, dueDate) {
+  const bill = Store.getBill(billId);
+
+  if (!bill) {
+    alert("Bill not found.");
+    return;
+  }
+
+  const occurrenceBill = {
+    ...bill,
+    id: getOccurrenceKey(bill.id, dueDate),
+    sourceBillId: bill.id,
+    dueDate,
+    isOccurrence: true
+  };
+
+  const payment = getActivePaymentForOccurrence(
+    occurrenceBill,
+    new Date(dueDate)
+  );
+
+  if (!payment) {
+    alert("This occurrence does not have an active payment to reverse.");
+    return;
+  }
+
+  const confirmed = confirm(
+    `Mark ${bill.name} as unpaid for ${formatDate(dueDate, "full")}?\n\n` +
+    `${formatCurrency(payment.amount)} will be added back to bills due.`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  Store.updatePayment(payment.id, {
+    status: "voided",
+    voidedAt: new Date().toISOString()
+  });
+
+  render();
+}
 function svgIcon(name, size = 20) {
   const path = ICONS[name] || ICONS.doc;
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="fill:currentColor">${path}</svg>`;
@@ -4036,22 +4121,111 @@ function renderBillDetail() {
   const bill = Store.getBill(routeParams.id);
 
   if (!bill) {
-    navigate('bills');
-    return '';
+    navigate("bills");
+    return "";
   }
 
-  const status = getBillStatus(bill);
+  const occurrenceDueDate = routeParams.occurrenceDueDate || null;
+
+  const detailBill = occurrenceDueDate
+    ? {
+        ...bill,
+        id: getOccurrenceKey(bill.id, occurrenceDueDate),
+        sourceBillId: bill.id,
+        dueDate: occurrenceDueDate,
+        isOccurrence: true
+      }
+    : {
+        ...bill,
+        dueDate: getBillOccurrenceDueDate(bill, new Date()),
+        isOccurrence: isRecurringBill(bill)
+      };
+
+  const referenceDate = new Date(detailBill.dueDate);
+  const status = getOccurrenceStatus(detailBill, referenceDate);
+  const payment = getActivePaymentForOccurrence(
+    detailBill,
+    referenceDate
+  );
+
   const cat = getCategory(bill.category);
-  const payments = Store.getPaymentsForBill(bill.id);
+  const sourceBillId = bill.id;
+  const isCalendarOccurrence = Boolean(occurrenceDueDate);
+
+  const backAction = isCalendarOccurrence
+    ? `navigate('recurring',{month:'${detailBill.dueDate}'})`
+    : `navigate('bills')`;
+
+  const paymentAction = !payment
+    ? `
+      <div
+        style="
+          display:grid;
+          grid-template-columns:1fr 1fr;
+          gap:var(--space-2);
+          margin-top:var(--space-4);
+        "
+      >
+        <button
+          class="btn-primary"
+          style="margin:0;min-width:0;padding-left:12px;padding-right:12px"
+          onclick="confirmMarkPaidOccurrence(
+            '${sourceBillId}',
+            '${detailBill.dueDate}'
+          )"
+        >
+          ${svgIcon("checkCircle", 18)}
+          Mark as Paid
+        </button>
+
+        ${
+          isCalendarOccurrence
+            ? `
+              <button
+                class="bb-outline-pill"
+                style="width:100%;min-width:0;margin:0;padding:0 12px"
+                onclick="alert('Postponing one recurring occurrence will be added next. It is not available yet because it must not change the recurring template.')"
+              >
+                ${svgIcon("calendar", 18)}
+                <span>Postpone</span>
+              </button>
+            `
+            : `
+              <button
+                class="bb-outline-pill"
+                style="width:100%;min-width:0;margin:0;padding:0 12px"
+                onclick="openPostponeBillSheet('${sourceBillId}')"
+              >
+                ${svgIcon("calendar", 18)}
+                <span>Postpone</span>
+              </button>
+            `
+        }
+      </div>
+    `
+    : `
+      <button
+        class="bb-outline-pill"
+        style="width:100%;min-height:46px;margin-top:var(--space-4);"
+        onclick="markBillOccurrenceUnpaid(
+          '${sourceBillId}',
+          '${detailBill.dueDate}'
+        )"
+      >
+        ${svgIcon("close", 18)}
+        <span>Mark as Unpaid</span>
+      </button>
+    `;
 
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <button class="nav-button" onclick="navigate('bills')">
-          ${svgIcon('chevronLeft', 22)} Bills
+        <button class="nav-button" onclick="${backAction}">
+          ${svgIcon("chevronLeft", 22)}
+          ${isCalendarOccurrence ? "Recurring" : "Bills"}
         </button>
 
-        <button class="nav-button" onclick="openBillForm('${bill.id}')">
+        <button class="nav-button" onclick="openBillForm('${sourceBillId}')">
           Edit
         </button>
       </div>
@@ -4059,7 +4233,6 @@ function renderBillDetail() {
 
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
-
         <div class="detail-header">
           <div
             style="
@@ -4071,14 +4244,20 @@ function renderBillDetail() {
               overflow:hidden;
               border-radius:14px;
               margin:0 auto var(--space-2);
-              background:${getBillBrand(bill.name) ? 'white' : `var(--${cat.color})`};
-              color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
+              background:${
+                getBillBrand(bill.name)
+                  ? "white"
+                  : `var(--${cat.color})`
+              };
+              color:${
+                getBillBrand(bill.name) ? "#1e1e2e" : "white"
+              };
             "
           >
             ${billVisual(bill, 46)}
           </div>
 
-          <div style="flex:1; min-width:0; margin-left:12px;">
+          <div style="flex:1;min-width:0;margin-left:12px;">
             <div
               style="
                 font-size:var(--text-xl);
@@ -4110,89 +4289,84 @@ function renderBillDetail() {
             <span
               class="status-pill"
               style="
-                background:var(--${status === 'paid'
-                  ? 'paid-bg'
-                  : status === 'overdue'
-                    ? 'overdue-bg'
-                    : 'upcoming-bg'});
-                color:var(--${status === 'paid'
-                  ? 'paid'
-                  : status === 'overdue'
-                    ? 'overdue'
-                    : 'upcoming'});
+                background:var(--${
+                  status === "paid"
+                    ? "paid-bg"
+                    : status === "overdue"
+                      ? "overdue-bg"
+                      : "upcoming-bg"
+                });
+                color:var(--${
+                  status === "paid"
+                    ? "paid"
+                    : status === "overdue"
+                      ? "overdue"
+                      : "upcoming"
+                });
               "
             >
-              ${status === 'paid'
-                ? svgIcon('checkCircle', 12)
-                : status === 'overdue'
-                  ? svgIcon('warning', 12)
-                  : svgIcon('clock', 12)}
+              ${
+                status === "paid"
+                  ? svgIcon("checkCircle", 12)
+                  : status === "overdue"
+                    ? svgIcon("warning", 12)
+                    : svgIcon("clock", 12)
+              }
 
-              ${status === 'paid'
-                ? 'Paid'
-                : relativeDue(bill.dueDate).charAt(0).toUpperCase() +
-                  relativeDue(bill.dueDate).slice(1)}
+              ${
+                status === "paid"
+                  ? "Paid"
+                  : relativeDue(detailBill.dueDate)
+                      .charAt(0)
+                      .toUpperCase() +
+                    relativeDue(detailBill.dueDate).slice(1)
+              }
             </span>
           </div>
+
+          ${
+            isCalendarOccurrence
+              ? `
+                <div
+                  style="
+                    width:100%;
+                    margin-top:var(--space-2);
+                    font-size:var(--text-sm);
+                    color:var(--text-muted);
+                  "
+                >
+                  Occurrence due ${formatDate(detailBill.dueDate, "full")}
+                </div>
+              `
+              : ""
+          }
         </div>
 
         <div>
-          ${safePaymentUrl(bill.paymentUrl) ? `
-            <button
-              class="btn-primary"
-              style="width:100%; margin-top:var(--space-4);"
-              onclick="openPaymentPage('${bill.id}')"
-            >
-              Make a Payment
-            </button>
-          ` : `
-            <button
-              class="btn-secondary"
-              style="width:100%; margin-top:var(--space-4);"
-              onclick="openPaymentLinkPopup('${bill.id}')"
-            >
-              Add Payment Link
-            </button>
-          `}
+          ${
+            safePaymentUrl(bill.paymentUrl)
+              ? `
+                <button
+                  class="btn-primary"
+                  style="width:100%;margin-top:var(--space-4);"
+                  onclick="openPaymentPage('${sourceBillId}')"
+                >
+                  Make a Payment
+                </button>
+              `
+              : `
+                <button
+                  class="btn-secondary"
+                  style="width:100%;margin-top:var(--space-4);"
+                  onclick="openPaymentLinkPopup('${sourceBillId}')"
+                >
+                  Add Payment Link
+                </button>
+              `
+          }
         </div>
 
-        ${!isPaidThisMonth(bill) ? `
-          <div
-            style="
-              display:grid;
-              grid-template-columns:1fr 1fr;
-              gap:var(--space-2);
-              margin-top:var(--space-4);
-            "
-          >
-            <button
-              class="btn-primary"
-              style="margin:0; min-width:0; padding-left:12px; padding-right:12px"
-              onclick="confirmMarkPaid('${bill.id}')"
-            >
-              ${svgIcon('checkCircle', 18)}
-              Mark as Paid
-            </button>
-
-            <button
-              class="bb-outline-pill"
-              style="width:100%; min-width:0; margin:0; padding:0 12px"
-              onclick="openPostponeBillSheet('${bill.id}')"
-            >
-              ${svgIcon('calendar', 18)}
-              <span>Postpone</span>
-            </button>
-          </div>
-        ` : `
-          <button
-            class="bb-outline-pill"
-            style="width:100%; min-height:46px; margin-top:var(--space-4);"
-            onclick="markBillUnpaid('${bill.id}')"
-          >
-            ${svgIcon('close', 18)}
-            <span>Mark as Unpaid</span>
-          </button>
-        `}
+        ${paymentAction}
 
         <button
           type="button"
@@ -4202,13 +4376,14 @@ function renderBillDetail() {
             min-height:46px;
             margin-top:var(--space-3);
           "
-          onclick="openBillDetailsSheet('${bill.id}')"
+          onclick="openBillDetailsSheet('${sourceBillId}')"
         >
-          <span class="pill-icon">${svgIcon('doc', 20)}</span>
+          <span class="pill-icon">${svgIcon("doc", 20)}</span>
           <span>Show Details</span>
-          <span class="pill-chevron">${svgIcon('chevronRight', 18)}</span>
+          <span class="pill-chevron">
+            ${svgIcon("chevronRight", 18)}
+          </span>
         </button>
-
       </div>
     </div>
   `;
