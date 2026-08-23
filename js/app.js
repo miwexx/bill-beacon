@@ -720,7 +720,7 @@ function getCalendarBillsForMonth(referenceDate = new Date()) {
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
 
-function getCalendarBillsForDay(dateString) {
+function getCalendarBillsForDay(dateString) { 
   const selectedDate = new Date(dateString);
 
   if (Number.isNaN(selectedDate.getTime())) return [];
