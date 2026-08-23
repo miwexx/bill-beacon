@@ -616,29 +616,41 @@ function getCalendarBillsForDay(dateString) {
     );
   });
 }
+function getLocalDateKey(value) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
 
 function isCalendarBillPaid(bill) {
   if (!bill) return false;
 
-  const payments = Store.getPayments().filter(
-    (payment) => payment.status !== "voided"
-  );
-
-  if (!bill.isOccurrence) {
-    return payments.some((payment) => {
-      return (
-        payment.billId === bill.id &&
-        isSameMonth(payment.paidDate, new Date(bill.dueDate))
-      );
-    });
-  }
-
+  const billId = bill.isOccurrence ? bill.sourceBillId : bill.id;
   const occurrenceDate = new Date(bill.dueDate);
 
+  if (!billId || Number.isNaN(occurrenceDate.getTime())) {
+    return false;
+  }
+
+  const occurrenceDateKey = getLocalDateKey(occurrenceDate);
+
+  const payments = Store.getPayments().filter((payment) => {
+    return payment.billId === billId && payment.status !== "voided";
+  });
+
   const exactOccurrencePayment = payments.some((payment) => {
+    if (!payment.paidForDueDate) return false;
+
     return (
-      payment.billId === bill.sourceBillId &&
-      payment.paidForDueDate === bill.dueDate
+      getLocalDateKey(payment.paidForDueDate) === occurrenceDateKey
     );
   });
 
@@ -647,13 +659,12 @@ function isCalendarBillPaid(bill) {
   }
 
   /*
-   * Backward compatibility:
-   * Older payment records did not include paidForDueDate.
-   * Treat a legacy payment made in the same occurrence month
-   * as payment for that month’s recurring occurrence.
+   * Legacy payment records have no paidForDueDate.
+   * They count only for a matching due-date month. This lets
+   * existing current-month payments remain Paid without allowing
+   * an August payment to mark September as paid.
    */
   return payments.some((payment) => {
-    if (payment.billId !== bill.sourceBillId) return false;
     if (payment.paidForDueDate) return false;
 
     return isSameMonth(payment.paidDate, occurrenceDate);
@@ -661,12 +672,63 @@ function isCalendarBillPaid(bill) {
 }
 
 function getCalendarBillStatus(bill) {
-  if (isCalendarBillPaid(bill)) return "paid";
+  if (isCalendarBillPaid(bill)) {
+    return "paid";
+  }
 
-  if (daysUntil(bill.dueDate) < 0) return "overdue";
+  const dueDate = new Date(bill.dueDate);
 
-  return "upcoming";
+  if (Number.isNaN(dueDate.getTime())) {
+    return "upcoming";
+  }
+
+  const today = new Date();
+
+  const dueDay = new Date(
+    dueDate.getFullYear(),
+    dueDate.getMonth(),
+    dueDate.getDate()
+  );
+
+  const todayDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  return dueDay < todayDay ? "overdue" : "upcoming";
 }
+
+function isPaidThisMonth(bill, referenceDate = new Date()) {
+  if (!bill) return false;
+
+  const billId = bill.isOccurrence ? bill.sourceBillId : bill.id;
+  const occurrenceDate = bill.isOccurrence
+    ? new Date(bill.dueDate)
+    : new Date(referenceDate);
+
+  if (!billId || Number.isNaN(occurrenceDate.getTime())) {
+    return false;
+  }
+
+  const occurrenceDateKey = getLocalDateKey(occurrenceDate);
+
+  const payments = Store.getPayments().filter((payment) => {
+    return payment.billId === billId && payment.status !== "voided";
+  });
+
+  return payments.some((payment) => {
+    if (payment.paidForDueDate) {
+      return (
+        getLocalDateKey(payment.paidForDueDate) === occurrenceDateKey
+      );
+    }
+
+    return isSameMonth(payment.paidDate, occurrenceDate);
+  });
+}
+
+
 function postponeBill(billId, newDueDate) {
   const bill = Store.getBill(billId);
 
@@ -851,12 +913,6 @@ function getLatestActivePaymentForBill(billId) {
   return Store.getPaymentsForBill(billId)
     .filter(payment => payment.status !== 'voided')
     .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))[0] || null;
-}
-function isPaidThisMonth(bill, referenceDate = new Date()) {
-  return Store.getPaymentsForBill(bill.id).some(payment => {
-    if (payment.status === 'voided') return false;
-    return isSameMonth(payment.paidDate, referenceDate);
-  });
 }
 
 function markBillPaid(billId) {
