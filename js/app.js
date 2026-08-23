@@ -1936,37 +1936,98 @@ const monthBills =
 
 function renderRecurring() {
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let recurring = Store.getBills().filter(bill => bill.recurrence !== 'None');
-  let overdue = recurring.filter(bill => getBillStatus(bill) === 'overdue');
-  let upcoming = recurring.filter(bill => {
-    const dueDate = new Date(bill.dueDate);
-    return getBillStatus(bill) !== 'paid' && dueDate >= startOfToday;
-  });
-  const sortDue = (a, b) => new Date(a.dueDate) - new Date(b.dueDate);
-  overdue.sort(sortDue);
-  upcoming.sort(sortDue);
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    12,
+    0,
+    0
+  );
+
+  // Use generated occurrences for the current month and next two months.
+  // This keeps the list aligned with the recurring calendar.
+  const recurringOccurrences = getRecurringOccurrencesForNextMonths(now, 3);
+
+  const overdue = recurringOccurrences
+    .filter(bill => {
+      const dueDate = new Date(bill.dueDate);
+
+      return (
+        getOccurrenceStatus(bill, dueDate) === 'overdue' &&
+        dueDate < startOfToday
+      );
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const upcoming = recurringOccurrences
+    .filter(bill => {
+      const dueDate = new Date(bill.dueDate);
+
+      return (
+        getOccurrenceStatus(bill, dueDate) !== 'paid' &&
+        dueDate >= startOfToday
+      );
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
   const visibleBills = [...overdue, ...upcoming];
+
   return `
-    <div class="nav-bar"><div class="nav-bar-content">
-      <div class="nav-title">Recurring</div>
-      <button class="nav-button" onclick="openAddMenu()" aria-label="Add a recurring bill">${svgIcon('plus', 18)}</button>
-    </div></div>
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <div class="nav-title">Recurring</div>
+
+        <button
+          class="nav-button"
+          onclick="openAddMenu()"
+          aria-label="Add a recurring bill"
+        >
+          ${svgIcon('plus', 18)}
+        </button>
+      </div>
+    </div>
+
     <div class="main-content fade-in">
       <div class="content-pad recurring-content">
         ${renderCompactRecurringCalendar()}
+
         <div class="recurring-list-heading">
-          <div><div class="section-header">Upcoming</div><div class="recurring-list-subtitle">Your recurring bills coming next</div></div>
+          <div>
+            <div class="section-header">Upcoming</div>
+
+            <div class="recurring-list-subtitle">
+              Your recurring bills coming next
+            </div>
+          </div>
+
           <span class="recurring-count">${visibleBills.length}</span>
         </div>
-        ${visibleBills.length ? `<div class="card recurring-bills-card">${visibleBills.map(bill => billRow(bill, true)).join('')}</div>` : `
-          <div class="empty-state recurring-empty-state">
-            <div class="empty-state-icon">${svgIcon('checkCircle', 48)}</div>
-            <div class="empty-state-title">Nothing upcoming</div>
-            <div class="empty-state-text">Your recurring bills are all caught up.</div>
-          </div>`}
+
+        ${
+          visibleBills.length
+            ? `
+              <div class="card recurring-bills-card">
+                ${visibleBills.map(bill => billRow(bill, true)).join('')}
+              </div>
+            `
+            : `
+              <div class="empty-state recurring-empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon('checkCircle', 48)}
+                </div>
+
+                <div class="empty-state-title">Nothing upcoming</div>
+
+                <div class="empty-state-text">
+                  Your recurring bills are all caught up.
+                </div>
+              </div>
+            `
+        }
       </div>
-    </div>`;
+    </div>
+  `;
 }
 
 function renderBills() {
@@ -2815,20 +2876,11 @@ if (!confirmed) {
     voidedAt: null
   });
 
-    closeCalendarDay();
+  closeCalendarDay();
 
-  const calendarMonth = new Date(
-    dueDate.getFullYear(),
-    dueDate.getMonth(),
-    1,
-    12,
-    0,
-    0
-  ).toISOString();
-
-  setTimeout(() => {
-    navigate('calendar', { month: calendarMonth });
-  }, 320);
+setTimeout(() => {
+  navigate("recurring");
+}, 320);
 };
 function closeDashboardStatusSheet() {
   document.getElementById('dashboardStatusContainer')?.remove();
