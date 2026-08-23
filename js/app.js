@@ -1429,7 +1429,8 @@ function renderToday() {
                 }"
                 onclick="navigate('detail', {
   id: '${getSourceBillId(nextDueBill)}',
-  occurrenceDueDate: '${nextDueBill.dueDate}'
+  occurrenceDueDate: '${nextDueBill.dueDate}',
+  returnRoute: 'today'
 })"
                 aria-label="View next due bill"
               >
