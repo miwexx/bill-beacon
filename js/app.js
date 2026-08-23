@@ -1936,20 +1936,8 @@ const monthBills =
 
 function renderRecurring() {
   const now = new Date();
+
   const startOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    12,
-    0,
-    0
-  );
-
-  // Use generated occurrences for the current month and next two months.
-  // This keeps the list aligned with the recurring calendar.
-  const recurringOccurrences = getRecurringOccurrencesForNextMonths(now, 3);
-
-    const startOfToday = new Date(
     now.getFullYear(),
     now.getMonth(),
     now.getDate(),
@@ -1967,23 +1955,7 @@ function renderRecurring() {
     0
   );
 
-  const startOfLater = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 6,
-    12,
-    0,
-    0
-  );
-
-  const endOfLater = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 10,
-    12,
-    0,
-    0
-  );
+  const recurringOccurrences = getRecurringOccurrencesForNextMonths(now, 3);
 
   const isUnpaidOccurrence = bill => {
     const dueDate = new Date(bill.dueDate);
@@ -2016,17 +1988,6 @@ function renderRecurring() {
     })
     .sort(sortDue);
 
-  const comingUpLater = recurringOccurrences
-    .filter(bill => {
-      const dueDate = new Date(bill.dueDate);
-
-      return (
-        isUnpaidOccurrence(bill) &&
-        dueDate >= startOfLater &&
-        dueDate <= endOfLater
-      );
-    })
-    .sort(sortDue);
   const visibleBills = [...overdue, ...upcoming];
 
   return `
@@ -2053,7 +2014,7 @@ function renderRecurring() {
             <div class="section-header">Upcoming</div>
 
             <div class="recurring-list-subtitle">
-              Your recurring bills coming next
+              Due today through the next 5 days
             </div>
           </div>
 
@@ -2073,10 +2034,10 @@ function renderRecurring() {
                   ${svgIcon('checkCircle', 48)}
                 </div>
 
-                <div class="empty-state-title">Nothing upcoming</div>
+                <div class="empty-state-title">Nothing due soon</div>
 
                 <div class="empty-state-text">
-                  Your recurring bills are all caught up.
+                  You have no unpaid recurring bills due in the next 5 days.
                 </div>
               </div>
             `
