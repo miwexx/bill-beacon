@@ -2588,10 +2588,9 @@ if (!confirmed) {
 
   closeCalendarDay();
 
-  setTimeout(() => {
-    render();
-    openCalendarDay(occurrenceDueDate);
-  }, 320);
+setTimeout(() => {
+  navigate("recurring");
+}, 320);
 };
 function closeDashboardStatusSheet() {
   document.getElementById('dashboardStatusContainer')?.remove();
