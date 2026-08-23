@@ -1955,6 +1955,24 @@ function renderRecurring() {
     0
   );
 
+  const startOfLater = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 6,
+    12,
+    0,
+    0
+  );
+
+  const endOfLater = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 10,
+    12,
+    0,
+    0
+  );
+
   const recurringOccurrences = getRecurringOccurrencesForNextMonths(now, 3);
 
   const isUnpaidOccurrence = bill => {
@@ -1971,7 +1989,6 @@ function renderRecurring() {
   const overdue = recurringOccurrences
     .filter(bill => {
       const dueDate = new Date(bill.dueDate);
-
       return isUnpaidOccurrence(bill) && dueDate < startOfToday;
     })
     .sort(sortDue);
@@ -1988,7 +2005,44 @@ function renderRecurring() {
     })
     .sort(sortDue);
 
-  const visibleBills = [...overdue, ...upcoming];
+  const comingUpLater = recurringOccurrences
+    .filter(bill => {
+      const dueDate = new Date(bill.dueDate);
+
+      return (
+        isUnpaidOccurrence(bill) &&
+        dueDate >= startOfLater &&
+        dueDate <= endOfLater
+      );
+    })
+    .sort(sortDue);
+
+  const renderSection = (title, subtitle, bills, emptyMessage) => `
+    <section class="recurring-list-section">
+      <div class="recurring-list-heading">
+        <div>
+          <div class="section-header">${title}</div>
+          <div class="recurring-list-subtitle">${subtitle}</div>
+        </div>
+
+        <span class="recurring-count">${bills.length}</span>
+      </div>
+
+      ${
+        bills.length
+          ? `
+            <div class="card recurring-bills-card">
+              ${bills.map(bill => billRow(bill, true)).join('')}
+            </div>
+          `
+          : `
+            <div class="empty-state recurring-empty-state">
+              <div class="empty-state-text">${emptyMessage}</div>
+            </div>
+          `
+      }
+    </section>
+  `;
 
   return `
     <div class="nav-bar">
@@ -2009,44 +2063,38 @@ function renderRecurring() {
       <div class="content-pad recurring-content">
         ${renderCompactRecurringCalendar()}
 
-        <div class="recurring-list-heading">
-          <div>
-            <div class="section-header">Upcoming</div>
+        ${
+          overdue.length
+            ? renderSection(
+                'Overdue',
+                'Past-due recurring bills',
+                overdue,
+                ''
+              )
+            : ''
+        }
 
-            <div class="recurring-list-subtitle">
-              Due today through the next 5 days
-            </div>
-          </div>
-
-          <span class="recurring-count">${visibleBills.length}</span>
-        </div>
+        ${renderSection(
+          'Upcoming',
+          'Due today through the next 5 days',
+          upcoming,
+          'You have no unpaid recurring bills due in the next 5 days.'
+        )}
 
         ${
-          visibleBills.length
-            ? `
-              <div class="card recurring-bills-card">
-                ${visibleBills.map(bill => billRow(bill, true)).join('')}
-              </div>
-            `
-            : `
-              <div class="empty-state recurring-empty-state">
-                <div class="empty-state-icon">
-                  ${svgIcon('checkCircle', 48)}
-                </div>
-
-                <div class="empty-state-title">Nothing due soon</div>
-
-                <div class="empty-state-text">
-                  You have no unpaid recurring bills due in the next 5 days.
-                </div>
-              </div>
-            `
+          comingUpLater.length
+            ? renderSection(
+                'Coming Up Later',
+                'Due in 6 to 10 days',
+                comingUpLater,
+                ''
+              )
+            : ''
         }
       </div>
     </div>
   `;
 }
-
 function renderBills() {
   const bills = Store.getBills();
   const billSort = routeParams.billSort || 'dueDate';
