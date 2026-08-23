@@ -2968,7 +2968,10 @@ function openDashboardStatusSheet(status) {
                     return `
                       <button
                         class="bill-row"
-                        onclick="closeDashboardStatusSheet();navigate('detail',{id:'${sourceBillId}'})"
+                        onclick="closeDashboardStatusSheet();navigate('detail',{
+  id:'${sourceBillId}',
+  occurrenceDueDate:'${bill.dueDate}'
+})"
                         style="width:100%;text-align:left"
                         aria-label="View ${escapeHtml(bill.name)}"
                       >
