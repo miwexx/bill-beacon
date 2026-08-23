@@ -3099,7 +3099,7 @@ function renderInsights() {
 const now = new Date();
 
 // Use the same generated occurrence list as Dashboard and Calendar.
-// This makes recurring bills count once for the month they are due.
+// This makes recurring bills count once for the month they are due .
 const monthBills = getCalendarBillsForMonth(now);
 
 const paidBillsThisMonth = monthBills.filter(bill =>
