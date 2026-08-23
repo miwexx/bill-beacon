@@ -1080,49 +1080,44 @@ function getNotificationCount() {
   }).length;
 }
 function renderToday() {
-  const bills = Store.getBills();
-  const payments = Store.getPayments();
   const now = new Date();
 
   const currentDateLabel = new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric'
+    weekday: "short",
+    month: "short",
+    day: "numeric"
   }).format(now);
 
-  const monthBills = bills.filter(
-    bill => isSameMonth(bill.dueDate, now)
-  );
+  /*
+   * Use the exact same month-specific objects used by the calendar:
+   * - one-time bills due this month
+   * - generated occurrences for recurring bills due this month
+   */
+  const monthBills = getCalendarBillsForMonth(now);
 
-  const monthPayments = payments.filter(
-    payment => isSameMonth(payment.paidDate, now)
-  );
+  const paidThisMonthBills = monthBills.filter((bill) => {
+    return isOccurrencePaid(bill, new Date(bill.dueDate));
+  });
 
-  const activeMonthPayments = monthPayments.filter(
-    payment => payment.status !== 'voided'
-  );
+  const unpaidThisMonthBills = monthBills.filter((bill) => {
+    return !isOccurrencePaid(bill, new Date(bill.dueDate));
+  });
 
-  const paidBillIds = new Set(
-    activeMonthPayments.map(payment => payment.billId)
-  );
+  const upcomingMonthBills = unpaidThisMonthBills.filter((bill) => {
+    return getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming";
+  });
 
-  const unpaidThisMonthBills = monthBills.filter(
-    bill => !isPaidThisMonth(bill, now)
-  );
+  const overdueBills = unpaidThisMonthBills.filter((bill) => {
+    return getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue";
+  });
 
-  const paidThisMonthBills = monthBills.filter(
-    bill => isPaidThisMonth(bill, now)
-  );
+  const totalDueThisMonth = unpaidThisMonthBills.reduce((sum, bill) => {
+    return sum + (parseFloat(bill.amount) || 0);
+  }, 0);
 
-  const totalDueThisMonth = unpaidThisMonthBills.reduce(
-    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
-    0
-  );
-
-  const totalPaidThisMonth = paidThisMonthBills.reduce(
-    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
-    0
-  );
+  const totalPaidThisMonth = paidThisMonthBills.reduce((sum, bill) => {
+    return sum + (parseFloat(bill.amount) || 0);
+  }, 0);
 
   const totalScheduledThisMonth =
     totalDueThisMonth + totalPaidThisMonth;
@@ -1135,27 +1130,15 @@ function renderToday() {
         )
       : 0;
 
-  const upcomingMonthBills = unpaidThisMonthBills.filter(
-    bill => getBillStatus(bill) === 'upcoming'
-  );
-
-  const overdueBills = bills.filter(
-    bill =>
-      !isPaidThisMonth(bill, now) &&
-      getBillStatus(bill) === 'overdue'
-  );
-
   const nextDueBill = [...upcomingMonthBills, ...overdueBills]
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
 
-  const upcomingBills = [
-  ...overdueBills,
-  ...upcomingMonthBills
-]
-  .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-  .slice(0, 6);
-  const recentPayments = payments
-    .map(payment => ({
+  const upcomingBills = [...overdueBills, ...upcomingMonthBills]
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+    .slice(0, 6);
+
+  const recentPayments = Store.getPayments()
+    .map((payment) => ({
       ...payment,
       bill: Store.getBill(payment.billId)
     }))
@@ -1163,12 +1146,17 @@ function renderToday() {
     .slice(0, 5);
 
   const paidCount = paidThisMonthBills.length;
-
   const upcomingCount = upcomingMonthBills.length;
-
   const overdueCount = overdueBills.length;
-
   const notificationCount = getNotificationCount();
+
+  const getSourceBillId = (bill) => {
+    return bill.isOccurrence ? bill.sourceBillId : bill.id;
+  };
+
+  const getBillStatusForDashboard = (bill) => {
+    return getOccurrenceStatus(bill, new Date(bill.dueDate));
+  };
 
   return `
     <div class="nav-bar dashboard-nav">
@@ -1178,7 +1166,7 @@ function renderToday() {
           onclick="navigate('settings')"
           aria-label="Open settings"
         >
-          ${svgIcon('gear', 22)}
+          ${svgIcon("gear", 22)}
         </button>
 
         <div class="dashboard-date">${currentDateLabel}</div>
@@ -1189,7 +1177,7 @@ function renderToday() {
           aria-label="Open notifications"
           style="position:relative"
         >
-          ${svgIcon('bell', 22)}
+          ${svgIcon("bell", 22)}
           ${
             notificationCount > 0
               ? `
@@ -1209,10 +1197,10 @@ function renderToday() {
                   text-align:center;
                   border:2px solid var(--bg);
                 ">
-                  ${notificationCount > 9 ? '9+' : notificationCount}
+                  ${notificationCount > 9 ? "9+" : notificationCount}
                 </span>
               `
-              : ''
+              : ""
           }
         </button>
       </div>
@@ -1220,95 +1208,95 @@ function renderToday() {
 
     <div class="main-content fade-in">
       <div class="content-pad dashboard-content">
-      <button
-  class="dashboard-month-card"
-  onclick="openDashboardStatusSheet('unpaid')"
-  aria-label="View bills still due this month"
->
-  <div class="dashboard-card-topline">
-    <span>This Month</span>
- 
-    <span>
-      ${paidThisMonthBills.length} of ${monthBills.length} bills paid
-    </span>
-  </div>
+        <button
+          class="dashboard-month-card"
+          onclick="openDashboardStatusSheet('unpaid')"
+          aria-label="View bills still due this month"
+        >
+          <div class="dashboard-card-topline">
+            <span>This Month</span>
 
-  <div
-    style="
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:var(--space-3);
-      margin-top:var(--space-4);
-    "
-  >
-    
-<div>
-  <div
-    style="
-      font-size:var(--text-xs);
-      color:var(--text-muted);
-      margin-bottom:4px;
-    "
-  >
-    Remaining
-  </div>
+            <span>
+              ${paidThisMonthBills.length} of ${monthBills.length} bills paid
+            </span>
+          </div>
 
-  <div
-    class="text-upcoming"
-    style="
-      font-size:var(--text-2xl);
-      font-weight:800;
-      line-height:1.1;
-    "
-  >
-    ${formatCurrency(totalDueThisMonth)}
-  </div>
-</div>
+          <div
+            style="
+              display:grid;
+              grid-template-columns:1fr 1fr;
+              gap:var(--space-3);
+              margin-top:var(--space-4);
+            "
+          >
+            <div>
+              <div
+                style="
+                  font-size:var(--text-xs);
+                  color:var(--text-muted);
+                  margin-bottom:4px;
+                "
+              >
+                Remaining
+              </div>
 
-<div style="text-align:right">
-  <div
-    style="
-      font-size:var(--text-xs);
-      color:var(--text-muted);
-      margin-bottom:4px;
-    "
-  >
-    Paid
-  </div>
+              <div
+                class="text-upcoming"
+                style="
+                  font-size:var(--text-2xl);
+                  font-weight:800;
+                  line-height:1.1;
+                "
+              >
+                ${formatCurrency(totalDueThisMonth)}
+              </div>
+            </div>
 
-  <div
-    class="text-paid"
-    style="
-      font-size:var(--text-2xl);
-      font-weight:800;
-      line-height:1.1;
-    "
-  >
-    ${formatCurrency(totalPaidThisMonth)}
-  </div>
-</div>
-</div>
-  <div
-    class="dashboard-progress-track"
-    style="margin-top:var(--space-4)"
-  >
-    <div
-      class="dashboard-progress-fill"
-      style="width:${monthPaymentProgress}%"
-    ></div>
-  </div>
+            <div style="text-align:right">
+              <div
+                style="
+                  font-size:var(--text-xs);
+                  color:var(--text-muted);
+                  margin-bottom:4px;
+                "
+              >
+                Paid
+              </div>
 
-  <div class="dashboard-month-footer">
-    <span>
-      ${unpaidThisMonthBills.length}
-      bill${unpaidThisMonthBills.length === 1 ? '' : 's'} left
-    </span>
+              <div
+                class="text-paid"
+                style="
+                  font-size:var(--text-2xl);
+                  font-weight:800;
+                  line-height:1.1;
+                "
+              >
+                ${formatCurrency(totalPaidThisMonth)}
+              </div>
+            </div>
+          </div>
 
-    <span>
-      View Unpaid Bills ${svgIcon('chevronRight', 14)}
-    </span>
-  </div>
-</button>
+          <div
+            class="dashboard-progress-track"
+            style="margin-top:var(--space-4)"
+          >
+            <div
+              class="dashboard-progress-fill"
+              style="width:${monthPaymentProgress}%"
+            ></div>
+          </div>
+
+          <div class="dashboard-month-footer">
+            <span>
+              ${unpaidThisMonthBills.length}
+              bill${unpaidThisMonthBills.length === 1 ? "" : "s"} left
+            </span>
+
+            <span>
+              View Unpaid Bills ${svgIcon("chevronRight", 14)}
+            </span>
+          </div>
+        </button>
 
         <div class="section-header">Bill Status · This Month</div>
 
@@ -1325,7 +1313,7 @@ function renderToday() {
           <button
             class="dashboard-status-card status-upcoming-card"
             onclick="openDashboardStatusSheet('due')"
-            aria-label="View Bills Due"
+            aria-label="View bills due"
           >
             <div class="dashboard-status-number text-upcoming">
               ${upcomingCount}
@@ -1336,7 +1324,7 @@ function renderToday() {
           <button
             class="dashboard-status-card status-overdue-card"
             onclick="openDashboardStatusSheet('overdue')"
-            aria-label="View Overdue Bills"
+            aria-label="View overdue bills"
           >
             <div class="dashboard-status-number text-overdue">
               ${overdueCount}
@@ -1350,18 +1338,20 @@ function renderToday() {
             ? `
               <button
                 class="next-due-card ${
-                  getBillStatus(nextDueBill) === 'overdue'
-                    ? 'next-due-card-overdue'
-                    : ''
+                  getBillStatusForDashboard(nextDueBill) === "overdue"
+                    ? "next-due-card-overdue"
+                    : ""
                 }"
-                onclick="navigate('detail', { id: '${nextDueBill.id}' })"
+                onclick="navigate('detail', { id: '${getSourceBillId(
+                  nextDueBill
+                )}' })"
                 aria-label="View next due bill"
               >
                 <div class="next-due-icon">
                   ${svgIcon(
-                    getBillStatus(nextDueBill) === 'overdue'
-                      ? 'warning'
-                      : 'clock',
+                    getBillStatusForDashboard(nextDueBill) === "overdue"
+                      ? "warning"
+                      : "clock",
                     18
                   )}
                 </div>
@@ -1369,9 +1359,9 @@ function renderToday() {
                 <div class="next-due-copy">
                   <div class="next-due-label">
                     ${
-                      getBillStatus(nextDueBill) === 'overdue'
-                        ? 'Overdue'
-                        : 'Next Due'
+                      getBillStatusForDashboard(nextDueBill) === "overdue"
+                        ? "Overdue"
+                        : "Next Due"
                     }
                   </div>
 
@@ -1380,7 +1370,7 @@ function renderToday() {
                   </div>
 
                   <div class="next-due-meta">
-                    ${formatDate(nextDueBill.dueDate, 'full')} ·
+                    ${formatDate(nextDueBill.dueDate, "full")} ·
                     ${relativeDue(nextDueBill.dueDate)}
                   </div>
                 </div>
@@ -1390,14 +1380,14 @@ function renderToday() {
                 </div>
 
                 <div class="next-due-arrow">
-                  ${svgIcon('chevronRight', 20)}
+                  ${svgIcon("chevronRight", 20)}
                 </div>
               </button>
             `
             : `
               <div class="next-due-card next-due-card-empty">
                 <div class="next-due-icon">
-                  ${svgIcon('checkCircle', 18)}
+                  ${svgIcon("checkCircle", 18)}
                 </div>
 
                 <div class="next-due-copy">
@@ -1427,7 +1417,7 @@ function renderToday() {
             >
               <span>See All</span>
               <span class="pill-chevron">
-                ${svgIcon('chevronRight', 14)}
+                ${svgIcon("chevronRight", 14)}
               </span>
             </button>
           </div>
@@ -1436,53 +1426,58 @@ function renderToday() {
             upcomingBills.length
               ? `
                 <div class="upcoming-carousel">
-                  ${upcomingBills.map(bill => {
-                    const category = getCategory(bill.category);
+                  ${upcomingBills
+                    .map((bill) => {
+                      const category = getCategory(bill.category);
+                      const billStatus = getBillStatusForDashboard(bill);
 
-                    return `
-                      <button
-                        class="upcoming-bill-card"
-                        onclick="navigate('detail', { id: '${bill.id}' })"
-                        aria-label="View ${escapeHtml(bill.name)} details"
-                      >
-                        <div
-                          class="upcoming-bill-icon"
-                          style="background:${
-                            getBillBrand(bill.name)
-                              ? '#fff'
-                              : `var(--${category.color})`
-                          }"
+                      return `
+                        <button
+                          class="upcoming-bill-card"
+                          onclick="navigate('detail', { id: '${getSourceBillId(
+                            bill
+                          )}' })"
+                          aria-label="View ${escapeHtml(bill.name)} details"
                         >
-                          ${billVisual(bill, 32)}
-                        </div>
+                          <div
+                            class="upcoming-bill-icon"
+                            style="background:${
+                              getBillBrand(bill.name)
+                                ? "#fff"
+                                : `var(--${category.color})`
+                            }"
+                          >
+                            ${billVisual(bill, 32)}
+                          </div>
 
-                        <div class="upcoming-bill-name">
-                          ${escapeHtml(bill.name)}
-                        </div>
+                          <div class="upcoming-bill-name">
+                            ${escapeHtml(bill.name)}
+                          </div>
 
-                        <div class="upcoming-bill-amount">
-                          ${formatCurrency(bill.amount)}
-                        </div>
+                          <div class="upcoming-bill-amount">
+                            ${formatCurrency(bill.amount)}
+                          </div>
 
-                        <div
-  class="upcoming-bill-date"
-  style="color:${
-    getBillStatus(bill) === 'overdue'
-      ? 'var(--overdue)'
-      : ''
-  }"
->
-  ${formatDate(bill.dueDate)} ·
-  ${relativeDue(bill.dueDate)}
-</div>
-                      </button>
-                    `;
-                  }).join('')}
+                          <div
+                            class="upcoming-bill-date"
+                            style="color:${
+                              billStatus === "overdue"
+                                ? "var(--overdue)"
+                                : ""
+                            }"
+                          >
+                            ${formatDate(bill.dueDate)} ·
+                            ${relativeDue(bill.dueDate)}
+                          </div>
+                        </button>
+                      `;
+                    })
+                    .join("")}
                 </div>
               `
               : `
                 <div class="dashboard-empty-card">
-                  ${svgIcon('checkCircle', 22)}
+                  ${svgIcon("checkCircle", 22)}
                   <span>No upcoming bills right now</span>
                 </div>
               `
@@ -1509,11 +1504,11 @@ function renderToday() {
                   >
                     <span>See All</span>
                     <span class="pill-chevron">
-                      ${svgIcon('chevronRight', 14)}
+                      ${svgIcon("chevronRight", 14)}
                     </span>
                   </button>
                 `
-                : ''
+                : ""
             }
           </div>
 
@@ -1521,75 +1516,77 @@ function renderToday() {
             recentPayments.length
               ? `
                 <div class="card">
-                  ${recentPayments.map(payment => {
-                    const billName = payment.bill
-                      ? escapeHtml(payment.bill.name)
-                      : 'Archived bill';
+                  ${recentPayments
+                    .map((payment) => {
+                      const billName = payment.bill
+                        ? escapeHtml(payment.bill.name)
+                        : "Archived bill";
 
-                    const isVoided = payment.status === 'voided';
+                      const isVoided = payment.status === "voided";
 
-                    return `
-                      <button
-                        class="recent-payment-row"
-                        onclick="navigate('detail', { id: '${payment.billId}' })"
-                        ${
-                          isVoided
-                            ? 'style="opacity:.58; text-decoration:line-through"'
-                            : ''
-                        }
-                      >
-                        <div
-                          class="recent-payment-icon"
-                          style="color:${
+                      return `
+                        <button
+                          class="recent-payment-row"
+                          onclick="navigate('detail', { id: '${payment.billId}' })"
+                          ${
                             isVoided
-                              ? 'var(--text-muted)'
-                              : 'var(--paid)'
-                          }"
+                              ? 'style="opacity:.58; text-decoration:line-through"'
+                              : ""
+                          }
                         >
-                          ${svgIcon(
-                            isVoided ? 'close' : 'checkCircle',
-                            18
-                          )}
-                        </div>
-
-                        <div class="bill-info">
-                          <div class="bill-name">
-                            ${billName}${isVoided ? ' · Voided' : ''}
-                          </div>
-
-                          <div class="bill-meta">
-                            ${
+                          <div
+                            class="recent-payment-icon"
+                            style="color:${
                               isVoided
-                                ? `Payment voided ${formatDate(
-                                    payment.voidedAt || payment.paidDate,
-                                    'full'
-                                  )}`
-                                : `Paid ${formatDate(
-                                    payment.paidDate,
-                                    'full'
-                                  )}`
-                            }
+                                ? "var(--text-muted)"
+                                : "var(--paid)"
+                            }"
+                          >
+                            ${svgIcon(
+                              isVoided ? "close" : "checkCircle",
+                              18
+                            )}
                           </div>
-                        </div>
 
-                        <div
-                          class="recent-payment-amount"
-                          style="${
-                            isVoided
-                              ? 'text-decoration:line-through; color:var(--text-muted)'
-                              : ''
-                          }"
-                        >
-                          ${formatCurrency(payment.amount)}
-                        </div>
-                      </button>
-                    `;
-                  }).join('')}
+                          <div class="bill-info">
+                            <div class="bill-name">
+                              ${billName}${isVoided ? " · Voided" : ""}
+                            </div>
+
+                            <div class="bill-meta">
+                              ${
+                                isVoided
+                                  ? `Payment voided ${formatDate(
+                                      payment.voidedAt || payment.paidDate,
+                                      "full"
+                                    )}`
+                                  : `Paid ${formatDate(
+                                      payment.paidDate,
+                                      "full"
+                                    )}`
+                              }
+                            </div>
+                          </div>
+
+                          <div
+                            class="recent-payment-amount"
+                            style="${
+                              isVoided
+                                ? "text-decoration:line-through; color:var(--text-muted)"
+                                : ""
+                            }"
+                          >
+                            ${formatCurrency(payment.amount)}
+                          </div>
+                        </button>
+                      `;
+                    })
+                    .join("")}
                 </div>
               `
               : `
                 <div class="dashboard-empty-card">
-                  ${svgIcon('tray', 22)}
+                  ${svgIcon("tray", 22)}
                   <span>Payments you mark as paid will appear here</span>
                 </div>
               `
@@ -2691,101 +2688,95 @@ function closeCycleBillsSheet() {
   unlockBackgroundScroll();
 }, 300);
 }
-
-
 function openDashboardStatusSheet(status) {
   const now = new Date();
 
-  const isDueThisMonth = (bill) => {
-    const dueDate = new Date(bill.dueDate);
+  const monthBills = getCalendarBillsForMonth(now);
 
-    return (
-      dueDate.getMonth() === now.getMonth() &&
-      dueDate.getFullYear() === now.getFullYear()
+  const getBillStatusForSheet = (bill) => {
+    return getOccurrenceStatus(bill, new Date(bill.dueDate));
+  };
+
+  const getSourceBillId = (bill) => {
+    return bill.isOccurrence ? bill.sourceBillId : bill.id;
+  };
+
+  const getOccurrencePayment = (bill) => {
+    return getActivePaymentForOccurrence(
+      bill,
+      new Date(bill.dueDate)
     );
   };
 
   let title = "Paid Bills";
-let color = "var(--paid)";
-let icon = svgIcon("checkCircle", 18);
-let selectedBills = [];
+  let color = "var(--paid)";
+  let icon = svgIcon("checkCircle", 18);
+  let selectedBills = [];
 
-if (status === "paid") {
-  selectedBills = Store.getBills()
-    .filter((bill) => {
-      if (!isDueThisMonth(bill)) return false;
+  if (status === "paid") {
+    selectedBills = monthBills
+      .filter((bill) => {
+        return getBillStatusForSheet(bill) === "paid";
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
 
-      return Store.getPaymentsForBill(bill.id).some(
-        (payment) =>
-          payment.status !== "voided" &&
-          isSameMonth(payment.paidDate, now)
-      );
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-}
+  if (status === "unpaid") {
+    title = "Unpaid Bills";
+    color = "var(--upcoming)";
+    icon = svgIcon("clock", 18);
 
-if (status === "unpaid") {
-  title = "Unpaid Bills";
-  color = "var(--upcoming)";
-  icon = svgIcon("clock", 18);
+    selectedBills = monthBills
+      .filter((bill) => {
+        return getBillStatusForSheet(bill) !== "paid";
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
 
-  selectedBills = Store.getBills()
-    .filter(
-      (bill) => isDueThisMonth(bill) && !isPaidThisMonth(bill, now)
-    )
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-}
+  if (status === "upcoming") {
+    title = "Upcoming Bills";
+    color = "var(--upcoming)";
+    icon = svgIcon("clock", 18);
 
-if (status === "upcoming") {
-  title = "Upcoming Bills";
-  color = "var(--upcoming)";
-  icon = svgIcon("clock", 18);
+    selectedBills = monthBills
+      .filter((bill) => {
+        const billStatus = getBillStatusForSheet(bill);
 
-  selectedBills = Store.getBills()
-    .filter((bill) => {
-      const billStatus = getBillStatus(bill);
+        return billStatus === "overdue" || billStatus === "upcoming";
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
 
-      return billStatus === "overdue" || billStatus === "upcoming";
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-}
+  if (status === "due") {
+    title = "Due Bills";
+    color = "var(--upcoming)";
+    icon = svgIcon("clock", 18);
 
-if (status === "due") {
-  title = "Due Bills";
-  color = "var(--upcoming)";
-  icon = svgIcon("clock", 18);
+    selectedBills = monthBills
+      .filter((bill) => {
+        return getBillStatusForSheet(bill) === "upcoming";
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
 
-  selectedBills = Store.getBills()
-    .filter(
-      (bill) =>
-        isDueThisMonth(bill) &&
-        !isPaidThisMonth(bill, now) &&
-        getBillStatus(bill) === "upcoming"
-    )
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-}
+  if (status === "overdue") {
+    title = "Overdue Bills";
+    color = "var(--overdue)";
+    icon = svgIcon("warning", 18);
 
-if (status === "overdue") {
-  title = "Overdue Bills";
-  color = "var(--overdue)";
-  icon = svgIcon("warning", 18);
+    selectedBills = monthBills
+      .filter((bill) => {
+        return getBillStatusForSheet(bill) === "overdue";
+      })
+      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  }
 
-  selectedBills = Store.getBills()
-    .filter(
-      (bill) =>
-        !isPaidThisMonth(bill, now) &&
-        getBillStatus(bill) === "overdue"
-    )
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-}
+  const total = selectedBills.reduce((sum, bill) => {
+    return sum + (parseFloat(bill.amount) || 0);
+  }, 0);
 
-  const total = selectedBills.reduce(
-    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
-    0
-  );
-
-  const container = document.createElement('div');
-  container.id = 'dashboardStatusContainer';
+  const container = document.createElement("div");
+  container.id = "dashboardStatusContainer";
 
   container.innerHTML = `
     <div
@@ -2826,7 +2817,7 @@ if (status === "overdue") {
               ${icon}
               <span style="font-weight:700">
                 ${selectedBills.length}
-                ${selectedBills.length === 1 ? 'bill' : 'bills'}
+                ${selectedBills.length === 1 ? "bill" : "bills"}
               </span>
             </div>
 
@@ -2848,77 +2839,95 @@ if (status === "overdue") {
           selectedBills.length
             ? `
               <div class="card">
-                ${selectedBills.map(bill => {
-                  const payment = status === 'paid'
-                    ? getLatestActivePaymentForBill(bill.id)
-                    : null;
+                ${selectedBills
+                  .map((bill) => {
+                    const payment =
+                      status === "paid"
+                        ? getOccurrencePayment(bill)
+                        : null;
 
-                  const billStatus = getBillStatus(bill);
+                    const billStatus = getBillStatusForSheet(bill);
 
-                  const rowColor =
-                    status === 'unpaid' && billStatus === 'overdue'
-                      ? 'var(--overdue)'
-                      : color;
+                    const rowColor =
+                      status === "unpaid" && billStatus === "overdue"
+                        ? "var(--overdue)"
+                        : color;
 
-                  const dateLabel = status === 'paid' && payment
-                    ? `Paid ${formatDate(payment.paidDate, 'full')}`
-                    : billStatus === 'overdue'
-                      ? `Overdue · ${formatDate(bill.dueDate, 'full')}`
-                      : `${formatDate(bill.dueDate, 'full')} · ${relativeDue(bill.dueDate)}`;
+                    const dateLabel =
+                      status === "paid" && payment
+                        ? `Paid ${formatDate(payment.paidDate, "full")}`
+                        : billStatus === "overdue"
+                          ? `Overdue · ${formatDate(
+                              bill.dueDate,
+                              "full"
+                            )}`
+                          : `${formatDate(
+                              bill.dueDate,
+                              "full"
+                            )} · ${relativeDue(bill.dueDate)}`;
 
-                  const category = getCategory(bill.category);
+                    const category = getCategory(bill.category);
+                    const sourceBillId = getSourceBillId(bill);
 
-                  return `
-                    <button
-                      class="bill-row"
-                      onclick="closeDashboardStatusSheet(); navigate('detail', { id: '${bill.id}' })"
-                      style="width:100%; text-align:left"
-                      aria-label="View ${escapeHtml(bill.name)}"
-                    >
-                
-<div
-  class="bill-icon"
-  style="
-    width:42px;
-    height:42px;
-    min-width:42px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    overflow:hidden;
-    border-radius:10px;
-    background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`};
-    color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
-  "
->
-  ${billVisual(bill, 32)}
-</div>
-
-                      <div class="bill-info">
-                        <div class="bill-name">
-                          ${escapeHtml(bill.name)}
-                        </div>
-
+                    return `
+                      <button
+                        class="bill-row"
+                        onclick="closeDashboardStatusSheet();navigate('detail',{id:'${sourceBillId}'})"
+                        style="width:100%;text-align:left"
+                        aria-label="View ${escapeHtml(bill.name)}"
+                      >
                         <div
-                          class="bill-meta"
-                          style="color:${rowColor}"
+                          class="bill-icon"
+                          style="
+                            width:42px;
+                            height:42px;
+                            min-width:42px;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            overflow:hidden;
+                            border-radius:10px;
+                            background:${
+                              getBillBrand(bill.name)
+                                ? "#fff"
+                                : `var(--${category.color})`
+                            };
+                            color:${
+                              getBillBrand(bill.name)
+                                ? "#1e1e2e"
+                                : "white"
+                            };
+                          "
                         >
-                          ${dateLabel}
+                          ${billVisual(bill, 32)}
                         </div>
-                      </div>
 
-                      <div class="bill-amount">
-                        ${formatCurrency(bill.amount)}
-                      </div>
-                    </button>
-                  `;
-                }).join('')}
+                        <div class="bill-info">
+                          <div class="bill-name">
+                            ${escapeHtml(bill.name)}
+                          </div>
+
+                          <div
+                            class="bill-meta"
+                            style="color:${rowColor}"
+                          >
+                            ${dateLabel}
+                          </div>
+                        </div>
+
+                        <div class="bill-amount">
+                          ${formatCurrency(bill.amount)}
+                        </div>
+                      </button>
+                    `;
+                  })
+                  .join("")}
               </div>
             `
             : `
               <div class="empty-state">
                 <div class="empty-state-icon">
-                  ${svgIcon('checkCircle', 44)}
+                  ${svgIcon("checkCircle", 44)}
                 </div>
 
                 <div class="empty-state-title">
@@ -2937,6 +2946,8 @@ if (status === "overdue") {
 
   document.body.appendChild(container);
 }
+
+
 function getMonthlySpendingLimit() {
   const settings = Store.getSettings();
   return Number(settings.monthlySpendingLimit || 0);
