@@ -1141,97 +1141,7 @@ let currentRoute = 'today';
 let routeParams = {
   billSort: 'dueDate',
 };
-let dashboardUpcomingExpanded = false;
-let recurringUpcomingExpanded = false;
 
-function getUpcomingBillsDisplay(expanded = false) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-  // Covers current and following months so the list can reach five bills.
-  const recurringOccurrences = getRecurringOccurrencesForNextMonths(today, 3);
-
-  // Include non-recurring bills as well, but do not duplicate recurring templates.
-  const oneTimeBills = Store.getBills().filter(bill => !isRecurringBill(bill));
-
-  const eligibleBills = [...oneTimeBills, ...recurringOccurrences]
-    .filter(bill => {
-      const dueDate = new Date(bill.dueDate);
-      const dueDay = new Date(
-        dueDate.getFullYear(),
-        dueDate.getMonth(),
-        dueDate.getDate()
-      );
-
-      return dueDay >= today && !isCalendarBillPaid(bill);
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-  const firstFive = eligibleBills.slice(0, 5);
-
-  if (firstFive.length < 5) {
-    return {
-      visibleBills: firstFive,
-      hasSameDateOverflow: false,
-      overflowCount: 0,
-      cutoffDate: null
-    };
-  }
-
-  const cutoffDate = getLocalDateKey(firstFive[4].dueDate);
-
-  const sameDateOverflow = eligibleBills.slice(5).filter(bill =>
-    getLocalDateKey(bill.dueDate) === cutoffDate
-  );
-
-  return {
-    visibleBills: expanded
-      ? [...firstFive, ...sameDateOverflow]
-      : firstFive,
-    hasSameDateOverflow: sameDateOverflow.length > 0,
-    overflowCount: sameDateOverflow.length,
-    cutoffDate
-  };
-}
-
-function toggleDashboardUpcomingBills() {
-  dashboardUpcomingExpanded = !dashboardUpcomingExpanded;
-  render();
-}
-
-function toggleRecurringUpcomingBills() {
-  recurringUpcomingExpanded = !recurringUpcomingExpanded;
-  render();
-}
-
-function renderUpcomingOverflowButton(display, toggleFunctionName, expanded) {
-  if (!display.hasSameDateOverflow) return '';
-
-  if (expanded) {
-    return `
-      <button
-        class="show-more-bills-button"
-        onclick="${toggleFunctionName}()"
-      >
-        Show less
-        ${svgIcon('chevronRight', 18)}
-      </button>
-    `;
-  }
-
-  const label = display.overflowCount === 1 ? 'bill' : 'bills';
-
-  return `
-    <button
-      class="show-more-bills-button"
-      onclick="${toggleFunctionName}()"
-    >
-      Show ${display.overflowCount} more ${label} due
-      ${formatDate(display.cutoffDate, 'short')}
-      ${svgIcon('chevronRight', 18)}
-    </button>
-  `;
-}
 function navigate(route, params = {}) {
   currentRoute = route;
   routeParams = params;
@@ -1277,22 +1187,15 @@ function renderToday() {
   const unpaidThisMonthBills = monthBills.filter((bill) => {
     return !isOccurrencePaid(bill, new Date(bill.dueDate));
   });
-const upcomingMonthBills = unpaidThisMonthBills.filter(
-  bill => getBillStatus(bill) === 'upcoming'
-);
 
-const overdueBills = bills.filter(
-  bill => !isPaidThisMonth(bill, now) && getBillStatus(bill) === 'overdue'
-);
+  const upcomingMonthBills = unpaidThisMonthBills.filter((bill) => {
+    return getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming";
+  });
 
-const nextDueBill = [...upcomingMonthBills, ...overdueBills]
-  .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
+  const overdueBills = unpaidThisMonthBills.filter((bill) => {
+    return getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue";
+  });
 
-const dashboardUpcomingDisplay = getUpcomingBillsDisplay(
-  dashboardUpcomingExpanded
-);
-
-const upcomingBills = dashboardUpcomingDisplay.visibleBills;
   const totalDueThisMonth = unpaidThisMonthBills.reduce((sum, bill) => {
     return sum + (parseFloat(bill.amount) || 0);
   }, 0);
@@ -1311,6 +1214,13 @@ const upcomingBills = dashboardUpcomingDisplay.visibleBills;
           100
         )
       : 0;
+
+  const nextDueBill = [...upcomingMonthBills, ...overdueBills]
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
+
+  const upcomingBills = [...overdueBills, ...upcomingMonthBills]
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
+    .slice(0, 6);
 
   const recentPayments = Store.getPayments()
     .map((payment) => ({
@@ -1597,52 +1507,66 @@ const upcomingBills = dashboardUpcomingDisplay.visibleBills;
             </button>
           </div>
 
-          ${upcomingBills.length ? `
-  <div class="upcoming-carousel">
-    ${upcomingBills.map(bill => {
-      const category = getCategory(bill.category);
-      const billId = bill.isOccurrence ? bill.sourceBillId : bill.id;
+          ${
+            upcomingBills.length
+              ? `
+                <div class="upcoming-carousel">
+                  ${upcomingBills
+                    .map((bill) => {
+                      const category = getCategory(bill.category);
+                      const billStatus = getBillStatusForDashboard(bill);
 
-      return `
-        <button
-          class="upcoming-bill-card"
-          onclick="navigate('detail', { id: '${billId}' })"
-          aria-label="View ${escapeHtml(bill.name)} details"
-        >
-          <div
-            class="upcoming-bill-icon"
-            style="background:${getBillBrand(bill.name) ? '#fff' : category.color}"
-          >
-            ${billVisual(bill, 32)}
-          </div>
+                      return `
+                        <button
+                          class="upcoming-bill-card"
+                          onclick="navigate('detail', { id: '${getSourceBillId(
+                            bill
+                          )}' })"
+                          aria-label="View ${escapeHtml(bill.name)} details"
+                        >
+                          <div
+                            class="upcoming-bill-icon"
+                            style="background:${
+                              getBillBrand(bill.name)
+                                ? "#fff"
+                                : `var(--${category.color})`
+                            }"
+                          >
+                            ${billVisual(bill, 32)}
+                          </div>
 
-          <div class="upcoming-bill-name">
-            ${escapeHtml(bill.name)}
-          </div>
+                          <div class="upcoming-bill-name">
+                            ${escapeHtml(bill.name)}
+                          </div>
 
-          <div class="upcoming-bill-amount">
-            ${formatCurrency(bill.amount)}
-          </div>
+                          <div class="upcoming-bill-amount">
+                            ${formatCurrency(bill.amount)}
+                          </div>
 
-          <div class="upcoming-bill-date">
-            ${formatDate(bill.dueDate, 'short')}
-          </div>
-        </button>
-      `;
-    }).join('')}
-  </div>
-
-  ${renderUpcomingOverflowButton(
-    dashboardUpcomingDisplay,
-    'toggleDashboardUpcomingBills',
-    dashboardUpcomingExpanded
-  )}
-` : `
-  <div class="dashboard-empty-card">
-    ${svgIcon('checkCircle', 22)}
-    <span>No upcoming bills</span>
-  </div>
-`}
+                          <div
+                            class="upcoming-bill-date"
+                            style="color:${
+                              billStatus === "overdue"
+                                ? "var(--overdue)"
+                                : ""
+                            }"
+                          >
+                            ${formatDate(bill.dueDate)} ·
+                            ${relativeDue(bill.dueDate)}
+                          </div>
+                        </button>
+                      `;
+                    })
+                    .join("")}
+                </div>
+              `
+              : `
+                <div class="dashboard-empty-card">
+                  ${svgIcon("checkCircle", 22)}
+                  <span>No upcoming bills right now</span>
+                </div>
+              `
+          }
         </div>
 
         <div>
