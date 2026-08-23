@@ -2006,7 +2006,7 @@ function renderRecurring() {
   `;
 }
 
-function renderBills() {
+function renderBills() { 
   const bills = Store.getBills();
   const billSort = routeParams.billSort || 'dueDate';
 
