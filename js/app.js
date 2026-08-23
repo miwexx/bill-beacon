@@ -1427,9 +1427,10 @@ function renderToday() {
                     ? "next-due-card-overdue"
                     : ""
                 }"
-                onclick="navigate('detail', { id: '${getSourceBillId(
-                  nextDueBill
-                )}' })"
+                onclick="navigate('detail', {
+  id: '${getSourceBillId(nextDueBill)}',
+  occurrenceDueDate: '${nextDueBill.dueDate}'
+})"
                 aria-label="View next due bill"
               >
                 <div class="next-due-icon">
@@ -1519,9 +1520,10 @@ function renderToday() {
                       return `
                         <button
                           class="upcoming-bill-card"
-                          onclick="navigate('detail', { id: '${getSourceBillId(
-                            bill
-                          )}' })"
+                          onclick="navigate('detail', {
+  id: '${getSourceBillId(bill)}',
+  occurrenceDueDate: '${bill.dueDate}'
+})"
                           aria-label="View ${escapeHtml(bill.name)} details"
                         >
                           <div
@@ -1612,7 +1614,10 @@ function renderToday() {
                       return `
                         <button
                           class="recent-payment-row"
-                          onclick="navigate('detail', { id: '${payment.billId}' })"
+                          onclick="navigate('detail', {
+  id: '${payment.billId}',
+  occurrenceDueDate: '${payment.paidForDueDate || ''}'
+})"
                           ${
                             isVoided
                               ? 'style="opacity:.58; text-decoration:line-through"'
