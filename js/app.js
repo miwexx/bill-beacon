@@ -3163,15 +3163,17 @@ const activeMonthPayments = payments.filter(payment =>
   const isOverLimit =
     monthlyLimit > 0 && paidThisMonth > monthlyLimit;
 
+    // Category spending belongs to the month an occurrence is due,
+  // not the month a payment was made. This keeps late payments in
+  // their scheduled month and excludes voided payments.
   const catTotals = {};
 
-  activeMonthPayments.forEach(payment => {
-    const bill = Store.getBill(payment.billId);
-    const categoryId = bill ? bill.category : 'other';
+  paidBillsThisMonth.forEach(bill => {
+    const categoryId = bill.category || 'other';
 
     catTotals[categoryId] =
       (catTotals[categoryId] || 0) +
-      (parseFloat(payment.amount) || 0);
+      (parseFloat(bill.amount) || 0);
   });
 
   const catEntries = Object.entries(catTotals).sort(
