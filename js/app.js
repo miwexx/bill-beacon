@@ -4142,12 +4142,14 @@ function renderBillDetail() {
       };
 
   const referenceDate = new Date(detailBill.dueDate);
-  const status = getOccurrenceStatus(detailBill, referenceDate);
   const payment = getActivePaymentForOccurrence(
-    detailBill,
-    referenceDate
-  );
+  detailBill,
+  referenceDate
+);
 
+const status = payment
+  ? 'paid'
+  : getOccurrenceStatus(detailBill, referenceDate);
   const cat = getCategory(bill.category);
   const sourceBillId = bill.id;
   const isCalendarOccurrence = Boolean(occurrenceDueDate);
@@ -4313,14 +4315,11 @@ function renderBillDetail() {
                     : svgIcon("clock", 12)
               }
 
-              ${
-                status === "paid"
-                  ? "Paid"
-                  : relativeDue(detailBill.dueDate)
-                      .charAt(0)
-                      .toUpperCase() +
-                    relativeDue(detailBill.dueDate).slice(1)
-              }
+              ${status === 'paid'
+  ? `Paid ${formatDate(payment.paidDate, 'short')}`
+  : relativeDue(detailBill.dueDate).charAt(0).toUpperCase() +
+    relativeDue(detailBill.dueDate).slice(1)
+}
             </span>
           </div>
 
