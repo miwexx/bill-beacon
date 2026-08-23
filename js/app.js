@@ -2815,11 +2815,20 @@ if (!confirmed) {
     voidedAt: null
   });
 
-  closeCalendarDay();
+    closeCalendarDay();
 
-setTimeout(() => {
-  navigate("recurring");
-}, 320);
+  const calendarMonth = new Date(
+    dueDate.getFullYear(),
+    dueDate.getMonth(),
+    1,
+    12,
+    0,
+    0
+  ).toISOString();
+
+  setTimeout(() => {
+    navigate('calendar', { month: calendarMonth });
+  }, 320);
 };
 function closeDashboardStatusSheet() {
   document.getElementById('dashboardStatusContainer')?.remove();
