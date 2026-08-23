@@ -2540,7 +2540,14 @@ window.markCalendarBillPaid = function (billId, dateString) {
     alert("Bill not found.");
     return;
   }
+const confirmed = confirm(
+  `Mark ${bill.name} as paid for ${formatDate(dateString, "full")}?\n\n` +
+  `${formatCurrency(bill.amount)} will be recorded as paid for this occurrence.`
+);
 
+if (!confirmed) {
+  return;
+}
   const dueDate = new Date(dateString);
 
   if (Number.isNaN(dueDate.getTime())) {
