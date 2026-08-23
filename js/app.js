@@ -1949,28 +1949,84 @@ function renderRecurring() {
   // This keeps the list aligned with the recurring calendar.
   const recurringOccurrences = getRecurringOccurrencesForNextMonths(now, 3);
 
+    const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    12,
+    0,
+    0
+  );
+
+  const endOfUpcoming = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 5,
+    12,
+    0,
+    0
+  );
+
+  const startOfLater = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 6,
+    12,
+    0,
+    0
+  );
+
+  const endOfLater = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 10,
+    12,
+    0,
+    0
+  );
+
+  const isUnpaidOccurrence = bill => {
+    const dueDate = new Date(bill.dueDate);
+
+    return (
+      !Number.isNaN(dueDate.getTime()) &&
+      getOccurrenceStatus(bill, dueDate) !== 'paid'
+    );
+  };
+
+  const sortDue = (a, b) => new Date(a.dueDate) - new Date(b.dueDate);
+
   const overdue = recurringOccurrences
     .filter(bill => {
       const dueDate = new Date(bill.dueDate);
 
-      return (
-        getOccurrenceStatus(bill, dueDate) === 'overdue' &&
-        dueDate < startOfToday
-      );
+      return isUnpaidOccurrence(bill) && dueDate < startOfToday;
     })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    .sort(sortDue);
 
   const upcoming = recurringOccurrences
     .filter(bill => {
       const dueDate = new Date(bill.dueDate);
 
       return (
-        getOccurrenceStatus(bill, dueDate) !== 'paid' &&
-        dueDate >= startOfToday
+        isUnpaidOccurrence(bill) &&
+        dueDate >= startOfToday &&
+        dueDate <= endOfUpcoming
       );
     })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    .sort(sortDue);
 
+  const comingUpLater = recurringOccurrences
+    .filter(bill => {
+      const dueDate = new Date(bill.dueDate);
+
+      return (
+        isUnpaidOccurrence(bill) &&
+        dueDate >= startOfLater &&
+        dueDate <= endOfLater
+      );
+    })
+    .sort(sortDue);
   const visibleBills = [...overdue, ...upcoming];
 
   return `
