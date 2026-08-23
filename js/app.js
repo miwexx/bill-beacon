@@ -3095,34 +3095,32 @@ function editMonthlySpendingLimit() {
 }
 
 function renderInsights() {
-  const bills = Store.getBills();
   const payments = Store.getPayments();
-  const now = new Date();
+const now = new Date();
 
-  const monthBills = bills.filter(
-    bill => isSameMonth(bill.dueDate, now)
-  );
+// Use the same generated occurrence list as Dashboard and Calendar.
+// This makes recurring bills count once for the month they are due.
+const monthBills = getCalendarBillsForMonth(now);
 
-  const activeMonthPayments = payments.filter(
-    payment =>
-      payment.status !== 'voided' &&
-      isSameMonth(payment.paidDate, now)
-  );
+const paidBillsThisMonth = monthBills.filter(bill =>
+  isOccurrencePaid(bill, new Date(bill.dueDate))
+);
 
-  const paidBillsThisMonth = monthBills.filter(
-    bill => isPaidThisMonth(bill, now)
-  );
+const unpaidBillsThisMonth = monthBills.filter(bill =>
+  !isOccurrencePaid(bill, new Date(bill.dueDate))
+);
 
-  const unpaidBillsThisMonth = monthBills.filter(
-    bill => !isPaidThisMonth(bill, now)
-  );
+const overdueBills = unpaidBillsThisMonth.filter(bill =>
+  getOccurrenceStatus(bill, new Date(bill.dueDate)) === 'overdue'
+);
 
-  const overdueBills = bills.filter(
-    bill =>
-      !isPaidThisMonth(bill, now) &&
-      getBillStatus(bill) === 'overdue'
-  );
-
+// Keep this only for the existing six-month paid-date chart.
+// Monthly summary totals and category totals will be moved to
+// occurrence-based selectors in the next patch.
+const activeMonthPayments = payments.filter(payment =>
+  payment.status !== 'voided' &&
+  isSameMonth(payment.paidDate, now)
+);
   const scheduledThisMonth = monthBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
