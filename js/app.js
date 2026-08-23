@@ -479,51 +479,58 @@ function getMonthlyOccurrenceDate(bill, year, month) {
 }
 
 function getBillOccurrenceDate(bill, year, month) {
+  if (!bill) return null;
+
   if (bill.recurrence === 'Monthly') {
     return getMonthlyOccurrenceDate(bill, year, month);
   }
 
   return bill.dueDate;
 }
+
 function getOccurrenceKey(templateId, dueDate) {
   const date = new Date(dueDate);
-
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
 
   return `${templateId}:${year}-${month}-${day}`;
 }
 
 function isRecurringBill(bill) {
-  return Boolean(bill && bill.recurrence && bill.recurrence !== "None");
+  return Boolean(bill && bill.recurrence && bill.recurrence !== 'None');
 }
 
 function getRecurringTemplateId(bill) {
   if (!bill) return null;
-
   return bill.recurringTemplateId || bill.id;
 }
 
 function getOccurrenceDueDate(bill, year, month) {
   if (!bill) return null;
 
-  if (bill.recurrence === "Monthly") {
+  if (bill.recurrence === 'Monthly') {
     return getMonthlyOccurrenceDate(bill, year, month);
   }
 
   return getBillOccurrenceDate(bill, year, month);
 }
 
-function createBillOccurrence(bill, year, month) {
-  if (!bill) return null;
+function createBillOccurrence(bill, dueDate) {
+  if (!bill || !dueDate) return null;
 
-  const dueDate = getOccurrenceDueDate(bill, year, month);
-
-  if (!dueDate) return null;
+  const normalizedDueDate =
+    new Date(
+      new Date(dueDate).getFullYear(),
+      new Date(dueDate).getMonth(),
+      new Date(dueDate).getDate(),
+      12,
+      0,
+      0
+    ).toISOString();
 
   const templateId = getRecurringTemplateId(bill);
-  const occurrenceKey = getOccurrenceKey(templateId, dueDate);
+  const occurrenceKey = getOccurrenceKey(templateId, normalizedDueDate);
 
   return {
     id: occurrenceKey,
@@ -533,12 +540,12 @@ function createBillOccurrence(bill, year, month) {
     name: bill.name,
     amount: bill.amount,
     category: bill.category,
-    dueDate,
+    dueDate: normalizedDueDate,
     recurrence: bill.recurrence,
-    paymentMethod: bill.paymentMethod || "",
-    paymentUrl: bill.paymentUrl || "",
+    paymentMethod: bill.paymentMethod || '',
+    paymentUrl: bill.paymentUrl || '',
     autopay: Boolean(bill.autopay),
-    notes: bill.notes || "",
+    notes: bill.notes || '',
     reminderOffsets: Array.isArray(bill.reminderOffsets)
       ? [...bill.reminderOffsets]
       : [],
@@ -546,14 +553,115 @@ function createBillOccurrence(bill, year, month) {
   };
 }
 
-function getRecurringOccurrencesForMonth(referenceDate = new Date()) {
+function getMonthBounds(referenceDate = new Date()) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
 
+  return {
+    start: new Date(year, month, 1, 12, 0, 0),
+    end: new Date(year, month + 1, 0, 12, 0, 0)
+  };
+}
+
+function getMonthOccurrenceDates(bill, referenceDate = new Date()) {
+  if (!bill || !isRecurringBill(bill)) return [];
+
+  const { start, end } = getMonthBounds(referenceDate);
+  const originalDueDate = new Date(bill.dueDate);
+
+  if (Number.isNaN(originalDueDate.getTime())) return [];
+
+  const occurrenceDates = [];
+
+  if (bill.recurrence === 'Weekly') {
+    const candidate = new Date(
+      originalDueDate.getFullYear(),
+      originalDueDate.getMonth(),
+      originalDueDate.getDate(),
+      12,
+      0,
+      0
+    );
+
+    while (candidate < start) {
+      candidate.setDate(candidate.getDate() + 7);
+    }
+
+    while (candidate <= end) {
+      occurrenceDates.push(new Date(candidate));
+      candidate.setDate(candidate.getDate() + 7);
+    }
+  }
+
+  if (bill.recurrence === 'Monthly') {
+    occurrenceDates.push(
+      new Date(
+        getMonthlyOccurrenceDate(
+          bill,
+          start.getFullYear(),
+          start.getMonth()
+        )
+      )
+    );
+  }
+
+  if (bill.recurrence === 'Quarterly') {
+    const startYear = originalDueDate.getFullYear();
+    const startMonth = originalDueDate.getMonth();
+    const targetYear = start.getFullYear();
+    const targetMonth = start.getMonth();
+
+    const monthsSinceStart =
+      (targetYear - startYear) * 12 + (targetMonth - startMonth);
+
+    if (monthsSinceStart >= 0 && monthsSinceStart % 3 === 0) {
+      const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+      const dueDay = Math.min(originalDueDate.getDate(), lastDay);
+
+      occurrenceDates.push(
+        new Date(targetYear, targetMonth, dueDay, 12, 0, 0)
+      );
+    }
+  }
+
+  if (bill.recurrence === 'Yearly') {
+    const targetYear = start.getFullYear();
+    const dueMonth = originalDueDate.getMonth();
+
+    if (
+      targetYear >= originalDueDate.getFullYear() &&
+      start.getMonth() === dueMonth
+    ) {
+      const lastDay = new Date(targetYear, dueMonth + 1, 0).getDate();
+      const dueDay = Math.min(originalDueDate.getDate(), lastDay);
+
+      occurrenceDates.push(
+        new Date(targetYear, dueMonth, dueDay, 12, 0, 0)
+      );
+    }
+  }
+
+  return occurrenceDates
+    .filter(date => date >= start && date <= end)
+    .map(date => date.toISOString());
+}
+
+function getRecurringOccurrencesForMonth(referenceDate = new Date()) {
+  const seen = new Set();
+
   return Store.getBills()
     .filter(isRecurringBill)
-    .map((bill) => createBillOccurrence(bill, year, month))
-    .filter(Boolean);
+    .flatMap(bill =>
+      getMonthOccurrenceDates(bill, referenceDate)
+        .map(dueDate => createBillOccurrence(bill, dueDate))
+        .filter(Boolean)
+    )
+    .filter(occurrence => {
+      if (seen.has(occurrence.occurrenceKey)) return false;
+      seen.add(occurrence.occurrenceKey);
+      return true;
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
 
 function getRecurringOccurrencesForNextMonths(
@@ -567,12 +675,14 @@ function getRecurringOccurrencesForNextMonths(
     const monthDate = new Date(
       startDate.getFullYear(),
       startDate.getMonth() + offset,
-      1
+      1,
+      12,
+      0,
+      0
     );
 
-    getRecurringOccurrencesForMonth(monthDate).forEach((occurrence) => {
+    getRecurringOccurrencesForMonth(monthDate).forEach(occurrence => {
       if (seen.has(occurrence.occurrenceKey)) return;
-
       seen.add(occurrence.occurrenceKey);
       occurrences.push(occurrence);
     });
@@ -582,41 +692,59 @@ function getRecurringOccurrencesForNextMonths(
     (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
   );
 }
+
 function getCalendarBillsForMonth(referenceDate = new Date()) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
+  const seen = new Set();
 
-  const oneTimeBills = Store.getBills().filter((bill) => {
+  const oneTimeBills = Store.getBills().filter(bill => {
     if (isRecurringBill(bill)) return false;
 
     const dueDate = new Date(bill.dueDate);
 
     return (
+      !Number.isNaN(dueDate.getTime()) &&
       dueDate.getFullYear() === year &&
       dueDate.getMonth() === month
     );
   });
 
-  return [
-    ...oneTimeBills,
-    ...getRecurringOccurrencesForMonth(referenceDate)
-  ].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  return [...oneTimeBills, ...getRecurringOccurrencesForMonth(referenceDate)]
+    .filter(bill => {
+      const key = bill.occurrenceKey || bill.id;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
 
 function getCalendarBillsForDay(dateString) {
   const selectedDate = new Date(dateString);
 
-  return getCalendarBillsForMonth(selectedDate).filter((bill) => {
+  if (Number.isNaN(selectedDate.getTime())) return [];
+
+  const selectedKey = [
+    selectedDate.getFullYear(),
+    String(selectedDate.getMonth() + 1).padStart(2, '0'),
+    String(selectedDate.getDate()).padStart(2, '0')
+  ].join('-');
+
+  return getCalendarBillsForMonth(selectedDate).filter(bill => {
     const dueDate = new Date(bill.dueDate);
 
-    return (
-      dueDate.getFullYear() === selectedDate.getFullYear() &&
-      dueDate.getMonth() === selectedDate.getMonth() &&
-      dueDate.getDate() === selectedDate.getDate()
-    );
+    if (Number.isNaN(dueDate.getTime())) return false;
+
+    const dueKey = [
+      dueDate.getFullYear(),
+      String(dueDate.getMonth() + 1).padStart(2, '0'),
+      String(dueDate.getDate()).padStart(2, '0')
+    ].join('-');
+
+    return dueKey === selectedKey;
   });
 }
-
 function isCalendarBillPaid(bill) {
   return isOccurrencePaid(bill, new Date(bill.dueDate));
 }
