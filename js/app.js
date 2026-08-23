@@ -5750,11 +5750,83 @@ function savePaymentLinkPopup(billId) {
 }
 function saveBill() {
   const name = document.getElementById('billName').value.trim();
-  const amount = parseFloat(document.getElementById('billAmount').value) || 0;
+  const amountInput = document.getElementById('billAmount').value;
+  const amount = Number(amountInput);
+
+  const dueDateInput = document.getElementById('billDueDate');
+  const recurrenceInput = document.getElementById('billRecurrence');
+  const dueDayInput = document.getElementById('billDueDay');
 
   if (!name) {
-  alert('Please enter a bill name');
-  return;
+    alert('Please enter a bill name.');
+    return;
+  }
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    alert('Please enter an amount greater than 0.');
+    return;
+  }
+
+  if (!dueDateInput?.value) {
+    alert('Please choose a due date.');
+    return;
+  }
+
+  const recurrence = recurrenceInput.value;
+  const selectedDueDay = Number(dueDayInput?.value);
+  const dueDate = dateFromInput(dueDateInput.value);
+
+  if (Number.isNaN(new Date(dueDate).getTime())) {
+    alert('Please choose a valid due date.');
+    return;
+  }
+
+  if (
+    recurrence === 'Monthly' &&
+    (!Number.isInteger(selectedDueDay) ||
+      selectedDueDay < 1 ||
+      selectedDueDay > 31)
+  ) {
+    alert('Please choose a valid monthly due day.');
+    return;
+  }
+
+  const paymentUrlInput = document.getElementById('paymentUrl');
+  const paymentUrl = paymentUrlInput ? paymentUrlInput.value.trim() : '';
+
+  const data = {
+    name,
+    amount: amount.toString(),
+    dueDate,
+    dueDay:
+      recurrence === 'Monthly'
+        ? selectedDueDay
+        : new Date(dueDate).getDate(),
+    category: document.getElementById('billCategory').value,
+    recurrence,
+    payCycle: document.getElementById('billPayCycle').value,
+    paymentMethod: document.getElementById('billPaymentMethod').value,
+    paymentUrl,
+    autopay: document.getElementById('billAutopay').checked,
+    notes: document.getElementById('billNotes').value.trim(),
+    reminderOffsets: Array.from(
+      document.querySelectorAll('.reminder-toggle:checked')
+    ).map(cb => parseInt(cb.dataset.days, 10))
+  };
+
+  if (editingBillId) {
+    Store.updateBill(editingBillId, data);
+  } else {
+    Store.addBill({
+      id: uid(),
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  closeBillForm();
+  render();
 }
 
 const paymentUrlInput = document.getElementById('paymentUrl');
