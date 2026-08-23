@@ -4404,7 +4404,6 @@ function detailRow(label, value) {
 function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const payCycleLabel = getPayCycleLabel(bill);
-
   const dueDate = new Date(bill.dueDate);
   const dueDay = dueDate.getDate();
 
@@ -4427,9 +4426,10 @@ function billRow(bill, clickable = false) {
     }
   };
 
-  const scheduleText = bill.recurrence && bill.recurrence !== 'None'
-    ? `Due on the ${ordinal(dueDay)}`
-    : `Due on ${formatDate(bill.dueDate, 'full')}`;
+  const scheduleText =
+    bill.recurrence && bill.recurrence !== 'None'
+      ? `Due on the ${ordinal(dueDay)}`
+      : `Due on ${formatDate(bill.dueDate, 'full')}`;
 
   const payCycleClass =
     bill.payCycle === 'first' ||
@@ -4437,10 +4437,26 @@ function billRow(bill, clickable = false) {
       ? 'pay-cycle-first'
       : 'pay-cycle-second';
 
+  // Occurrences have their own due date but use the source template ID.
+  const detailBillId = bill.isOccurrence
+    ? bill.sourceBillId
+    : bill.id;
+
+  const detailDueDate = bill.isOccurrence
+    ? bill.dueDate
+    : '';
+
+  const rowClick = clickable
+    ? `onclick="navigate('detail', {
+        id: '${detailBillId}',
+        occurrenceDueDate: '${detailDueDate}'
+      })"`
+    : '';
+
   return `
     <div
-      class="bill-row"
-      ${clickable ? `onclick="navigate('detail', { id: '${bill.id}' })"` : ''}
+      class="bill-row ${clickable ? 'clickable' : ''}"
+      ${rowClick}
     >
       <div
         class="bill-icon"
@@ -4455,7 +4471,9 @@ function billRow(bill, clickable = false) {
       </div>
 
       <div class="bill-info">
-        <div class="bill-name">${escapeHtml(bill.name)}</div>
+        <div class="bill-name">
+          ${escapeHtml(bill.name)}
+        </div>
 
         <div class="bill-meta-row">
           <div class="bill-meta">
@@ -4468,15 +4486,8 @@ function billRow(bill, clickable = false) {
         </div>
       </div>
 
-      <div style="display:flex; align-items:center; gap:6px">
-        <div
-          style="
-            display:flex;
-            flex-direction:column;
-            align-items:flex-end;
-            gap:4px;
-          "
-        >
+      <div style="display:flex;align-items:center;gap:6px">
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
           <div class="bill-amount">
             ${formatCurrency(bill.amount)}
           </div>
@@ -4487,7 +4498,7 @@ function billRow(bill, clickable = false) {
           class="bill-more-button"
           aria-label="More options for ${escapeHtml(bill.name)}"
           title="More options"
-          onclick="event.stopPropagation(); openBillQuickActions('${bill.id}')"
+          onclick="event.stopPropagation();openBillQuickActions('${detailBillId}')"
         >
           ${svgIcon('moreVertical', 22)}
         </button>
