@@ -2441,7 +2441,7 @@ window.openCalendarDay = function (dateString) {
                     return `
                       <div class="bill-row">
                         <button
-                          onclick="closeCalendarDay()"
+                          onclick="closeCalendarDay();navigate('detail',{id:'${sourceBillId}',occurrenceDueDate:'${bill.dueDate}'})"
                           style="display:contents;text-align:left"
                           aria-label="View ${escapeHtml(bill.name)}"
                         >
