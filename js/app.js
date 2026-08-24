@@ -5811,7 +5811,10 @@ function openBillDetailsSheet(billId) {
         </div>
 
         <div class="card" style="margin-bottom:18px">
-          ${detailRow("Due date", formatDate(bill.dueDate, "full"))}
+          ${detailRow(
+  bill.recurrence && bill.recurrence !== 'None' ? 'Schedule' : 'Due date',
+  getBillScheduleLabel(bill)
+)}
           ${detailRow("Pay cycle", getPayCycleLabel(bill))}
           ${detailRow("Category", category.label)}
           ${detailRow("Repeats", bill.recurrence)}
