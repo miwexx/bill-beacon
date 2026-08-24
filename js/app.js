@@ -5388,7 +5388,16 @@ function confirmDeleteIncomeSource(id) {
   render();
 }
 function closeBillQuickActions() {
-  document.getElementById('billQuickActionsContainer')?.remove();
+  const overlay = document.getElementById('billQuickActionsOverlay');
+  const sheet = document.getElementById('billQuickActionsSheet');
+
+  overlay?.classList.remove('show');
+  sheet?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('billQuickActionsContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
 }
 
 function openBillQuickActions(billId) {
