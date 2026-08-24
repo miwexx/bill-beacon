@@ -2411,7 +2411,7 @@ function renderBills() {
             <div class="card">
               ${groups[categoryName]
                 .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-                .map((bill) => billRow(bill, true))
+                .map((bill) => billRow(bill, false))
                 .join('')}
             </div>
           </div>
@@ -2421,7 +2421,7 @@ function renderBills() {
   } else {
     billContent = `
       <div class="card">
-        ${sortedBills.map((bill) => billRow(bill, true)).join('')}
+        ${sortedBills.map((bill) => billRow(bill, false)).join('')}
       </div>
     `;
   }
@@ -4969,18 +4969,10 @@ function billRow(bill, clickable = false) {
   const quickActionArgs = bill.isOccurrence
     ? `'${detailBillId}', '${detailDueDate}'`
     : `'${detailBillId}'`;
-  const rowClick = clickable
-    ? `onclick="navigate('detail', {
-        id: '${detailBillId}',
-        occurrenceDueDate: '${detailDueDate}'
-      })"`
-    : '';
+  const rowClick = '';
 
   return `
-    <div
-      class="bill-row ${clickable ? 'clickable' : ''}"
-      ${rowClick}
-    >
+    <div class="bill-row">
       <div
         class="bill-icon"
         style="
@@ -5401,42 +5393,8 @@ function closeBillQuickActions() {
 
 function openBillQuickActions(billId) {
   const bill = Store.getBill(billId);
+
   if (!bill) return;
-
-  const category = getCategory(bill.category);
-  const activePayment = getLatestActivePaymentForBill(bill.id);
-  const isPaid = Boolean(activePayment);
-
-  const paymentAction = isPaid
-    ? `
-      <button
-        class="bill-sheet-action"
-        onclick="closeBillQuickActions(); markBillUnpaid('${bill.id}')"
-      >
-        <span>${svgIcon('close', 20)}</span>
-        <span>Mark as unpaid</span>
-        <span>${svgIcon('chevronRight', 18)}</span>
-      </button>
-    `
-    : `
-      <button
-        class="bill-sheet-action"
-        onclick="closeBillQuickActions(); confirmMarkPaid('${bill.id}')"
-      >
-        <span>${svgIcon('checkCircle', 20)}</span>
-        <span>Mark as paid</span>
-        <span>${svgIcon('chevronRight', 18)}</span>
-      </button>
-
-      <button
-        class="bill-sheet-action"
-        onclick="closeBillQuickActions(); openPostponeBillSheet('${bill.id}')"
-      >
-        <span>${svgIcon('calendar', 20)}</span>
-        <span>Postpone</span>
-        <span>${svgIcon('chevronRight', 18)}</span>
-      </button>
-    `;
 
   const sheetHtml = `
     <div
@@ -5449,24 +5407,27 @@ function openBillQuickActions(billId) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillQuickActions()">Cancel</button>
+        <button
+          class="nav-button"
+          onclick="closeBillQuickActions()"
+        >
+          Cancel
+        </button>
+
         <div class="sheet-title">Bill actions</div>
+
         <div style="width:54px"></div>
       </div>
 
       <div class="sheet-body">
         <div class="bill-sheet-header">
-          <div
-            class="bill-sheet-logo"
-            style="background:${getBillBrand(bill.name) ? '#fff' : `var(--${category.color})`}"
-          >
-            ${billVisual(bill, 44)}
-          </div>
-
           <div class="bill-sheet-heading">
-            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
+            <div class="bill-sheet-title">
+              ${escapeHtml(bill.name)}
+            </div>
+
             <div class="bill-sheet-subtitle">
-              ${formatCurrency(bill.amount)} · ${getPayCycleLabel(bill)}
+              ${formatCurrency(bill.amount)}
             </div>
           </div>
         </div>
@@ -5481,7 +5442,14 @@ function openBillQuickActions(billId) {
             <span>${svgIcon('chevronRight', 18)}</span>
           </button>
 
-          ${paymentAction}
+          <button
+            class="bill-sheet-action"
+            onclick="closeBillQuickActions(); openBillDetailsSheet('${bill.id}')"
+          >
+            <span>${svgIcon('doc', 20)}</span>
+            <span>Payment history</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
 
           <button
             class="bill-sheet-action bill-sheet-action-danger"
@@ -5499,7 +5467,9 @@ function openBillQuickActions(billId) {
   const container = document.createElement('div');
   container.id = 'billQuickActionsContainer';
   container.innerHTML = sheetHtml;
+
   document.body.appendChild(container);
+  lockBackgroundScroll();
 }
 function closeBillDetailsSheet() {
   document.getElementById('billDetailsContainer')?.remove();
