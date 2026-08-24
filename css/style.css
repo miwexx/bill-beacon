@@ -2359,10 +2359,10 @@ body {
 }
 
 .upcoming-carousel .dashboard-upcoming-tile .upcoming-bill-icon img {
-  width: 38px !important;
-  height: 38px !important;
-  max-width: 38px;
-  max-height: 38px;
+  width: 42px !important;
+  height: 42px !important;
+  max-width: 42px;
+  max-height: 42px;
   object-fit: contain;
   transform: none !important;
 }
