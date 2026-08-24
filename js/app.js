@@ -5445,7 +5445,7 @@ function openBillQuickActions(billId) {
           Cancel
         </button>
 
-        <div class="sheet-title">Bill actions</div>
+        <div class="sheet-title">Bill Actions</div>
 
         <div style="width:54px"></div>
       </div>
