@@ -2256,3 +2256,26 @@ body {
   line-height:1;
   font-weight:700;
 }
+.recurring-section-more {
+  display: none;
+}
+
+.recurring-section-more.is-open {
+  display: block;
+}
+
+.show-more-bills-button {
+  width: 100%;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}

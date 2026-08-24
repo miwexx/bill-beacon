@@ -1933,41 +1933,146 @@ const monthBills =
     </section>
   `;
 }
+const RECURRING_SECTION_LIMIT = 3;
 
-function renderRecurring() {
-  const now = new Date();
-
-  const startOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
+function getStartOfLocalDay(date = new Date()) {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
     12,
     0,
     0
   );
+}
+
+function getRecurringRelativeLabel(dateString, now = new Date()) {
+  const startOfToday = getStartOfLocalDay(now);
+  const dueDate = getStartOfLocalDay(new Date(dateString));
+  const dayDifference = Math.round(
+    (dueDate - startOfToday) / 86400000
+  );
+
+  if (dayDifference === 0) return 'Today';
+  if (dayDifference === 1) return 'Tomorrow';
+  if (dayDifference === -1) return '1 day ago';
+  if (dayDifference < 0) return `${Math.abs(dayDifference)} days ago`;
+
+  return `In ${dayDifference} days`;
+}
+
+function isActiveRecurringOccurrence(bill) {
+  if (!bill || !bill.isOccurrence) return false;
+
+  return !(
+    bill.archived ||
+    bill.cancelled ||
+    bill.status === 'cancelled' ||
+    bill.status === 'paid-in-full' ||
+    bill.status === 'paidInFull'
+  );
+}
+
+function renderRecurringOccurrenceRow(bill) {
+  const sourceBillId = bill.sourceBillId || bill.id;
+  const dueDate = new Date(bill.dueDate);
+  const status = getOccurrenceStatus(bill, dueDate);
+  const statusColor =
+    status === 'overdue' ? 'var(--overdue)' : 'var(--text-muted)';
+
+  return `
+    <button
+      type="button"
+      class="bill-row clickable"
+      style="width:100%;text-align:left"
+      onclick="navigate('detail', {
+        id: '${sourceBillId}',
+        occurrenceDueDate: '${bill.dueDate}',
+        returnRoute: 'recurring'
+      })"
+      aria-label="View ${escapeHtml(bill.name)} due ${formatDate(
+        bill.dueDate,
+        'full'
+      )}"
+    >
+      <div
+        class="bill-icon"
+        style="
+          background:${
+            getBillBrand(bill.name)
+              ? '#fff'
+              : `var(--${getCategory(bill.category).color})`
+          };
+          color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
+          padding:${getBillBrand(bill.name) ? '3px' : '0'};
+          overflow:hidden;
+        "
+      >
+        ${billVisual(bill, 32)}
+      </div>
+
+      <div class="bill-info">
+        <div class="bill-name">${escapeHtml(bill.name)}</div>
+
+        <div class="bill-meta" style="color:${statusColor}">
+          ${getRecurringRelativeLabel(bill.dueDate)}
+          · ${formatDate(bill.dueDate, 'short')}
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="bill-amount">${formatCurrency(bill.amount)}</div>
+        ${svgIcon('chevronRight', 18)}
+      </div>
+    </button>
+  `;
+}
+
+function toggleRecurringSection(sectionId) {
+  const hiddenRows = document.getElementById(
+    `recurring-${sectionId}-more`
+  );
+
+  const button = document.getElementById(
+    `recurring-${sectionId}-toggle`
+  );
+
+  if (!hiddenRows || !button) return;
+
+  const isOpen = hiddenRows.classList.toggle('is-open');
+
+  button.innerHTML = isOpen
+    ? `<span>Show Less</span>${svgIcon('chevronRight', 18)}`
+    : `<span>Show More</span>${svgIcon('chevronRight', 18)}`;
+
+  button.setAttribute('aria-expanded', String(isOpen));
+}
+function renderRecurring() {
+  const now = new Date();
+  const startOfToday = getStartOfLocalDay(now);
 
   const endOfUpcoming = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 5,
+    startOfToday.getFullYear(),
+    startOfToday.getMonth(),
+    startOfToday.getDate() + 5,
     12,
     0,
     0
   );
 
   const startOfLater = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 6,
+    startOfToday.getFullYear(),
+    startOfToday.getMonth(),
+    startOfToday.getDate() + 6,
     12,
     0,
     0
   );
 
   const endOfLater = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate() + 10,
+    startOfToday.getFullYear(),
+    startOfToday.getMonth(),
+    startOfToday.getDate() + 10,
     12,
     0,
     0
@@ -1975,10 +2080,11 @@ function renderRecurring() {
 
   const recurringOccurrences = getRecurringOccurrencesForNextMonths(now, 3);
 
-  const isUnpaidOccurrence = bill => {
+  const isUnpaidEligibleOccurrence = bill => {
     const dueDate = new Date(bill.dueDate);
 
     return (
+      isActiveRecurringOccurrence(bill) &&
       !Number.isNaN(dueDate.getTime()) &&
       getOccurrenceStatus(bill, dueDate) !== 'paid'
     );
@@ -1989,7 +2095,8 @@ function renderRecurring() {
   const overdue = recurringOccurrences
     .filter(bill => {
       const dueDate = new Date(bill.dueDate);
-      return isUnpaidOccurrence(bill) && dueDate < startOfToday;
+
+      return isUnpaidEligibleOccurrence(bill) && dueDate < startOfToday;
     })
     .sort(sortDue);
 
@@ -1998,7 +2105,7 @@ function renderRecurring() {
       const dueDate = new Date(bill.dueDate);
 
       return (
-        isUnpaidOccurrence(bill) &&
+        isUnpaidEligibleOccurrence(bill) &&
         dueDate >= startOfToday &&
         dueDate <= endOfUpcoming
       );
@@ -2010,39 +2117,82 @@ function renderRecurring() {
       const dueDate = new Date(bill.dueDate);
 
       return (
-        isUnpaidOccurrence(bill) &&
+        isUnpaidEligibleOccurrence(bill) &&
         dueDate >= startOfLater &&
         dueDate <= endOfLater
       );
     })
     .sort(sortDue);
 
-  const renderSection = (title, subtitle, bills, emptyMessage) => `
-    <section class="recurring-list-section">
-      <div class="recurring-list-heading">
-        <div>
-          <div class="section-header">${title}</div>
-          <div class="recurring-list-subtitle">${subtitle}</div>
+  const renderSection = ({
+    id,
+    title,
+    subtitle,
+    bills,
+    emptyMessage,
+    showWhenEmpty = true
+  }) => {
+    if (!bills.length && !showWhenEmpty) return '';
+
+    const visibleBills = bills.slice(0, RECURRING_SECTION_LIMIT);
+    const hiddenBills = bills.slice(RECURRING_SECTION_LIMIT);
+    const hasMore = hiddenBills.length > 0;
+
+    return `
+      <section class="recurring-list-section">
+        <div class="recurring-list-heading">
+          <div>
+            <div class="section-header">${title}</div>
+            <div class="recurring-list-subtitle">${subtitle}</div>
+          </div>
+
+          <span class="recurring-count">${bills.length}</span>
         </div>
 
-        <span class="recurring-count">${bills.length}</span>
-      </div>
+        ${
+          bills.length
+            ? `
+              <div class="card recurring-bills-card">
+                ${visibleBills
+                  .map(renderRecurringOccurrenceRow)
+                  .join('')}
 
-      ${
-        bills.length
-          ? `
-            <div class="card recurring-bills-card">
-              ${bills.map(bill => billRow(bill, true)).join('')}
-            </div>
-          `
-          : `
-            <div class="empty-state recurring-empty-state">
-              <div class="empty-state-text">${emptyMessage}</div>
-            </div>
-          `
-      }
-    </section>
-  `;
+                ${
+                  hasMore
+                    ? `
+                      <div
+                        id="recurring-${id}-more"
+                        class="recurring-section-more"
+                      >
+                        ${hiddenBills
+                          .map(renderRecurringOccurrenceRow)
+                          .join('')}
+                      </div>
+
+                      <button
+                        type="button"
+                        id="recurring-${id}-toggle"
+                        class="show-more-bills-button"
+                        onclick="toggleRecurringSection('${id}')"
+                        aria-expanded="false"
+                      >
+                        <span>Show More</span>
+                        ${svgIcon('chevronRight', 18)}
+                      </button>
+                    `
+                    : ''
+                }
+              </div>
+            `
+            : `
+              <div class="empty-state recurring-empty-state">
+                <div class="empty-state-text">${emptyMessage}</div>
+              </div>
+            `
+        }
+      </section>
+    `;
+  };
 
   return `
     <div class="nav-bar">
@@ -2063,34 +2213,32 @@ function renderRecurring() {
       <div class="content-pad recurring-content">
         ${renderCompactRecurringCalendar()}
 
-        ${
-          overdue.length
-            ? renderSection(
-                'Overdue',
-                'Past-due recurring bills',
-                overdue,
-                ''
-              )
-            : ''
-        }
+        ${renderSection({
+          id: 'overdue',
+          title: 'Overdue',
+          subtitle: 'Past-due recurring bills',
+          bills: overdue,
+          emptyMessage: '',
+          showWhenEmpty: false
+        })}
 
-        ${renderSection(
-          'Upcoming',
-          'Due today through the next 5 days',
-          upcoming,
-          'You have no unpaid recurring bills due in the next 5 days.'
-        )}
+        ${renderSection({
+          id: 'upcoming',
+          title: 'Upcoming',
+          subtitle: 'Due today through the next 5 days',
+          bills: upcoming,
+          emptyMessage:
+            'You have no unpaid recurring bills due in the next 5 days.'
+        })}
 
-        ${
-          comingUpLater.length
-            ? renderSection(
-                'Coming Up Later',
-                'Due in 6 to 10 days',
-                comingUpLater,
-                ''
-              )
-            : ''
-        }
+        ${renderSection({
+          id: 'later',
+          title: 'Coming Up Later',
+          subtitle: 'Due in 6 to 10 days',
+          bills: comingUpLater,
+          emptyMessage:
+            'You have no unpaid recurring bills due 6 to 10 days from now.'
+        })}
       </div>
     </div>
   `;
