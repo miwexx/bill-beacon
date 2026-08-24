@@ -5637,28 +5637,39 @@ function openBillQuickActions(billId) {
   document.body.appendChild(container);
   lockBackgroundScroll();
 }
-function openBillActionEdit(billId) {
-  closeBillQuickActions();
+function closeBillQuickActions(callback) {
+  const overlay = document.getElementById('billQuickActionsOverlay');
+  const sheet = document.getElementById('billQuickActionsSheet');
+
+  overlay?.classList.remove('show');
+  sheet?.classList.remove('show');
 
   setTimeout(() => {
+    document.getElementById('billQuickActionsContainer')?.remove();
+    unlockBackgroundScroll();
+
+    if (typeof callback === 'function') {
+      callback();
+    }
+  }, 300);
+}
+
+function openBillActionEdit(billId) {
+  closeBillQuickActions(() => {
     openBillForm(billId);
-  }, 320);
+  });
 }
 
 function openBillActionHistory(billId) {
-  closeBillQuickActions();
-
-  setTimeout(() => {
+  closeBillQuickActions(() => {
     openBillDetailsSheet(billId);
-  }, 320);
+  });
 }
 
 function openBillActionRemove(billId) {
-  closeBillQuickActions();
-
-  setTimeout(() => {
+  closeBillQuickActions(() => {
     confirmDeleteBill(billId);
-  }, 320);
+  });
 }
 function closeBillDetailsSheet() {
   document.getElementById('billDetailsContainer')?.remove();
