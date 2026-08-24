@@ -5437,7 +5437,7 @@ function closeBillQuickActions() {
     document.getElementById('billQuickActionsContainer')?.remove();
     unlockBackgroundScroll();
   }, 300);
-}
+
   const paymentRows = payments.length
     ? payments.map((payment) => {
         const isVoided = payment.status === 'voided';
