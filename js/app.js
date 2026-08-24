@@ -5467,10 +5467,10 @@ function openBillQuickActions(billId) {
         <div class="bill-sheet-actions">
           <button
             class="bill-sheet-action"
-            onclick="openBillActionEdit('${bill.id}')"
+            onclick="openBillActionDetails('${bill.id}')"
           >
-            <span>${svgIcon('gear', 20)}</span>
-            <span>Edit details</span>
+            <span>${svgIcon('doc', 20)}</span>
+            <span>Bill details</span>
             <span>${svgIcon('chevronRight', 18)}</span>
           </button>
 
@@ -5478,8 +5478,17 @@ function openBillQuickActions(billId) {
             class="bill-sheet-action"
             onclick="openBillActionHistory('${bill.id}')"
           >
-            <span>${svgIcon('doc', 20)}</span>
+            <span>${svgIcon('clock', 20)}</span>
             <span>Payment history</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
+
+          <button
+            class="bill-sheet-action"
+            onclick="openBillActionEdit('${bill.id}')"
+          >
+            <span>${svgIcon('gear', 20)}</span>
+            <span>Edit details</span>
             <span>${svgIcon('chevronRight', 18)}</span>
           </button>
 
@@ -5530,7 +5539,11 @@ window.openBillActionEdit = function (billId) {
     openBillForm(billId);
   });
 };
-
+window.openBillActionDetails = function (billId) {
+  closeBillQuickActions(() => {
+    openBillDetailsSheet(billId);
+  });
+};
 window.openBillActionHistory = function (billId) {
   closeBillQuickActions(() => {
     openBillDetailsSheet(billId);
