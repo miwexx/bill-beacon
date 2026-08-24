@@ -1648,8 +1648,7 @@ function renderToday() {
 
                      return `
   <button
-    class="upcoming-bill"
-    onclick="navigate('detail', {
+      onclick="navigate('detail', {
   id: '${getSourceBillId(bill)}',
   occurrenceDueDate: '${bill.dueDate}',
   returnRoute: 'today'
