@@ -1256,8 +1256,7 @@ function initTheme() {
   } else if (settings.theme === 'dark') {
     document.documentElement.setAttribute('data-theme', 'dark');
   } else {
-    // Default to dark (Rocket Money style)
-    document.documentElement.setAttribute('data-theme', 'dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
   }
 }
 
@@ -5479,7 +5478,7 @@ function openBillQuickActions(billId) {
             onclick="openBillActionHistory('${bill.id}')"
           >
             <span>${svgIcon('doc', 20)}</span>
-            <span>Payment history</span>
+            <span>Bill Details</span>
             <span>${svgIcon('chevronRight', 18)}</span>
           </button>
 
