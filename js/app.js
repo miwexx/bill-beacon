@@ -4921,7 +4921,46 @@ function detailRow(label, value) {
 // ====================================
 // COMPONENTS
 // ====================================
+function getBillScheduleLabel(bill) {
+  const dueDate = new Date(bill.dueDate);
+  const day = bill.dueDay || dueDate.getDate();
 
+  const ordinal = (value) => {
+    const mod100 = value % 100;
+
+    if (mod100 >= 11 && mod100 <= 13) {
+      return `${value}th`;
+    }
+
+    switch (value % 10) {
+      case 1:
+        return `${value}st`;
+      case 2:
+        return `${value}nd`;
+      case 3:
+        return `${value}rd`;
+      default:
+        return `${value}th`;
+    }
+  };
+
+  switch (bill.recurrence) {
+    case 'Weekly':
+      return `Repeats weekly`;
+
+    case 'Monthly':
+      return `Due on the ${ordinal(day)} of each month`;
+
+    case 'Quarterly':
+      return `Repeats every 3 months`;
+
+    case 'Yearly':
+      return `Repeats yearly`;
+
+    default:
+      return `Due ${formatDate(bill.dueDate, 'full')}`;
+  }
+}
 function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const payCycleLabel = getPayCycleLabel(bill);
@@ -4947,10 +4986,9 @@ function billRow(bill, clickable = false) {
     }
   };
 
-  const scheduleText =
-    bill.recurrence && bill.recurrence !== 'None'
-      ? `Due on the ${ordinal(dueDay)}`
-      : `Due on ${formatDate(bill.dueDate, 'full')}`;
+  const scheduleText = bill.recurrence && bill.recurrence !== 'None'
+  ? `Due on the ${ordinal(dueDay)} of each month`
+  : `Due on ${formatDate(bill.dueDate, 'full')}`;
 
   const payCycleClass =
     bill.payCycle === 'first' ||
@@ -5453,7 +5491,7 @@ function openBillQuickActions(billId) {
 
           <button
             class="bill-sheet-action"
-            onclick="closeBillQuickActions(); openBillDetailsSheet('${bill.id}')"
+            onclick="closeBillQuickActions(); openBillPaymentHistorySheet('${bill.id}')"
           >
             <span>${svgIcon('doc', 20)}</span>
             <span>Payment history</span>
@@ -5479,6 +5517,154 @@ function openBillQuickActions(billId) {
 
   document.body.appendChild(container);
   lockBackgroundScroll();
+}
+function closeBillPaymentHistorySheet() {
+  const overlay = document.getElementById('billPaymentHistoryOverlay');
+  const sheet = document.getElementById('billPaymentHistorySheet');
+
+  overlay?.classList.remove('show');
+  sheet?.classList.remove('show');
+
+  setTimeout(() => {
+    document.getElementById('billPaymentHistoryContainer')?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function openBillPaymentHistorySheet(billId) {
+  const bill = Store.getBill(billId);
+
+  if (!bill) return;
+
+  const payments = Store.getPaymentsForBill(billId).sort((a, b) => {
+    const aDate = new Date(a.voidedAt || a.paidDate || a.createdAt || 0);
+    const bDate = new Date(b.voidedAt || b.paidDate || b.createdAt || 0);
+    return bDate - aDate;
+  });
+
+  const paymentRows = payments.length
+    ? payments.map((payment) => {
+        const isVoided = payment.status === 'voided';
+        const activityDate = isVoided
+          ? payment.voidedAt || payment.paidDate
+          : payment.paidDate;
+
+        return `
+          <div
+            class="bill-row"
+            style="${isVoided ? 'opacity:.62' : ''}"
+          >
+            <div
+              class="bill-icon"
+              style="
+                background:${isVoided ? 'var(--surface-2)' : 'var(--paid-bg)'};
+                color:${isVoided ? 'var(--text-muted)' : 'var(--paid)'};
+              "
+            >
+              ${svgIcon(isVoided ? 'close' : 'checkCircle', 20)}
+            </div>
+
+            <div class="bill-info">
+              <div
+                class="bill-name"
+                style="${isVoided ? 'text-decoration:line-through;color:var(--text-muted)' : ''}"
+              >
+                ${isVoided ? 'Payment voided' : 'Payment made'}
+              </div>
+
+              <div
+                class="bill-meta"
+                style="color:${isVoided ? 'var(--text-muted)' : 'var(--paid)'}"
+              >
+                ${
+                  isVoided
+                    ? `Voided ${formatDate(activityDate, 'full')}`
+                    : `Paid ${formatDate(activityDate, 'full')}`
+                }
+              </div>
+            </div>
+
+            <div
+              class="bill-amount"
+              style="${
+                isVoided
+                  ? 'text-decoration:line-through;color:var(--text-muted)'
+                  : 'color:var(--paid)'
+              }"
+            >
+              ${formatCurrency(payment.amount)}
+            </div>
+          </div>
+        `;
+      }).join('')
+    : `
+      <div class="empty-state" style="padding:var(--space-5) var(--space-3)">
+        <div class="empty-state-icon">${svgIcon('tray', 40)}</div>
+        <div class="empty-state-title">No payment history</div>
+        <div class="empty-state-text">
+          Payments marked paid for this bill will appear here.
+        </div>
+      </div>
+    `;
+
+  const container = document.createElement('div');
+  container.id = 'billPaymentHistoryContainer';
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="billPaymentHistoryOverlay"
+      onclick="closeBillPaymentHistorySheet()"
+    ></div>
+
+    <div class="sheet" id="billPaymentHistorySheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button
+          class="nav-button"
+          onclick="closeBillPaymentHistorySheet()"
+        >
+          Close
+        </button>
+
+        <div class="sheet-title">Payment History</div>
+
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body content-gap">
+        <div class="card card-pad">
+          <div style="font-weight:800;font-size:var(--text-lg)">
+            ${escapeHtml(bill.name)}
+          </div>
+
+          <div
+            style="
+              font-size:var(--text-sm);
+              color:var(--text-muted);
+              margin-top:4px;
+            "
+          >
+            ${getBillScheduleLabel(bill)}
+          </div>
+        </div>
+
+        <div>
+          <div class="section-header">Payments</div>
+          <div class="card">${paymentRows}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('billPaymentHistoryOverlay')?.classList.add('show');
+    document.getElementById('billPaymentHistorySheet')?.classList.add('show');
+  });
 }
 function closeBillDetailsSheet() {
   document.getElementById('billDetailsContainer')?.remove();
