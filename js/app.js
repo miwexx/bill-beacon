@@ -5464,6 +5464,15 @@ function openBillQuickActions(billId) {
         </div>
 
         <div class="bill-sheet-actions">
+        <button
+            class="bill-sheet-action"
+            onclick="openBillActionHistory('${bill.id}')"
+          >
+            <span>${svgIcon('doc', 20)}</span>
+            <span>Bill Details</span>
+            <span>${svgIcon('chevronRight', 18)}</span>
+          </button>
+
           <button
             class="bill-sheet-action"
             onclick="openBillActionEdit('${bill.id}')"
@@ -5473,15 +5482,7 @@ function openBillQuickActions(billId) {
             <span>${svgIcon('chevronRight', 18)}</span>
           </button>
 
-          <button
-            class="bill-sheet-action"
-            onclick="openBillActionHistory('${bill.id}')"
-          >
-            <span>${svgIcon('doc', 20)}</span>
-            <span>Bill Details</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-
+          
           <button
             class="bill-sheet-action bill-sheet-action-danger"
             onclick="openBillActionRemove('${bill.id}')"
