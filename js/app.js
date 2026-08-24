@@ -1646,9 +1646,10 @@ function renderToday() {
                       const category = getCategory(bill.category);
                       const billStatus = getBillStatusForDashboard(bill);
 
-                      return `
-                        <button
-                          onclick="navigate('detail', {
+                     return `
+  <button
+    class="upcoming-bill"
+    onclick="navigate('detail', {
   id: '${getSourceBillId(bill)}',
   occurrenceDueDate: '${bill.dueDate}',
   returnRoute: 'today'

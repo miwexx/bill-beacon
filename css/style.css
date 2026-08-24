@@ -2284,3 +2284,7 @@ body {
   border: 1px solid var(--border);
   box-sizing: border-box;
 }
+.upcoming-bill {
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+}
