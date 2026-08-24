@@ -5426,97 +5426,7 @@ function confirmDeleteIncomeSource(id) {
   closeIncomeSourceForm();
   render();
 }
-function openBillQuickActions(billId) {
-  const bill = Store.getBill(billId);
 
-  if (!bill) return;
-
-  const sheetHtml = `
-    <div
-      class="sheet-overlay"
-      id="billQuickActionsOverlay"
-      onclick="closeBillQuickActions()"
-    ></div>
-
-    <div class="sheet" id="billQuickActionsSheet">
-      <div class="sheet-handle"></div>
-
-      <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillQuickActions()">
-          Cancel
-        </button>
-
-        <div class="sheet-title">Bill actions</div>
-
-        <div style="width:54px"></div>
-      </div>
-
-      <div class="sheet-body">
-        <div class="bill-sheet-header">
-          <div class="bill-sheet-heading">
-            <div class="bill-sheet-title">
-              ${escapeHtml(bill.name)}
-            </div>
-
-            <div class="bill-sheet-subtitle">
-              ${formatCurrency(bill.amount)}
-            </div>
-          </div>
-        </div>
-
-        <div class="bill-sheet-actions">
-          <button
-            class="bill-sheet-action"
-            onclick="openBillActionDetails('${bill.id}')"
-          >
-            <span>${svgIcon('doc', 20)}</span>
-            <span>Bill details</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-
-          <button
-            class="bill-sheet-action"
-            onclick="openBillActionHistory('${bill.id}')"
-          >
-            <span>${svgIcon('clock', 20)}</span>
-            <span>Payment history</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-
-          <button
-            class="bill-sheet-action"
-            onclick="openBillActionEdit('${bill.id}')"
-          >
-            <span>${svgIcon('gear', 20)}</span>
-            <span>Edit details</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-
-          <button
-            class="bill-sheet-action bill-sheet-action-danger"
-            onclick="openBillActionRemove('${bill.id}')"
-          >
-            <span>${svgIcon('trash', 20)}</span>
-            <span>Remove from list</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  const container = document.createElement('div');
-  container.id = 'billQuickActionsContainer';
-  container.innerHTML = sheetHtml;
-
-  document.body.appendChild(container);
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document.getElementById('billQuickActionsOverlay')?.classList.add('show');
-    document.getElementById('billQuickActionsSheet')?.classList.add('show');
-  });
-}
 function closeBillQuickActions(callback) {
   const overlay = document.getElementById('billQuickActionsOverlay');
   const sheet = document.getElementById('billQuickActionsSheet');
@@ -5539,11 +5449,7 @@ window.openBillActionEdit = function (billId) {
     openBillForm(billId);
   });
 };
-window.openBillActionDetails = function (billId) {
-  closeBillQuickActions(() => {
-    openBillDetailsSheet(billId);
-  });
-};
+
 window.openBillActionHistory = function (billId) {
   closeBillQuickActions(() => {
     openBillDetailsSheet(billId);
