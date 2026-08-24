@@ -5433,12 +5433,12 @@ function openBillQuickActions(billId) {
 
   const sheetHtml = `
     <div
-      class="sheet-overlay show"
+      class="sheet-overlay"
       id="billQuickActionsOverlay"
       onclick="closeBillQuickActions()"
     ></div>
 
-    <div class="sheet show" id="billQuickActionsSheet">
+    <div class="sheet" id="billQuickActionsSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
@@ -5454,7 +5454,9 @@ function openBillQuickActions(billId) {
       <div class="sheet-body">
         <div class="bill-sheet-header">
           <div class="bill-sheet-heading">
-            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
+            <div class="bill-sheet-title">
+              ${escapeHtml(bill.name)}
+            </div>
 
             <div class="bill-sheet-subtitle">
               ${formatCurrency(bill.amount)}
@@ -5500,6 +5502,11 @@ function openBillQuickActions(billId) {
 
   document.body.appendChild(container);
   lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document.getElementById('billQuickActionsOverlay')?.classList.add('show');
+    document.getElementById('billQuickActionsSheet')?.classList.add('show');
+  });
 }
 function closeBillQuickActions(callback) {
   const overlay = document.getElementById('billQuickActionsOverlay');
