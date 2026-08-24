@@ -1340,7 +1340,10 @@ function renderDashboardUpcomingBill(bill) {
 
   return `
     <button
-      onclick="navigate('detail', {
+      <button
+  type="button"
+  class="dashboard-upcoming-tile ${billStatus === 'overdue' ? 'is-overdue' : ''}"
+  onclick="navigate('detail', {
         id: '${sourceBillId}',
         occurrenceDueDate: '${bill.dueDate}',
         returnRoute: 'today'

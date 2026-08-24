@@ -2296,3 +2296,23 @@ body {
   color: var(--text);
   font-size: var(--text-sm);
 }
+/* Compact outlined cards inside the Dashboard Upcoming Bills carousel */
+.upcoming-carousel .dashboard-upcoming-tile {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-sizing: border-box;
+}
+
+.upcoming-carousel .dashboard-upcoming-tile.is-overdue {
+  border-color: color-mix(
+    in srgb,
+    var(--overdue) 55%,
+    var(--border)
+  );
+  background: color-mix(
+    in srgb,
+    var(--overdue-bg) 22%,
+    var(--surface)
+  );
+}
