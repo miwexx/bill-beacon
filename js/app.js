@@ -5590,9 +5590,7 @@ function openBillQuickActions(billId) {
       <div class="sheet-body">
         <div class="bill-sheet-header">
           <div class="bill-sheet-heading">
-            <div class="bill-sheet-title">
-              ${escapeHtml(bill.name)}
-            </div>
+            <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
 
             <div class="bill-sheet-subtitle">
               ${formatCurrency(bill.amount)}
@@ -5603,7 +5601,7 @@ function openBillQuickActions(billId) {
         <div class="bill-sheet-actions">
           <button
             class="bill-sheet-action"
-            onclick="closeBillQuickActions(); setTimeout(() => openBillForm('${bill.id}'), 320)"
+            onclick="openBillActionEdit('${bill.id}')"
           >
             <span>${svgIcon('gear', 20)}</span>
             <span>Edit details</span>
@@ -5612,7 +5610,7 @@ function openBillQuickActions(billId) {
 
           <button
             class="bill-sheet-action"
-            onclick="closeBillQuickActions(); setTimeout(() => openBillDetailsSheet('${bill.id}'), 320)"
+            onclick="openBillActionHistory('${bill.id}')"
           >
             <span>${svgIcon('doc', 20)}</span>
             <span>Payment history</span>
@@ -5621,7 +5619,7 @@ function openBillQuickActions(billId) {
 
           <button
             class="bill-sheet-action bill-sheet-action-danger"
-            onclick="closeBillQuickActions(); setTimeout(() => confirmDeleteBill('${bill.id}'), 320)"
+            onclick="openBillActionRemove('${bill.id}')"
           >
             <span>${svgIcon('trash', 20)}</span>
             <span>Remove from list</span>
@@ -5639,7 +5637,29 @@ function openBillQuickActions(billId) {
   document.body.appendChild(container);
   lockBackgroundScroll();
 }
+function openBillActionEdit(billId) {
+  closeBillQuickActions();
 
+  setTimeout(() => {
+    openBillForm(billId);
+  }, 320);
+}
+
+function openBillActionHistory(billId) {
+  closeBillQuickActions();
+
+  setTimeout(() => {
+    openBillDetailsSheet(billId);
+  }, 320);
+}
+
+function openBillActionRemove(billId) {
+  closeBillQuickActions();
+
+  setTimeout(() => {
+    confirmDeleteBill(billId);
+  }, 320);
+}
 function closeBillDetailsSheet() {
   document.getElementById('billDetailsContainer')?.remove();
 }
