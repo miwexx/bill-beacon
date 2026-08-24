@@ -2281,10 +2281,8 @@ body {
 }
 /* Dashboard: match Upcoming Bills cards to Bill Status card outlines */
 .upcoming-bill {
+  background: var(--surface);
   border: 1px solid var(--border);
-  box-sizing: border-box;
-}
-.upcoming-bill {
-  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
   box-sizing: border-box;
 }
