@@ -2279,3 +2279,8 @@ body {
   font-weight: 800;
   cursor: pointer;
 }
+/* Dashboard: match Upcoming Bills cards to Bill Status card outlines */
+.upcoming-bill {
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+}
