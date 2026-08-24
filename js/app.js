@@ -1292,6 +1292,94 @@ function getNotificationCount() {
     );
   }).length;
 }
+function getDashboardUpcomingGroups(referenceDate = new Date()) {
+  const currentMonthBills = getCalendarBillsForMonth(referenceDate);
+
+  const nextMonthDate = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth() + 1,
+    1,
+    12,
+    0,
+    0
+  );
+
+  const nextMonthBills = getCalendarBillsForMonth(nextMonthDate);
+
+  const isUnpaid = bill =>
+    !isOccurrencePaid(bill, new Date(bill.dueDate));
+
+  const sortDue = (a, b) =>
+    new Date(a.dueDate) - new Date(b.dueDate);
+
+  const currentMonth = currentMonthBills
+    .filter(isUnpaid)
+    .sort(sortDue);
+
+  const nextMonth = nextMonthBills
+    .filter(isUnpaid)
+    .sort(sortDue);
+
+  return {
+    currentMonth,
+    nextMonth,
+    nextMonthLabel: formatDate(nextMonthDate.toISOString(), 'monthYear')
+  };
+}
+
+function renderDashboardUpcomingBill(bill) {
+  const category = getCategory(bill.category);
+  const billStatus = getOccurrenceStatus(
+    bill,
+    new Date(bill.dueDate)
+  );
+
+  const sourceBillId = bill.isOccurrence
+    ? bill.sourceBillId
+    : bill.id;
+
+  return `
+    <button
+      onclick="navigate('detail', {
+        id: '${sourceBillId}',
+        occurrenceDueDate: '${bill.dueDate}',
+        returnRoute: 'today'
+      })"
+      aria-label="View ${escapeHtml(bill.name)} details"
+    >
+      <div
+        class="upcoming-bill-icon"
+        style="background:${
+          getBillBrand(bill.name)
+            ? '#fff'
+            : `var(--${category.color})`
+        }"
+      >
+        ${billVisual(bill, 32)}
+      </div>
+
+      <div class="upcoming-bill-name">
+        ${escapeHtml(bill.name)}
+      </div>
+
+      <div class="upcoming-bill-amount">
+        ${formatCurrency(bill.amount)}
+      </div>
+
+      <div
+        class="upcoming-bill-date"
+        style="color:${
+          billStatus === 'overdue'
+            ? 'var(--overdue)'
+            : 'var(--text-muted)'
+        }"
+      >
+        ${formatDate(bill.dueDate, 'short')}
+        · ${relativeDue(bill.dueDate)}
+      </div>
+    </button>
+  `;
+}
 function renderToday() {
   const now = new Date();
 
@@ -1346,9 +1434,11 @@ function renderToday() {
   const nextDueBill = [...upcomingMonthBills, ...overdueBills]
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))[0];
 
-  const upcomingBills = [...overdueBills, ...upcomingMonthBills]
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-    .slice(0, 6);
+  const dashboardUpcomingGroups = getDashboardUpcomingGroups(now);
+
+const currentMonthUpcomingBills = dashboardUpcomingGroups.currentMonth;
+const nextMonthUpcomingBills = dashboardUpcomingGroups.nextMonth;
+const nextMonthLabel = dashboardUpcomingGroups.nextMonthLabel;
 
   const recentPayments = Store.getPayments()
     .map((payment) => ({
@@ -1638,66 +1728,58 @@ function renderToday() {
           </div>
 
           ${
-            upcomingBills.length
-              ? `
-                <div class="upcoming-carousel">
-                  ${upcomingBills
-                    .map((bill) => {
-                      const category = getCategory(bill.category);
-                      const billStatus = getBillStatusForDashboard(bill);
+  currentMonthUpcomingBills.length || nextMonthUpcomingBills.length
+    ? `
+      ${
+        currentMonthUpcomingBills.length
+          ? `
+            <div class="upcoming-carousel">
+              ${currentMonthUpcomingBills
+                .slice(0, 6)
+                .map(renderDashboardUpcomingBill)
+                .join('')}
+            </div>
+          `
+          : ''
+      }
 
-                     return `
-  <button
-      onclick="navigate('detail', {
-  id: '${getSourceBillId(bill)}',
-  occurrenceDueDate: '${bill.dueDate}',
-  returnRoute: 'today'
-})"
-                          aria-label="View ${escapeHtml(bill.name)} details"
-                        >
-                          <div
-                            class="upcoming-bill-icon"
-                            style="background:${
-                              getBillBrand(bill.name)
-                                ? "#fff"
-                                : `var(--${category.color})`
-                            }"
-                          >
-                            ${billVisual(bill, 32)}
-                          </div>
+      ${
+        nextMonthUpcomingBills.length
+          ? `
+            <div class="dashboard-upcoming-month-divider">
+              <span>${nextMonthLabel}</span>
+              <span>
+                ${nextMonthUpcomingBills.length} bill${
+                  nextMonthUpcomingBills.length === 1 ? '' : 's'
+                }
+                · ${formatCurrency(
+                  nextMonthUpcomingBills.reduce(
+                    (total, bill) =>
+                      total + (parseFloat(bill.amount) || 0),
+                    0
+                  )
+                )}
+              </span>
+            </div>
 
-                          <div class="upcoming-bill-name">
-                            ${escapeHtml(bill.name)}
-                          </div>
-
-                          <div class="upcoming-bill-amount">
-                            ${formatCurrency(bill.amount)}
-                          </div>
-
-                          <div
-                            class="upcoming-bill-date"
-                            style="color:${
-                              billStatus === "overdue"
-                                ? "var(--overdue)"
-                                : ""
-                            }"
-                          >
-                            ${formatDate(bill.dueDate)} ·
-                            ${relativeDue(bill.dueDate)}
-                          </div>
-                        </button>
-                      `;
-                    })
-                    .join("")}
-                </div>
-              `
-              : `
-                <div class="dashboard-empty-card">
-                  ${svgIcon("checkCircle", 22)}
-                  <span>No upcoming bills right now</span>
-                </div>
-              `
-          }
+            <div class="upcoming-carousel">
+              ${nextMonthUpcomingBills
+                .slice(0, 6)
+                .map(renderDashboardUpcomingBill)
+                .join('')}
+            </div>
+          `
+          : ''
+      }
+    `
+    : `
+      <div class="dashboard-empty-card">
+        ${svgIcon('checkCircle', 22)}
+        <span>No upcoming bills right now</span>
+      </div>
+    `
+}
+ 
         </div>
 
         <div>
