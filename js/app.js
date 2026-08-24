@@ -4921,46 +4921,7 @@ function detailRow(label, value) {
 // ====================================
 // COMPONENTS
 // ====================================
-function getBillScheduleLabel(bill) {
-  const dueDate = new Date(bill.dueDate);
-  const day = bill.dueDay || dueDate.getDate();
 
-  const ordinal = (value) => {
-    const mod100 = value % 100;
-
-    if (mod100 >= 11 && mod100 <= 13) {
-      return `${value}th`;
-    }
-
-    switch (value % 10) {
-      case 1:
-        return `${value}st`;
-      case 2:
-        return `${value}nd`;
-      case 3:
-        return `${value}rd`;
-      default:
-        return `${value}th`;
-    }
-  };
-
-  switch (bill.recurrence) {
-    case 'Weekly':
-      return `Repeats weekly`;
-
-    case 'Monthly':
-      return `Due on the ${ordinal(day)} of each month`;
-
-    case 'Quarterly':
-      return `Repeats every 3 months`;
-
-    case 'Yearly':
-      return `Repeats yearly`;
-
-    default:
-      return `Due ${formatDate(bill.dueDate, 'full')}`;
-  }
-}
 function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const payCycleLabel = getPayCycleLabel(bill);
@@ -4986,9 +4947,10 @@ function billRow(bill, clickable = false) {
     }
   };
 
-  const scheduleText = bill.recurrence && bill.recurrence !== 'None'
-  ? `Due on the ${ordinal(dueDay)} of each month`
-  : `Due on ${formatDate(bill.dueDate, 'full')}`;
+  const scheduleText =
+    bill.recurrence && bill.recurrence !== 'None'
+      ? `Due on the ${ordinal(dueDay)}`
+      : `Due on ${formatDate(bill.dueDate, 'full')}`;
 
   const payCycleClass =
     bill.payCycle === 'first' ||
