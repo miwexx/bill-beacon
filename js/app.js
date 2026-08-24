@@ -5438,31 +5438,6 @@ function closeBillQuickActions() {
     unlockBackgroundScroll();
   }, 300);
 }
-
-function closeBillPaymentHistorySheet() {
-  const overlay = document.getElementById('billPaymentHistoryOverlay');
-  const sheet = document.getElementById('billPaymentHistorySheet');
-
-  overlay?.classList.remove('show');
-  sheet?.classList.remove('show');
-
-  setTimeout(() => {
-    document.getElementById('billPaymentHistoryContainer')?.remove();
-    unlockBackgroundScroll();
-  }, 300);
-}
-
-function openBillPaymentHistorySheet(billId) {
-  const bill = Store.getBill(billId);
-
-  if (!bill) return;
-
-  const payments = Store.getPaymentsForBill(billId).sort((a, b) => {
-    const aDate = new Date(a.voidedAt || a.paidDate || a.createdAt || 0);
-    const bDate = new Date(b.voidedAt || b.paidDate || b.createdAt || 0);
-    return bDate - aDate;
-  });
-
   const paymentRows = payments.length
     ? payments.map((payment) => {
         const isVoided = payment.status === 'voided';
