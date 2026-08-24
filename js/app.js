@@ -5654,23 +5654,23 @@ function closeBillQuickActions(callback) {
   }, 300);
 }
 
-function openBillActionEdit(billId) {
+window.openBillActionEdit = function (billId) {
   closeBillQuickActions(() => {
     openBillForm(billId);
   });
-}
+};
 
-function openBillActionHistory(billId) {
+window.openBillActionHistory = function (billId) {
   closeBillQuickActions(() => {
     openBillDetailsSheet(billId);
   });
-}
+};
 
-function openBillActionRemove(billId) {
+window.openBillActionRemove = function (billId) {
   closeBillQuickActions(() => {
     confirmDeleteBill(billId);
   });
-}
+};
 function closeBillDetailsSheet() {
   document.getElementById('billDetailsContainer')?.remove();
 }
