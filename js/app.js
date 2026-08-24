@@ -1747,20 +1747,22 @@ const nextMonthLabel = dashboardUpcomingGroups.nextMonthLabel;
         nextMonthUpcomingBills.length
           ? `
             <div class="dashboard-upcoming-month-divider">
-              <span>${nextMonthLabel}</span>
-              <span>
-                ${nextMonthUpcomingBills.length} bill${
-                  nextMonthUpcomingBills.length === 1 ? '' : 's'
-                }
-                · ${formatCurrency(
-                  nextMonthUpcomingBills.reduce(
-                    (total, bill) =>
-                      total + (parseFloat(bill.amount) || 0),
-                    0
-                  )
-                )}
-              </span>
-            </div>
+  <span>${nextMonthLabel}</span>
+  <span>
+    ${
+      nextMonthUpcomingBills.slice(0, 6).length
+    } shown
+    · ${formatCurrency(
+      nextMonthUpcomingBills
+        .slice(0, 6)
+        .reduce(
+          (total, bill) =>
+            total + (parseFloat(bill.amount) || 0),
+          0
+        )
+    )}
+  </span>
+</div>
 
             <div class="upcoming-carousel">
               ${nextMonthUpcomingBills
