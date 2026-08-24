@@ -2296,12 +2296,42 @@ body {
   color: var(--text);
   font-size: var(--text-sm);
 }
-/* Compact outlined cards inside the Dashboard Upcoming Bills carousel */
+/* Dashboard Upcoming Bills: compact status-card style carousel */
+.upcoming-carousel {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding: 2px 0 6px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+
 .upcoming-carousel .dashboard-upcoming-tile {
-  background: var(--surface);
+  flex: 0 0 152px;
+  width: 152px;
+  min-height: 148px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  padding: 14px 12px 12px;
+  overflow: hidden;
+  scroll-snap-align: start;
+
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  text-align: center;
+  font: inherit;
+  cursor: pointer;
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.upcoming-carousel .dashboard-upcoming-tile:active {
+  transform: scale(0.98);
 }
 
 .upcoming-carousel .dashboard-upcoming-tile.is-overdue {
@@ -2312,7 +2342,53 @@ body {
   );
   background: color-mix(
     in srgb,
-    var(--overdue-bg) 22%,
+    var(--overdue-bg) 24%,
     var(--surface)
   );
+}
+
+.upcoming-carousel .dashboard-upcoming-tile .upcoming-bill-icon {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.upcoming-carousel .dashboard-upcoming-tile .upcoming-bill-icon img {
+  width: 32px !important;
+  height: 32px !important;
+  max-width: 32px;
+  max-height: 32px;
+  object-fit: contain;
+  transform: none !important;
+}
+
+.upcoming-carousel .dashboard-upcoming-tile .upcoming-bill-name {
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  font-weight: 800;
+}
+
+.upcoming-carousel .dashboard-upcoming-tile .upcoming-bill-amount {
+  font-size: var(--text-base);
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.upcoming-carousel .dashboard-upcoming-tile .upcoming-bill-date {
+  width: 100%;
+  margin-top: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.2;
 }
