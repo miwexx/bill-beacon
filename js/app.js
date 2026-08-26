@@ -3718,50 +3718,58 @@ function editMonthlySpendingLimit() {
   render();
 }
 function paymentPlanVisual(provider, size = 42) {
-  const normalized = String(provider || '').toLowerCase();
+  const normalized = String(provider || '').trim().toLowerCase();
 
   const providers = {
     klarna: {
       label: 'Klarna',
+      domain: 'klarna.com',
       background: '#ffb3c7',
       color: '#111111',
       initials: 'K'
     },
     afterpay: {
       label: 'Afterpay',
+      domain: 'afterpay.com',
       background: '#b7f7d8',
       color: '#111111',
       initials: 'A'
     },
     affirm: {
       label: 'Affirm',
+      domain: 'affirm.com',
       background: '#4a4af4',
       color: '#ffffff',
       initials: 'A'
     },
     sezzle: {
       label: 'Sezzle',
+      domain: 'sezzle.com',
       background: '#7b5cff',
       color: '#ffffff',
       initials: 'S'
     },
     'paypal pay later': {
-      label: 'PayPal',
+      label: 'PayPal Pay Later',
+      domain: 'paypal.com',
       background: '#003087',
-      color: '#ffffff',
-      initials: 'P'
-    },
-    other: {
-      label: 'Payment plan',
-      background: 'var(--accent)',
       color: '#ffffff',
       initials: 'P'
     }
   };
 
-  const plan = providers[normalized] || providers.other;
+  const plan = providers[normalized] || {
+    label: provider || 'Payment plan',
+    domain: '',
+    background: 'var(--accent)',
+    color: '#ffffff',
+    initials: String(provider || 'P')
+      .trim()
+      .charAt(0)
+      .toUpperCase()
+  };
 
-  return `
+  const fallback = `
     <span
       aria-label="${escapeHtml(plan.label)}"
       title="${escapeHtml(plan.label)}"
@@ -3781,8 +3789,54 @@ function paymentPlanVisual(provider, size = 42) {
         line-height:1;
       "
     >
-      ${plan.initials}
+      ${escapeHtml(plan.initials)}
     </span>
+  `;
+
+  if (!plan.domain) {
+    return fallback;
+  }
+
+  return `
+    <img
+      src="https://img.logo.dev/${plan.domain}?token=pkOi2mTbJSOOVDVoEsRz5kg&size=128&format=png"
+      alt="${escapeHtml(plan.label)} logo"
+      title="${escapeHtml(plan.label)}"
+      width="${size}"
+      height="${size}"
+      style="
+        width:${size}px;
+        height:${size}px;
+        flex:0 0 ${size}px;
+        display:block;
+        object-fit:contain;
+        border-radius:${Math.round(size * 0.3)}px;
+        background:#ffffff;
+        padding:3px;
+      "
+      onerror="
+        this.onerror = null;
+        this.replaceWith(
+          Object.assign(document.createElement('span'), {
+            textContent: '${String(plan.initials).replace(/'/g, "\\'")}',
+            title: '${String(plan.label).replace(/'/g, "\\'")}',
+            style:
+              'width:${size}px;' +
+              'height:${size}px;' +
+              'flex:0 0 ${size}px;' +
+              'display:inline-flex;' +
+              'align-items:center;' +
+              'justify-content:center;' +
+              'border-radius:${Math.round(size * 0.3)}px;' +
+              'background:${plan.background};' +
+              'color:${plan.color};' +
+              'font-size:${Math.max(16, Math.round(size * 0.55))}px;' +
+              'font-weight:900;' +
+              'line-height:1;'
+          })
+        );
+      "
+    >
   `;
 }
 function renderPaymentPlans() {
