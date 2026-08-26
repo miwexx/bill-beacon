@@ -8900,7 +8900,25 @@ document.addEventListener(
   },
   true
 );
+function cleanExistingPaymentPlanNames() {
+  const bills = Store.getBills().map((bill) => {
+    if (!bill.installmentPlanId) return bill;
 
+    const cleanName = String(bill.name || "")
+      .replace(/\s*—\s*Payment\s+\d+\s+of\s+\d+\s*$/i, "")
+      .replace(/^[^—]+—\s*/, "")
+      .trim();
+
+    return {
+      ...bill,
+      name: cleanName || "Payment Plan",
+      updatedAt: new Date().toISOString(),
+    };
+  });
+
+  Store.saveBills(bills);
+  render();
+}
 /* ============================================
    Real Push Notification Inbox
    Uses Worker notification send history
