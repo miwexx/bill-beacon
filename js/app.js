@@ -8002,14 +8002,17 @@ function saveInstallmentPlan() {
 
     Store.addBill(bill);
 
-    if (paymentNumber === 1 && firstPaymentStatus === "paid") {
-      Store.addPayment({
-        id: uid(),
-        billId: bill.id,
-        paidDate: paymentDate.toISOString(),
-        amount: paymentAmount,
-      });
-    }
+    if (paymentNumber === 1 && firstPaymentStatus === 'paid') {
+  Store.addPayment({
+    id: uid(),
+    billId: bill.id,
+    paidDate: paymentDate.toISOString(),
+    amount: paymentAmount,
+    paidForDueDate: bill.dueDate,
+    status: 'active',
+    voidedAt: null
+  });
+}
 
     paymentDate = getNextInstallmentDate(
       paymentDate,
