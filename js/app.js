@@ -3981,10 +3981,28 @@ function renderPaymentPlans() {
 
   return `
     <div class="nav-bar">
-      <div class="nav-bar-content">
-        <div class="nav-title">Payment Plans</div>
-      </div>
-    </div>
+  <div class="nav-bar-content">
+    <button
+      type="button"
+      class="nav-button"
+      onclick="navigate('insights')"
+      aria-label="Back to Insights"
+    >
+      ${svgIcon("chevronLeft", 22)}
+    </button>
+
+    <div class="nav-title">Payment Plans</div>
+
+    <button
+      type="button"
+      class="nav-button"
+      onclick="navigate('insights')"
+      aria-label="Close Payment Plans"
+    >
+      ${svgIcon("close", 22)}
+    </button>
+  </div>
+</div>
 
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
