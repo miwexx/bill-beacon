@@ -2022,7 +2022,7 @@ const viewedMonthStart = new Date(year, month, 1);
 const monthBills =
   viewedMonthStart < currentMonthStart
     ? []
-    : getRecurringOccurrencesForMonth(viewDate);
+    : getCalendarBillsForMonth(viewDate);
 
   const cells = [];
 
