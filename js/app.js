@@ -3750,39 +3750,43 @@ function paymentPlanVisual(provider, size = 42) {
       initials: 'S'
     },
     zip: {
-  label: 'Zip',
-  domain: 'zip.co',
-  background: '#6d5cff',
-  color: '#ffffff',
-  initials: 'Z'
-},
+      label: 'Zip',
+      domain: 'zip.co',
+      background: '#6d5cff',
+      color: '#ffffff',
+      initials: 'Z'
+    },
     'paypal pay later': {
-  label: 'PayPal Pay Later',
-  domain: 'paypal.com',
-  background: '#003087',
-  color: '#ffffff',
-  initials: 'P'
-},
-paypal: {
-  label: 'PayPal',
-  domain: 'paypal.com',
-  background: '#003087',
-  color: '#ffffff',
-  initials: 'P'
-},
+      label: 'PayPal Pay Later',
+      domain: 'paypal.com',
+      background: '#003087',
+      color: '#ffffff',
+      initials: 'P'
+    },
+    paypal: {
+      label: 'PayPal',
+      domain: 'paypal.com',
+      background: '#003087',
+      color: '#ffffff',
+      initials: 'P'
+    }
+  };
 
   const plan = providers[normalized] || {
-    label: provider || 'Payment plan',
+    label: String(provider || 'Payment plan'),
     domain: '',
     background: 'var(--accent)',
     color: '#ffffff',
-    initials: String(provider || 'P')
-      .trim()
-      .charAt(0)
-      .toUpperCase()
+    initials: String(provider || 'P').trim().charAt(0).toUpperCase()
   };
 
-  const fallback = `
+  const radius = Math.round(size * 0.3);
+  const fontSize = Math.max(16, Math.round(size * 0.55));
+  const logoUrl = plan.domain
+    ? `https://img.logo.dev/${plan.domain}?token=pkOi2mTbJSOOVDVoEsRz5kg&size=128&format=png`
+    : '';
+
+  return `
     <span
       aria-label="${escapeHtml(plan.label)}"
       title="${escapeHtml(plan.label)}"
@@ -3793,63 +3797,44 @@ paypal: {
         display:inline-flex;
         align-items:center;
         justify-content:center;
-        border-radius:${Math.round(size * 0.3)}px;
+        overflow:hidden;
+        border-radius:${radius}px;
         background:${plan.background};
         color:${plan.color};
-        font-size:${Math.max(16, Math.round(size * 0.55))}px;
+        font-size:${fontSize}px;
         font-weight:900;
-        letter-spacing:-0.06em;
         line-height:1;
       "
     >
-      ${escapeHtml(plan.initials)}
+      ${
+        logoUrl
+          ? `
+            <img
+              src="${logoUrl}"
+              alt=""
+              width="${size}"
+              height="${size}"
+              style="
+                width:100%;
+                height:100%;
+                object-fit:contain;
+                background:#ffffff;
+                padding:3px;
+              "
+              onerror="this.remove()"
+            >
+          `
+          : ''
+      }
+      <span
+        style="
+          display:${logoUrl ? 'none' : 'inline'};
+          line-height:1;
+        "
+      >
+        ${escapeHtml(plan.initials)}
+      </span>
     </span>
-  `;
-
-  if (!plan.domain) {
-    return fallback;
-  }
-
-  return `
-    <img
-      src="https://img.logo.dev/${plan.domain}?token=pkOi2mTbJSOOVDVoEsRz5kg&size=128&format=png"
-      alt="${escapeHtml(plan.label)} logo"
-      title="${escapeHtml(plan.label)}"
-      width="${size}"
-      height="${size}"
-      style="
-        width:${size}px;
-        height:${size}px;
-        flex:0 0 ${size}px;
-        display:block;
-        object-fit:contain;
-        border-radius:${Math.round(size * 0.3)}px;
-        background:#ffffff;
-        padding:3px;
-      "
-      onerror="
-        this.onerror = null;
-        this.replaceWith(
-          Object.assign(document.createElement('span'), {
-            textContent: '${String(plan.initials).replace(/'/g, "\\'")}',
-            title: '${String(plan.label).replace(/'/g, "\\'")}',
-            style:
-              'width:${size}px;' +
-              'height:${size}px;' +
-              'flex:0 0 ${size}px;' +
-              'display:inline-flex;' +
-              'align-items:center;' +
-              'justify-content:center;' +
-              'border-radius:${Math.round(size * 0.3)}px;' +
-              'background:${plan.background};' +
-              'color:${plan.color};' +
-              'font-size:${Math.max(16, Math.round(size * 0.55))}px;' +
-              'font-weight:900;' +
-              'line-height:1;'
-          })
-        );
-      "
-    >
   `;
 }
 function renderPaymentPlans() {
