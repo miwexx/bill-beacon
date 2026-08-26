@@ -1065,7 +1065,7 @@ function showPaymentUndoToast(payment, billName) {
   `;
 
   toast.innerHTML = `
-    <span>${escapeHtml(billName)} marked paid</span>
+    <span>${escapeHtml(billName)} Marked Paid</span>
     <button
       type="button"
       data-payment-undo="${payment.id}"
