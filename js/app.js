@@ -3749,6 +3749,13 @@ function paymentPlanVisual(provider, size = 42) {
       color: '#ffffff',
       initials: 'S'
     },
+    zip: {
+  label: 'Zip',
+  domain: 'zip.co',
+  background: '#6d5cff',
+  color: '#ffffff',
+  initials: 'Z'
+},
     'paypal pay later': {
       label: 'PayPal Pay Later',
       domain: 'paypal.com',
