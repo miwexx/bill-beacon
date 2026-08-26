@@ -4056,6 +4056,7 @@ function renderPaymentPlans() {
     </div>
   `;
 }
+
 function openPaymentPlanActions(planId) {
   const installments = Store.getBills()
     .filter((bill) => bill.installmentPlanId === planId)
@@ -4065,8 +4066,8 @@ function openPaymentPlanActions(planId) {
     (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
   );
 
-  if (!unpaidInstallments.length) {
-    alert("This payment plan is already paid in full.");
+  if (!installments.length) {
+    alert("Payment plan not found.");
     return;
   }
 
@@ -4079,64 +4080,131 @@ function openPaymentPlanActions(planId) {
     0
   );
 
-  const confirmed = confirm(
-    `Pay in full?\n\n` +
-    `${provider}\n` +
-    `${unpaidInstallments.length} payment` +
-    `${unpaidInstallments.length === 1 ? "" : "s"} remaining\n` +
-    `Remaining balance: ${formatCurrency(remainingBalance)}\n\n` +
-    `This will mark all remaining scheduled payments as paid.`
-  );
+  document.getElementById("paymentPlanActionsContainer")?.remove();
 
-  if (!confirmed) return;
+  const container = document.createElement("div");
+  container.id = "paymentPlanActionsContainer";
 
-  payPaymentPlanInFull(planId);
-}
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="paymentPlanActionsOverlay"
+      onclick="closePaymentPlanActions()"
+    ></div>
 
-function payPaymentPlanInFull(planId) {
-  const paidInFullAt = new Date().toISOString();
+    <div class="sheet" id="paymentPlanActionsSheet">
+      <div class="sheet-handle"></div>
 
-  const installments = Store.getBills().filter(
-    (bill) => bill.installmentPlanId === planId
-  );
+      <div class="sheet-nav">
+        <button
+          type="button"
+          class="nav-button"
+          onclick="closePaymentPlanActions()"
+          aria-label="Close payment plan actions"
+        >
+          ${svgIcon("close", 22)}
+        </button>
 
-  const unpaidInstallments = installments.filter(
-    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
-  );
+        <div class="sheet-title">Payment Plan</div>
 
-  if (!unpaidInstallments.length) {
-    alert("This payment plan is already paid in full.");
-    return;
-  }
+        <div style="width:54px"></div>
+      </div>
 
-  const payoffAmount = unpaidInstallments.reduce(
-    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
-    0
-  );
+      <div class="sheet-body content-gap">
+        <div class="card card-pad">
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              gap:var(--space-3);
+            "
+          >
+            ${paymentPlanVisual(provider, 42)}
 
-  unpaidInstallments.forEach((bill) => {
-    Store.addPayment({
-      id: uid(),
-      billId: bill.id,
-      paidDate: paidInFullAt,
-      amount: parseFloat(bill.amount) || 0,
-      paidForDueDate: bill.dueDate,
-      status: "active",
-      voidedAt: null,
-      paymentPlanId: planId,
-      paymentType: "paid-in-full",
-      paidInFullAt,
-    });
+            <div style="min-width:0;flex:1">
+              <div
+                style="
+                  font-size:var(--text-base);
+                  font-weight:800;
+                "
+              >
+                ${escapeHtml(provider)}
+              </div>
+            </div>
+
+            <div style="text-align:right">
+              <div
+                style="
+                  font-size:var(--text-xs);
+                  color:var(--text-muted);
+                "
+              >
+                Remaining
+              </div>
+
+              <div
+                style="
+                  margin-top:3px;
+                  font-size:var(--text-lg);
+                  font-weight:800;
+                "
+              >
+                ${formatCurrency(remainingBalance)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="btn-secondary"
+          style="width:100%"
+          onclick="openEditPaymentPlan('${planId}')"
+        >
+          ${svgIcon("gear", 20)}
+          Edit Plan
+        </button>
+
+        ${
+          unpaidInstallments.length
+            ? `
+              <button
+                type="button"
+                class="btn-primary"
+                style="width:100%"
+                onclick="payPaymentPlanInFull('${planId}')"
+              >
+                ${svgIcon("checkCircle", 20)}
+                Pay in Full
+              </button>
+            `
+            : ""
+        }
+
+        <button
+          type="button"
+          class="btn-secondary"
+          style="width:100%"
+          onclick="closePaymentPlanActions()"
+        >
+          Cancel
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document
+      .getElementById("paymentPlanActionsOverlay")
+      ?.classList.add("show");
+
+    document
+      .getElementById("paymentPlanActionsSheet")
+      ?.classList.add("show");
   });
-
-  installments.forEach((bill) => {
-    Store.updateBill(bill.id, {
-      paidInFullAt,
-      paidInFullAmount: payoffAmount,
-    });
-  });
-
-  render();
 }
 function closePaymentPlanActions() {
   document
