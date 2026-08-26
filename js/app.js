@@ -1106,7 +1106,7 @@ function showPaymentUndoToast(payment, billName) {
 
   paymentUndoTimer = setTimeout(() => {
     dismissPaymentUndoToast();
-  }, 7000);
+  }, 3000);
 }
 function markBillPaid(billId) {
   const bill = Store.getBill(billId);
@@ -3717,6 +3717,74 @@ function editMonthlySpendingLimit() {
   saveMonthlySpendingLimit(limit);
   render();
 }
+function paymentPlanVisual(provider, size = 42) {
+  const normalized = String(provider || '').toLowerCase();
+
+  const providers = {
+    klarna: {
+      label: 'Klarna',
+      background: '#ffb3c7',
+      color: '#111111',
+      initials: 'K'
+    },
+    afterpay: {
+      label: 'Afterpay',
+      background: '#b7f7d8',
+      color: '#111111',
+      initials: 'A'
+    },
+    affirm: {
+      label: 'Affirm',
+      background: '#4a4af4',
+      color: '#ffffff',
+      initials: 'A'
+    },
+    sezzle: {
+      label: 'Sezzle',
+      background: '#7b5cff',
+      color: '#ffffff',
+      initials: 'S'
+    },
+    'paypal pay later': {
+      label: 'PayPal',
+      background: '#003087',
+      color: '#ffffff',
+      initials: 'P'
+    },
+    other: {
+      label: 'Payment plan',
+      background: 'var(--accent)',
+      color: '#ffffff',
+      initials: 'P'
+    }
+  };
+
+  const plan = providers[normalized] || providers.other;
+
+  return `
+    <span
+      aria-label="${escapeHtml(plan.label)}"
+      title="${escapeHtml(plan.label)}"
+      style="
+        width:${size}px;
+        height:${size}px;
+        flex:0 0 ${size}px;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:${Math.round(size * 0.3)}px;
+        background:${plan.background};
+        color:${plan.color};
+        font-size:${Math.max(16, Math.round(size * 0.55))}px;
+        font-weight:900;
+        letter-spacing:-0.06em;
+        line-height:1;
+      "
+    >
+      ${plan.initials}
+    </span>
+  `;
+}
 function renderPaymentPlans() {
   const installmentBills = Store.getBills().filter(
     bill =>
@@ -3826,21 +3894,7 @@ function renderPaymentPlans() {
             gap:var(--space-3);
           "
         >
-          <div
-            style="
-              width:42px;
-              height:42px;
-              flex:0 0 42px;
-              border-radius:13px;
-              display:flex;
-              align-items:center;
-              justify-content:center;
-              background:var(--accent-soft, rgba(124,92,255,.14));
-              color:var(--accent);
-            "
-          >
-            ${svgIcon('calendar', 21)}
-          </div>
+          ${paymentPlanVisual(plan.provider, 42)}
 
           <div style="min-width:0; flex:1">
             <div
@@ -4345,7 +4399,11 @@ const activeMonthPayments = payments.filter(payment =>
                       background:var(--accent-soft, rgba(124,92,255,.14));
                     "
                   >
-                    ${svgIcon('calendar', 20)}
+                    ${
+  activePlans.length === 1
+    ? paymentPlanVisual(nextPlanPayment.provider, 38)
+    : svgIcon('calendar', 20)
+}
                   </div>
 
                   <div style="min-width:0; flex:1">
