@@ -2423,7 +2423,12 @@ function renderRecurring() {
   `;
 }
 function renderBills() {
-  const bills = Store.getBills();
+  const allBills = Store.getBills();
+
+  // Payment-plan installments remain stored as individual bills for their
+  // independent due dates and payment history, but do not appear in Bills.
+  const bills = allBills.filter(bill => !bill.installmentPlanId);
+
   const billSort = routeParams.billSort || 'dueDate';
 
   const sortOptions = {
@@ -2434,18 +2439,20 @@ function renderBills() {
     category: 'Type / category'
   };
 
-  const sortBills = (items) => {
+  const sortBills = items => {
     const copy = [...items];
 
     switch (billSort) {
       case 'amountLow':
         return copy.sort(
-          (a, b) => (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0)
+          (a, b) =>
+            (parseFloat(a.amount) || 0) - (parseFloat(b.amount) || 0)
         );
 
       case 'amountHigh':
         return copy.sort(
-          (a, b) => (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0)
+          (a, b) =>
+            (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0)
         );
 
       case 'name':
@@ -2480,7 +2487,7 @@ function renderBills() {
   if (billSort === 'category') {
     const groups = {};
 
-    sortedBills.forEach((bill) => {
+    sortedBills.forEach(bill => {
       const categoryName = getCategory(bill.category).label;
 
       if (!groups[categoryName]) {
@@ -2496,24 +2503,24 @@ function renderBills() {
 
     billContent = sortedCategoryNames
       .map(
-        (categoryName) => `
+        categoryName => `
           <div>
             <div class="section-header">${categoryName}</div>
 
             <div class="card">
               ${groups[categoryName]
                 .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-                .map((bill) => billRow(bill, false))
+                .map(bill => billRow(bill, false))
                 .join('')}
             </div>
           </div>
         `
       )
       .join('');
-  } else {
+  } else if (sortedBills.length) {
     billContent = `
       <div class="card">
-        ${sortedBills.map((bill) => billRow(bill, false)).join('')}
+        ${sortedBills.map(bill => billRow(bill, false)).join('')}
       </div>
     `;
   }
@@ -2545,7 +2552,7 @@ function renderBills() {
               <div class="empty-state-title">No bills yet</div>
 
               <div class="empty-state-text">
-                Add a bill or payment plan to start tracking payments.
+                Add a bill to start tracking payments.
               </div>
 
               <button
@@ -7828,7 +7835,7 @@ function openInstallmentPlanForm() {
                 onchange="updateInstallmentFirstPaymentLabel()"
               >
                 <option value="notPaid">
-                  No Downpayment Required
+                  No Down Payment Required
                 </option>
                 <option value="paid">
                   Paid At Checkout
