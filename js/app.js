@@ -4119,6 +4119,239 @@ function payPaymentPlanInFull(planId) {
 
   render();
 }
+function closePaymentPlanActions() {
+  document
+    .getElementById("paymentPlanActionsOverlay")
+    ?.classList.remove("show");
+
+  document
+    .getElementById("paymentPlanActionsSheet")
+    ?.classList.remove("show");
+
+  setTimeout(() => {
+    document.getElementById("paymentPlanActionsContainer")?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function openPaymentPlanActions(planId) {
+  const installments = Store.getBills()
+    .filter((bill) => bill.installmentPlanId === planId)
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const unpaidInstallments = installments.filter(
+    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
+
+  if (!unpaidInstallments.length) {
+    alert("This payment plan is already paid in full.");
+    return;
+  }
+
+  const representative = installments[0];
+  const provider =
+    representative?.installmentProvider || "Payment Plan";
+
+  const storeName = String(representative?.name || "")
+    .split(" ")
+    .slice(1, -1)
+    .join(" ")
+    .trim();
+
+  const planTitle = storeName
+    ? `${provider} · ${storeName}`
+    : provider;
+
+  const remainingBalance = unpaidInstallments.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+  document.getElementById("paymentPlanActionsContainer")?.remove();
+
+  const container = document.createElement("div");
+  container.id = "paymentPlanActionsContainer";
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="paymentPlanActionsOverlay"
+      onclick="closePaymentPlanActions()"
+    ></div>
+
+    <div class="sheet" id="paymentPlanActionsSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button
+          type="button"
+          class="nav-button"
+          onclick="closePaymentPlanActions()"
+          aria-label="Close payment plan actions"
+        >
+          ${svgIcon("close", 22)}
+        </button>
+
+        <div class="sheet-title">Payment Plan</div>
+
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body content-gap">
+        <div class="card card-pad">
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              gap:var(--space-3);
+            "
+          >
+            ${paymentPlanVisual(provider, 42)}
+
+            <div style="min-width:0;flex:1">
+              <div
+                style="
+                  font-size:var(--text-base);
+                  font-weight:800;
+                  overflow:hidden;
+                  text-overflow:ellipsis;
+                  white-space:nowrap;
+                "
+              >
+                ${escapeHtml(planTitle)}
+              </div>
+
+              <div
+                style="
+                  margin-top:4px;
+                  font-size:var(--text-sm);
+                  color:var(--text-muted);
+                "
+              >
+                ${unpaidInstallments.length} payment${
+                  unpaidInstallments.length === 1 ? "" : "s"
+                } remaining
+              </div>
+            </div>
+
+            <div style="text-align:right">
+              <div
+                style="
+                  font-size:var(--text-xs);
+                  color:var(--text-muted);
+                "
+              >
+                Remaining
+              </div>
+
+              <div
+                style="
+                  margin-top:3px;
+                  font-size:var(--text-lg);
+                  font-weight:800;
+                "
+              >
+                ${formatCurrency(remainingBalance)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="btn-primary"
+          style="width:100%"
+          onclick="payPaymentPlanInFull('${planId}')"
+        >
+          ${svgIcon("checkCircle", 20)}
+          Pay in Full
+        </button>
+
+        <button
+          type="button"
+          class="btn-secondary"
+          style="width:100%"
+          onclick="closePaymentPlanActions()"
+        >
+          Cancel
+        </button>
+
+        <div class="settings-footer">
+          Paying in full marks every remaining scheduled installment as paid.
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document
+      .getElementById("paymentPlanActionsOverlay")
+      ?.classList.add("show");
+
+    document
+      .getElementById("paymentPlanActionsSheet")
+      ?.classList.add("show");
+  });
+}
+
+function payPaymentPlanInFull(planId) {
+  const paidInFullAt = new Date().toISOString();
+
+  const installments = Store.getBills().filter(
+    (bill) => bill.installmentPlanId === planId
+  );
+
+  const unpaidInstallments = installments.filter(
+    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
+
+  if (!unpaidInstallments.length) {
+    closePaymentPlanActions();
+    alert("This payment plan is already paid in full.");
+    return;
+  }
+
+  const payoffAmount = unpaidInstallments.reduce(
+    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+    0
+  );
+
+  const confirmed = confirm(
+    `Pay off ${formatCurrency(payoffAmount)}?\n\n` +
+    `This will mark ${unpaidInstallments.length} remaining scheduled ` +
+    `payment${unpaidInstallments.length === 1 ? "" : "s"} as paid.`
+  );
+
+  if (!confirmed) return;
+
+  unpaidInstallments.forEach((bill) => {
+    Store.addPayment({
+      id: uid(),
+      billId: bill.id,
+      paidDate: paidInFullAt,
+      amount: parseFloat(bill.amount) || 0,
+      paidForDueDate: bill.dueDate,
+      status: "active",
+      voidedAt: null,
+      paymentPlanId: planId,
+      paymentType: "paid-in-full",
+      paidInFullAt,
+    });
+  });
+
+  installments.forEach((bill) => {
+    Store.updateBill(bill.id, {
+      paidInFullAt,
+      paidInFullAmount: payoffAmount,
+    });
+  });
+
+  closePaymentPlanActions();
+  render();
+}
 function renderInsights() {
   const payments = Store.getPayments();
 const now = new Date();
