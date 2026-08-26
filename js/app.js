@@ -1018,7 +1018,96 @@ function getLatestActivePaymentForBill(billId) {
 function isPaidThisMonth(bill, referenceDate = new Date()) {
   return isOccurrencePaid(bill, referenceDate);
 }
+let paymentUndoTimer = null;
+let paymentUndoToastId = null;
 
+function dismissPaymentUndoToast() {
+  if (paymentUndoTimer) {
+    clearTimeout(paymentUndoTimer);
+    paymentUndoTimer = null;
+  }
+
+  if (paymentUndoToastId) {
+    document.getElementById(paymentUndoToastId)?.remove();
+    paymentUndoToastId = null;
+  }
+}
+
+function showPaymentUndoToast(payment, billName) {
+  if (!payment?.id) return;
+
+  dismissPaymentUndoToast();
+
+  const toastId = `payment-undo-${payment.id}`;
+  paymentUndoToastId = toastId;
+
+  const toast = document.createElement('div');
+  toast.id = toastId;
+  toast.setAttribute('role', 'status');
+
+  toast.style.cssText = `
+    position:fixed;
+    left:16px;
+    right:16px;
+    bottom:calc(82px + env(safe-area-inset-bottom, 0px));
+    z-index:10000;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    padding:14px 16px;
+    border-radius:14px;
+    background:var(--surface, #1e1e2e);
+    color:var(--text, #ffffff);
+    box-shadow:0 12px 30px rgba(0,0,0,.28);
+    font-size:14px;
+    font-weight:700;
+  `;
+
+  toast.innerHTML = `
+    <span>${escapeHtml(billName)} marked paid</span>
+    <button
+      type="button"
+      data-payment-undo="${payment.id}"
+      style="
+        border:0;
+        background:transparent;
+        color:var(--accent, #7c5cff);
+        font:inherit;
+        font-weight:900;
+        padding:6px 2px;
+        cursor:pointer;
+      "
+    >
+      Undo
+    </button>
+  `;
+
+  document.body.appendChild(toast);
+
+  toast.querySelector('[data-payment-undo]')?.addEventListener('click', () => {
+    const activePayment = Store.getPayments().find(
+      item => item.id === payment.id && item.status !== 'voided'
+    );
+
+    if (!activePayment) {
+      dismissPaymentUndoToast();
+      return;
+    }
+
+    Store.updatePayment(payment.id, {
+      status: 'voided',
+      voidedAt: new Date().toISOString()
+    });
+
+    dismissPaymentUndoToast();
+    render();
+  });
+
+  paymentUndoTimer = setTimeout(() => {
+    dismissPaymentUndoToast();
+  }, 7000);
+}
 function markBillPaid(billId) {
   const bill = Store.getBill(billId);
 
@@ -1047,17 +1136,19 @@ function markBillPaid(billId) {
     return;
   }
 
-  Store.addPayment({
+  const payment = {
     id: uid(),
     billId: bill.id,
     paidDate: new Date().toISOString(),
     amount: bill.amount,
     paidForDueDate: dueDate,
-    status: "active",
+    status: 'active',
     voidedAt: null
-  });
+  };
 
+  Store.addPayment(payment);
   render();
+  showPaymentUndoToast(payment, bill.name);
 }
 function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
@@ -1113,12 +1204,12 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
   const bill = Store.getBill(billId);
 
   if (!bill) {
-    alert("Bill not found.");
+    alert('Bill not found.');
     return;
   }
 
   const confirmed = confirm(
-    `Mark ${bill.name} as paid for ${formatDate(dueDate, "full")}?\n\n` +
+    `Mark ${bill.name} as paid for ${formatDate(dueDate, 'full')}?\n\n` +
     `${formatCurrency(bill.amount)} will be recorded for this occurrence.`
   );
 
@@ -1135,21 +1226,23 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
   };
 
   if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) {
-    alert("This occurrence is already marked as paid.");
+    alert('This occurrence is already marked as paid.');
     return;
   }
 
-  Store.addPayment({
+  const payment = {
     id: uid(),
     billId: bill.id,
     paidDate: new Date().toISOString(),
     amount: bill.amount,
     paidForDueDate: dueDate,
-    status: "active",
+    status: 'active',
     voidedAt: null
-  });
+  };
 
+  Store.addPayment(payment);
   render();
+  showPaymentUndoToast(payment, bill.name);
 }
 
 function markBillOccurrenceUnpaid(billId, dueDate) {
@@ -3165,15 +3258,18 @@ if (!confirmed) {
     return;
   }
 
-  Store.addPayment({
+    const payment = {
     id: uid(),
     billId: bill.id,
     paidDate: new Date().toISOString(),
     amount: bill.amount,
     paidForDueDate: occurrenceDueDate,
-    status: "active",
+    status: 'active',
     voidedAt: null
-  });
+  };
+
+  Store.addPayment(payment);
+  showPaymentUndoToast(payment, bill.name);
 
   closeCalendarDay();
 
