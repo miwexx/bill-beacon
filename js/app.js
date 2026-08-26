@@ -16,6 +16,7 @@ const CATEGORIES = [
   { id: 'transportation', label: 'Transportation', icon: 'car', color: 'cat-transportation' },
   { id: 'loans', label: 'Loans', icon: 'percent', color: 'cat-loans' },
   { id: 'creditcards', label: 'Credit Cards', icon: 'creditcard', color: 'cat-creditcards' },
+  { id: 'paymentplans', label: 'Payment Plans', icon: 'Subscription', color: 'cat-paymentplans' },
   { id: 'health', label: 'Health', icon: 'cross', color: 'cat-health' },
   { id: 'education', label: 'Education', icon: 'graduationcap', color: 'cat-education' },
   { id: 'other', label: 'Other', icon: 'doc', color: 'cat-other' },
@@ -8900,25 +8901,7 @@ document.addEventListener(
   },
   true
 );
-function cleanExistingPaymentPlanNames() {
-  const bills = Store.getBills().map((bill) => {
-    if (!bill.installmentPlanId) return bill;
 
-    const cleanName = String(bill.name || "")
-      .replace(/\s*—\s*Payment\s+\d+\s+of\s+\d+\s*$/i, "")
-      .replace(/^[^—]+—\s*/, "")
-      .trim();
-
-    return {
-      ...bill,
-      name: cleanName || "Payment Plan",
-      updatedAt: new Date().toISOString(),
-    };
-  });
-
-  Store.saveBills(bills);
-  render();
-}
 /* ============================================
    Real Push Notification Inbox
    Uses Worker notification send history
