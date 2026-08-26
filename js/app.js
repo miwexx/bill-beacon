@@ -4170,11 +4170,16 @@ function openPaymentPlanActions(planId) {
   const provider =
     representative?.installmentProvider || "Payment Plan";
 
-  const planTitle = provider;
-const paymentNumber =
-  installments.length - unpaidInstallments.length + 1;
-const paymentProgress =
-  `Payment ${paymentNumber} of ${installments.length}`;
+  const storeName = String(representative?.name || "")
+    .split(" ")
+    .slice(1, -1)
+    .join(" ")
+    .trim();
+
+  const planTitle = storeName
+    ? `${provider} · ${storeName}`
+    : provider;
+
   const remainingBalance = unpaidInstallments.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
@@ -4223,13 +4228,28 @@ const paymentProgress =
 
             <div style="min-width:0;flex:1">
               <div
-  style="
-    font-size:var(--text-base);
-    font-weight:800;
-  "
->
-  ${escapeHtml(planTitle)}
-</div>
+                style="
+                  font-size:var(--text-base);
+                  font-weight:800;
+                  overflow:hidden;
+                  text-overflow:ellipsis;
+                  white-space:nowrap;
+                "
+              >
+                ${escapeHtml(planTitle)}
+              </div>
+
+              <div
+                style="
+                  margin-top:4px;
+                  font-size:var(--text-sm);
+                  color:var(--text-muted);
+                "
+              >
+                ${unpaidInstallments.length} payment${
+                  unpaidInstallments.length === 1 ? "" : "s"
+                } remaining
+              </div>
             </div>
 
             <div style="text-align:right">
@@ -4274,16 +4294,9 @@ const paymentProgress =
           Cancel
         </button>
 
-        <div
-  class="settings-footer"
-  style="
-    text-align:center;
-    font-size:var(--text-sm);
-    font-weight:800;
-  "
->
-  ${paymentProgress}
-</div>
+        <div class="settings-footer">
+          Paying in full marks every remaining scheduled installment as paid.
+        </div>
       </div>
     </div>
   `;
