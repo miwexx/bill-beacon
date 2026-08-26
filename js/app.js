@@ -3836,6 +3836,69 @@ const activeMonthPayments = payments.filter(payment =>
     ...monthlyData.map(month => month.amount),
     1
   );
+    const installmentBills = Store.getBills().filter(
+    bill =>
+      Boolean(bill.installmentPlanId) &&
+      !bill.archivedAt &&
+      !bill.cancelledAt &&
+      !bill.paidInFullAt
+  );
+
+  const plansById = installmentBills.reduce((plans, bill) => {
+    if (!plans[bill.installmentPlanId]) {
+      plans[bill.installmentPlanId] = [];
+    }
+
+    plans[bill.installmentPlanId].push(bill);
+    return plans;
+  }, {});
+
+  const activePlans = Object.entries(plansById)
+    .map(([planId, installments]) => {
+      const sortedInstallments = [...installments].sort(
+        (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+      );
+
+      const unpaidInstallments = sortedInstallments.filter(
+        bill => !isOccurrencePaid(bill, new Date(bill.dueDate))
+      );
+
+      if (!unpaidInstallments.length) {
+        return null;
+      }
+
+      const nextInstallment = unpaidInstallments[0];
+      const provider = nextInstallment.installmentProvider || 'Payment plan';
+      const storeName = String(nextInstallment.name || '')
+        .split(' — ')
+        .slice(1, -1)
+        .join(' — ')
+        .trim();
+
+      return {
+        id: planId,
+        provider,
+        storeName,
+        remainingBalance: unpaidInstallments.reduce(
+          (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+          0
+        ),
+        nextInstallment
+      };
+    })
+    .filter(Boolean)
+    .sort(
+      (a, b) =>
+        new Date(a.nextInstallment.dueDate) -
+        new Date(b.nextInstallment.dueDate)
+    );
+
+  const paymentPlansRemaining = activePlans.reduce(
+    (sum, plan) => sum + plan.remainingBalance,
+    0
+  );
+
+  const nextPlanPayment = activePlans[0] || null;
 
   return `
     <div class="nav-bar">
@@ -3950,6 +4013,95 @@ const activeMonthPayments = payments.filter(payment =>
             </span>
           </div>
         </div>
+        ${
+          activePlans.length
+            ? `
+              <button
+                type="button"
+                class="card card-pad"
+                onclick="alert('Payment Plans tracker is coming next.')"
+                style="
+                  width:100%;
+                  text-align:left;
+                  cursor:pointer;
+                  border:1px solid var(--border);
+                "
+                aria-label="View payment plans"
+              >
+                <div
+                  style="
+                    display:flex;
+                    align-items:center;
+                    gap:var(--space-2);
+                  "
+                >
+                  <div
+                    style="
+                      width:38px;
+                      height:38px;
+                      border-radius:12px;
+                      display:flex;
+                      align-items:center;
+                      justify-content:center;
+                      color:var(--accent);
+                      background:var(--accent-soft, rgba(124,92,255,.14));
+                    "
+                  >
+                    ${svgIcon('calendar', 20)}
+                  </div>
+
+                  <div style="min-width:0; flex:1">
+                    <div style="font-size:var(--text-base); font-weight:800">
+                      Payment Plans
+                    </div>
+
+                    <div
+                      style="
+                        font-size:var(--text-sm);
+                        color:var(--text-muted);
+                        margin-top:3px;
+                        overflow:hidden;
+                        text-overflow:ellipsis;
+                        white-space:nowrap;
+                      "
+                    >
+                      ${
+                        activePlans.length === 1
+                          ? `${nextPlanPayment.provider}${
+                              nextPlanPayment.storeName
+                                ? ` · ${nextPlanPayment.storeName}`
+                                : ''
+                            }`
+                          : `${activePlans.length} active plans`
+                      }
+                    </div>
+                  </div>
+
+                  <div style="text-align:right">
+                    <div style="font-size:var(--text-base); font-weight:800">
+                      ${formatCurrency(paymentPlansRemaining)}
+                    </div>
+
+                    <div
+                      style="
+                        font-size:var(--text-xs);
+                        color:var(--text-muted);
+                        margin-top:3px;
+                      "
+                    >
+                      Next ${formatDate(
+                        nextPlanPayment.nextInstallment.dueDate,
+                        'short'
+                      )}
+                    </div>
+                  </div>
+
+                  ${svgIcon('chevronRight', 18)}
+                </div>
+              </button>
+            `
+            : ''
+        }
 
         ${
   overdueBills.length
