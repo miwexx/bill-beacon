@@ -3717,7 +3717,305 @@ function editMonthlySpendingLimit() {
   saveMonthlySpendingLimit(limit);
   render();
 }
+function renderPaymentPlans() {
+  const installmentBills = Store.getBills().filter(
+    bill =>
+      Boolean(bill.installmentPlanId) &&
+      !bill.archivedAt &&
+      !bill.cancelledAt &&
+      !bill.paidInFullAt
+  );
 
+  const plansById = installmentBills.reduce((plans, bill) => {
+    if (!plans[bill.installmentPlanId]) {
+      plans[bill.installmentPlanId] = [];
+    }
+
+    plans[bill.installmentPlanId].push(bill);
+    return plans;
+  }, {});
+
+  const plans = Object.entries(plansById)
+    .map(([planId, installments]) => {
+      const sortedInstallments = [...installments].sort(
+        (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+      );
+
+      const paidInstallments = sortedInstallments.filter(
+        bill => isOccurrencePaid(bill, new Date(bill.dueDate))
+      );
+
+      const unpaidInstallments = sortedInstallments.filter(
+        bill => !isOccurrencePaid(bill, new Date(bill.dueDate))
+      );
+
+      const representative = sortedInstallments[0];
+      const provider =
+        representative.installmentProvider || 'Payment plan';
+
+      const storeName = String(representative.name || '')
+        .split(' — ')
+        .slice(1, -1)
+        .join(' — ')
+        .trim();
+
+      const totalAmount = sortedInstallments.reduce(
+        (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+        0
+      );
+
+      const remainingBalance = unpaidInstallments.reduce(
+        (sum, bill) => sum + (parseFloat(bill.amount) || 0),
+        0
+      );
+
+      return {
+        id: planId,
+        provider,
+        storeName,
+        installmentCount: sortedInstallments.length,
+        paidCount: paidInstallments.length,
+        totalAmount,
+        remainingBalance,
+        nextInstallment: unpaidInstallments[0] || null
+      };
+    })
+    .sort((a, b) => {
+      if (!a.nextInstallment && !b.nextInstallment) {
+        return a.provider.localeCompare(b.provider);
+      }
+
+      if (!a.nextInstallment) return 1;
+      if (!b.nextInstallment) return -1;
+
+      return (
+        new Date(a.nextInstallment.dueDate) -
+        new Date(b.nextInstallment.dueDate)
+      );
+    });
+
+  const activePlans = plans.filter(plan => plan.nextInstallment);
+  const completedPlans = plans.filter(plan => !plan.nextInstallment);
+
+  const renderPlanCard = (plan, isCompleted = false) => {
+    const planTitle = `${plan.provider}${
+      plan.storeName ? ` · ${plan.storeName}` : ''
+    }`;
+
+    const progressPercent = plan.installmentCount
+      ? (plan.paidCount / plan.installmentCount) * 100
+      : 0;
+
+    return `
+      <button
+        type="button"
+        class="card card-pad"
+        onclick="alert('Plan details are the next step.')"
+        style="
+          width:100%;
+          text-align:left;
+          cursor:pointer;
+          opacity:${isCompleted ? '.72' : '1'};
+        "
+        aria-label="View ${escapeHtml(planTitle)} payment plan"
+      >
+        <div
+          style="
+            display:flex;
+            align-items:flex-start;
+            gap:var(--space-3);
+          "
+        >
+          <div
+            style="
+              width:42px;
+              height:42px;
+              flex:0 0 42px;
+              border-radius:13px;
+              display:flex;
+              align-items:center;
+              justify-content:center;
+              background:var(--accent-soft, rgba(124,92,255,.14));
+              color:var(--accent);
+            "
+          >
+            ${svgIcon('calendar', 21)}
+          </div>
+
+          <div style="min-width:0; flex:1">
+            <div
+              style="
+                font-size:var(--text-base);
+                font-weight:800;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+              "
+            >
+              ${escapeHtml(planTitle)}
+            </div>
+
+            <div
+              style="
+                margin-top:4px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+              "
+            >
+              ${
+                isCompleted
+                  ? 'Completed'
+                  : `Payment ${plan.paidCount + 1} of ${
+                      plan.installmentCount
+                    }`
+              }
+            </div>
+          </div>
+
+          <div style="text-align:right">
+            <div
+              style="
+                font-size:var(--text-base);
+                font-weight:800;
+                color:${isCompleted ? 'var(--text-muted)' : 'var(--text)'};
+              "
+            >
+              ${
+                isCompleted
+                  ? 'Paid in full'
+                  : `${formatCurrency(plan.remainingBalance)} left`
+              }
+            </div>
+
+            ${
+              plan.nextInstallment
+                ? `
+                  <div
+                    style="
+                      margin-top:4px;
+                      font-size:var(--text-xs);
+                      color:var(--text-muted);
+                    "
+                  >
+                    Next ${formatDate(
+                      plan.nextInstallment.dueDate,
+                      'short'
+                    )}
+                  </div>
+                `
+                : ''
+            }
+          </div>
+        </div>
+
+        <div
+          class="dashboard-progress-track"
+          style="margin-top:var(--space-3)"
+        >
+          <div
+            class="dashboard-progress-fill"
+            style="width:${progressPercent}%"
+          ></div>
+        </div>
+
+        <div
+          style="
+            display:flex;
+            justify-content:space-between;
+            margin-top:8px;
+            font-size:var(--text-xs);
+            color:var(--text-muted);
+          "
+        >
+          <span>
+            ${plan.paidCount} of ${plan.installmentCount} paid
+          </span>
+
+          <span>
+            ${formatCurrency(plan.totalAmount)} total
+          </span>
+        </div>
+      </button>
+    `;
+  };
+
+  return `
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <button
+          class="nav-button"
+          onclick="navigate('insights')"
+          aria-label="Back to Insights"
+        >
+          ${svgIcon('chevronLeft', 22)}
+          Insights
+        </button>
+
+        <div class="nav-title">Payment Plans</div>
+
+        <div style="width:54px"></div>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad content-gap">
+        ${
+          activePlans.length
+            ? `
+              <div>
+                <div class="section-header">Active Plans</div>
+
+                <div
+                  style="
+                    display:flex;
+                    flex-direction:column;
+                    gap:var(--space-3);
+                  "
+                >
+                  ${activePlans.map(plan => renderPlanCard(plan)).join('')}
+                </div>
+              </div>
+            `
+            : `
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon('checkCircle', 48)}
+                </div>
+
+                <div class="empty-state-title">No active payment plans</div>
+
+                <div class="empty-state-text">
+                  Active Pay-in-4 and installment plans will appear here.
+                </div>
+              </div>
+            `
+        }
+
+        ${
+          completedPlans.length
+            ? `
+              <div>
+                <div class="section-header">Completed</div>
+
+                <div
+                  style="
+                    display:flex;
+                    flex-direction:column;
+                    gap:var(--space-3);
+                  "
+                >
+                  ${completedPlans
+                    .map(plan => renderPlanCard(plan, true))
+                    .join('')}
+                </div>
+              </div>
+            `
+            : ''
+        }
+      </div>
+    </div>
+  `;
+}
 function renderInsights() {
   const payments = Store.getPayments();
 const now = new Date();
@@ -4019,7 +4317,7 @@ const activeMonthPayments = payments.filter(payment =>
               <button
                 type="button"
                 class="card card-pad"
-                onclick="alert('Payment Plans tracker is coming next.')"
+                onclick="navigate('payment-plans')"
                 style="
                   width:100%;
                   text-align:left;
@@ -7092,6 +7390,7 @@ function render() {
     case 'bills': content = renderBills(); break;
     case 'calendar': content = renderCalendar(); break;
     case 'insights': content = renderInsights(); break;
+    case 'payment-plans': content = renderPaymentPlans(); break;
     case 'settings': content = renderSettings(); break;
     case 'detail': content = renderBillDetail(); break;
     default: content = renderToday();
