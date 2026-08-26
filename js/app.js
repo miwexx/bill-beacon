@@ -2259,11 +2259,44 @@ function renderRecurring() {
 
   const recurringOccurrences = getRecurringOccurrencesForNextMonths(now, 3);
 
+  const paymentPlanInstallments = Store.getBills()
+    .filter(bill => {
+      if (!bill.installmentPlanId) return false;
+
+      const dueDate = new Date(bill.dueDate);
+
+      return (
+        !Number.isNaN(dueDate.getTime()) &&
+        !bill.archivedAt &&
+        !bill.cancelledAt &&
+        !bill.paidInFullAt
+      );
+    })
+    .map(bill => ({
+      ...bill,
+      isPaymentPlanInstallment: true
+    }));
+
+  const scheduledItems = [
+    ...recurringOccurrences,
+    ...paymentPlanInstallments
+  ];
+
   const isUnpaidEligibleOccurrence = bill => {
     const dueDate = new Date(bill.dueDate);
 
+    const isActivePaymentPlanInstallment =
+      Boolean(bill.installmentPlanId) &&
+      !bill.archivedAt &&
+      !bill.cancelledAt &&
+      !bill.paidInFullAt;
+
+    const isEligible =
+      isActiveRecurringOccurrence(bill) ||
+      isActivePaymentPlanInstallment;
+
     return (
-      isActiveRecurringOccurrence(bill) &&
+      isEligible &&
       !Number.isNaN(dueDate.getTime()) &&
       getOccurrenceStatus(bill, dueDate) !== 'paid'
     );
@@ -2271,7 +2304,7 @@ function renderRecurring() {
 
   const sortDue = (a, b) => new Date(a.dueDate) - new Date(b.dueDate);
 
-  const overdue = recurringOccurrences
+  const overdue = scheduledItems
     .filter(bill => {
       const dueDate = new Date(bill.dueDate);
 
@@ -2279,7 +2312,7 @@ function renderRecurring() {
     })
     .sort(sortDue);
 
-  const upcoming = recurringOccurrences
+  const upcoming = scheduledItems
     .filter(bill => {
       const dueDate = new Date(bill.dueDate);
 
@@ -2291,7 +2324,7 @@ function renderRecurring() {
     })
     .sort(sortDue);
 
-  const comingUpLater = recurringOccurrences
+  const comingUpLater = scheduledItems
     .filter(bill => {
       const dueDate = new Date(bill.dueDate);
 
@@ -2395,7 +2428,7 @@ function renderRecurring() {
         ${renderSection({
           id: 'overdue',
           title: 'Overdue',
-          subtitle: 'Past-due recurring bills',
+          subtitle: 'Past-due bills and payment plans',
           bills: overdue,
           emptyMessage: '',
           showWhenEmpty: false
@@ -2407,7 +2440,7 @@ function renderRecurring() {
           subtitle: 'Due today through the next 5 days',
           bills: upcoming,
           emptyMessage:
-            'You have no unpaid recurring bills due in the next 5 days.'
+            'You have no unpaid bills or payment plans due in the next 5 days.'
         })}
 
         ${renderSection({
@@ -2416,7 +2449,7 @@ function renderRecurring() {
           subtitle: 'Due in 6 to 10 days',
           bills: comingUpLater,
           emptyMessage:
-            'You have no unpaid recurring bills due 6 to 10 days from now.'
+            'You have no unpaid bills or payment plans due 6 to 10 days from now.'
         })}
       </div>
     </div>
