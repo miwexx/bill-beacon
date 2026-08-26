@@ -8827,8 +8827,7 @@ function saveInstallmentPlan() {
     const paymentAmount = (paymentCents / 100).toFixed(2);
 
     const billName = store
-  ? `${provider} — ${store}`
-  : provider;
+ 
 
     const bill = {
       id: uid(),
