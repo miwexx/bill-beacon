@@ -7707,7 +7707,7 @@ function updateInstallmentFirstPaymentLabel() {
 
   label.textContent =
     status.value === "paid"
-      ? "Date Paid"
+      ? "Payment Date"
       : "First Due Date";
 }
 
@@ -7757,6 +7757,7 @@ function openInstallmentPlanForm() {
               <option value="Klarna">Klarna</option>
               <option value="Afterpay">Afterpay</option>
               <option value="Affirm">Affirm</option>
+              <option value="Zip">Zip</option>
               <option value="Sezzle">Sezzle</option>
               <option value="PayPal Pay Later">PayPal Pay Later</option>
               <option value="Other">Other</option>
@@ -7827,10 +7828,10 @@ function openInstallmentPlanForm() {
                 onchange="updateInstallmentFirstPaymentLabel()"
               >
                 <option value="notPaid">
-                  Not paid — first payment is scheduled
+                  No Downpayment Required
                 </option>
                 <option value="paid">
-                  Already paid at checkout
+                  Paid At Checkout
                 </option>
               </select>
             </div>
