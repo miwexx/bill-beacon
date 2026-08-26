@@ -3757,13 +3757,19 @@ function paymentPlanVisual(provider, size = 42) {
   initials: 'Z'
 },
     'paypal pay later': {
-      label: 'PayPal Pay Later',
-      domain: 'paypal.com',
-      background: '#003087',
-      color: '#ffffff',
-      initials: 'P'
-    }
-  };
+  label: 'PayPal Pay Later',
+  domain: 'paypal.com',
+  background: '#003087',
+  color: '#ffffff',
+  initials: 'P'
+},
+paypal: {
+  label: 'PayPal',
+  domain: 'paypal.com',
+  background: '#003087',
+  color: '#ffffff',
+  initials: 'P'
+},
 
   const plan = providers[normalized] || {
     label: provider || 'Payment plan',
