@@ -144,13 +144,73 @@ const Store = {
     this.saveBills(bills);
   },
   updateBill(id, updates) {
-    const bills = this.getBills();
-    const idx = bills.findIndex(b => b.id === id);
-    if (idx >= 0) {
-      bills[idx] = { ...bills[idx], ...updates, updatedAt: new Date().toISOString() };
-      this.saveBills(bills);
+  const bills = this.getBills();
+  const idx = bills.findIndex((b) => b.id === id);
+
+  if (idx < 0) return null;
+
+  const previousBill = { ...bills[idx] };
+
+  bills[idx] = {
+    ...bills[idx],
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  };
+
+  this.saveBills(bills);
+
+  const updatedBill = bills[idx];
+
+  const trackedFields = [
+    "name",
+    "amount",
+    "dueDate",
+    "category",
+    "paymentMethod",
+    "paymentUrl",
+    "autopay",
+    "notes",
+    "recurrence",
+    "payCycle",
+  ];
+
+  const changes = trackedFields
+    .filter((field) => (previousBill[field] ?? null) !== (updatedBill[field] ?? null))
+    .map((field) => ({
+      field,
+      before: previousBill[field] ?? null,
+      after: updatedBill[field] ?? null,
+    }));
+
+  if (changes.length) {
+    const amountChange = changes.find((change) => change.field === "amount");
+    const dueDateChange = changes.find((change) => change.field === "dueDate");
+
+    let detail = `${changes.length} change${changes.length === 1 ? "" : "s"}`;
+
+    if (amountChange) {
+      detail =
+        `${formatCurrency(amountChange.before || 0)} → ` +
+        `${formatCurrency(amountChange.after || 0)}`;
+    } else if (dueDateChange) {
+      detail =
+        `${formatDate(dueDateChange.before, "short")} → ` +
+        `${formatDate(dueDateChange.after, "short")}`;
     }
-  },
+
+    this.addActivity({
+      action: "bill_updated",
+      entityType: updatedBill.installmentPlanId ? "payment_plan" : "bill",
+      entityId: updatedBill.installmentPlanId || updatedBill.id,
+      title: `${updatedBill.name} updated`,
+      detail,
+      before: Object.fromEntries(changes.map((change) => [change.field, change.before])),
+      after: Object.fromEntries(changes.map((change) => [change.field, change.after])),
+    });
+  }
+
+  return updatedBill;
+},
   deleteBill(id) {
     const bills = this.getBills().filter(b => b.id !== id);
     this.saveBills(bills);
@@ -5888,7 +5948,11 @@ function getActivityActionIcon(action) {
         icon: "close",
         color: "var(--overdue)",
       };
-
+      case "bill_updated":
+  return {
+    icon: "gear",
+    color: "var(--accent)",
+  };
     case "bill_postponed":
       return {
         icon: "calendar",
