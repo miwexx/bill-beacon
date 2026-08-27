@@ -236,17 +236,60 @@ deleteIncomeSource(id) {
 
 updatePayment(paymentId, updates) {
   const payments = this.getPayments();
-  const index = payments.findIndex(payment => payment.id === paymentId);
+
+  const index = payments.findIndex(
+    (payment) => payment.id === paymentId
+  );
 
   if (index === -1) return null;
 
+  const previousPayment = { ...payments[index] };
+
   payments[index] = {
     ...payments[index],
-    ...updates
+    ...updates,
   };
 
   this.savePayments(payments);
-  return payments[index];
+
+  const updatedPayment = payments[index];
+
+  const isNewlyVoided =
+    previousPayment.status !== "voided" &&
+    updatedPayment.status === "voided";
+
+  if (isNewlyVoided) {
+    const bill = this.getBill(updatedPayment.billId);
+
+    const dueDate =
+      updatedPayment.paidForDueDate ||
+      bill?.dueDate ||
+      new Date().toISOString();
+
+    this.addActivity({
+      action: "payment_voided",
+      entityType: bill?.installmentPlanId ? "payment_plan" : "bill",
+      entityId: bill?.installmentPlanId || updatedPayment.billId,
+      title: `${bill?.name || "Bill"} payment reversed`,
+      detail: `${formatCurrency(
+        updatedPayment.amount
+      )} · Due ${formatDate(dueDate, "short")}`,
+      before: {
+        paymentId: previousPayment.id,
+        status: previousPayment.status,
+        amount: parseFloat(previousPayment.amount) || 0,
+        paidDate: previousPayment.paidDate,
+        dueDate,
+      },
+      after: {
+        paymentId: updatedPayment.id,
+        status: updatedPayment.status,
+        voidedAt: updatedPayment.voidedAt || new Date().toISOString(),
+      },
+    });
+  }
+
+  return updatedPayment;
 },
   getPaymentsForBill(billId) {
     return this.getPayments().filter(p => p.billId === billId).sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
