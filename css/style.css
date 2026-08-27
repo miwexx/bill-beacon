@@ -209,7 +209,7 @@ a { color: var(--accent); text-decoration: none; }
   background: var(--nav-bg);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
-  padding-top: var(--safe-top);
+  padding-top: 0;
   border-bottom: 1px solid var(--separator);
 }
 
@@ -2382,23 +2382,25 @@ body {
 }
 html,
 body {
-min-height: 100%;
-min-height: 100dvh;
-background: var(--bg);
+  min-height: 100%;
+  min-height: 100dvh;
+  background: var(--bg);
 }
 
 #app {
-min-height: 100dvh;
-background: var(--bg);
+  min-height: 100dvh;
+  background: var(--bg);
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: border-box;
 }
 
 .tab-bar {
-position: fixed;
-left: 0;
-right: 0;
-bottom: 0;
-min-height: calc(76px + env(safe-area-inset-bottom, 0px));
-padding-bottom: env(safe-area-inset-bottom, 0px);
-box-sizing: border-box;
-background: var(--bg);
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  min-height: calc(76px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  background: var(--bg);
 }
