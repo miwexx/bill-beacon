@@ -163,6 +163,7 @@ const Store = {
 
   const trackedFields = [
     "name",
+    "amount",
     "dueDate",
     "category",
     "paymentMethod",
@@ -173,43 +174,83 @@ const Store = {
     "payCycle",
   ];
 
+  const fieldLabels = {
+    name: "Name",
+    amount: "Amount",
+    dueDate: "Due date",
+    category: "Category",
+    paymentMethod: "Payment method",
+    paymentUrl: "Payment link",
+    autopay: "Autopay",
+    notes: "Notes",
+    recurrence: "Repeats",
+    payCycle: "Pay cycle",
+  };
+
+  const formatActivityValue = (field, value) => {
+    if (value === null || value === undefined || value === "") return "None";
+
+    switch (field) {
+      case "amount":
+        return formatCurrency(value);
+      case "dueDate":
+        return formatDate(value, "short");
+      case "autopay":
+        return value ? "On" : "Off";
+      case "category":
+        return getCategory(value)?.label || String(value);
+      case "payCycle":
+        return value === "first"
+          ? "Early Cycle"
+          : value === "second"
+          ? "Late Cycle"
+          : String(value);
+      default:
+        return String(value);
+    }
+  };
+
   const changes = trackedFields
     .filter((field) => (previousBill[field] ?? null) !== (updatedBill[field] ?? null))
     .map((field) => ({
       field,
       before: previousBill[field] ?? null,
       after: updatedBill[field] ?? null,
+      label: fieldLabels[field] || field,
     }));
 
   if (changes.length) {
-    const amountChange = changes.find((change) => change.field === "amount");
-    const dueDateChange = changes.find((change) => change.field === "dueDate");
-
-    let detail = `${changes.length} change${changes.length === 1 ? "" : "s"}`;
-
-    if (amountChange) {
-      detail =
-        `${formatCurrency(amountChange.before || 0)} → ` +
-        `${formatCurrency(amountChange.after || 0)}`;
-    } else if (dueDateChange) {
-      detail =
-        `${formatDate(dueDateChange.before, "short")} → ` +
-        `${formatDate(dueDateChange.after, "short")}`;
-    }
+    const detail = changes
+      .slice(0, 3)
+      .map(
+        (change) =>
+          `${change.label}: ${formatActivityValue(change.field, change.before)} → ${formatActivityValue(change.field, change.after)}`
+      )
+      .join(" • ");
 
     this.addActivity({
-      action: "bill_updated",
-      entityType: updatedBill.installmentPlanId ? "payment_plan" : "bill",
+      action: changes.some((change) => change.field === "amount")
+        ? "billbalancechanged"
+        : "billupdated",
+      entityType: updatedBill.installmentPlanId ? "paymentplan" : "bill",
       entityId: updatedBill.installmentPlanId || updatedBill.id,
       title: `${updatedBill.name} updated`,
-      detail,
-      before: Object.fromEntries(changes.map((change) => [change.field, change.before])),
-      after: Object.fromEntries(changes.map((change) => [change.field, change.after])),
+      detail:
+        changes.length > 3
+          ? `${detail} • +${changes.length - 3} more`
+          : detail,
+      before: Object.fromEntries(
+        changes.map((change) => [change.field, change.before])
+      ),
+      after: Object.fromEntries(
+        changes.map((change) => [change.field, change.after])
+      ),
     });
   }
 
   return updatedBill;
 },
+
   deleteBill(id) {
     const bills = this.getBills().filter(b => b.id !== id);
     this.saveBills(bills);
