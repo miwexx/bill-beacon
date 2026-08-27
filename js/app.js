@@ -4159,7 +4159,7 @@ function openPaymentPlanActions(planId) {
           type="button"
           class="btn-secondary"
           style="width:100%"
-          onclick="openEditPaymentPlan('${planId}')"
+          onclick="openExistingPaymentPlanEditor('${planId}')"
         >
           ${svgIcon("gear", 20)}
           Edit Plan
@@ -4275,7 +4275,7 @@ function payPaymentPlanInFull(planId) {
   closePaymentPlanActions();
   render();
 }
-function openEditPaymentPlan(planId) {
+function openExistingPaymentPlanEditor(planId) {
   const installments = Store.getBills()
     .filter((bill) => bill.installmentPlanId === planId)
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
@@ -4285,145 +4285,11 @@ function openEditPaymentPlan(planId) {
     return;
   }
 
-  const representative = installments[0];
-
-  const provider = representative.installmentProvider || "";
-  const name = String(representative.name || "")
-    .replace(/\s*—\s*Payment\s+\d+\s+of\s+\d+\s*$/i, "")
-    .replace(/^[^—]+—\s*/i, "")
-    .trim();
-
   closePaymentPlanActions();
 
-  const container = document.createElement("div");
-  container.id = "editPaymentPlanContainer";
-
-  container.innerHTML = `
-    <div
-      class="sheet-overlay"
-      id="editPaymentPlanOverlay"
-      onclick="closeEditPaymentPlan()"
-    ></div>
-
-    <div class="sheet" id="editPaymentPlanSheet">
-      <div class="sheet-handle"></div>
-
-      <div class="sheet-nav">
-        <button
-          type="button"
-          class="nav-button"
-          onclick="closeEditPaymentPlan()"
-          aria-label="Close Edit Plan"
-        >
-          ${svgIcon("close", 22)}
-        </button>
-
-        <div class="sheet-title">Edit Plan</div>
-
-        <button
-          type="button"
-          class="nav-button"
-          onclick="savePaymentPlanEdits('${planId}')"
-          style="font-weight:800"
-        >
-          Save
-        </button>
-      </div>
-
-      <div class="sheet-body content-gap">
-        <div class="section-header">Plan details</div>
-
-        <div class="card">
-          <div class="form-row">
-            <div class="form-label">Provider</div>
-
-            <input
-              id="editPaymentPlanProvider"
-              class="form-input"
-              type="text"
-              value="${escapeHtml(provider)}"
-              placeholder="Klarna, Affirm, Zip..."
-              style="text-align:right"
-            >
-          </div>
-
-          <div class="form-row">
-            <div class="form-label">Store or plan name</div>
-
-            <input
-              id="editPaymentPlanName"
-              class="form-input"
-              type="text"
-              value="${escapeHtml(name)}"
-              placeholder="Nike"
-              style="text-align:right"
-            >
-          </div>
-        </div>
-
-        <div class="settings-footer">
-          Editing a plan changes its provider and name across all installments.
-          Payment amounts, due dates, and payment history will not change.
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document.getElementById("editPaymentPlanOverlay")?.classList.add("show");
-    document.getElementById("editPaymentPlanSheet")?.classList.add("show");
-  });
-}
-function closeEditPaymentPlan() {
-  document.getElementById("editPaymentPlanOverlay")?.classList.remove("show");
-  document.getElementById("editPaymentPlanSheet")?.classList.remove("show");
-
-  setTimeout(() => {
-    document.getElementById("editPaymentPlanContainer")?.remove();
-    unlockBackgroundScroll();
-  }, 300);
-}
-
-function savePaymentPlanEdits(planId) {
-  const provider = document
-    .getElementById("editPaymentPlanProvider")
-    ?.value.trim();
-
-  const name = document
-    .getElementById("editPaymentPlanName")
-    ?.value.trim();
-
-  if (!provider) {
-    alert("Enter a payment-plan provider.");
-    return;
-  }
-
-  if (!name) {
-    alert("Enter a store or plan name.");
-    return;
-  }
-
-  const installments = Store.getBills().filter(
-    (bill) => bill.installmentPlanId === planId
-  );
-
-  if (!installments.length) {
-    alert("Payment plan not found.");
-    return;
-  }
-
-  installments.forEach((bill) => {
-    Store.updateBill(bill.id, {
-      installmentProvider: provider,
-      name,
-    });
-  });
-
-  closeEditPaymentPlan();
-  render();
+  // Opens the normal existing Bill/Recurring edit form
+  // using the first installment as the representative record.
+  openBillForm(installments[0].id);
 }
 function renderInsights() {
   const payments = Store.getPayments();
