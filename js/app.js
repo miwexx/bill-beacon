@@ -4356,6 +4356,268 @@ function openExistingPaymentPlanEditor(planId) {
   // using the first installment as the representative record.
   openBillForm(installments[0].id);
 }
+function closeCategorySpendingSheet() {
+  document
+    .getElementById("categorySpendingOverlay")
+    ?.classList.remove("show");
+
+  document
+    .getElementById("categorySpendingSheet")
+    ?.classList.remove("show");
+
+  setTimeout(() => {
+    document.getElementById("categorySpendingContainer")?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function getCategorySpendingItems(categoryId) {
+  const now = new Date();
+
+  return getCalendarBillsForMonth(now)
+    .filter((bill) => bill.category === categoryId)
+    .map((bill) => {
+      const dueDate = new Date(bill.dueDate);
+      const payment = getActivePaymentForOccurrence(bill, dueDate);
+      const status = getOccurrenceStatus(bill, dueDate);
+
+      return {
+        bill,
+        payment,
+        status,
+        amount: parseFloat(bill.amount) || 0,
+      };
+    })
+    .sort(
+      (a, b) =>
+        new Date(a.bill.dueDate) - new Date(b.bill.dueDate)
+    );
+}
+
+function openCategorySpendingSheet(categoryId) {
+  const category = getCategory(categoryId);
+  const items = getCategorySpendingItems(categoryId);
+
+  const total = items.reduce((sum, item) => {
+    return sum + item.amount;
+  }, 0);
+
+  document.getElementById("categorySpendingContainer")?.remove();
+
+  const container = document.createElement("div");
+  container.id = "categorySpendingContainer";
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="categorySpendingOverlay"
+      onclick="closeCategorySpendingSheet()"
+    ></div>
+
+    <div class="sheet" id="categorySpendingSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button
+          type="button"
+          class="nav-button"
+          onclick="closeCategorySpendingSheet()"
+          aria-label="Close category spending"
+        >
+          ${svgIcon("close", 22)}
+        </button>
+
+        <div class="sheet-title">
+          ${escapeHtml(category.label)}
+        </div>
+
+        <div style="width:54px"></div>
+      </div>
+
+      <div class="sheet-body content-gap">
+        <div class="card card-pad">
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              gap:var(--space-3);
+            "
+          >
+            <div
+              style="
+                width:42px;
+                height:42px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                border-radius:12px;
+                color:white;
+                background:var(--${category.color});
+              "
+            >
+              ${svgIcon(category.icon, 22)}
+            </div>
+
+            <div style="flex:1">
+              <div
+                style="
+                  font-size:var(--text-sm);
+                  color:var(--text-muted);
+                "
+              >
+                This month
+              </div>
+
+              <div
+                style="
+                  margin-top:3px;
+                  font-size:var(--text-lg);
+                  font-weight:800;
+                "
+              >
+                ${formatCurrency(total)}
+              </div>
+            </div>
+
+            <div
+              style="
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+              "
+            >
+              ${items.length} item${items.length === 1 ? "" : "s"}
+            </div>
+          </div>
+        </div>
+
+        ${
+          items.length
+            ? `
+              <div class="card">
+                ${items
+                  .map(({ bill, payment, status }) => {
+                    const sourceBillId = bill.isOccurrence
+                      ? bill.sourceBillId
+                      : bill.id;
+
+                    const statusColor =
+                      status === "paid"
+                        ? "var(--paid)"
+                        : status === "overdue"
+                          ? "var(--overdue)"
+                          : "var(--upcoming)";
+
+                    const statusLabel =
+                      status === "paid"
+                        ? `Paid ${formatDate(
+                            payment?.paidDate,
+                            "short"
+                          )}`
+                        : status === "overdue"
+                          ? `Overdue ${formatDate(
+                              bill.dueDate,
+                              "short"
+                            )}`
+                          : `Due ${formatDate(
+                              bill.dueDate,
+                              "short"
+                            )}`;
+
+                    return `
+                      <button
+                        type="button"
+                        class="bill-row"
+                        style="width:100%;text-align:left"
+                        onclick="
+                          closeCategorySpendingSheet();
+                          navigate('detail', {
+                            id: '${sourceBillId}',
+                            occurrenceDueDate: '${bill.dueDate}',
+                            returnRoute: 'insights'
+                          });
+                        "
+                        aria-label="View ${escapeHtml(bill.name)} details"
+                      >
+                        <div
+                          class="bill-icon"
+                          style="
+                            background:${
+                              getBillBrand(bill.name)
+                                ? "#fff"
+                                : `var(--${category.color})`
+                            };
+                            color:${
+                              getBillBrand(bill.name)
+                                ? "#1e1e2e"
+                                : "white"
+                            };
+                            overflow:hidden;
+                          "
+                        >
+                          ${billVisual(bill, 32)}
+                        </div>
+
+                        <div class="bill-info">
+                          <div class="bill-name">
+                            ${escapeHtml(bill.name)}
+                          </div>
+
+                          <div
+                            class="bill-meta"
+                            style="color:${statusColor}"
+                          >
+                            ${statusLabel}
+                          </div>
+                        </div>
+
+                        <div
+                          style="
+                            margin-left:auto;
+                            text-align:right;
+                            font-weight:800;
+                          "
+                        >
+                          ${formatCurrency(bill.amount)}
+                        </div>
+                      </button>
+                    `;
+                  })
+                  .join("")}
+              </div>
+            `
+            : `
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon("tray", 44)}
+                </div>
+
+                <div class="empty-state-title">
+                  No items this month
+                </div>
+
+                <div class="empty-state-text">
+                  There are no bills in ${escapeHtml(category.label)} for this month.
+                </div>
+              </div>
+            `
+        }
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document
+      .getElementById("categorySpendingOverlay")
+      ?.classList.add("show");
+
+    document
+      .getElementById("categorySpendingSheet")
+      ?.classList.add("show");
+  });
+}
 function renderInsights() {
   const payments = Store.getPayments();
 const now = new Date();
