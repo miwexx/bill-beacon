@@ -220,33 +220,35 @@ const Store = {
     }));
 
   if (changes.length) {
-    const detail = changes
-      .slice(0, 3)
-      .map(
-        (change) =>
-          `${change.label}: ${formatActivityValue(change.field, change.before)} → ${formatActivityValue(change.field, change.after)}`
-      )
-      .join(" • ");
+  const primaryChange =
+    changes.find((change) => change.field === "amount") ||
+    changes.find((change) => change.field === "dueDate") ||
+    changes[0];
 
-    this.addActivity({
-      action: changes.some((change) => change.field === "amount")
-        ? "billbalancechanged"
-        : "billupdated",
-      entityType: updatedBill.installmentPlanId ? "paymentplan" : "bill",
-      entityId: updatedBill.installmentPlanId || updatedBill.id,
-      title: `${updatedBill.name} updated`,
-      detail:
-        changes.length > 3
-          ? `${detail} • +${changes.length - 3} more`
-          : detail,
-      before: Object.fromEntries(
-        changes.map((change) => [change.field, change.before])
-      ),
-      after: Object.fromEntries(
-        changes.map((change) => [change.field, change.after])
-      ),
-    });
-  }
+  const detail = `${primaryChange.label}: ${formatActivityValue(
+    primaryChange.field,
+    primaryChange.before
+  )} → ${formatActivityValue(primaryChange.field, primaryChange.after)}`;
+
+  this.addActivity({
+    action: primaryChange.field === "amount"
+      ? "billbalancechanged"
+      : "billupdated",
+    entityType: updatedBill.installmentPlanId ? "paymentplan" : "bill",
+    entityId: updatedBill.installmentPlanId || updatedBill.id,
+    title:
+      primaryChange.field === "amount"
+        ? `${updatedBill.name} balance changed`
+        : `${updatedBill.name} updated`,
+    detail,
+    before: {
+      [primaryChange.field]: primaryChange.before,
+    },
+    after: {
+      [primaryChange.field]: primaryChange.after,
+    },
+  });
+}
 
   return updatedBill;
 },
