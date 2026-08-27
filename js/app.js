@@ -4677,12 +4677,12 @@ function renderInsights() {
     (bill) =>
       getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
   );
-
-  const startOfToday = new Date(
+const startOfToday = new Date(
   now.getFullYear(),
   now.getMonth(),
   now.getDate(),
   12,
+  0,
   0,
   0
 );
@@ -4693,33 +4693,56 @@ const endOfNextSevenDays = new Date(
   now.getDate() + 7,
   12,
   0,
+  0,
   0
 );
 
-const upcomingBillsForInsight = [
-  ...getCalendarBillsForMonth(now),
-  ...getCalendarBillsForMonth(endOfNextSevenDays),
-]
+const relevantMonths = [
+  new Date(now.getFullYear(), now.getMonth(), 1, 12, 0, 0),
+  new Date(
+    endOfNextSevenDays.getFullYear(),
+    endOfNextSevenDays.getMonth(),
+    1,
+    12,
+    0,
+    0
+  ),
+];
+
+const upcomingBillsForInsight = relevantMonths
+  .flatMap((monthDate) => getCalendarBillsForMonth(monthDate))
   .filter((bill, index, allBills) => {
-    const sourceId = bill.isOccurrence ? bill.sourceBillId : bill.id;
-    const duplicateIndex = allBills.findIndex((candidate) => {
-      const candidateSourceId = candidate.isOccurrence
+    const sourceBillId = bill.isOccurrence ? bill.sourceBillId : bill.id;
+
+    const firstMatchIndex = allBills.findIndex((candidate) => {
+      const candidateSourceBillId = candidate.isOccurrence
         ? candidate.sourceBillId
         : candidate.id;
 
       return (
-        candidateSourceId === sourceId &&
+        candidateSourceBillId === sourceBillId &&
         candidate.dueDate === bill.dueDate
       );
     });
 
-    if (duplicateIndex !== index) return false;
+    if (index !== firstMatchIndex) return false;
 
-    const dueDate = new Date(bill.dueDate);
-    const status = getOccurrenceStatus(bill, dueDate);
+    const rawDueDate = new Date(bill.dueDate);
+
+    if (Number.isNaN(rawDueDate.getTime())) return false;
+
+    const dueDate = new Date(
+      rawDueDate.getFullYear(),
+      rawDueDate.getMonth(),
+      rawDueDate.getDate(),
+      12,
+      0,
+      0,
+      0
+    );
 
     return (
-      status === "upcoming" &&
+      !isOccurrencePaid(bill, rawDueDate) &&
       dueDate >= startOfToday &&
       dueDate <= endOfNextSevenDays
     );
@@ -4730,7 +4753,6 @@ const upcomingBillsForInsight = [
   );
 
 const largestUpcomingBill = upcomingBillsForInsight[0] || null;
-
   const scheduledThisMonth = monthBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
