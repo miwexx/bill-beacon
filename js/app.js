@@ -4678,17 +4678,58 @@ function renderInsights() {
       getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
   );
 
-  const upcomingBillsForInsight = unpaidBillsThisMonth
-    .filter(
-      (bill) =>
-        getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming"
-    )
-    .sort(
-      (a, b) =>
-        (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0)
-    );
+  const startOfToday = new Date(
+  now.getFullYear(),
+  now.getMonth(),
+  now.getDate(),
+  12,
+  0,
+  0
+);
 
-  const largestUpcomingBill = upcomingBillsForInsight[0] || null;
+const endOfNextSevenDays = new Date(
+  now.getFullYear(),
+  now.getMonth(),
+  now.getDate() + 7,
+  12,
+  0,
+  0
+);
+
+const upcomingBillsForInsight = [
+  ...getCalendarBillsForMonth(now),
+  ...getCalendarBillsForMonth(endOfNextSevenDays),
+]
+  .filter((bill, index, allBills) => {
+    const sourceId = bill.isOccurrence ? bill.sourceBillId : bill.id;
+    const duplicateIndex = allBills.findIndex((candidate) => {
+      const candidateSourceId = candidate.isOccurrence
+        ? candidate.sourceBillId
+        : candidate.id;
+
+      return (
+        candidateSourceId === sourceId &&
+        candidate.dueDate === bill.dueDate
+      );
+    });
+
+    if (duplicateIndex !== index) return false;
+
+    const dueDate = new Date(bill.dueDate);
+    const status = getOccurrenceStatus(bill, dueDate);
+
+    return (
+      status === "upcoming" &&
+      dueDate >= startOfToday &&
+      dueDate <= endOfNextSevenDays
+    );
+  })
+  .sort(
+    (a, b) =>
+      (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0)
+  );
+
+const largestUpcomingBill = upcomingBillsForInsight[0] || null;
 
   const scheduledThisMonth = monthBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
