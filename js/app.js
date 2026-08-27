@@ -7172,6 +7172,10 @@ function openBillQuickActions(billId) {
 
   if (!bill) return;
 
+  const dueDate = new Date(bill.dueDate);
+
+  const isPaid = isOccurrencePaid(bill, dueDate);
+
   const sheetHtml = `
     <div
       class="sheet-overlay"
@@ -7183,7 +7187,10 @@ function openBillQuickActions(billId) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillQuickActions()">
+        <button
+          class="nav-button"
+          onclick="closeBillQuickActions()"
+        >
           Cancel
         </button>
 
@@ -7201,14 +7208,18 @@ function openBillQuickActions(billId) {
 
             <div class="bill-sheet-subtitle">
               ${formatCurrency(bill.amount)}
+              · Due ${formatDate(bill.dueDate, "short")}
             </div>
           </div>
         </div>
 
         <div class="bill-sheet-actions">
-        <button
+          <button
             class="bill-sheet-action"
-            onclick="openBillActionHistory('${bill.id}')"
+            onclick="
+              closeBillQuickActions();
+              navigate('detail', { id: '${bill.id}' });
+            "
           >
             <span>${svgIcon('doc', 20)}</span>
             <span>Bill Details</span>
@@ -7217,17 +7228,40 @@ function openBillQuickActions(billId) {
 
           <button
             class="bill-sheet-action"
-            onclick="openBillActionEdit('${bill.id}')"
+            onclick="
+              closeBillQuickActions();
+              openBillForm('${bill.id}');
+            "
           >
             <span>${svgIcon('gear', 20)}</span>
-            <span>Edit details</span>
+            <span>Edit Details</span>
             <span>${svgIcon('chevronRight', 18)}</span>
           </button>
 
-          
+          ${
+            !isPaid
+              ? `
+                <button
+                  class="bill-sheet-action"
+                  onclick="
+                    closeBillQuickActions();
+                    openPostponeBillSheet('${bill.id}');
+                  "
+                >
+                  <span>${svgIcon('calendar', 20)}</span>
+                  <span>Postpone</span>
+                  <span>${svgIcon('chevronRight', 18)}</span>
+                </button>
+              `
+              : ''
+          }
+
           <button
             class="bill-sheet-action bill-sheet-action-danger"
-            onclick="openBillActionRemove('${bill.id}')"
+            onclick="
+              closeBillQuickActions();
+              openBillActionRemove('${bill.id}');
+            "
           >
             <span>${svgIcon('trash', 20)}</span>
             <span>Remove from list</span>
@@ -7238,16 +7272,24 @@ function openBillQuickActions(billId) {
     </div>
   `;
 
+  document.getElementById('billQuickActionsContainer')?.remove();
+
   const container = document.createElement('div');
   container.id = 'billQuickActionsContainer';
   container.innerHTML = sheetHtml;
 
   document.body.appendChild(container);
+
   lockBackgroundScroll();
 
   requestAnimationFrame(() => {
-    document.getElementById('billQuickActionsOverlay')?.classList.add('show');
-    document.getElementById('billQuickActionsSheet')?.classList.add('show');
+    document
+      .getElementById('billQuickActionsOverlay')
+      ?.classList.add('show');
+
+    document
+      .getElementById('billQuickActionsSheet')
+      ?.classList.add('show');
   });
 }
 function closeBillQuickActions(callback) {
