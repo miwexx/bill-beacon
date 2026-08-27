@@ -4620,31 +4620,23 @@ function openCategorySpendingSheet(categoryId) {
 }
 function renderInsights() {
   const payments = Store.getPayments();
-const now = new Date();
+  const now = new Date();
 
-// Use the same generated occurrence list as Dashboard and Calendar.
-// This makes recurring bills count once for the month they are due .
-const monthBills = getCalendarBillsForMonth(now);
+  const monthBills = getCalendarBillsForMonth(now);
 
-const paidBillsThisMonth = monthBills.filter(bill =>
-  isOccurrencePaid(bill, new Date(bill.dueDate))
-);
+  const paidBillsThisMonth = monthBills.filter((bill) =>
+    isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
 
-const unpaidBillsThisMonth = monthBills.filter(bill =>
-  !isOccurrencePaid(bill, new Date(bill.dueDate))
-);
+  const unpaidBillsThisMonth = monthBills.filter((bill) =>
+    !isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
 
-const overdueBills = unpaidBillsThisMonth.filter(bill =>
-  getOccurrenceStatus(bill, new Date(bill.dueDate)) === 'overdue'
-);
+  const overdueBills = unpaidBillsThisMonth.filter(
+    (bill) =>
+      getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
+  );
 
-// Keep this only for the existing six-month paid-date chart.
-// Monthly summary totals and category totals will be moved to
-// occurrence-based selectors in the next patch.
-const activeMonthPayments = payments.filter(payment =>
-  payment.status !== 'voided' &&
-  isSameMonth(payment.paidDate, now)
-);
   const scheduledThisMonth = monthBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
@@ -4666,34 +4658,23 @@ const activeMonthPayments = payments.filter(payment =>
   );
 
   const estimatedMonthlyIncome = getTotalMonthlyIncomeEstimate();
-
-  const estimatedRemaining =
-    estimatedMonthlyIncome - scheduledThisMonth;
-
-  const incomeCoversBills =
-    estimatedMonthlyIncome >= scheduledThisMonth;
+  const estimatedRemaining = estimatedMonthlyIncome - scheduledThisMonth;
 
   const monthlyLimit = getMonthlySpendingLimit();
+  const remainingLimit = Math.max(monthlyLimit - paidThisMonth, 0);
 
-  const remainingLimit = Math.max(
-    monthlyLimit - paidThisMonth,
-    0
-  );
-
-  const limitPercent = monthlyLimit > 0
-    ? Math.min((paidThisMonth / monthlyLimit) * 100, 100)
-    : 0;
+  const limitPercent =
+    monthlyLimit > 0
+      ? Math.min((paidThisMonth / monthlyLimit) * 100, 100)
+      : 0;
 
   const isOverLimit =
     monthlyLimit > 0 && paidThisMonth > monthlyLimit;
 
-    // Category spending belongs to the month an occurrence is due,
-  // not the month a payment was made. This keeps late payments in
-  // their scheduled month and excludes voided payments.
   const catTotals = {};
 
-  paidBillsThisMonth.forEach(bill => {
-    const categoryId = bill.category || 'other';
+  paidBillsThisMonth.forEach((bill) => {
+    const categoryId = bill.category || "other";
 
     catTotals[categoryId] =
       (catTotals[categoryId] || 0) +
@@ -4704,40 +4685,43 @@ const activeMonthPayments = payments.filter(payment =>
     (a, b) => b[1] - a[1]
   );
 
-  const maxCat = catEntries.length
-    ? catEntries[0][1]
-    : 1;
+  const maxCat = catEntries.length ? catEntries[0][1] : 1;
 
   const monthlyData = [];
 
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+  for (let i = 5; i >= 0; i -= 1) {
+    const date = new Date(
+      now.getFullYear(),
+      now.getMonth() - i,
+      1
+    );
 
-    const paymentsForMonth = payments.filter(payment => {
+    const paymentsForMonth = payments.filter((payment) => {
       const paidDate = new Date(payment.paidDate);
 
       return (
-        payment.status !== 'voided' &&
+        payment.status !== "voided" &&
         paidDate.getMonth() === date.getMonth() &&
         paidDate.getFullYear() === date.getFullYear()
       );
     });
 
     monthlyData.push({
-      label: formatDate(date.toISOString(), 'monthShort'),
+      label: formatDate(date.toISOString(), "monthShort"),
       amount: paymentsForMonth.reduce(
         (sum, payment) => sum + (parseFloat(payment.amount) || 0),
         0
-      )
+      ),
     });
   }
 
   const maxMonthly = Math.max(
-    ...monthlyData.map(month => month.amount),
+    ...monthlyData.map((month) => month.amount),
     1
   );
-    const installmentBills = Store.getBills().filter(
-    bill =>
+
+  const installmentBills = Store.getBills().filter(
+    (bill) =>
       Boolean(bill.installmentPlanId) &&
       !bill.archivedAt &&
       !bill.cancelledAt &&
@@ -4760,30 +4744,23 @@ const activeMonthPayments = payments.filter(payment =>
       );
 
       const unpaidInstallments = sortedInstallments.filter(
-        bill => !isOccurrencePaid(bill, new Date(bill.dueDate))
+        (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
       );
 
-      if (!unpaidInstallments.length) {
-        return null;
-      }
+      if (!unpaidInstallments.length) return null;
 
       const nextInstallment = unpaidInstallments[0];
-      const provider = nextInstallment.installmentProvider || 'Payment plan';
-      const storeName = String(nextInstallment.name || '')
-        .split(' — ')
-        .slice(1, -1)
-        .join(' — ')
-        .trim();
+      const provider =
+        nextInstallment.installmentProvider || "Payment Plan";
 
       return {
         id: planId,
         provider,
-        storeName,
         remainingBalance: unpaidInstallments.reduce(
           (sum, bill) => sum + (parseFloat(bill.amount) || 0),
           0
         ),
-        nextInstallment
+        nextInstallment,
       };
     })
     .filter(Boolean)
@@ -4816,7 +4793,6 @@ const activeMonthPayments = payments.filter(payment =>
             <div class="stat-value text-paid">
               ${formatCurrency(estimatedMonthlyIncome)}
             </div>
-
             <div class="stat-label">Estimated Income</div>
           </div>
 
@@ -4824,7 +4800,6 @@ const activeMonthPayments = payments.filter(payment =>
             <div class="stat-value text-upcoming">
               ${formatCurrency(stillDueThisMonth)}
             </div>
-
             <div class="stat-label">Still Due</div>
           </div>
         </div>
@@ -4848,7 +4823,7 @@ const activeMonthPayments = payments.filter(payment =>
                 Scheduled
               </div>
 
-              <div style="font-size:var(--text-xl); font-weight:800">
+              <div style="font-size:var(--text-xl);font-weight:800">
                 ${formatCurrency(scheduledThisMonth)}
               </div>
             </div>
@@ -4866,7 +4841,7 @@ const activeMonthPayments = payments.filter(payment =>
 
               <div
                 class="text-paid"
-                style="font-size:var(--text-xl); font-weight:800"
+                style="font-size:var(--text-xl);font-weight:800"
               >
                 ${formatCurrency(paidThisMonth)}
               </div>
@@ -4879,14 +4854,16 @@ const activeMonthPayments = payments.filter(payment =>
           >
             <div
               class="dashboard-progress-fill"
-              style="width:${
-                scheduledThisMonth > 0
-                  ? Math.min(
-                      (paidThisMonth / scheduledThisMonth) * 100,
-                      100
-                    )
-                  : 0
-              }%"
+              style="
+                width:${
+                  scheduledThisMonth > 0
+                    ? Math.min(
+                        (paidThisMonth / scheduledThisMonth) * 100,
+                        100
+                      )
+                    : 0
+                }%
+              "
             ></div>
           </div>
 
@@ -4901,18 +4878,19 @@ const activeMonthPayments = payments.filter(payment =>
           >
             <span>
               ${unpaidBillsThisMonth.length}
-              bill${unpaidBillsThisMonth.length === 1 ? '' : 's'} remaining
+              bill${unpaidBillsThisMonth.length === 1 ? "" : "s"} remaining
             </span>
 
             <span>
               ${
                 estimatedMonthlyIncome > 0
                   ? `Est. ${formatCurrency(estimatedRemaining)} after bills`
-                  : 'Add income to see your estimate'
+                  : "Add income to see your estimate"
               }
             </span>
           </div>
         </div>
+
         ${
           activePlans.length
             ? `
@@ -4944,18 +4922,18 @@ const activeMonthPayments = payments.filter(payment =>
                       align-items:center;
                       justify-content:center;
                       color:var(--accent);
-                      background:var(--accent-soft, rgba(124,92,255,.14));
+                      background:var(--accent-soft,rgba(124,92,255,.14));
                     "
                   >
                     ${
-  activePlans.length === 1
-    ? paymentPlanVisual(nextPlanPayment.provider, 38)
-    : svgIcon('calendar', 20)
-}
+                      activePlans.length === 1
+                        ? paymentPlanVisual(nextPlanPayment.provider, 38)
+                        : svgIcon("calendar", 20)
+                    }
                   </div>
 
-                  <div style="min-width:0; flex:1">
-                    <div style="font-size:var(--text-base); font-weight:800">
+                  <div style="min-width:0;flex:1">
+                    <div style="font-size:var(--text-base);font-weight:800">
                       Payment Plans
                     </div>
 
@@ -4964,25 +4942,18 @@ const activeMonthPayments = payments.filter(payment =>
                         font-size:var(--text-sm);
                         color:var(--text-muted);
                         margin-top:3px;
-                        overflow:hidden;
-                        text-overflow:ellipsis;
-                        white-space:nowrap;
                       "
                     >
                       ${
                         activePlans.length === 1
-                          ? `${nextPlanPayment.provider}${
-                              nextPlanPayment.storeName
-                                ? ` · ${nextPlanPayment.storeName}`
-                                : ''
-                            }`
+                          ? nextPlanPayment.provider
                           : `${activePlans.length} active plans`
                       }
                     </div>
                   </div>
 
                   <div style="text-align:right">
-                    <div style="font-size:var(--text-base); font-weight:800">
+                    <div style="font-size:var(--text-base);font-weight:800">
                       ${formatCurrency(paymentPlansRemaining)}
                     </div>
 
@@ -4995,60 +4966,60 @@ const activeMonthPayments = payments.filter(payment =>
                     >
                       Next ${formatDate(
                         nextPlanPayment.nextInstallment.dueDate,
-                        'short'
+                        "short"
                       )}
                     </div>
                   </div>
 
-                  ${svgIcon('chevronRight', 18)}
+                  ${svgIcon("chevronRight", 18)}
                 </div>
               </button>
             `
-            : ''
+            : ""
         }
 
         ${
-  overdueBills.length
-    ? `
-      <button
-        class="card card-pad"
-        type="button"
-        onclick="openDashboardStatusSheet('overdue')"
-        style="
-          width:100%;
-          text-align:left;
-          cursor:pointer;
-          border-color:color-mix(
-            in srgb,
-            var(--overdue) 38%,
-            var(--border)
-          );
-        "
-        aria-label="View overdue bills"
-      >
-        <div
-          style="
-            display:flex;
-            align-items:center;
-            gap:var(--space-2);
-            color:var(--overdue);
-          "
-        >
-          ${svgIcon('warning', 18)}
+          overdueBills.length
+            ? `
+              <button
+                class="card card-pad"
+                type="button"
+                onclick="openDashboardStatusSheet('overdue')"
+                style="
+                  width:100%;
+                  text-align:left;
+                  cursor:pointer;
+                  border-color:color-mix(
+                    in srgb,
+                    var(--overdue) 38%,
+                    var(--border)
+                  );
+                "
+                aria-label="View overdue bills"
+              >
+                <div
+                  style="
+                    display:flex;
+                    align-items:center;
+                    gap:var(--space-2);
+                    color:var(--overdue);
+                  "
+                >
+                  ${svgIcon("warning", 18)}
 
-          <strong>
-            ${overdueBills.length}
-            overdue bill${overdueBills.length === 1 ? '' : 's'}
-          </strong>
+                  <strong>
+                    ${overdueBills.length}
+                    overdue bill${overdueBills.length === 1 ? "" : "s"}
+                  </strong>
 
-          <span style="margin-left:auto; font-weight:800">
-            ${formatCurrency(overdueTotal)}
-          </span>
-        </div>
-      </button>
-    `
-    : ''
-}
+                  <span style="margin-left:auto;font-weight:800">
+                    ${formatCurrency(overdueTotal)}
+                  </span>
+                </div>
+              </button>
+            `
+            : ""
+        }
 
         ${
           monthlyLimit > 0
@@ -5081,8 +5052,8 @@ const activeMonthPayments = payments.filter(payment =>
                           font-weight:800;
                           color:${
                             isOverLimit
-                              ? 'var(--overdue)'
-                              : 'var(--text)'
+                              ? "var(--overdue)"
+                              : "var(--text)"
                           };
                           margin-top:4px;
                         "
@@ -5123,8 +5094,8 @@ const activeMonthPayments = payments.filter(payment =>
                         width:${limitPercent}%;
                         background:${
                           isOverLimit
-                            ? 'var(--overdue)'
-                            : 'var(--accent)'
+                            ? "var(--overdue)"
+                            : "var(--accent)"
                         };
                       "
                     ></div>
@@ -5136,8 +5107,8 @@ const activeMonthPayments = payments.filter(payment =>
                       font-size:var(--text-xs);
                       color:${
                         isOverLimit
-                          ? 'var(--overdue)'
-                          : 'var(--text-muted)'
+                          ? "var(--overdue)"
+                          : "var(--text-muted)"
                       };
                     "
                   >
@@ -5152,7 +5123,7 @@ const activeMonthPayments = payments.filter(payment =>
                 </div>
               </div>
             `
-            : ''
+            : ""
         }
 
         <div>
@@ -5164,7 +5135,7 @@ const activeMonthPayments = payments.filter(payment =>
                 ? `
                   <div class="empty-state">
                     <div class="empty-state-icon">
-                      ${svgIcon('pieChart', 40)}
+                      ${svgIcon("pieChart", 40)}
                     </div>
 
                     <div class="empty-state-text">
@@ -5172,32 +5143,50 @@ const activeMonthPayments = payments.filter(payment =>
                     </div>
                   </div>
                 `
-                : catEntries.map(([categoryId, total]) => {
-                    const category = getCategory(categoryId);
+                : catEntries
+                    .map(([categoryId, total]) => {
+                      const category = getCategory(categoryId);
 
-                    return `
-                      <div class="h-chart-row">
-                        <div class="h-chart-label">
-                          ${svgIcon(category.icon, 14)}
-                          ${category.label}
-                        </div>
+                      return `
+                        <button
+                          type="button"
+                          class="h-chart-row"
+                          onclick="openCategorySpendingSheet('${categoryId}')"
+                          aria-label="View ${escapeHtml(
+                            category.label
+                          )} spending details"
+                          style="
+                            width:100%;
+                            border:0;
+                            background:transparent;
+                            color:inherit;
+                            padding:8px 0;
+                            cursor:pointer;
+                            text-align:left;
+                          "
+                        >
+                          <div class="h-chart-label">
+                            ${svgIcon(category.icon, 14)}
+                            ${escapeHtml(category.label)}
+                          </div>
 
-                        <div class="h-chart-bar-bg">
-                          <div
-                            class="h-chart-bar-fill"
-                            style="
-                              width:${(total / maxCat) * 100}%;
-                              background:var(--${category.color});
-                            "
-                          ></div>
-                        </div>
+                          <div class="h-chart-bar-bg">
+                            <div
+                              class="h-chart-bar-fill"
+                              style="
+                                width:${(total / maxCat) * 100}%;
+                                background:var(--${category.color});
+                              "
+                            ></div>
+                          </div>
 
-                        <div class="h-chart-value">
-                          ${formatCurrency(total)}
-                        </div>
-                      </div>
-                    `;
-                  }).join('')
+                          <div class="h-chart-value">
+                            ${formatCurrency(total)}
+                          </div>
+                        </button>
+                      `;
+                    })
+                    .join("")
             }
           </div>
         </div>
@@ -5207,11 +5196,11 @@ const activeMonthPayments = payments.filter(payment =>
 
           <div class="card card-pad">
             ${
-              monthlyData.every(month => month.amount === 0)
+              monthlyData.every((month) => month.amount === 0)
                 ? `
                   <div class="empty-state">
                     <div class="empty-state-icon">
-                      ${svgIcon('trendUp', 40)}
+                      ${svgIcon("trendUp", 40)}
                     </div>
 
                     <div class="empty-state-text">
@@ -5221,32 +5210,38 @@ const activeMonthPayments = payments.filter(payment =>
                 `
                 : `
                   <div class="chart-bar-container">
-                    ${monthlyData.map(month => `
-                      <div class="chart-bar-item">
-                        <div class="chart-bar-value">
-                          ${
-                            month.amount > 0
-                              ? formatCurrency(month.amount).replace(
-                                  /\\.\\d+$/,
-                                  ''
-                                )
-                              : ''
-                          }
-                        </div>
+                    ${monthlyData
+                      .map(
+                        (month) => `
+                          <div class="chart-bar-item">
+                            <div class="chart-bar-value">
+                              ${
+                                month.amount > 0
+                                  ? formatCurrency(month.amount).replace(
+                                      /\\.\\d+$/,
+                                      ""
+                                    )
+                                  : ""
+                              }
+                            </div>
 
-                        <div
-                          class="chart-bar"
-                          style="
-                            height:${(month.amount / maxMonthly) * 100}%;
-                            background:var(--accent);
-                          "
-                        ></div>
+                            <div
+                              class="chart-bar"
+                              style="
+                                height:${
+                                  (month.amount / maxMonthly) * 100
+                                }%;
+                                background:var(--accent);
+                              "
+                            ></div>
 
-                        <div class="chart-bar-label">
-                          ${month.label}
-                        </div>
-                      </div>
-                    `).join('')}
+                            <div class="chart-bar-label">
+                              ${month.label}
+                            </div>
+                          </div>
+                        `
+                      )
+                      .join("")}
                   </div>
                 `
             }
