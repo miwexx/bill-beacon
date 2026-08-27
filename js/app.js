@@ -8477,23 +8477,23 @@ function saveBill() {
   };
 
   if (editingBillId) {
-    Store.updateBill(editingBillId, data);
+  Store.updateBill(editingBillId, data);
 
-    const previousAmount = parseFloat(existingBill?.amount) || 0;
-    const newAmount = parseFloat(data.amount) || 0;
+  const previousAmount = parseFloat(existingBill?.amount) || 0;
+  const newAmount = parseFloat(data.amount) || 0;
 
-    if (previousAmount !== newAmount) {
-      recordActivity(
-        'bill_balance_changed',
-        existingBill?.installmentPlanId ? 'paymentplan' : 'bill',
-        existingBill?.installmentPlanId || editingBillId,
-        `${data.name} balance changed`,
-        `${formatCurrency(previousAmount)} → ${formatCurrency(newAmount)}`,
-        { amount: previousAmount },
-        { amount: newAmount }
-      );
-    }
-  } else {
+  if (previousAmount !== newAmount) {
+    recordActivity(
+      'billbalancechanged',
+      existingBill?.installmentPlanId ? 'paymentplan' : 'bill',
+      existingBill?.installmentPlanId || editingBillId,
+      `${data.name} balance changed`,
+      `${formatCurrency(previousAmount)} → ${formatCurrency(newAmount)}`,
+      { amount: previousAmount },
+      { amount: newAmount }
+    );
+  }
+} else {
     Store.addBill({
       id: uid(),
       ...data,
