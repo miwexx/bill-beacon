@@ -3770,29 +3770,22 @@ function paymentPlanVisual(provider, size = 42) {
   const fallback = `
     <span
       style="
-        display:inline-flex;
-        width:${size}px;
-        height:${size}px;
+        position:absolute;
+        inset:0;
+        display:flex;
         align-items:center;
         justify-content:center;
-        border-radius:${Math.round(size * 0.3)}px;
-        background:${plan.background};
         color:white;
       "
-      aria-label="${escapeHtml(plan.label)}"
-      title="${escapeHtml(plan.label)}"
     >
-      ${svgIcon("creditcard", Math.round(size * 0.52))}
+      ${svgIcon("creditcard", Math.round(size * 0.5))}
     </span>
   `;
-
-  if (!plan.domain) {
-    return fallback;
-  }
 
   return `
     <span
       style="
+        position:relative;
         display:inline-flex;
         width:${size}px;
         height:${size}px;
@@ -3806,23 +3799,30 @@ function paymentPlanVisual(provider, size = 42) {
       aria-label="${escapeHtml(plan.label)}"
       title="${escapeHtml(plan.label)}"
     >
-      <img
-        src="https://img.logo.dev/${plan.domain}?token=pk_Oi2mTbJ_SOOVDVoEsRz5kg&size=256&format=png"
-        alt="${escapeHtml(plan.label)} logo"
-        width="${size}"
-        height="${size}"
-        style="
-          display:block;
-          width:${size}px;
-          height:${size}px;
-          object-fit:contain;
-          transform:scale(1.12);
-        "
-        onerror="
-          this.onerror=null;
-          this.parentElement.outerHTML=${JSON.stringify(fallback)};
-        "
-      >
+      ${fallback}
+
+      ${
+        plan.domain
+          ? `
+            <img
+              src="https://img.logo.dev/${plan.domain}?token=pk_Oi2mTbJ_SOOVDVoEsRz5kg&size=256&format=png"
+              alt=""
+              width="${size}"
+              height="${size}"
+              style="
+                position:relative;
+                z-index:1;
+                display:block;
+                width:${size}px;
+                height:${size}px;
+                object-fit:contain;
+                transform:scale(1.08);
+              "
+              onerror="this.style.display='none'"
+            >
+          `
+          : ""
+      }
     </span>
   `;
 }
