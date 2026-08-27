@@ -1460,15 +1460,18 @@ function renderDashboardUpcomingBill(bill) {
       aria-label="View ${escapeHtml(bill.name)} details"
     >
       <div
-        class="upcoming-bill-icon"
-        style="
-          background:${iconBackground};
-          color:${iconColor};
-          overflow:hidden;
-        "
-      >
-        ${billOrPaymentPlanVisual(bill, 32)}
-      </div>
+  class="upcoming-bill-icon"
+  style="
+    width:42px;
+    height:42px;
+    min-width:42px;
+    background:${iconBackground};
+    color:${iconColor};
+    overflow:hidden;
+  "
+>
+  ${billOrPaymentPlanVisual(bill, 42)}
+</div>
 
       <div class="upcoming-bill-name">
         ${escapeHtml(bill.name)}
@@ -2208,7 +2211,7 @@ function renderRecurringOccurrenceRow(bill) {
           overflow:hidden;
         "
       >
-        ${billOrPaymentPlanVisual(bill, 32)}
+        ${billOrPaymentPlanVisual(bill, 42)}
       </div>
 
       <div class="bill-info">
