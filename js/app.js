@@ -3719,45 +3719,110 @@ function editMonthlySpendingLimit() {
   render();
 }
 function paymentPlanVisual(provider, size = 42) {
-  const normalized = String(provider || '').trim().toLowerCase();
+  const normalized = String(provider || "")
+    .trim()
+    .toLowerCase();
 
   const providers = {
-    klarna: { label: 'Klarna', background: '#ffb3c7', color: '#111111', initials: 'K' },
-    afterpay: { label: 'Afterpay', background: '#b7f7d8', color: '#111111', initials: 'A' },
-    affirm: { label: 'Affirm', background: '#4a4af4', color: '#ffffff', initials: 'A' },
-    sezzle: { label: 'Sezzle', background: '#7b5cff', color: '#ffffff', initials: 'S' },
-    zip: { label: 'Zip', background: '#6d5cff', color: '#ffffff', initials: 'Z' },
-    'paypal pay later': { label: 'PayPal Pay Later', background: '#003087', color: '#ffffff', initials: 'P' },
-    paypal: { label: 'PayPal', background: '#003087', color: '#ffffff', initials: 'P' }
+    klarna: {
+      label: "Klarna",
+      domain: "klarna.com",
+      background: "#ffb3c7",
+    },
+    afterpay: {
+      label: "Afterpay",
+      domain: "afterpay.com",
+      background: "#b7f7d8",
+    },
+    affirm: {
+      label: "Affirm",
+      domain: "affirm.com",
+      background: "#4a4af4",
+    },
+    sezzle: {
+      label: "Sezzle",
+      domain: "sezzle.com",
+      background: "#7b5cff",
+    },
+    zip: {
+      label: "Zip",
+      domain: "zip.co",
+      background: "#6d5cff",
+    },
+    "paypal pay later": {
+      label: "PayPal Pay Later",
+      domain: "paypal.com",
+      background: "#003087",
+    },
+    paypal: {
+      label: "PayPal",
+      domain: "paypal.com",
+      background: "#003087",
+    },
   };
 
   const plan = providers[normalized] || {
-    label: String(provider || 'Payment plan'),
-    background: 'var(--accent)',
-    color: '#ffffff',
-    initials: String(provider || 'P').trim().charAt(0).toUpperCase()
+    label: String(provider || "Payment Plan"),
+    domain: "",
+    background: "var(--accent)",
   };
 
-  return `
+  const fallback = `
     <span
-      aria-label="${escapeHtml(plan.label)}"
-      title="${escapeHtml(plan.label)}"
       style="
+        display:inline-flex;
         width:${size}px;
         height:${size}px;
-        flex:0 0 ${size}px;
-        display:inline-flex;
         align-items:center;
         justify-content:center;
         border-radius:${Math.round(size * 0.3)}px;
         background:${plan.background};
-        color:${plan.color};
-        font-size:${Math.max(16, Math.round(size * 0.55))}px;
-        font-weight:900;
-        line-height:1;
+        color:white;
       "
+      aria-label="${escapeHtml(plan.label)}"
+      title="${escapeHtml(plan.label)}"
     >
-      ${escapeHtml(plan.initials)}
+      ${svgIcon("creditcard", Math.round(size * 0.52))}
+    </span>
+  `;
+
+  if (!plan.domain) {
+    return fallback;
+  }
+
+  return `
+    <span
+      style="
+        display:inline-flex;
+        width:${size}px;
+        height:${size}px;
+        flex:0 0 ${size}px;
+        align-items:center;
+        justify-content:center;
+        overflow:hidden;
+        border-radius:${Math.round(size * 0.3)}px;
+        background:${plan.background};
+      "
+      aria-label="${escapeHtml(plan.label)}"
+      title="${escapeHtml(plan.label)}"
+    >
+      <img
+        src="https://img.logo.dev/${plan.domain}?token=pk_Oi2mTbJ_SOOVDVoEsRz5kg&size=256&format=png"
+        alt="${escapeHtml(plan.label)} logo"
+        width="${size}"
+        height="${size}"
+        style="
+          display:block;
+          width:${size}px;
+          height:${size}px;
+          object-fit:contain;
+          transform:scale(1.12);
+        "
+        onerror="
+          this.onerror=null;
+          this.parentElement.outerHTML=${JSON.stringify(fallback)};
+        "
+      >
     </span>
   `;
 }
