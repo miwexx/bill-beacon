@@ -4834,7 +4834,7 @@ function renderInsights() {
             <div class="stat-value text-paid">
               ${formatCurrency(estimatedMonthlyIncome)}
             </div>
-            <div class="stat-label">Estimated Income</div>
+            <div class="stat-label">Expected Income</div>
           </div>
 
           <div class="stat-card">
@@ -5018,7 +5018,6 @@ function renderInsights() {
             `
             : ""
         }
-
         ${
           overdueBills.length
             ? `
