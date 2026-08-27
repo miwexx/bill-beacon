@@ -5207,8 +5207,7 @@ function renderInsights() {
                           "
                         >
                           <div class="h-chart-label">
-                            ${svgIcon(category.icon, 14)}
-                            ${escapeHtml(category.label)}
+                              ${escapeHtml(category.label)}
                           </div>
 
                           <div class="h-chart-bar-bg">
