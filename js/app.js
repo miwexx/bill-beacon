@@ -2632,8 +2632,7 @@ function renderBills() {
   `;
 }
 function closeBillSortSheet() {
-  document.getElementById("billSortContainer")?.remove();
-  unlockBackgroundScroll();
+  document.getElementById('billSortContainer')?.remove();
 }
 
 function openBillSortSheet() {
@@ -9428,46 +9427,39 @@ openNotificationCenter = async function () {
 
 let backgroundScrollY = 0;
 
-let savedScrollY = 0;
-let scrollLockCount = 0;
-
 function lockBackgroundScroll() {
-  if (scrollLockCount > 0) {
-    scrollLockCount += 1;
-    return;
-  }
+  if (document.body.classList.contains('popup-open')) return;
 
-  scrollLockCount = 1;
-  savedScrollY = window.scrollY || window.pageYOffset || 0;
+  backgroundScrollY = window.scrollY;
 
-  document.body.style.position = "fixed";
-  document.body.style.top = `-${savedScrollY}px`;
-  document.body.style.left = "0";
-  document.body.style.right = "0";
-  document.body.style.width = "100%";
-  document.body.style.overflow = "hidden";
+  document.body.classList.add('popup-open');
+  document.body.style.position = 'fixed';
+  document.body.style.top = `-${backgroundScrollY}px`;
+  document.body.style.left = '0';
+  document.body.style.right = '0';
+  document.body.style.width = '100%';
 }
 
 function unlockBackgroundScroll() {
-  if (scrollLockCount === 0) return;
+  const scrollY = backgroundScrollY || 0;
 
-  scrollLockCount -= 1;
+  document.body.classList.remove('popup-open');
+  document.body.style.position = '';
+  document.body.style.top = '';
+  document.body.style.left = '';
+  document.body.style.right = '';
+  document.body.style.width = '';
 
-  if (scrollLockCount > 0) return;
+  backgroundScrollY = 0;
 
-  const savedTop = document.body.style.top;
-  const restoreY = Math.abs(parseInt(savedTop || "0", 10)) || savedScrollY;
+  requestAnimationFrame(() => {
+    window.scrollTo(0, scrollY);
 
-  document.body.style.position = "";
-  document.body.style.top = "";
-  document.body.style.left = "";
-  document.body.style.right = "";
-  document.body.style.width = "";
-  document.body.style.overflow = "";
-
-  window.scrollTo(0, restoreY);
-
-  savedScrollY = 0;
+    const main = document.querySelector('.main-content');
+    if (main) {
+      main.scrollTop = 0;
+    }
+  });
 }
 document.addEventListener('DOMContentLoaded', () => {
   refreshNotificationInbox()
