@@ -4678,6 +4678,18 @@ function renderInsights() {
       getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
   );
 
+  const upcomingBillsForInsight = unpaidBillsThisMonth
+    .filter(
+      (bill) =>
+        getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming"
+    )
+    .sort(
+      (a, b) =>
+        (parseFloat(b.amount) || 0) - (parseFloat(a.amount) || 0)
+    );
+
+  const largestUpcomingBill = upcomingBillsForInsight[0] || null;
+
   const scheduledThisMonth = monthBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
@@ -5018,6 +5030,123 @@ function renderInsights() {
             `
             : ""
         }
+
+        ${
+          largestUpcomingBill
+            ? `
+              <button
+                type="button"
+                class="card card-pad"
+                onclick="navigate('detail', {
+                  id: '${
+                    largestUpcomingBill.isOccurrence
+                      ? largestUpcomingBill.sourceBillId
+                      : largestUpcomingBill.id
+                  }',
+                  occurrenceDueDate: '${largestUpcomingBill.dueDate}',
+                  returnRoute: 'insights'
+                })"
+                style="
+                  width:100%;
+                  text-align:left;
+                  cursor:pointer;
+                  border:1px solid var(--border);
+                "
+                aria-label="View largest upcoming bill: ${escapeHtml(
+                  largestUpcomingBill.name
+                )}"
+              >
+                <div
+                  style="
+                    display:flex;
+                    align-items:center;
+                    gap:var(--space-3);
+                  "
+                >
+                  <div
+                    style="
+                      width:38px;
+                      height:38px;
+                      min-width:38px;
+                      display:flex;
+                      align-items:center;
+                      justify-content:center;
+                      overflow:hidden;
+                      border-radius:12px;
+                      background:${
+                        largestUpcomingBill.installmentPlanId
+                          ? "transparent"
+                          : getBillBrand(largestUpcomingBill.name)
+                            ? "#fff"
+                            : `var(--${
+                                getCategory(largestUpcomingBill.category).color
+                              })`
+                      };
+                      color:${
+                        largestUpcomingBill.installmentPlanId ||
+                        getBillBrand(largestUpcomingBill.name)
+                          ? "#1e1e2e"
+                          : "white"
+                      };
+                    "
+                  >
+                    ${billOrPaymentPlanVisual(largestUpcomingBill, 38)}
+                  </div>
+
+                  <div style="min-width:0;flex:1">
+                    <div
+                      style="
+                        font-size:var(--text-xs);
+                        color:var(--text-muted);
+                      "
+                    >
+                      Largest Upcoming Bill
+                    </div>
+
+                    <div
+                      style="
+                        margin-top:3px;
+                        font-size:var(--text-base);
+                        font-weight:800;
+                        overflow:hidden;
+                        text-overflow:ellipsis;
+                        white-space:nowrap;
+                      "
+                    >
+                      ${escapeHtml(largestUpcomingBill.name)}
+                    </div>
+
+                    <div
+                      style="
+                        margin-top:3px;
+                        font-size:var(--text-sm);
+                        color:var(--text-muted);
+                      "
+                    >
+                      Due ${formatDate(largestUpcomingBill.dueDate, "short")}
+                    </div>
+                  </div>
+
+                  <div style="text-align:right">
+                    <div style="font-size:var(--text-lg);font-weight:800">
+                      ${formatCurrency(largestUpcomingBill.amount)}
+                    </div>
+
+                    <div
+                      style="
+                        margin-top:3px;
+                        color:var(--text-muted);
+                      "
+                    >
+                      ${svgIcon("chevronRight", 18)}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            `
+            : ""
+        }
+
         ${
           overdueBills.length
             ? `
@@ -5206,7 +5335,7 @@ function renderInsights() {
                           "
                         >
                           <div class="h-chart-label">
-                              ${escapeHtml(category.label)}
+                            ${escapeHtml(category.label)}
                           </div>
 
                           <div class="h-chart-bar-bg">
