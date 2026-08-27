@@ -1422,6 +1422,7 @@ function getDashboardUpcomingGroups(referenceDate = new Date()) {
 
 function renderDashboardUpcomingBill(bill) {
   const category = getCategory(bill.category);
+
   const billStatus = getOccurrenceStatus(
     bill,
     new Date(bill.dueDate)
@@ -1431,12 +1432,27 @@ function renderDashboardUpcomingBill(bill) {
     ? bill.sourceBillId
     : bill.id;
 
+  const isPaymentPlan = Boolean(
+    bill.installmentPlanId && bill.installmentProvider
+  );
+
+  const iconBackground = isPaymentPlan
+    ? "transparent"
+    : getBillBrand(bill.name)
+      ? "#fff"
+      : `var(--${category.color})`;
+
+  const iconColor = isPaymentPlan || getBillBrand(bill.name)
+    ? "#1e1e2e"
+    : "white";
+
   return `
     <button
-      <button
-  type="button"
-  class="dashboard-upcoming-tile ${billStatus === 'overdue' ? 'is-overdue' : ''}"
-  onclick="navigate('detail', {
+      type="button"
+      class="dashboard-upcoming-tile ${
+        billStatus === "overdue" ? "is-overdue" : ""
+      }"
+      onclick="navigate('detail', {
         id: '${sourceBillId}',
         occurrenceDueDate: '${bill.dueDate}',
         returnRoute: 'today'
@@ -1445,13 +1461,13 @@ function renderDashboardUpcomingBill(bill) {
     >
       <div
         class="upcoming-bill-icon"
-        style="background:${
-          getBillBrand(bill.name)
-            ? '#fff'
-            : `var(--${category.color})`
-        }"
+        style="
+          background:${iconBackground};
+          color:${iconColor};
+          overflow:hidden;
+        "
       >
-        ${billVisual(bill, 32)}
+        ${billOrPaymentPlanVisual(bill, 32)}
       </div>
 
       <div class="upcoming-bill-name">
@@ -1464,13 +1480,15 @@ function renderDashboardUpcomingBill(bill) {
 
       <div
         class="upcoming-bill-date"
-        style="color:${
-          billStatus === 'overdue'
-            ? 'var(--overdue)'
-            : 'var(--text-muted)'
-        }"
+        style="
+          color:${
+            billStatus === "overdue"
+              ? "var(--overdue)"
+              : "var(--text-muted)"
+          };
+        "
       >
-        ${formatDate(bill.dueDate, 'short')}
+        ${formatDate(bill.dueDate, "short")}
         · ${relativeDue(bill.dueDate)}
       </div>
     </button>
