@@ -163,7 +163,6 @@ const Store = {
 
   const trackedFields = [
     "name",
-    "amount",
     "dueDate",
     "category",
     "paymentMethod",
@@ -5941,7 +5940,11 @@ function getActivityActionIcon(action) {
         icon: "checkCircle",
         color: "var(--paid)",
       };
-
+      case 'bill_balance_changed':
+  return {
+    icon: 'gear',
+    color: 'var(--accent)',
+  };
     case "payment_voided":
     case "payment_undone":
       return {
@@ -8426,13 +8429,16 @@ function savePaymentLinkPopup(billId) {
   render();
 }
 function saveBill() {
+  const existingBill = editingBillId ? Store.getBill(editingBillId) : null;
+
   const name = document.getElementById('billName').value.trim();
   const amount = parseFloat(document.getElementById('billAmount').value) || 0;
 
   if (!name) {
-  alert('Please enter a bill name');
-  return;
-}
+    alert('Please enter a bill name');
+    return;
+  }
+
   if (!Number.isFinite(amount) || amount <= 0) {
     alert('Please enter an amount greater than 0.');
     return;
@@ -8442,9 +8448,6 @@ function saveBill() {
   const selectedDueDay = Number(
     document.getElementById('billDueDay')?.value
   );
-const paymentUrlInput = document.getElementById('paymentUrl');
-let paymentUrl = paymentUrlInput ? paymentUrlInput.value.trim() : '';
-
 
   const data = {
     name,
@@ -8475,6 +8478,21 @@ let paymentUrl = paymentUrlInput ? paymentUrlInput.value.trim() : '';
 
   if (editingBillId) {
     Store.updateBill(editingBillId, data);
+
+    const previousAmount = parseFloat(existingBill?.amount) || 0;
+    const newAmount = parseFloat(data.amount) || 0;
+
+    if (previousAmount !== newAmount) {
+      recordActivity(
+        'bill_balance_changed',
+        existingBill?.installmentPlanId ? 'paymentplan' : 'bill',
+        existingBill?.installmentPlanId || editingBillId,
+        `${data.name} balance changed`,
+        `${formatCurrency(previousAmount)} → ${formatCurrency(newAmount)}`,
+        { amount: previousAmount },
+        { amount: newAmount }
+      );
+    }
   } else {
     Store.addBill({
       id: uid(),
