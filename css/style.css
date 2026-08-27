@@ -2404,3 +2404,10 @@ body {
   box-sizing: border-box;
   background: var(--bg);
 }
+/* Keep bottom sheets below the iPhone top safe area */
+.sheet {
+  top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+  max-height: none !important;
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0 !important;
+}
