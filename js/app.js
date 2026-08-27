@@ -5832,57 +5832,62 @@ function renderSettings() {
             ${
               Store.getIncomeSources().length
                 ? Store.getIncomeSources()
-                    .map(source => `
-                      <div
-                        class="form-row"
-                        onclick="openIncomeSourceForm('${source.id}')"
-                        style="cursor:pointer"
-                      >
-                        <div>
-                          <div class="form-label">
-                            ${escapeHtml(source.name)}
+                    .map(
+                      (source) => `
+                        <div
+                          class="form-row"
+                          onclick="openIncomeSourceForm('${source.id}')"
+                          style="cursor:pointer"
+                        >
+                          <div>
+                            <div class="form-label">
+                              ${escapeHtml(source.name)}
+                            </div>
+
+                            <div
+                              style="
+                                font-size:var(--text-xs);
+                                color:var(--text-muted);
+                                margin-top:3px;
+                              "
+                            >
+                              ${escapeHtml(source.frequency)} ·
+                              Next: ${formatDate(
+                                source.nextPayDate,
+                                'short'
+                              )}
+                            </div>
                           </div>
 
-                          <div
-                            style="
-                              font-size:var(--text-xs);
-                              color:var(--text-muted);
-                              margin-top:3px;
-                            "
-                          >
-                            ${escapeHtml(source.frequency)} ·
-                            Next: ${formatDate(source.nextPayDate, 'short')}
+                          <div style="margin-left:auto;text-align:right">
+                            <div style="font-weight:800">
+                              ${formatCurrency(source.expectedAmount)}
+                            </div>
+
+                            <div
+                              style="
+                                font-size:var(--text-xs);
+                                color:var(--text-muted);
+                              "
+                            >
+                              expected pay
+                            </div>
                           </div>
                         </div>
-
-                        <div style="margin-left:auto; text-align:right">
-                          <div style="font-weight:800">
-                            ${formatCurrency(source.expectedAmount)}
-                          </div>
-
-                          <div
-                            style="
-                              font-size:var(--text-xs);
-                              color:var(--text-muted);
-                            "
-                          >
-                            expected pay
-                          </div>
-                        </div>
-                      </div>
-                    `)
+                      `
+                    )
                     .join('')
                 : `
-                  <div
-                    class="card-pad"
-                    style="
-                      font-size:var(--text-sm);
-                      color:var(--text-muted);
-                    "
-                  >
-                    Add an income source to plan future paychecks and fund bills.
-                  </div>
-                `
+                    <div
+                      class="card-pad"
+                      style="
+                        font-size:var(--text-sm);
+                        color:var(--text-muted);
+                      "
+                    >
+                      Add an income source to plan future paychecks and fund bills.
+                    </div>
+                  `
             }
           </div>
 
@@ -5909,41 +5914,45 @@ function renderSettings() {
                 ${svgIcon('internaldrive', 18)}
               </div>
 
-              <div style="flex:1; color:var(--text-muted)">
+              <div style="flex:1;color:var(--text-muted)">
                 ${billCount} bill${billCount === 1 ? '' : 's'} stored on device
               </div>
             </div>
-<div
-  class="form-row"
-  onclick="navigate('activity')"
-  style="cursor:pointer"
->
-  <div class="form-label">
-    ${svgIcon("doc", 18)}
-  </div>
 
-  <div style="flex:1">
-    <div style="font-weight:700">Activity & Changes</div>
-    <div
-      style="
-        margin-top:3px;
-        font-size:var(--text-xs);
-        color:var(--text-muted);
-      "
-    >
-      Payments, reversals, and bill changes
-    </div>
-  </div>
+            <div
+              class="form-row"
+              onclick="navigate('activity')"
+              style="cursor:pointer"
+            >
+              <div class="form-label">
+                ${svgIcon('doc', 18)}
+              </div>
 
-  ${svgIcon("chevronRight", 18)}
-</div>
+              <div style="flex:1">
+                <div style="font-weight:700">Activity & Changes</div>
+
+                <div
+                  style="
+                    margin-top:3px;
+                    font-size:var(--text-xs);
+                    color:var(--text-muted);
+                  "
+                >
+                  Payments, reversals, and bill changes
+                </div>
+              </div>
+
+              ${svgIcon('chevronRight', 18)}
+            </div>
+
             <div
               class="form-row"
               onclick="exportCSV()"
               style="cursor:pointer"
             >
               <div class="form-label">${svgIcon('export', 18)}</div>
-              <div style="flex:1; color:var(--accent)">
+
+              <div style="flex:1;color:var(--accent)">
                 Export Bills CSV
               </div>
             </div>
@@ -5955,7 +5964,7 @@ function renderSettings() {
             >
               <div class="form-label">${svgIcon('tray', 18)}</div>
 
-              <div style="flex:1; color:var(--accent)">
+              <div style="flex:1;color:var(--accent)">
                 Import Bills CSV
               </div>
 
@@ -5975,7 +5984,7 @@ function renderSettings() {
             >
               <div class="form-label">${svgIcon('tray', 18)}</div>
 
-              <div style="flex:1; color:var(--accent)">
+              <div style="flex:1;color:var(--accent)">
                 Load 5 test bills
               </div>
             </div>
@@ -5987,7 +5996,7 @@ function renderSettings() {
             >
               <div class="form-label">${svgIcon('trash', 18)}</div>
 
-              <div style="flex:1; color:var(--overdue)">
+              <div style="flex:1;color:var(--overdue)">
                 Clear all app data
               </div>
             </div>
