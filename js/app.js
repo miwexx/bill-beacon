@@ -5970,8 +5970,30 @@ function getActivityActionIcon(action) {
   }
 }
 
+function getActivityLabel(action) {
+  switch (action) {
+    case "billbalancechanged":
+      return "Balance changed";
+    case "billupdated":
+      return "Bill updated";
+    case "billpostponed":
+      return "Bill postponed";
+    case "paymentvoided":
+      return "Payment reversed";
+    case "paymentundone":
+      return "Payment undone";
+    case "billpaid":
+      return "Bill paid";
+    default:
+      return "Recent activity";
+  }
+}
+
 function renderActivity() {
   const entries = Store.getActivityLog()
+    .filter(
+      (entry) => entry && entry.action && (entry.title || entry.detail)
+    )
     .slice()
     .sort(
       (a, b) =>
@@ -6013,73 +6035,92 @@ function renderActivity() {
                     const timestamp = new Date(entry.timestamp);
 
                     return `
-                      <div class="form-row">
+                      <div
+                        class="form-row"
+                        style="
+                          align-items:flex-start;
+                          padding-top:14px;
+                          padding-bottom:14px;
+                        "
+                      >
                         <div
                           style="
-                            width:36px;
-                            height:36px;
-                            min-width:36px;
                             display:flex;
-                            align-items:center;
-                            justify-content:center;
-                            border-radius:10px;
-                            color:${appearance.color};
-                            background:color-mix(
-                              in srgb,
-                              ${appearance.color} 14%,
-                              transparent
-                            );
+                            align-items:flex-start;
+                            gap:14px;
+                            width:100%;
                           "
                         >
-                          ${svgIcon(appearance.icon, 18)}
-                        </div>
-
-                        <div style="min-width:0;flex:1">
                           <div
                             style="
-                              font-size:var(--text-sm);
-                              font-weight:800;
-                              overflow:hidden;
-                              text-overflow:ellipsis;
-                              white-space:nowrap;
+                              width:40px;
+                              height:40px;
+                              min-width:40px;
+                              display:flex;
+                              align-items:center;
+                              justify-content:center;
+                              border-radius:12px;
+                              margin-top:2px;
+                              color:${appearance.color};
+                              background:color-mix(
+                                in srgb,
+                                ${appearance.color} 14%,
+                                transparent
+                              );
                             "
                           >
-                            ${escapeHtml(entry.title || "Activity")}
+                            ${svgIcon(appearance.icon, 18)}
                           </div>
 
-                          ${
-                            entry.detail
-                              ? `
-                                <div
-                                  style="
-                                    margin-top:3px;
-                                    font-size:var(--text-xs);
-                                    color:var(--text-muted);
-                                    overflow:hidden;
-                                    text-overflow:ellipsis;
-                                    white-space:nowrap;
-                                  "
-                                >
-                                  ${escapeHtml(entry.detail)}
-                                </div>
-                              `
-                              : ""
-                          }
+                          <div style="min-width:0; flex:1; padding-top:1px;">
+                            <div
+                              style="
+                                font-size:var(--text-sm);
+                                font-weight:800;
+                                overflow:hidden;
+                                text-overflow:ellipsis;
+                                white-space:nowrap;
+                              "
+                            >
+                              ${escapeHtml(
+                                entry.title || getActivityLabel(entry.action)
+                              )}
+                            </div>
 
-                          <div
-                            style="
-                              margin-top:3px;
-                              font-size:var(--text-xs);
-                              color:var(--text-muted);
-                            "
-                          >
-                            ${formatDate(
-                              timestamp.toISOString(),
-                              "short"
-                            )} · ${timestamp.toLocaleTimeString([], {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
+                            ${
+                              entry.detail
+                                ? `
+                                  <div
+                                    style="
+                                      margin-top:4px;
+                                      font-size:var(--text-xs);
+                                      color:var(--text-muted);
+                                      overflow:hidden;
+                                      text-overflow:ellipsis;
+                                      white-space:nowrap;
+                                    "
+                                  >
+                                    ${escapeHtml(entry.detail)}
+                                  </div>
+                                `
+                                : ""
+                            }
+
+                            <div
+                              style="
+                                margin-top:4px;
+                                font-size:var(--text-xs);
+                                color:var(--text-muted);
+                              "
+                            >
+                              ${formatDate(
+                                timestamp.toISOString(),
+                                "short"
+                              )} · ${timestamp.toLocaleTimeString([], {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </div>
                           </div>
                         </div>
                       </div>
