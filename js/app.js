@@ -165,6 +165,29 @@ const Store = {
   savePayments(payments) {
     localStorage.setItem('payments', JSON.stringify(payments));
   },
+  getActivityLog() {
+  try {
+    return JSON.parse(localStorage.getItem("activityLog")) || [];
+  } catch {
+    return [];
+  }
+},
+
+saveActivityLog(entries) {
+  localStorage.setItem("activityLog", JSON.stringify(entries));
+},
+
+addActivity(entry) {
+  const entries = this.getActivityLog();
+
+  entries.push({
+    id: uid(),
+    timestamp: new Date().toISOString(),
+    ...entry,
+  });
+
+  this.saveActivityLog(entries);
+},
   getIncomeSources() {
   try {
     return JSON.parse(localStorage.getItem('incomeSources')) || [];
@@ -402,7 +425,25 @@ function getTotalIncomeForPayCycle(cycle) {
     0
   );
 }
-
+function recordActivity({
+  action,
+  entityType,
+  entityId,
+  title,
+  detail = "",
+  before = null,
+  after = null,
+}) {
+  Store.addActivity({
+    action,
+    entityType,
+    entityId,
+    title,
+    detail,
+    before,
+    after,
+  });
+}
 function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
   return num.toLocaleString(undefined, { style: 'currency', currency: Store.getSettings().currency || 'USD' });
@@ -762,14 +803,16 @@ function postponeBill(billId, newDueDate) {
   const postponedDueDate = dateFromInput(newDueDate);
 
   if (Number.isNaN(new Date(postponedDueDate).getTime())) {
-    alert('Please choose a valid new due date.');
+    alert("Please choose a valid new due date.");
     return;
   }
 
   if (new Date(postponedDueDate) <= new Date(previousDueDate)) {
-    alert('Choose a date after the current due date.');
+    alert("Choose a date after the current due date.");
     return;
   }
+
+  const postponedAt = new Date().toISOString();
 
   const postponementHistory = Array.isArray(bill.postponementHistory)
     ? bill.postponementHistory
@@ -783,12 +826,29 @@ function postponeBill(billId, newDueDate) {
         id: uid(),
         originalDueDate: previousDueDate,
         postponedTo: postponedDueDate,
-        postponedAt: new Date().toISOString(),
+        postponedAt,
       },
     ],
   });
-}
 
+  recordActivity({
+    action: "bill_postponed",
+    entityType: bill.installmentPlanId ? "payment_plan" : "bill",
+    entityId: bill.installmentPlanId || bill.id,
+    title: `${bill.name} postponed`,
+    detail: `${formatDate(previousDueDate, "short")} → ${formatDate(
+      postponedDueDate,
+      "short"
+    )}`,
+    before: {
+      dueDate: previousDueDate,
+    },
+    after: {
+      dueDate: postponedDueDate,
+      postponedAt,
+    },
+  });
+}
 function openPostponeBillSheet(billId) {
   const bill = Store.getBill(billId);
   if (!bill) return;
@@ -1042,9 +1102,10 @@ function showPaymentUndoToast(payment, billName) {
   const toastId = `payment-undo-${payment.id}`;
   paymentUndoToastId = toastId;
 
-  const toast = document.createElement('div');
+  const toast = document.createElement("div");
+
   toast.id = toastId;
-  toast.setAttribute('role', 'status');
+  toast.setAttribute("role", "status");
 
   toast.style.cssText = `
     position:fixed;
@@ -1066,7 +1127,7 @@ function showPaymentUndoToast(payment, billName) {
   `;
 
   toast.innerHTML = `
-    <span>${escapeHtml(billName)} Marked Paid</span>
+    <span>${escapeHtml(billName)} marked paid</span>
     <button
       type="button"
       data-payment-undo="${payment.id}"
@@ -1086,35 +1147,61 @@ function showPaymentUndoToast(payment, billName) {
 
   document.body.appendChild(toast);
 
-  toast.querySelector('[data-payment-undo]')?.addEventListener('click', () => {
-    const activePayment = Store.getPayments().find(
-      item => item.id === payment.id && item.status !== 'voided'
-    );
+  toast
+    .querySelector("[data-payment-undo]")
+    ?.addEventListener("click", () => {
+      const activePayment = Store.getPayments().find(
+        (item) =>
+          item.id === payment.id &&
+          item.status !== "voided"
+      );
 
-    if (!activePayment) {
+      if (!activePayment) {
+        dismissPaymentUndoToast();
+        return;
+      }
+
+      const bill = Store.getBill(activePayment.billId);
+      const voidedAt = new Date().toISOString();
+
+      Store.updatePayment(activePayment.id, {
+        status: "voided",
+        voidedAt,
+      });
+
+      recordActivity({
+        action: "payment_undone",
+        entityType: bill?.installmentPlanId ? "payment_plan" : "bill",
+        entityId: bill?.installmentPlanId || activePayment.billId,
+        title: `${bill?.name || billName} payment undone`,
+        detail: `${formatCurrency(activePayment.amount)} · Due ${formatDate(
+          activePayment.paidForDueDate,
+          "short"
+        )}`,
+        before: {
+          paymentId: activePayment.id,
+          status: "active",
+          amount: parseFloat(activePayment.amount) || 0,
+          paidDate: activePayment.paidDate,
+          dueDate: activePayment.paidForDueDate,
+        },
+        after: {
+          paymentId: activePayment.id,
+          status: "voided",
+          voidedAt,
+        },
+      });
+
       dismissPaymentUndoToast();
-      return;
-    }
-
-    Store.updatePayment(payment.id, {
-      status: 'voided',
-      voidedAt: new Date().toISOString()
+      render();
     });
 
-    dismissPaymentUndoToast();
-    render();
-  });
-
-  paymentUndoTimer = setTimeout(() => {
-    dismissPaymentUndoToast();
-  }, 3000);
+  paymentUndoTimer = setTimeout(dismissPaymentUndoToast, 3000);
 }
 function markBillPaid(billId) {
   const bill = Store.getBill(billId);
 
-  if (!bill) {
-    return;
-  }
+  if (!bill) return;
 
   const today = new Date();
 
@@ -1130,12 +1217,10 @@ function markBillPaid(billId) {
     ...bill,
     sourceBillId: bill.id,
     dueDate,
-    isOccurrence: isRecurringBill(bill)
+    isOccurrence: isRecurringBill(bill),
   };
 
-  if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) {
-    return;
-  }
+  if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) return;
 
   const payment = {
     id: uid(),
@@ -1143,20 +1228,37 @@ function markBillPaid(billId) {
     paidDate: new Date().toISOString(),
     amount: bill.amount,
     paidForDueDate: dueDate,
-    status: 'active',
-    voidedAt: null
+    status: "active",
+    voidedAt: null,
   };
 
   Store.addPayment(payment);
+
+  recordActivity({
+    action: "bill_paid",
+    entityType: bill.installmentPlanId ? "payment_plan" : "bill",
+    entityId: bill.installmentPlanId || bill.id,
+    title: `${bill.name} marked as paid`,
+    detail: `${formatCurrency(bill.amount)} · Due ${formatDate(
+      dueDate,
+      "short"
+    )}`,
+    after: {
+      paymentId: payment.id,
+      amount: parseFloat(bill.amount) || 0,
+      dueDate,
+      paidDate: payment.paidDate,
+      paymentPlanId: bill.installmentPlanId || null,
+    },
+  });
+
   render();
   showPaymentUndoToast(payment, bill.name);
 }
 function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
 
-  if (!bill) {
-    return;
-  }
+  if (!bill) return;
 
   const today = new Date();
 
@@ -1172,7 +1274,7 @@ function markBillUnpaid(billId) {
     ...bill,
     sourceBillId: bill.id,
     dueDate,
-    isOccurrence: isRecurringBill(bill)
+    isOccurrence: isRecurringBill(bill),
   };
 
   const payment = getActivePaymentForOccurrence(
@@ -1186,17 +1288,42 @@ function markBillUnpaid(billId) {
   }
 
   const confirmed = confirm(
-    `Mark ${bill.name} as unpaid for ${formatDate(dueDate, "full")}? ` +
-    `${formatCurrency(payment.amount)} will be added back to bills still due.`
+    `Mark ${bill.name} as unpaid for ${formatDate(
+      dueDate,
+      "full"
+    )}? ${formatCurrency(payment.amount)} will be added back to bills still due.`
   );
 
-  if (!confirmed) {
-    return;
-  }
+  if (!confirmed) return;
+
+  const voidedAt = new Date().toISOString();
 
   Store.updatePayment(payment.id, {
     status: "voided",
-    voidedAt: new Date().toISOString()
+    voidedAt,
+  });
+
+  recordActivity({
+    action: "payment_voided",
+    entityType: bill.installmentPlanId ? "payment_plan" : "bill",
+    entityId: bill.installmentPlanId || bill.id,
+    title: `${bill.name} marked as unpaid`,
+    detail: `${formatCurrency(payment.amount)} · Due ${formatDate(
+      dueDate,
+      "short"
+    )}`,
+    before: {
+      paymentId: payment.id,
+      status: "active",
+      amount: parseFloat(payment.amount) || 0,
+      dueDate,
+      paidDate: payment.paidDate,
+    },
+    after: {
+      paymentId: payment.id,
+      status: "voided",
+      voidedAt,
+    },
   });
 
   render();
@@ -5482,6 +5609,171 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
     </div>
   `;
 }
+function getActivityActionIcon(action) {
+  switch (action) {
+    case "bill_paid":
+      return {
+        icon: "checkCircle",
+        color: "var(--paid)",
+      };
+
+    case "payment_voided":
+    case "payment_undone":
+      return {
+        icon: "close",
+        color: "var(--overdue)",
+      };
+
+    case "bill_postponed":
+      return {
+        icon: "calendar",
+        color: "var(--accent)",
+      };
+
+    default:
+      return {
+        icon: "doc",
+        color: "var(--text-muted)",
+      };
+  }
+}
+
+function renderActivity() {
+  const entries = Store.getActivityLog()
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() -
+        new Date(a.timestamp).getTime()
+    );
+
+  return `
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <button
+          type="button"
+          class="nav-button"
+          onclick="navigate('settings')"
+          aria-label="Back to Settings"
+        >
+          ${svgIcon("chevronLeft", 22)}
+        </button>
+
+        <div class="nav-title">Activity & Changes</div>
+
+        <div style="width:44px"></div>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad content-gap">
+        <div class="settings-footer" style="padding:0">
+          Your recent payment and bill changes are stored on this device.
+        </div>
+
+        ${
+          entries.length
+            ? `
+              <div class="card">
+                ${entries
+                  .map((entry) => {
+                    const appearance = getActivityActionIcon(entry.action);
+                    const timestamp = new Date(entry.timestamp);
+
+                    return `
+                      <div class="form-row">
+                        <div
+                          style="
+                            width:36px;
+                            height:36px;
+                            min-width:36px;
+                            display:flex;
+                            align-items:center;
+                            justify-content:center;
+                            border-radius:10px;
+                            color:${appearance.color};
+                            background:color-mix(
+                              in srgb,
+                              ${appearance.color} 14%,
+                              transparent
+                            );
+                          "
+                        >
+                          ${svgIcon(appearance.icon, 18)}
+                        </div>
+
+                        <div style="min-width:0;flex:1">
+                          <div
+                            style="
+                              font-size:var(--text-sm);
+                              font-weight:800;
+                              overflow:hidden;
+                              text-overflow:ellipsis;
+                              white-space:nowrap;
+                            "
+                          >
+                            ${escapeHtml(entry.title || "Activity")}
+                          </div>
+
+                          ${
+                            entry.detail
+                              ? `
+                                <div
+                                  style="
+                                    margin-top:3px;
+                                    font-size:var(--text-xs);
+                                    color:var(--text-muted);
+                                    overflow:hidden;
+                                    text-overflow:ellipsis;
+                                    white-space:nowrap;
+                                  "
+                                >
+                                  ${escapeHtml(entry.detail)}
+                                </div>
+                              `
+                              : ""
+                          }
+
+                          <div
+                            style="
+                              margin-top:3px;
+                              font-size:var(--text-xs);
+                              color:var(--text-muted);
+                            "
+                          >
+                            ${formatDate(
+                              timestamp.toISOString(),
+                              "short"
+                            )} · ${timestamp.toLocaleTimeString([], {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    `;
+                  })
+                  .join("")}
+              </div>
+            `
+            : `
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon("doc", 44)}
+                </div>
+
+                <div class="empty-state-title">No activity yet</div>
+
+                <div class="empty-state-text">
+                  Payment, reversal, and postponement changes will appear here.
+                </div>
+              </div>
+            `
+        }
+      </div>
+    </div>
+  `;
+}
 function renderSettings() {
   const settings = Store.getSettings();
   const billCount = Store.getBills().length;
@@ -5621,7 +5913,30 @@ function renderSettings() {
                 ${billCount} bill${billCount === 1 ? '' : 's'} stored on device
               </div>
             </div>
+<div
+  class="form-row"
+  onclick="navigate('activity')"
+  style="cursor:pointer"
+>
+  <div class="form-label">
+    ${svgIcon("doc", 18)}
+  </div>
 
+  <div style="flex:1">
+    <div style="font-weight:700">Activity & Changes</div>
+    <div
+      style="
+        margin-top:3px;
+        font-size:var(--text-xs);
+        color:var(--text-muted);
+      "
+    >
+      Payments, reversals, and bill changes
+    </div>
+  </div>
+
+  ${svgIcon("chevronRight", 18)}
+</div>
             <div
               class="form-row"
               onclick="exportCSV()"
@@ -8222,6 +8537,7 @@ function render() {
     case 'bills': content = renderBills(); break;
     case 'calendar': content = renderCalendar(); break;
     case 'insights': content = renderInsights(); break;
+    case 'activity': content = renderActivity(); break;
     case 'payment-plans': content = renderPaymentPlans(); break;
     case 'settings': content = renderSettings(); break;
     case 'detail': content = renderBillDetail(); break;
