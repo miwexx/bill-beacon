@@ -2179,16 +2179,18 @@ function renderRecurringOccurrenceRow(bill) {
         class="bill-icon"
         style="
           background:${
-            getBillBrand(bill.name)
-              ? '#fff'
-              : `var(--${getCategory(bill.category).color})`
-          };
+  bill.installmentPlanId
+    ? 'transparent'
+    : getBillBrand(bill.name)
+      ? '#fff'
+      : `var(--${getCategory(bill.category).color})`
+};
           color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
           padding:${getBillBrand(bill.name) ? '3px' : '0'};
           overflow:hidden;
         "
       >
-        ${billVisual(bill, 32)}
+        ${billOrPaymentPlanVisual(bill, 32)}
       </div>
 
       <div class="bill-info">
@@ -3171,11 +3173,22 @@ window.openCalendarDay = function (dateString) {
                           <div
                             class="bill-icon"
                             style="
-                              background:var(--${category.color});
-                              color:white;
+                              background:${
+  bill.installmentPlanId
+    ? 'transparent'
+    : getBillBrand(bill.name)
+      ? '#fff'
+      : `var(--${category.color})`
+};
+color:${
+  bill.installmentPlanId || getBillBrand(bill.name)
+    ? '#1e1e2e'
+    : 'white'
+};
+overflow:hidden;
                             "
                           >
-                            ${billVisual(bill, 32)}
+                            ${billOrPaymentPlanVisual(bill, 32)}
                           </div>
 
                           <div class="bill-info">
@@ -3717,6 +3730,13 @@ function editMonthlySpendingLimit() {
 
   saveMonthlySpendingLimit(limit);
   render();
+}
+function billOrPaymentPlanVisual(bill, size = 32) {
+  if (bill?.installmentPlanId && bill?.installmentProvider) {
+    return paymentPlanVisual(bill.installmentProvider, size);
+  }
+
+  return billVisual(bill, size);
 }
 function paymentPlanVisual(provider, size = 42) {
   const normalized = String(provider || "")
