@@ -211,13 +211,22 @@ const Store = {
   };
 
   const changes = trackedFields
-    .filter((field) => (previousBill[field] ?? null) !== (updatedBill[field] ?? null))
-    .map((field) => ({
-      field,
-      before: previousBill[field] ?? null,
-      after: updatedBill[field] ?? null,
-      label: fieldLabels[field] || field,
-    }));
+  .filter((field) => {
+    const before = previousBill[field] ?? null;
+    const after = updatedBill[field] ?? null;
+
+    if (field === 'amount') {
+      return (parseFloat(before) || 0) !== (parseFloat(after) || 0);
+    }
+
+    return before !== after;
+  })
+  .map((field) => ({
+    field,
+    before: previousBill[field] ?? null,
+    after: updatedBill[field] ?? null,
+    label: fieldLabels[field] || field,
+  }));
 
   if (changes.length) {
   const primaryChange =
@@ -7133,31 +7142,27 @@ function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const payCycleLabel = getPayCycleLabel(bill);
   const dueDate = new Date(bill.dueDate);
-  const dueDay = dueDate.getDate();
+  const dueDay = bill.recurrence === 'Monthly'
+    ? getMonthlyDueDay(bill)
+    : dueDate.getDate();
 
   const ordinal = (day) => {
     const mod100 = day % 100;
-
-    if (mod100 >= 11 && mod100 <= 13) {
-      return `${day}th`;
-    }
-
+    if (mod100 >= 11 && mod100 <= 13) return `${day}th`;
     switch (day % 10) {
-      case 1:
-        return `${day}st`;
-      case 2:
-        return `${day}nd`;
-      case 3:
-        return `${day}rd`;
-      default:
-        return `${day}th`;
+      case 1: return `${day}st`;
+      case 2: return `${day}nd`;
+      case 3: return `${day}rd`;
+      default: return `${day}th`;
     }
   };
 
-  const scheduleText = bill.recurrence && bill.recurrence !== 'None'
-  ? `Due on the ${ordinal(dueDay)} of each month`
-  : `Due on ${formatDate(bill.dueDate, 'full')}`;
-
+  const scheduleText =
+    bill.recurrence && bill.recurrence !== 'None'
+      ? bill.recurrence === 'Monthly'
+        ? `Due on the ${ordinal(dueDay)} of each month`
+        : getBillScheduleLabel(bill)
+      : `Due on ${formatDate(bill.dueDate, 'full')}`;
   const payCycleClass =
     bill.payCycle === 'first' ||
     (!bill.payCycle && dueDay <= 15)
