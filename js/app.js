@@ -645,7 +645,9 @@ function dateInputValue(date) {
 
 
 function dateFromInput(value) {
-  return new Date(`${value}T12:00:00`).toISOString();
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
 }
 function getMonthlyDueDay(bill) {
   const storedDay = Number(bill?.dueDay);
@@ -8513,76 +8515,79 @@ function savePaymentLinkPopup(billId) {
   render();
 }
 function saveBill() {
-  const existingBill = editingBillId ? Store.getBill(editingBillId) : null;
+  const name = document.getElementById('billName')?.value.trim();
+  const amount = parseFloat(document.getElementById('billAmount')?.value || 0);
+  const category = document.getElementById('billCategory')?.value || 'other';
+  const dueDateInput = document.getElementById('billDueDate')?.value;
+  const recurrence = document.getElementById('billRecurrence')?.value || 'None';
+  const dueDayValue = document.getElementById('billDueDay')?.value;
+  const payCycle = document.getElementById('billPayCycle')?.value || 'first';
+  const paymentMethod = document.getElementById('billPaymentMethod')?.value || '';
+  const paymentUrl = document.getElementById('billPaymentUrl')?.value.trim() || '';
+  const autopay = Boolean(document.getElementById('billAutopay')?.checked);
+  const notes = document.getElementById('billNotes')?.value.trim() || '';
 
-  const name = document.getElementById('billName').value.trim();
-  const amount = parseFloat(document.getElementById('billAmount').value) || 0;
+  const reminderOffsets = Array.from(
+    document.querySelectorAll('input[name="billReminderOffsets"]:checked')
+  )
+    .map((input) => Number(input.value))
+    .filter((value) => !Number.isNaN(value))
+    .sort((a, b) => a - b);
 
   if (!name) {
-    alert('Please enter a bill name');
+    alert('Please enter a bill name.');
     return;
   }
 
-  if (!Number.isFinite(amount) || amount <= 0) {
-    alert('Please enter an amount greater than 0.');
+  if (Number.isNaN(amount) || amount < 0) {
+    alert('Please enter a valid amount.');
     return;
   }
 
-  const recurrence = document.getElementById('billRecurrence').value;
-  const selectedDueDay = Number(
-    document.getElementById('billDueDay')?.value
-  );
+  if (!dueDateInput) {
+    alert('Please choose a due date.');
+    return;
+  }
+
+  const dueDate = dateFromInput(dueDateInput);
+
+  if (!dueDate) {
+    alert('Please choose a valid due date.');
+    return;
+  }
+
+  const dueDay =
+    recurrence === 'Monthly'
+      ? Math.max(1, Math.min(31, Number(dueDayValue) || new Date(dueDate).getDate()))
+      : new Date(dueDate).getDate();
+
+  const existingBill = editingBillId ? Store.getBill(editingBillId) : null;
 
   const data = {
     name,
-    amount: amount.toString(),
-    dueDate: dateFromInput(
-      document.getElementById('billDueDate').value
-    ),
-    dueDay:
-      recurrence === 'Monthly' &&
-      Number.isInteger(selectedDueDay) &&
-      selectedDueDay >= 1 &&
-      selectedDueDay <= 31
-        ? selectedDueDay
-        : new Date(
-            document.getElementById('billDueDate').value + 'T12:00:00'
-          ).getDate(),
-    category: document.getElementById('billCategory').value,
+    amount,
+    category,
+    dueDate,
+    dueDay,
     recurrence,
-    payCycle: document.getElementById('billPayCycle').value,
-    paymentMethod: document.getElementById('billPaymentMethod').value,
-    paymentUrl: document.getElementById('paymentUrl')?.value.trim() || '',
-    autopay: document.getElementById('billAutopay').checked,
-    notes: document.getElementById('billNotes').value.trim(),
-    reminderOffsets: Array.from(
-      document.querySelectorAll('.reminder-toggle:checked')
-    ).map(cb => parseInt(cb.dataset.days, 10))
+    payCycle,
+    paymentMethod,
+    paymentUrl,
+    autopay,
+    notes,
+    reminderOffsets,
   };
 
   if (editingBillId) {
-  Store.updateBill(editingBillId, data);
-
-  const previousAmount = parseFloat(existingBill?.amount) || 0;
-  const newAmount = parseFloat(data.amount) || 0;
-
-  if (previousAmount !== newAmount) {
-    recordActivity(
-      'billbalancechanged',
-      existingBill?.installmentPlanId ? 'paymentplan' : 'bill',
-      existingBill?.installmentPlanId || editingBillId,
-      `${data.name} balance changed`,
-      `${formatCurrency(previousAmount)} → ${formatCurrency(newAmount)}`,
-      { amount: previousAmount },
-      { amount: newAmount }
-    );
-  }
-} else {
+    Store.updateBill(editingBillId, data);
+  } else {
     Store.addBill({
       id: uid(),
       ...data,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      postponementHistory: [],
+      occurrenceOverrides: [],
     });
   }
 
