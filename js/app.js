@@ -197,6 +197,8 @@ const fieldLabels = {
         return formatCurrency(value);
       case "dueDate":
         return formatDate(value, "short");
+        case "dueDay":
+  return value ? `Day ${value}` : "None";
       case "autopay":
         return value ? "On" : "Off";
       case "category":
