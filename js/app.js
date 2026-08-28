@@ -162,30 +162,32 @@ const Store = {
   const updatedBill = bills[idx];
 
   const trackedFields = [
-    "name",
-    "amount",
-    "dueDate",
-    "category",
-    "paymentMethod",
-    "paymentUrl",
-    "autopay",
-    "notes",
-    "recurrence",
-    "payCycle",
-  ];
+  "name",
+  "amount",
+  "dueDate",
+  "dueDay",
+  "category",
+  "paymentMethod",
+  "paymentUrl",
+  "autopay",
+  "notes",
+  "recurrence",
+  "payCycle",
+];
 
-  const fieldLabels = {
-    name: "Name",
-    amount: "Amount",
-    dueDate: "Due date",
-    category: "Category",
-    paymentMethod: "Payment method",
-    paymentUrl: "Payment link",
-    autopay: "Autopay",
-    notes: "Notes",
-    recurrence: "Repeats",
-    payCycle: "Pay cycle",
-  };
+const fieldLabels = {
+  name: "Name",
+  amount: "Amount",
+  dueDate: "Due date",
+  dueDay: "Due day",
+  category: "Category",
+  paymentMethod: "Payment method",
+  paymentUrl: "Payment link",
+  autopay: "Autopay",
+  notes: "Notes",
+  recurrence: "Repeats",
+  payCycle: "Pay cycle",
+};
 
   const formatActivityValue = (field, value) => {
     if (value === null || value === undefined || value === "") return "None";
