@@ -1,7 +1,7 @@
 /* ============================================
    Bill Tracker PWA — App Logic
    ============================================ */
-
+// deploy refresh 2026-08-30 12:17am
 const GOOGLE_LOGIN_URL = "https://bill-beacon-api.rodz-m-1990.workers.dev/auth/google/start";
 
 function setupLoginScreen() {
