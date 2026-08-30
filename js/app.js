@@ -2,9 +2,9 @@
    Bill Tracker PWA — App Logic
    ============================================ */
 // deploy refresh 2026-08-30 12:17am
-const GOOGLE_LOGIN_URL = "https://bill-beacon-api.rodz-m-1990.workers.dev/auth/google/start";
+// const GOOGLE_LOGIN_URL = "https://bill-beacon-api.rodz-m-1990.workers.dev/auth/google/start";
 
-function setupLoginScreen() {
+/* function setupLoginScreen() {
   const loginScreen = document.getElementById("login-screen");
   const loginButton = document.getElementById("google-login-button");
   const appRoot = document.getElementById("app");
@@ -28,7 +28,7 @@ function setupLoginScreen() {
   loginButton.addEventListener("click", () => {
     window.location.href = GOOGLE_LOGIN_URL;
   });
-}
+} */
 
 // ====================================
 // CONSTANTS
