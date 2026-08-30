@@ -340,8 +340,8 @@ async function completeGoogleLogin(request, env) {
   }
 
   const sessionToken = await createSession(env, user);
-  const appUrl = new URL(env.APP_ORIGIN);
-  appUrl.hash = `session=${encodeURIComponent(sessionToken)}`;
+  const appUrl = new URL("https://bill-beacon.pages.dev/");
+appUrl.hash = `session=${encodeURIComponent(sessionToken)}`;
 
   return Response.redirect(appUrl.toString(), 302);
 }
