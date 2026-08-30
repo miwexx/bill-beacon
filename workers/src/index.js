@@ -281,7 +281,8 @@ async function completeGoogleLogin(request, env) {
 
   if (
     profile.aud !== env.GOOGLE_CLIENT_ID ||
-    profile.iss !== 'accounts.google.com' ||
+    (profile.iss !== 'accounts.google.com' &&
+  profile.iss !== 'https://accounts.google.com') ||
     (profile.email_verified !== true && profile.email_verified !== 'true') ||
     !profile.sub ||
     !profile.email
