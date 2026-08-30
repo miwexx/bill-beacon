@@ -6458,7 +6458,7 @@ function renderSettings() {
           <div class="card">
             <div class="about-row">
               <span class="about-label">App Name</span>
-              <span class="about-value">Bill Beacon</span>
+              <span class="about-value">Bill Beacon V2</span>
             </div>
 
             <div class="about-row">
