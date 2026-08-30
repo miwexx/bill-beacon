@@ -2,7 +2,7 @@
    Bill Tracker PWA — App Logic
    ============================================ */
 
-const GOOGLE_LOGIN_URL =
+/*const GOOGLE_LOGIN_URL =
   "https://bill-beacon-api.rodz-m-1990.workers.dev/auth/google/start";
 
 const API_BASE_URL =
@@ -98,7 +98,7 @@ async function apiFetch(path, options = {}) {
   }
 
   return response;
-}
+} */
 // ====================================
 // CONSTANTS
 // ====================================
