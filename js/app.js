@@ -1,35 +1,104 @@
 /* ============================================
    Bill Tracker PWA — App Logic
    ============================================ */
-// deploy refresh 2026-08-30 12:17am
-// const GOOGLE_LOGIN_URL = "https://bill-beacon-api.rodz-m-1990.workers.dev/auth/google/start";
 
-/* function setupLoginScreen() {
+const GOOGLE_LOGIN_URL =
+  "https://bill-beacon-api.rodz-m-1990.workers.dev/auth/google/start";
+
+const API_BASE_URL =
+  "https://bill-beacon-api.rodz-m-1990.workers.dev";
+
+let authToken = null;
+let currentUser = null;
+
+function getSessionFromHash() {
+  const hash = window.location.hash.startsWith("#")
+    ? window.location.hash.slice(1)
+    : window.location.hash;
+
+  const params = new URLSearchParams(hash);
+  return params.get("session");
+}
+
+function clearSessionHash() {
+  const cleanUrl = `${window.location.pathname}${window.location.search}`;
+  window.history.replaceState({}, document.title, cleanUrl);
+}
+
+function isLoggedIn() {
+  return Boolean(authToken);
+}
+
+function showApp() {
   const loginScreen = document.getElementById("login-screen");
-  const loginButton = document.getElementById("google-login-button");
   const appRoot = document.getElementById("app");
 
-  if (!loginScreen || !loginButton || !appRoot) return;
+  if (loginScreen) loginScreen.classList.add("hidden");
+  if (appRoot) appRoot.style.display = "";
+}
 
-  const isLoggedIn =
-  window.location.search.includes("auth=success") ||
-  window.location.hash.includes("auth=success") ||
-  document.cookie.includes("bill_beacon_session=");
+function showLogin() {
+  const loginScreen = document.getElementById("login-screen");
+  const appRoot = document.getElementById("app");
 
-  if (isLoggedIn) {
-    loginScreen.classList.add("hidden");
-    appRoot.style.display = "";
-    return;
+  if (appRoot) appRoot.style.display = "none";
+  if (loginScreen) loginScreen.classList.remove("hidden");
+}
+
+function logout() {
+  authToken = null;
+  currentUser = null;
+  showLogin();
+}
+
+function setupLoginScreen() {
+  const loginButton = document.getElementById("google-login-button");
+  const sessionFromHash = getSessionFromHash();
+
+  if (sessionFromHash) {
+    authToken = sessionFromHash;
+    showApp();
+    // clearSessionHash();
+  } else if (isLoggedIn()) {
+    showApp();
+  } else {
+    showLogin();
   }
 
-  appRoot.style.display = "none";
-  loginScreen.classList.remove("hidden");
+  if (loginButton) {
+    loginButton.onclick = () => {
+      window.location.assign(GOOGLE_LOGIN_URL);
+    };
+  }
+}
 
-  loginButton.addEventListener("click", () => {
-    window.location.href = GOOGLE_LOGIN_URL;
+async function apiFetch(path, options = {}) {
+  const headers = new Headers(options.headers || {});
+
+  if (authToken) {
+    headers.set("Authorization", `Bearer ${authToken}`);
+  }
+
+  if (
+    options.body &&
+    !headers.has("Content-Type") &&
+    !(options.body instanceof FormData)
+  ) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers
   });
-} */
 
+  if (response.status === 401) {
+    logout();
+    throw new Error("Sign-in required.");
+  }
+
+  return response;
+}
 // ====================================
 // CONSTANTS
 // ====================================
