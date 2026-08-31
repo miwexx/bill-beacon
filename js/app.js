@@ -1,3 +1,39 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+
+import {
+  getAuth,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCtQjabLSI4qoHPqGn7BQYWwLhOtpa2BLI",
+  authDomain: "bill-beacon-1646c.firebaseapp.com",
+  projectId: "bill-beacon-1646c",
+  storageBucket: "bill-beacon-1646c.firebasestorage.app",
+  messagingSenderId: "573940060750",
+  appId: "1:573940060750:web:17ae12740a4fead0aee91f",
+  measurementId: "G-KTS8E5YZM1"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const auth = getAuth(firebaseApp);
+const db = getFirestore(firebaseApp);
+
+let currentUser = null;
+let cloudLoaded = false;
+let cloudSaveTimer = null;
+
+
 /* ============================================
    Bill Tracker PWA — App Logic
    ============================================ */
@@ -6,6 +42,207 @@
 // CONSTANTS
 // ====================================
 
+function showApp() {
+  const loginScreen = document.getElementById("login-screen");
+  const appRoot = document.getElementById("app");
+
+  if (loginScreen) loginScreen.classList.add("hidden");
+  if (appRoot) appRoot.style.display = "";
+}
+
+function showLogin() {
+  const loginScreen = document.getElementById("login-screen");
+  const appRoot = document.getElementById("app");
+
+  if (appRoot) appRoot.style.display = "none";
+  if (loginScreen) loginScreen.classList.remove("hidden");
+}
+
+function setLoginError(message = "") {
+  const errorElement = document.getElementById("login-error");
+
+  if (errorElement) {
+    errorElement.textContent = message;
+  }
+}
+
+function friendlyAuthError(error) {
+  const code = error?.code || "";
+
+  if (code === "auth/invalid-email") {
+    return "Enter a valid email address.";
+  }
+
+  if (code === "auth/missing-password") {
+    return "Enter your password.";
+  }
+
+  if (code === "auth/weak-password") {
+    return "Use a password with at least 6 characters.";
+  }
+
+  if (code === "auth/email-already-in-use") {
+    return "An account already exists for that email. Use Sign In.";
+  }
+
+  if (
+    code === "auth/invalid-credential" ||
+    code === "auth/user-not-found" ||
+    code === "auth/wrong-password"
+  ) {
+    return "That email or password is not correct.";
+  }
+
+  if (code === "auth/too-many-requests") {
+    return "Too many attempts. Please wait a moment and try again.";
+  }
+
+  return "Unable to sign in right now. Please try again.";
+}
+
+async function createHouseholdAccount() {
+  const email = document.getElementById("email-login")?.value.trim();
+  const password = document.getElementById("password-login")?.value || "";
+
+  if (!email || !password) {
+    setLoginError("Enter an email and password.");
+    return;
+  }
+
+  setLoginError("");
+  await createUserWithEmailAndPassword(auth, email, password);
+}
+
+async function signInToHousehold() {
+  const email = document.getElementById("email-login")?.value.trim();
+  const password = document.getElementById("password-login")?.value || "";
+
+  if (!email || !password) {
+    setLoginError("Enter an email and password.");
+    return;
+  }
+
+  setLoginError("");
+  await signInWithEmailAndPassword(auth, email, password);
+}
+
+async function signOutOfHousehold() {
+  await signOut(auth);
+}
+
+function setupLoginScreen() {
+  const signInButton = document.getElementById("email-signin-button");
+  const createButton = document.getElementById("email-create-button");
+  const signOutButton = document.getElementById("signout-button");
+
+  signInButton?.addEventListener("click", async () => {
+    try {
+      await signInToHousehold();
+    } catch (error) {
+      console.error("Firebase sign-in failed:", error);
+      setLoginError(friendlyAuthError(error));
+    }
+  });
+
+  createButton?.addEventListener("click", async () => {
+    try {
+      await createHouseholdAccount();
+    } catch (error) {
+      console.error("Firebase account creation failed:", error);
+      setLoginError(friendlyAuthError(error));
+    }
+  });
+
+  signOutButton?.addEventListener("click", async () => {
+    try {
+      await signOutOfHousehold();
+    } catch (error) {
+      console.error("Firebase sign-out failed:", error);
+      alert("Could not sign out. Please try again.");
+    }
+  });
+
+  onAuthStateChanged(auth, async (user) => {
+    currentUser = user || null;
+
+    if (!currentUser) {
+      cloudLoaded = false;
+      showLogin();
+      return;
+    }
+
+    try {
+      await loadCloudData();
+      showApp();
+      render();
+    } catch (error) {
+      console.error("Firebase cloud load failed:", error);
+      setLoginError(
+        "You signed in, but Bill Beacon could not load household data."
+      );
+      showLogin();
+    }
+  });
+}
+
+function makeCloudDocument() {
+  return {
+    bills: Store.getBills(),
+    payments: Store.getPayments(),
+    activityLog: Store.getActivityLog(),
+    incomeSources: Store.getIncomeSources(),
+    settings: Store.getSettings(),
+    updatedAt: new Date().toISOString()
+  };
+}
+
+function applyCloudDocument(data) {
+  if (!data || typeof data !== "object") return;
+
+  localStorage.setItem("bills", JSON.stringify(data.bills || []));
+  localStorage.setItem("payments", JSON.stringify(data.payments || []));
+  localStorage.setItem("activityLog", JSON.stringify(data.activityLog || []));
+  localStorage.setItem(
+    "incomeSources",
+    JSON.stringify(data.incomeSources || [])
+  );
+  localStorage.setItem("settings", JSON.stringify(data.settings || {}));
+}
+
+async function loadCloudData() {
+  if (!currentUser) return;
+
+  const householdRef = doc(db, "households", currentUser.uid);
+  const householdSnapshot = await getDoc(householdRef);
+
+  if (householdSnapshot.exists()) {
+    applyCloudDocument(householdSnapshot.data());
+  } else {
+    await setDoc(householdRef, makeCloudDocument());
+  }
+
+  cloudLoaded = true;
+}
+
+async function saveCloudData() {
+  if (!currentUser || !cloudLoaded) return;
+
+  const householdRef = doc(db, "households", currentUser.uid);
+
+  await setDoc(householdRef, makeCloudDocument());
+}
+
+function queueCloudSave() {
+  if (!currentUser || !cloudLoaded) return;
+
+  clearTimeout(cloudSaveTimer);
+
+  cloudSaveTimer = setTimeout(() => {
+    saveCloudData().catch((error) => {
+      console.error("Firebase cloud save failed:", error);
+    });
+  }, 500);
+}
 const CATEGORIES = [
   { id: 'housing', label: 'Housing', icon: 'home', color: 'cat-housing' },
   { id: 'utilities', label: 'Utilities', icon: 'bolt', color: 'cat-utilities' },
@@ -133,8 +370,9 @@ const Store = {
     catch { return []; }
   },
   saveBills(bills) {
-    localStorage.setItem('bills', JSON.stringify(bills));
-  },
+  localStorage.setItem("bills", JSON.stringify(bills));
+  queueCloudSave();
+},
   getBill(id) {
     return this.getBills().find(b => b.id === id);
   },
@@ -277,6 +515,7 @@ const Store = {
   },
   savePayments(payments) {
     localStorage.setItem('payments', JSON.stringify(payments));
+    queueCloudSave();
   },
   getActivityLog() {
   try {
@@ -288,6 +527,7 @@ const Store = {
 
 saveActivityLog(entries) {
   localStorage.setItem("activityLog", JSON.stringify(entries));
+  queueCloudSave();
 },
 
 addActivity(entry) {
@@ -311,6 +551,7 @@ addActivity(entry) {
 
 saveIncomeSources(sources) {
   localStorage.setItem('incomeSources', JSON.stringify(sources));
+  queueCloudSave();
 },
 
 addIncomeSource(source) {
@@ -423,6 +664,7 @@ updatePayment(paymentId, updates) {
   },
   saveSettings(settings) {
     localStorage.setItem('settings', JSON.stringify(settings));
+    queueCloudSave();
   },
 };
 
@@ -8949,55 +9191,19 @@ function init() {
   setupLoginScreen();
   initTheme();
 
-  // Add sample data on first load
-  const bills = Store.getBills();
-  if (bills.length === 0 && !localStorage.getItem('initialized')) {
-    const now = new Date();
-    const sampleBills = [
-      {
-        id: uid(), name: 'Rent', amount: '1250',
-        dueDate: new Date(now.getFullYear(), now.getMonth(), 12).toISOString(),
-        category: 'housing', recurrence: 'Monthly', paymentMethod: 'Bank Transfer',
-        notes: '', reminderOffsets: [7, 1],
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      },
-      {
-        id: uid(), name: 'Electricity', amount: '86',
-        dueDate: new Date(now.getFullYear(), now.getMonth(), 15).toISOString(),
-        category: 'utilities', recurrence: 'Monthly', paymentMethod: '',
-        notes: 'Account ending in 0421', reminderOffsets: [7, 1],
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      },
-      {
-        id: uid(), name: 'Internet', amount: '65',
-        dueDate: new Date(now.getFullYear(), now.getMonth(), 5).toISOString(),
-        category: 'internet', recurrence: 'Monthly', paymentMethod: 'Credit Card',
-        notes: '', reminderOffsets: [7, 3],
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      },
-      {
-        id: uid(), name: 'Netflix', amount: '15.49',
-        dueDate: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString(),
-        category: 'subscriptions', recurrence: 'Monthly', paymentMethod: 'Credit Card',
-        notes: '', reminderOffsets: [7, 1],
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      },
-    ];
 
-    // Mark Netflix as paid
-    Store.saveBills(sampleBills);
-    Store.addPayment({
-      id: uid(),
-      billId: sampleBills[3].id,
-      paidDate: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
-      amount: '15.49',
+function init() {
+  setupLoginScreen();
+  initTheme();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch((error) => {
+      console.warn("Service worker registration failed:", error);
     });
-
-    localStorage.setItem('initialized', 'true');
   }
+}
 
-  render();
-
+document.addEventListener("DOMContentLoaded", init);
   // Register service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -9326,6 +9532,7 @@ Store.savePayments(backup.payments);
       }
 
       localStorage.setItem("initialized", "true");
+      queueCloudSave();
 
       alert("Backup restored successfully.");
       render();
@@ -9521,6 +9728,9 @@ function addUpcomingReminderSettings() {
       </button>
     </div>
   `;
+<button id="signout-button" type="button">
+  Sign Out
+</button>
 
   container.appendChild(section);
   loadUpcomingReminders();
@@ -9547,6 +9757,7 @@ function getArchivedBills() {
 
 function saveArchivedBills(bills) {
   localStorage.setItem("archivedBills", JSON.stringify(bills));
+  queueCloudSave();
 }
 
 function archiveBill(billId) {
