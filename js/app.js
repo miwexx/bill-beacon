@@ -135,21 +135,41 @@ function setupLoginScreen() {
   const createButton = document.getElementById("email-create-button");
   const signOutButton = document.getElementById("signout-button");
 
+  console.log("Login controls found:", {
+    signInButton: Boolean(signInButton),
+    createButton: Boolean(createButton),
+    signOutButton: Boolean(signOutButton)
+  });
+
   signInButton?.addEventListener("click", async () => {
     try {
+      setLoginError("");
+      signInButton.disabled = true;
+      signInButton.textContent = "Signing in…";
+
       await signInToHousehold();
     } catch (error) {
       console.error("Firebase sign-in failed:", error);
-      setLoginError(friendlyAuthError(error));
+      setLoginError(`${friendlyAuthError(error)} (${error.code || "unknown error"})`);
+    } finally {
+      signInButton.disabled = false;
+      signInButton.textContent = "Sign In";
     }
   });
 
   createButton?.addEventListener("click", async () => {
     try {
+      setLoginError("");
+      createButton.disabled = true;
+      createButton.textContent = "Creating account…";
+
       await createHouseholdAccount();
     } catch (error) {
       console.error("Firebase account creation failed:", error);
-      setLoginError(friendlyAuthError(error));
+      setLoginError(`${friendlyAuthError(error)} (${error.code || "unknown error"})`);
+    } finally {
+      createButton.disabled = false;
+      createButton.textContent = "Create Household Account";
     }
   });
 
@@ -158,11 +178,13 @@ function setupLoginScreen() {
       await signOutOfHousehold();
     } catch (error) {
       console.error("Firebase sign-out failed:", error);
-      alert("Could not sign out. Please try again.");
+      alert(`Could not sign out: ${error.message}`);
     }
   });
 
   onAuthStateChanged(auth, async (user) => {
+    console.log("Firebase auth state:", user ? user.email : "signed out");
+
     currentUser = user || null;
 
     if (!currentUser) {
@@ -172,13 +194,16 @@ function setupLoginScreen() {
     }
 
     try {
+      setLoginError("Loading household bills…");
       await loadCloudData();
+
       showApp();
       render();
     } catch (error) {
       console.error("Firebase cloud load failed:", error);
+      cloudLoaded = false;
       setLoginError(
-        "You signed in, but Bill Beacon could not load household data."
+        `Signed in, but your bills could not load: ${error.message || error.code || "unknown error"}`
       );
       showLogin();
     }
@@ -9186,12 +9211,6 @@ function render() {
 // ====================================
 // INIT
 // ====================================
-
-function init() {
-  setupLoginScreen();
-  initTheme();
-
-
 function init() {
   setupLoginScreen();
   initTheme();
