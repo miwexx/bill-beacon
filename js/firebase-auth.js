@@ -60,6 +60,10 @@ function showApp() {
       detail: { user: auth.currentUser }
     })
   );
+
+  if (typeof window.render === "function") {
+    window.render();
+  }
 }
 
 function friendlyError(error) {

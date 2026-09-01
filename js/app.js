@@ -9235,7 +9235,7 @@ function render() {
 
   app.innerHTML = content;
 }
-
+window.render = render;
 
 /* ============================================
    Bill Tracker Push Notifications
@@ -10650,10 +10650,7 @@ document.addEventListener(
 // ====================================
 
 function init() {
-  console.log("Bill Beacon app starting");
-
   initTheme();
-  setupLoginScreen();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch((error) => {
