@@ -9212,28 +9212,7 @@ function render() {
   app.innerHTML = content;
 }
 
-// ====================================
-// INIT
-// ====================================
-// ====================================
-// INIT
-// ====================================
-// ====================================
-// INIT
-// ====================================
 
-function init() {
-  setupLoginScreen();
-  initTheme();
-
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch((error) => {
-      console.warn("Service worker registration failed:", error);
-    });
-  }
-}
-
-document.addEventListener("DOMContentLoaded", init);
 /* ============================================
    Bill Tracker Push Notifications
 ============================================ */
@@ -10642,3 +10621,19 @@ document.addEventListener(
   },
   { passive: false }
 );
+// ====================================
+// INIT
+// ====================================
+
+function init() {
+  setupLoginScreen();
+  initTheme();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch((error) => {
+      console.warn("Service worker registration failed:", error);
+    });
+  }
+}
+
+document.addEventListener("DOMContentLoaded", init);

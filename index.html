@@ -1,19 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Bills">
-    <meta name="theme-color" content="#4F46E5">
-    <meta name="description" content="Free offline bill tracker — no ads, no account, no cloud">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icons/icon-192.png">
-    <link rel="icon" href="icons/icon-192.png">
-    <link rel="stylesheet" href="css/style.css">
-    <title>Bill Beacon</title>
+  <meta charset="UTF-8">
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"
+  >
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bills">
+  <meta name="theme-color" content="#4F46E5">
+  <meta
+    name="description"
+    content="Bill Beacon — shared household bill tracking"
+  >
+
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+
+  <title>Bill Beacon</title>
 </head>
+
 <body>
   <section id="login-screen" class="login-screen">
     <div class="login-card">
@@ -25,33 +34,51 @@
         Sign in to your shared household account.
       </p>
 
-      <label for="email-login">Email</label>
-      <input
-        id="email-login"
-        type="email"
-        autocomplete="email"
-        placeholder="Household email"
-        required
-      />
+      <div class="login-form">
+        <label class="login-label" for="email-login">Email</label>
+        <input
+          id="email-login"
+          class="login-input"
+          type="email"
+          autocomplete="email"
+          inputmode="email"
+          placeholder="Household email"
+          required
+        >
 
-      <label for="password-login">Password</label>
-      <input
-        id="password-login"
-        type="password"
-        autocomplete="current-password"
-        placeholder="Password"
-        required
-      />
+        <label class="login-label" for="password-login">Password</label>
+        <input
+          id="password-login"
+          class="login-input"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Password"
+          required
+        >
 
-      <p id="login-error" role="alert" aria-live="polite"></p>
+        <p
+          id="login-error"
+          class="login-error"
+          role="alert"
+          aria-live="polite"
+        ></p>
 
-      <button id="email-signin-button" type="button">
-        Sign In
-      </button>
+        <button
+          id="email-signin-button"
+          class="login-button login-button-primary"
+          type="button"
+        >
+          Sign In
+        </button>
 
-      <button id="email-create-button" type="button">
-        Create Household Account
-      </button>
+        <button
+          id="email-create-button"
+          class="login-button login-button-secondary"
+          type="button"
+        >
+          Create Household Account
+        </button>
+      </div>
     </div>
   </section>
 
