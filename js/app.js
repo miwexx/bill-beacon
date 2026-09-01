@@ -140,8 +140,12 @@ function setupLoginScreen() {
     createButton: Boolean(createButton),
     signOutButton: Boolean(signOutButton)
   });
-
-  signInButton?.addEventListener("click", async () => {
+if (!signInButton || !createButton) {
+  console.error("Bill Beacon login controls are missing.");
+  setLoginError("The login form did not load correctly. Please refresh.");
+  return;
+}
+  signInButton.addEventListener("click", async () => {
     try {
       setLoginError("");
       signInButton.disabled = true;
@@ -157,7 +161,7 @@ function setupLoginScreen() {
     }
   });
 
-  createButton?.addEventListener("click", async () => {
+  createButton.addEventListener("click", async () => {
     try {
       setLoginError("");
       createButton.disabled = true;
@@ -9208,6 +9212,9 @@ function render() {
   app.innerHTML = content;
 }
 
+// ====================================
+// INIT
+// ====================================
 // ====================================
 // INIT
 // ====================================
