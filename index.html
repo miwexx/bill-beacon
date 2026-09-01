@@ -83,7 +83,15 @@
   </section>
 
   <div id="app" style="display: none;"></div>
+<script>
+  document.getElementById("email-signin-button").addEventListener("click", () => {
+    alert("Sign In button click is reaching the browser.");
+  });
 
+  document.getElementById("email-create-button").addEventListener("click", () => {
+    alert("Create Household Account button click is reaching the browser.");
+  });
+</script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>
