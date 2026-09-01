@@ -9211,6 +9211,10 @@ function render() {
 // ====================================
 // INIT
 // ====================================
+// ====================================
+// INIT
+// ====================================
+
 function init() {
   setupLoginScreen();
   initTheme();
@@ -9223,14 +9227,6 @@ function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
-  // Register service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
-}
-
-document.addEventListener('DOMContentLoaded', init);
-
 /* ============================================
    Bill Tracker Push Notifications
 ============================================ */
