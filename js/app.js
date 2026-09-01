@@ -135,26 +135,38 @@ function setupLoginScreen() {
   const createButton = document.getElementById("email-create-button");
   const signOutButton = document.getElementById("signout-button");
 
+  console.log("Bill Beacon Firebase login initialized");
+
   console.log("Login controls found:", {
     signInButton: Boolean(signInButton),
     createButton: Boolean(createButton),
-    signOutButton: Boolean(signOutButton)
+    signOutButton: Boolean(signOutButton),
+    emailInput: Boolean(document.getElementById("email-login")),
+    passwordInput: Boolean(document.getElementById("password-login"))
   });
-if (!signInButton || !createButton) {
-  console.error("Bill Beacon login controls are missing.");
-  setLoginError("The login form did not load correctly. Please refresh.");
-  return;
-}
+
+  if (!signInButton || !createButton) {
+    console.error("Bill Beacon login controls are missing.");
+    setLoginError(
+      "The login form could not initialize. Please refresh and try again."
+    );
+    return;
+  }
+
   signInButton.addEventListener("click", async () => {
     try {
-      setLoginError("");
+      setLoginError("Signing in…");
+
       signInButton.disabled = true;
       signInButton.textContent = "Signing in…";
 
       await signInToHousehold();
     } catch (error) {
       console.error("Firebase sign-in failed:", error);
-      setLoginError(`${friendlyAuthError(error)} (${error.code || "unknown error"})`);
+
+      setLoginError(
+        `${friendlyAuthError(error)} (${error.code || "unknown error"})`
+      );
     } finally {
       signInButton.disabled = false;
       signInButton.textContent = "Sign In";
@@ -163,14 +175,18 @@ if (!signInButton || !createButton) {
 
   createButton.addEventListener("click", async () => {
     try {
-      setLoginError("");
+      setLoginError("Creating household account…");
+
       createButton.disabled = true;
       createButton.textContent = "Creating account…";
 
       await createHouseholdAccount();
     } catch (error) {
       console.error("Firebase account creation failed:", error);
-      setLoginError(`${friendlyAuthError(error)} (${error.code || "unknown error"})`);
+
+      setLoginError(
+        `${friendlyAuthError(error)} (${error.code || "unknown error"})`
+      );
     } finally {
       createButton.disabled = false;
       createButton.textContent = "Create Household Account";
@@ -182,12 +198,15 @@ if (!signInButton || !createButton) {
       await signOutOfHousehold();
     } catch (error) {
       console.error("Firebase sign-out failed:", error);
-      alert(`Could not sign out: ${error.message}`);
+      alert(`Could not sign out: ${error.message || "Unknown error"}`);
     }
   });
 
   onAuthStateChanged(auth, async (user) => {
-    console.log("Firebase auth state:", user ? user.email : "signed out");
+    console.log(
+      "Firebase auth state:",
+      user ? `signed in as ${user.email}` : "signed out"
+    );
 
     currentUser = user || null;
 
@@ -199,21 +218,26 @@ if (!signInButton || !createButton) {
 
     try {
       setLoginError("Loading household bills…");
+
       await loadCloudData();
 
       showApp();
       render();
     } catch (error) {
       console.error("Firebase cloud load failed:", error);
+
       cloudLoaded = false;
+
       setLoginError(
-        `Signed in, but your bills could not load: ${error.message || error.code || "unknown error"}`
+        `Signed in, but your household bills could not load: ${
+          error.message || error.code || "Unknown error"
+        }`
       );
+
       showLogin();
     }
   });
 }
-
 function makeCloudDocument() {
   return {
     bills: Store.getBills(),
@@ -10626,8 +10650,10 @@ document.addEventListener(
 // ====================================
 
 function init() {
-  setupLoginScreen();
+  console.log("Bill Beacon app starting");
+
   initTheme();
+  setupLoginScreen();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch((error) => {
