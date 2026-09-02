@@ -43,11 +43,24 @@ let cloudSaveTimer = null;
 // ====================================
 
 function showApp() {
-  const loginScreen = document.getElementById("login-screen");
-  const appRoot = document.getElementById("app");
+  const loginScreen = getElement("login-screen");
+  const app = getElement("app");
 
-  if (loginScreen) loginScreen.classList.add("hidden");
-  if (appRoot) appRoot.style.display = "";
+  loginScreen?.classList.add("hidden");
+
+  if (app) {
+    app.style.display = "";
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("billbeacon:authenticated", {
+      detail: { user: auth.currentUser }
+    })
+  );
+
+  if (typeof window.render === "function") {
+    window.render();
+  }
 }
 
 function showLogin() {
@@ -129,7 +142,7 @@ async function signInToHousehold() {
 async function signOutOfHousehold() {
   await signOut(auth);
 }
-
+/*
 function setupLoginScreen() {
   const signInButton = document.getElementById("email-signin-button");
   const createButton = document.getElementById("email-create-button");
@@ -237,7 +250,7 @@ function setupLoginScreen() {
       showLogin();
     }
   });
-}
+} */
 function makeCloudDocument() {
   return {
     bills: Store.getBills(),
