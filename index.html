@@ -23,18 +23,39 @@
   <link rel="icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="css/style.css">
 
+  <script>
+  try {
+    const settings = JSON.parse(localStorage.getItem("settings") || "{}");
+    const theme = settings.theme || "dark";
+
+    document.documentElement.setAttribute(
+      "data-theme",
+      theme === "light" ? "light" : "dark"
+    );
+  } catch {
+    document.documentElement.setAttribute("data-theme", "dark");
+  }
+</script>
+
   <title>Bill Beacon</title>
 </head>
 
 <body>
   <section id="login-screen" class="login-screen">
     <div class="login-card">
-      <div class="login-logo" aria-label="Bill Beacon logo">BB</div>
+      <div class="login-logo" aria-label="Bill Beacon logo">
+  <img
+    src="icons/icon-192.png"
+    alt="Bill Beacon"
+    width="88"
+    height="88"
+  >
+</div>
 
       <h1 class="login-title">Bill Beacon</h1>
 
       <p class="login-subtitle">
-        Sign in to your shared household account.
+        Sign in to your account.
       </p>
 
       <div class="login-form">
@@ -46,7 +67,7 @@
           type="email"
           autocomplete="email"
           inputmode="email"
-          placeholder="Household email"
+          placeholder="Email"
           required
         >
 
@@ -81,7 +102,7 @@
           class="login-button login-button-secondary"
           type="button"
         >
-          Create Household Account
+          Create Account
         </button>
       </div>
     </div>
