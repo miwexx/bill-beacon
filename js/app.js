@@ -25,7 +25,7 @@
   if (typeof window.render === "function") {
     window.render();
   }
-}*/
+}
 async function createHouseholdAccount() {
   const email = document.getElementById("email-login")?.value.trim();
   const password = document.getElementById("password-login")?.value || "";
@@ -55,7 +55,7 @@ async function signInToHousehold() {
 async function signOutOfHousehold() {
   await signOut(auth);
 }
-/*
+
 function setupLoginScreen() {
   const signInButton = document.getElementById("email-signin-button");
   const createButton = document.getElementById("email-create-button");
@@ -163,7 +163,7 @@ function setupLoginScreen() {
       showLogin();
     }
   });
-} */
+} 
 function makeCloudDocument() {
   return {
     bills: Store.getBills(),
@@ -221,7 +221,7 @@ function queueCloudSave() {
       console.error("Firebase cloud save failed:", error);
     });
   }, 500);
-}
+}*/
 const CATEGORIES = [
   { id: 'housing', label: 'Housing', icon: 'home', color: 'cat-housing' },
   { id: 'utilities', label: 'Utilities', icon: 'bolt', color: 'cat-utilities' },
@@ -9185,7 +9185,10 @@ function render() {
 }
 
 window.render = render;
-
+console.log(
+  "Bill Beacon app.js loaded successfully. window.render:",
+  typeof window.render
+);
 /* ============================================
    Bill Tracker Push Notifications
 ============================================ */
@@ -9731,7 +9734,6 @@ function getArchivedBills() {
 
 function saveArchivedBills(bills) {
   localStorage.setItem("archivedBills", JSON.stringify(bills));
-  queueCloudSave();
 }
 
 function archiveBill(billId) {
