@@ -350,8 +350,7 @@ const Store = {
   },
   saveBills(bills) {
   localStorage.setItem("bills", JSON.stringify(bills));
-  queueCloudSave();
-},
+  },
   getBill(id) {
     return this.getBills().find(b => b.id === id);
   },
@@ -494,8 +493,7 @@ const Store = {
   },
   savePayments(payments) {
     localStorage.setItem('payments', JSON.stringify(payments));
-    queueCloudSave();
-  },
+     },
   getActivityLog() {
   try {
     return JSON.parse(localStorage.getItem("activityLog")) || [];
@@ -506,8 +504,7 @@ const Store = {
 
 saveActivityLog(entries) {
   localStorage.setItem("activityLog", JSON.stringify(entries));
-  queueCloudSave();
-},
+ },
 
 addActivity(entry) {
   const entries = this.getActivityLog();
@@ -530,8 +527,7 @@ addActivity(entry) {
 
 saveIncomeSources(sources) {
   localStorage.setItem('incomeSources', JSON.stringify(sources));
-  queueCloudSave();
-},
+ },
 
 addIncomeSource(source) {
   const sources = this.getIncomeSources();
@@ -643,8 +639,7 @@ updatePayment(paymentId, updates) {
   },
   saveSettings(settings) {
     localStorage.setItem('settings', JSON.stringify(settings));
-    queueCloudSave();
-  },
+     },
 };
 
 // ====================================
@@ -9509,8 +9504,7 @@ Store.savePayments(backup.payments);
       }
 
       localStorage.setItem("initialized", "true");
-      queueCloudSave();
-
+    
       alert("Backup restored successfully.");
       render();
     } catch (error) {
