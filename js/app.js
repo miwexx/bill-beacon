@@ -1,39 +1,3 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-
-import {
-  getAuth,
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signOut
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-
-import {
-  getFirestore,
-  doc,
-  getDoc,
-  setDoc
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCtQjabLSI4qoHPqGn7BQYWwLhOtpa2BLI",
-  authDomain: "bill-beacon-1646c.firebaseapp.com",
-  projectId: "bill-beacon-1646c",
-  storageBucket: "bill-beacon-1646c.firebasestorage.app",
-  messagingSenderId: "573940060750",
-  appId: "1:573940060750:web:17ae12740a4fead0aee91f",
-  measurementId: "G-KTS8E5YZM1"
-};
-
-const firebaseApp = initializeApp(firebaseConfig);
-const auth = getAuth(firebaseApp);
-const db = getFirestore(firebaseApp);
-
-let currentUser = null;
-let cloudLoaded = false;
-let cloudSaveTimer = null;
-
-
 /* ============================================
    Bill Tracker PWA — App Logic
    ============================================ */
@@ -62,57 +26,6 @@ function showApp() {
     window.render();
   }
 }
-
-function showLogin() {
-  const loginScreen = document.getElementById("login-screen");
-  const appRoot = document.getElementById("app");
-
-  if (appRoot) appRoot.style.display = "none";
-  if (loginScreen) loginScreen.classList.remove("hidden");
-}
-
-function setLoginError(message = "") {
-  const errorElement = document.getElementById("login-error");
-
-  if (errorElement) {
-    errorElement.textContent = message;
-  }
-}
-
-function friendlyAuthError(error) {
-  const code = error?.code || "";
-
-  if (code === "auth/invalid-email") {
-    return "Enter a valid email address.";
-  }
-
-  if (code === "auth/missing-password") {
-    return "Enter your password.";
-  }
-
-  if (code === "auth/weak-password") {
-    return "Use a password with at least 6 characters.";
-  }
-
-  if (code === "auth/email-already-in-use") {
-    return "An account already exists for that email. Use Sign In.";
-  }
-
-  if (
-    code === "auth/invalid-credential" ||
-    code === "auth/user-not-found" ||
-    code === "auth/wrong-password"
-  ) {
-    return "That email or password is not correct.";
-  }
-
-  if (code === "auth/too-many-requests") {
-    return "Too many attempts. Please wait a moment and try again.";
-  }
-
-  return "Unable to sign in right now. Please try again.";
-}
-
 async function createHouseholdAccount() {
   const email = document.getElementById("email-login")?.value.trim();
   const password = document.getElementById("password-login")?.value || "";
@@ -9224,30 +9137,53 @@ function openNotificationCenter() {
 }
 
 function render() {
-  const app = document.getElementById('app');
+  const app = document.getElementById("app");
+  if (!app) return;
 
-  let content = '';
+  let content = "";
+
   switch (currentRoute) {
-    case 'today': content = renderToday(); break;
-    case 'recurring': content = renderRecurring(); break;
-    case 'bills': content = renderBills(); break;
-    case 'calendar': content = renderCalendar(); break;
-    case 'insights': content = renderInsights(); break;
-    case 'activity': content = renderActivity(); break;
-    case 'payment-plans': content = renderPaymentPlans(); break;
-    case 'settings': content = renderSettings(); break;
-    case 'detail': content = renderBillDetail(); break;
-    default: content = renderToday();
+    case "today":
+      content = renderToday();
+      break;
+    case "recurring":
+      content = renderRecurring();
+      break;
+    case "bills":
+      content = renderBills();
+      break;
+    case "calendar":
+      content = renderCalendar();
+      break;
+    case "insights":
+      content = renderInsights();
+      break;
+    case "activity":
+      content = renderActivity();
+      break;
+    case "payment-plans":
+      content = renderPaymentPlans();
+      break;
+    case "settings":
+      content = renderSettings();
+      break;
+    case "detail":
+      content = renderBillDetail();
+      break;
+    default:
+      content = renderToday();
   }
 
-  // Add tab bar for main views
-  const showTabBar = ['today', 'recurring', 'bills', 'insights', 'settings'].includes(currentRoute);
+  const showTabBar = ["today", "recurring", "bills", "insights", "settings"]
+    .includes(currentRoute);
+
   if (showTabBar) {
     content += tabBar();
   }
 
   app.innerHTML = content;
 }
+
 window.render = render;
 
 /* ============================================
