@@ -6,7 +6,7 @@
 // CONSTANTS
 // ====================================
 
-function showApp() {
+/*function showApp() {
   const loginScreen = getElement("login-screen");
   const app = getElement("app");
 
@@ -25,7 +25,7 @@ function showApp() {
   if (typeof window.render === "function") {
     window.render();
   }
-}
+}*/
 async function createHouseholdAccount() {
   const email = document.getElementById("email-login")?.value.trim();
   const password = document.getElementById("password-login")?.value || "";
