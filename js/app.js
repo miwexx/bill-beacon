@@ -135,6 +135,7 @@ const Store = {
   },
   saveBills(bills) {
   localStorage.setItem("bills", JSON.stringify(bills));
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
   },
   getBill(id) {
     return this.getBills().find(b => b.id === id);
@@ -278,6 +279,7 @@ const Store = {
   },
   savePayments(payments) {
     localStorage.setItem('payments', JSON.stringify(payments));
+    window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
      },
   getActivityLog() {
   try {
@@ -289,6 +291,7 @@ const Store = {
 
 saveActivityLog(entries) {
   localStorage.setItem("activityLog", JSON.stringify(entries));
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
  },
 
 addActivity(entry) {
@@ -312,6 +315,7 @@ addActivity(entry) {
 
 saveIncomeSources(sources) {
   localStorage.setItem('incomeSources', JSON.stringify(sources));
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
  },
 
 addIncomeSource(source) {
@@ -424,6 +428,7 @@ updatePayment(paymentId, updates) {
   },
   saveSettings(settings) {
     localStorage.setItem('settings', JSON.stringify(settings));
+    window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
      },
 };
 
@@ -9540,6 +9545,7 @@ function getArchivedBills() {
 
 function saveArchivedBills(bills) {
   localStorage.setItem("archivedBills", JSON.stringify(bills));
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 }
 
 function archiveBill(billId) {
@@ -10417,3 +10423,6 @@ function init() {
 }
 
 document.addEventListener("DOMContentLoaded", init);
+window.addEventListener("storage", () => {
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
+});

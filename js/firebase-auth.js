@@ -35,6 +35,8 @@ function setMessage(message = "", isError = false) {
 }
 
 function showLogin() {
+    window.dispatchEvent(new CustomEvent("billbeacon:signed-out"));
+
   const loginScreen = getElement("login-screen");
   const app = getElement("app");
 
@@ -56,55 +58,13 @@ function showApp() {
     app.style.display = "";
   }
 
-  if (typeof window.render !== "function") {
-    console.error(
-      "Bill Beacon app did not load. Expected window.render = render in js/app.js."
-    );
-
-    if (loginScreen) {
-      loginScreen.classList.remove("hidden");
-    }
-
-    if (app) {
-      app.style.display = "none";
-    }
-
-    setMessage(
-      "Your account is signed in, but the Bill Beacon app could not load. Refresh and try again.",
-      true
-    );
-
-    return;
-  }
-
-  try {
-    window.render();
-
-    window.dispatchEvent(
-      new CustomEvent("billbeacon:authenticated", {
-        detail: {
-          user: auth.currentUser
-        }
-      })
-    );
-  } catch (error) {
-    console.error("Bill Beacon render failed:", error);
-
-    const errorText = error?.message || String(error);
-
-    if (loginScreen) {
-      loginScreen.classList.remove("hidden");
-    }
-
-    if (app) {
-      app.style.display = "none";
-    }
-
-    setMessage(
-      `Signed in, but the dashboard failed: ${errorText}`,
-      true
-    );
-  }
+  window.dispatchEvent(
+    new CustomEvent("billbeacon:authenticated", {
+      detail: {
+        user: auth.currentUser
+      }
+    })
+  );
 }
 function friendlyError(error) {
   const code = error?.code || "";
