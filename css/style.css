@@ -2776,3 +2776,76 @@ body {
   height: 100%;
   object-fit: contain;
 }
+/* ====================================
+   Login screen: iPhone safe area +
+   Bill Beacon gradient title override
+   ==================================== */
+
+html,
+body {
+  min-height: 100%;
+  min-height: -webkit-fill-available;
+  background: var(--bg);
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* Fill the full visible iPhone viewport, including safe-area space. */
+.login-screen {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+
+  box-sizing: border-box;
+
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-right: max(20px, env(safe-area-inset-right));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  padding-left: max(20px, env(safe-area-inset-left));
+
+  background: var(--bg);
+}
+
+/* The login card uses the lighter dark app surface. */
+.login-card {
+  background: var(--surface);
+}
+
+/* Match the app's primary purple → pink → orange action gradient. */
+.login-title {
+  display: inline-block;
+  width: 100%;
+  margin: 0;
+
+  background: linear-gradient(
+    100deg,
+    #8f2cff 0%,
+    #d939d5 43%,
+    #f14381 68%,
+    #ff6b13 100%
+  );
+
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+
+  text-align: center;
+}
+
+/* Use normal text as a fallback in browsers that do not support gradient text. */
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .login-title {
+    color: #d939d5;
+    -webkit-text-fill-color: #d939d5;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-screen {
+    align-items: center;
+  }
+}
