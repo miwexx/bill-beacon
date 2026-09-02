@@ -1,3 +1,5 @@
+
+console.log("Bill Beacon app.js started");
 /* ============================================
    Bill Tracker PWA — App Logic
    ============================================ */
@@ -9180,10 +9182,11 @@ function render() {
 }
 
 window.render = render;
-console.log(
+console.log("Bill Beacon app.js reached render export");
+/*console.log(
   "Bill Beacon app.js loaded successfully. window.render:",
   typeof window.render
-);
+);*/
 /* ============================================
    Bill Tracker Push Notifications
 ============================================ */
