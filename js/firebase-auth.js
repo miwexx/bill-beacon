@@ -119,7 +119,7 @@ function friendlyError(error) {
     "auth/invalid-credential":
       "The email or password is not correct.",
     "auth/user-not-found":
-      "No account was found for that email. Choose Create Household Account.",
+      "No account was found for that email. Choose Create Account.",
     "auth/wrong-password":
       "The email or password is not correct.",
     "auth/too-many-requests":
@@ -145,7 +145,7 @@ async function createAccount() {
     return;
   }
 
-  setMessage("Creating household account…");
+  setMessage("Creating Account…");
 
   await createUserWithEmailAndPassword(auth, email, password);
 }
@@ -198,7 +198,7 @@ function initFirebaseLogin() {
         createButton,
         true,
         "Creating account…",
-        "Create Household Account"
+        "Create Account"
       );
 
       await createAccount();
@@ -210,7 +210,7 @@ function initFirebaseLogin() {
         createButton,
         false,
         "Creating account…",
-        "Create Household Account"
+        "Create Account"
       );
     }
   });
