@@ -48,89 +48,97 @@ function showApp() {
   const loginScreen = getElement("login-screen");
   const app = getElement("app");
 
-  loginScreen?.classList.add("hidden");
+  // Hide the Firebase login screen.
+  if (loginScreen) {
+    loginScreen.classList.add("hidden");
+  }
 
+  // Reveal the container that js/app.js renders into.
   if (app) {
     app.style.display = "";
   }
 
-  console.log("Firebase user signed in:", auth.currentUser?.email);
-  console.log("Bill Beacon renderer:", typeof window.render);
+  // The main Bill Beacon app must expose this:
+  // window.render = render;
+  if (typeof window.render === "function") {
+    try {
+      window.render();
+    } catch (error) {
+      console.error("Bill Beacon render failed:", error);
 
-  if (typeof window.render !== "function") {
+      // Do not leave the user with an unexplained blank screen.
+      if (app) {
+        app.innerHTML = `
+          <main style="
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            background: #111827;
+            color: #ffffff;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            text-align: center;
+          ">
+            <section style="max-width: 420px;">
+              <h1 style="margin: 0 0 12px;">Bill Beacon could not load</h1>
+              <p style="margin: 0; color: #cbd5e1; line-height: 1.5;">
+                You are signed in, but the dashboard had a loading error.
+              </p>
+              <button
+                type="button"
+                onclick="window.location.reload()"
+                style="
+                  margin-top: 20px;
+                  padding: 12px 16px;
+                  border: 0;
+                  border-radius: 10px;
+                  background: #4F46E5;
+                  color: #ffffff;
+                  font: inherit;
+                  font-weight: 700;
+                  cursor: pointer;
+                "
+              >
+                Reload Bill Beacon
+              </button>
+            </section>
+          </main>
+        `;
+      }
+
+      return;
+    }
+  } else {
     console.error(
-      "Bill Beacon could not start because js/app.js did not expose window.render."
+      "Bill Beacon app did not load. Expected window.render = render in js/app.js."
     );
 
-    if (app) {
-      app.innerHTML = `
-        <main style="
-          min-height: 100vh;
-          display: grid;
-          place-items: center;
-          padding: 24px;
-          background: #111827;
-          color: #ffffff;
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          text-align: center;
-        ">
-          <section style="max-width: 420px;">
-            <h1 style="margin: 0 0 12px;">Bill Beacon could not start</h1>
-            <p style="margin: 0; color: #cbd5e1; line-height: 1.5;">
-              Firebase login worked, but the main app script did not finish loading.
-            </p>
-            <p style="margin: 16px 0 0; color: #94a3b8; font-size: 14px; line-height: 1.5;">
-              Check that <code>js/app.js</code> has no Firebase imports,
-              no old login functions, and contains
-              <code>window.render = render;</code>.
-            </p>
-          </section>
-        </main>
-      `;
+    // Keep the login screen visible if the app script failed to load.
+    if (loginScreen) {
+      loginScreen.classList.remove("hidden");
     }
+
+    if (app) {
+      app.style.display = "none";
+    }
+
+    setMessage(
+      "Your account is signed in, but the Bill Beacon app could not load. Refresh and try again.",
+      true
+    );
 
     return;
   }
 
-  try {
-    window.render();
-
-    window.dispatchEvent(
-      new CustomEvent("billbeacon:authenticated", {
-        detail: { user: auth.currentUser }
-      })
-    );
-  } catch (error) {
-    console.error("Bill Beacon render failed:", error);
-
-    if (app) {
-      app.innerHTML = `
-        <main style="
-          min-height: 100vh;
-          display: grid;
-          place-items: center;
-          padding: 24px;
-          background: #111827;
-          color: #ffffff;
-          font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-          text-align: center;
-        ">
-          <section style="max-width: 420px;">
-            <h1 style="margin: 0 0 12px;">Bill Beacon could not render</h1>
-            <p style="margin: 0; color: #cbd5e1; line-height: 1.5;">
-              Firebase login worked, but the dashboard encountered a JavaScript error.
-            </p>
-            <p style="margin: 16px 0 0; color: #94a3b8; font-size: 14px; line-height: 1.5;">
-              Open the browser console and look for the error beginning
-              with <code>Bill Beacon render failed:</code>.
-            </p>
-          </section>
-        </main>
-      `;
-    }
-  }
+  // Notify optional app features only after the dashboard renders.
+  window.dispatchEvent(
+    new CustomEvent("billbeacon:authenticated", {
+      detail: {
+        user: auth.currentUser
+      }
+    })
+  );
 }
-
 function friendlyError(error) {
   const code = error?.code || "";
 
