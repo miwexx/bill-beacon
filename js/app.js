@@ -9688,26 +9688,53 @@ function addUpcomingReminderSettings() {
   section.id = "upcomingReminderSettings";
   section.className = "settings-section";
 
-  section.innerHTML = `
-    <div class="section-header">Upcoming Notifications</div>
-    <div class="card card-pad">
-      <div id="upcomingReminderList"></div>
+ section.innerHTML = `
+  <div class="section-header">Upcoming Notifications</div>
 
-      <button
-        class="btn-secondary"
-        style="margin-top: var(--space-3); width: 100%;"
-        onclick="loadUpcomingReminders()"
-      >
-        Refresh Schedule
-      </button>
+  <div class="card card-pad">
+    <div id="upcomingReminderList">
+      <div style="font-size: var(--text-sm); color: var(--text-muted);">
+        Loading scheduled reminders…
+      </div>
     </div>
-  `;
-<button id="signout-button" type="button">
-  Sign Out
-</button>
 
-  container.appendChild(section);
-  loadUpcomingReminders();
+    <button
+      class="btn-secondary"
+      style="margin-top: var(--space-3); width: 100%;"
+      onclick="loadUpcomingReminders()"
+      type="button"
+    >
+      Refresh Schedule
+    </button>
+  </div>
+
+  <button
+    id="signout-button"
+    class="btn-secondary"
+    type="button"
+    style="width: 100%; margin-top: var(--space-3);"
+  >
+    Sign Out
+  </button>
+`;
+
+container.appendChild(section);
+
+const signOutButton = document.getElementById("signout-button");
+
+if (signOutButton) {
+  signOutButton.addEventListener("click", async () => {
+    try {
+      const { signOut, auth } = await import("./firebase-auth.js");
+      await signOut(auth);
+    } catch (error) {
+      console.error("Firebase sign-out failed:", error);
+      alert("Could not sign out. Please refresh and try again.");
+    }
+  });
+}
+
+loadUpcomingReminders();
 }
 
 const renderWithUpcomingReminders = render;
