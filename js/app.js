@@ -1,3 +1,4 @@
+
 /* ============================================
    Bill Tracker PWA — App Logic
    ============================================ */
@@ -133,7 +134,8 @@ const Store = {
     catch { return []; }
   },
   saveBills(bills) {
-    localStorage.setItem('bills', JSON.stringify(bills));
+  localStorage.setItem("bills", JSON.stringify(bills));
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
   },
   getBill(id) {
     return this.getBills().find(b => b.id === id);
@@ -277,7 +279,8 @@ const Store = {
   },
   savePayments(payments) {
     localStorage.setItem('payments', JSON.stringify(payments));
-  },
+    window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
+     },
   getActivityLog() {
   try {
     return JSON.parse(localStorage.getItem("activityLog")) || [];
@@ -288,7 +291,8 @@ const Store = {
 
 saveActivityLog(entries) {
   localStorage.setItem("activityLog", JSON.stringify(entries));
-},
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
+ },
 
 addActivity(entry) {
   const entries = this.getActivityLog();
@@ -311,7 +315,8 @@ addActivity(entry) {
 
 saveIncomeSources(sources) {
   localStorage.setItem('incomeSources', JSON.stringify(sources));
-},
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
+ },
 
 addIncomeSource(source) {
   const sources = this.getIncomeSources();
@@ -423,7 +428,8 @@ updatePayment(paymentId, updates) {
   },
   saveSettings(settings) {
     localStorage.setItem('settings', JSON.stringify(settings));
-  },
+    window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
+     },
 };
 
 // ====================================
@@ -1869,7 +1875,13 @@ let currentRoute = 'today';
 let routeParams = {
   billSort: 'dueDate',
 };
+window.addEventListener("billbeacon:signed-out", () => {
+  currentRoute = "today";
 
+  routeParams = {
+    billSort: "dueDate"
+  };
+});
 function navigate(route, params = {}) {
   currentRoute = route;
   routeParams = params;
@@ -8916,24 +8928,46 @@ function openNotificationCenter() {
 }
 
 function render() {
-  const app = document.getElementById('app');
+  const app = document.getElementById("app");
+  if (!app) return;
 
-  let content = '';
+  let content = "";
+
   switch (currentRoute) {
-    case 'today': content = renderToday(); break;
-    case 'recurring': content = renderRecurring(); break;
-    case 'bills': content = renderBills(); break;
-    case 'calendar': content = renderCalendar(); break;
-    case 'insights': content = renderInsights(); break;
-    case 'activity': content = renderActivity(); break;
-    case 'payment-plans': content = renderPaymentPlans(); break;
-    case 'settings': content = renderSettings(); break;
-    case 'detail': content = renderBillDetail(); break;
-    default: content = renderToday();
+    case "today":
+      content = renderToday();
+      break;
+    case "recurring":
+      content = renderRecurring();
+      break;
+    case "bills":
+      content = renderBills();
+      break;
+    case "calendar":
+      content = renderCalendar();
+      break;
+    case "insights":
+      content = renderInsights();
+      break;
+    case "activity":
+      content = renderActivity();
+      break;
+    case "payment-plans":
+      content = renderPaymentPlans();
+      break;
+    case "settings":
+      content = renderSettings();
+      break;
+    case "detail":
+      content = renderBillDetail();
+      break;
+    default:
+      content = renderToday();
   }
 
-  // Add tab bar for main views
-  const showTabBar = ['today', 'recurring', 'bills', 'insights', 'settings'].includes(currentRoute);
+  const showTabBar = ["today", "recurring", "bills", "insights", "settings"]
+    .includes(currentRoute);
+
   if (showTabBar) {
     content += tabBar();
   }
@@ -8941,71 +8975,7 @@ function render() {
   app.innerHTML = content;
 }
 
-// ====================================
-// INIT
-// ====================================
-
-function init() {
-  setupLoginScreen();
-  initTheme();
-
-  // Add sample data on first load
-  const bills = Store.getBills();
-  if (bills.length === 0 && !localStorage.getItem('initialized')) {
-    const now = new Date();
-    const sampleBills = [
-      {
-        id: uid(), name: 'Rent', amount: '1250',
-        dueDate: new Date(now.getFullYear(), now.getMonth(), 12).toISOString(),
-        category: 'housing', recurrence: 'Monthly', paymentMethod: 'Bank Transfer',
-        notes: '', reminderOffsets: [7, 1],
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      },
-      {
-        id: uid(), name: 'Electricity', amount: '86',
-        dueDate: new Date(now.getFullYear(), now.getMonth(), 15).toISOString(),
-        category: 'utilities', recurrence: 'Monthly', paymentMethod: '',
-        notes: 'Account ending in 0421', reminderOffsets: [7, 1],
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      },
-      {
-        id: uid(), name: 'Internet', amount: '65',
-        dueDate: new Date(now.getFullYear(), now.getMonth(), 5).toISOString(),
-        category: 'internet', recurrence: 'Monthly', paymentMethod: 'Credit Card',
-        notes: '', reminderOffsets: [7, 3],
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      },
-      {
-        id: uid(), name: 'Netflix', amount: '15.49',
-        dueDate: new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString(),
-        category: 'subscriptions', recurrence: 'Monthly', paymentMethod: 'Credit Card',
-        notes: '', reminderOffsets: [7, 1],
-        createdAt: now.toISOString(), updatedAt: now.toISOString(),
-      },
-    ];
-
-    // Mark Netflix as paid
-    Store.saveBills(sampleBills);
-    Store.addPayment({
-      id: uid(),
-      billId: sampleBills[3].id,
-      paidDate: new Date(now.getFullYear(), now.getMonth(), 1).toISOString(),
-      amount: '15.49',
-    });
-
-    localStorage.setItem('initialized', 'true');
-  }
-
-  render();
-
-  // Register service worker
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
-}
-
-document.addEventListener('DOMContentLoaded', init);
-
+window.render = render;
 /* ============================================
    Bill Tracker Push Notifications
 ============================================ */
@@ -9326,7 +9296,7 @@ Store.savePayments(backup.payments);
       }
 
       localStorage.setItem("initialized", "true");
-
+    
       alert("Backup restored successfully.");
       render();
     } catch (error) {
@@ -9507,23 +9477,53 @@ function addUpcomingReminderSettings() {
   section.id = "upcomingReminderSettings";
   section.className = "settings-section";
 
-  section.innerHTML = `
-    <div class="section-header">Upcoming Notifications</div>
-    <div class="card card-pad">
-      <div id="upcomingReminderList"></div>
+ section.innerHTML = `
+  <div class="section-header">Upcoming Notifications</div>
 
-      <button
-        class="btn-secondary"
-        style="margin-top: var(--space-3); width: 100%;"
-        onclick="loadUpcomingReminders()"
-      >
-        Refresh Schedule
-      </button>
+  <div class="card card-pad">
+    <div id="upcomingReminderList">
+      <div style="font-size: var(--text-sm); color: var(--text-muted);">
+        Loading scheduled reminders…
+      </div>
     </div>
-  `;
 
-  container.appendChild(section);
-  loadUpcomingReminders();
+    <button
+      class="btn-secondary"
+      style="margin-top: var(--space-3); width: 100%;"
+      onclick="loadUpcomingReminders()"
+      type="button"
+    >
+      Refresh Schedule
+    </button>
+  </div>
+
+  <button
+    id="signout-button"
+    class="btn-secondary"
+    type="button"
+    style="width: 100%; margin-top: var(--space-3);"
+  >
+    Sign Out
+  </button>
+`;
+
+container.appendChild(section);
+
+const signOutButton = document.getElementById("signout-button");
+
+if (signOutButton) {
+  signOutButton.addEventListener("click", async () => {
+    try {
+      const { signOut, auth } = await import("./firebase-auth.js");
+      await signOut(auth);
+    } catch (error) {
+      console.error("Firebase sign-out failed:", error);
+      alert("Could not sign out. Please refresh and try again.");
+    }
+  });
+}
+
+loadUpcomingReminders();
 }
 
 const renderWithUpcomingReminders = render;
@@ -9547,6 +9547,7 @@ function getArchivedBills() {
 
 function saveArchivedBills(bills) {
   localStorage.setItem("archivedBills", JSON.stringify(bills));
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 }
 
 function archiveBill(billId) {
@@ -10409,3 +10410,21 @@ document.addEventListener(
   },
   { passive: false }
 );
+// ====================================
+// INIT
+// ====================================
+
+function init() {
+  initTheme();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch((error) => {
+      console.warn("Service worker registration failed:", error);
+    });
+  }
+}
+
+document.addEventListener("DOMContentLoaded", init);
+window.addEventListener("storage", () => {
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
+});

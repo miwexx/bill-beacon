@@ -2411,6 +2411,8 @@ body {
   max-height: none !important;
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0 !important;
 }
+/* Firebase household login — follows the existing Bill Beacon theme */
+
 .login-screen {
   position: fixed;
   inset: 0;
@@ -2418,10 +2420,11 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  min-height: 100dvh;
   padding: 24px;
-  background:
-    radial-gradient(circle at top, rgba(79, 70, 229, 0.18), transparent 45%),
-    linear-gradient(180deg, #0b1020 0%, #111827 100%);
+  overflow-y: auto;
+  color: var(--text);
+  background: var(--bg);
 }
 
 .login-screen.hidden {
@@ -2429,67 +2432,446 @@ body {
 }
 
 .login-card {
-  width: 100%;
-  max-width: 380px;
-  padding: 32px 24px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
-  background: rgba(17, 24, 39, 0.92);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+  width: min(100%, 410px);
+  padding: 32px 24px 26px;
   text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: var(--shadow-lg);
 }
 
 .login-logo {
-  width: 72px;
-  height: 72px;
-  margin: 0 auto 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 20px;
+  color: #fff;
+  font-size: 27px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  background: var(--accent);
   border-radius: 20px;
-  display: grid;
-  place-items: center;
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #ffffff;
-  background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
 }
 
 .login-title {
-  margin: 0 0 8px;
-  font-size: 28px;
-  font-weight: 700;
-  color: #ffffff;
+  margin: 0;
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.15;
 }
 
 .login-subtitle {
-  margin: 0 0 24px;
+  margin: 12px 0 26px;
+  color: var(--text-muted);
   font-size: 15px;
-  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.45;
 }
 
-.google-login-button {
+.login-form {
+  display: grid;
+  gap: 10px;
+  text-align: left;
+}
+
+.login-label {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.login-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 14px;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  outline: none;
+}
+
+.login-input::placeholder {
+  color: var(--text-muted);
+}
+
+.login-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.login-error {
+  min-height: 20px;
+  margin: 3px 0;
+  color: var(--overdue);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.login-button {
+  width: 100%;
+  min-height: 50px;
+  padding: 0 16px;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.login-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.login-button-primary {
+  margin-top: 4px;
+  color: #fff;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.login-button-secondary {
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+/* ====================================
+   Firebase Login Screen
+   Matches the Bill Beacon app UI
+   ==================================== */
+
+.login-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  padding:
+    max(24px, env(safe-area-inset-top))
+    20px
+    max(24px, env(safe-area-inset-bottom));
+  background: var(--bg);
+}
+
+.login-screen.hidden {
+  display: none;
+}
+
+.login-card {
+  width: min(100%, 440px);
+  padding: 32px 28px;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.login-logo {
+  display: flex;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 22px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 22px;
+  background: var(--surface-2);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.login-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.login-title {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(30px, 8vw, 38px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  text-align: center;
+}
+
+.login-subtitle {
+  margin: 12px 0 30px;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  text-align: center;
+}
+
+.login-form {
+  display: grid;
+  gap: 12px;
+}
+
+.login-label {
+  margin-top: 8px;
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 750;
+}
+
+.login-input {
   width: 100%;
   min-height: 52px;
-  padding: 14px 18px;
+  box-sizing: border-box;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  outline: none;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-base);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.login-input::placeholder {
+  color: var(--text-muted);
+  opacity: 0.78;
+}
+
+.login-input:focus {
+  border-color: #9f3cff;
+  box-shadow: 0 0 0 3px rgba(159, 60, 255, 0.2);
+}
+
+.login-error {
+  min-height: 20px;
+  margin: 4px 0 2px;
+  color: var(--overdue);
+  font-size: var(--text-sm);
+  font-weight: 650;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.login-button {
+  width: 100%;
+  min-height: 52px;
+  margin-top: 4px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease,
+    opacity 120ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.login-button:active {
+  transform: scale(0.985);
+}
+
+.login-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+/* Same primary gradient used by Add Bill, Create Backup, and notifications. */
+.login-button-primary {
   border: 0;
-  border-radius: 999px;
+  background: linear-gradient(
+    100deg,
+    #8f2cff 0%,
+    #d939d5 46%,
+    #f14381 68%,
+    #ff6b13 100%
+  );
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(192, 53, 184, 0.18);
+}
+
+.login-button-primary:hover {
+  filter: brightness(1.06);
+}
+
+/* Same dark outlined treatment used by Restore Backup and Add Payment Plan. */
+.login-button-secondary {
+  border: 2px solid transparent;
+  border-radius: 14px;
+  background:
+    linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+    linear-gradient(
+      100deg,
+      #8f2cff 0%,
+      #d939d5 46%,
+      #f14381 68%,
+      #ff6b13 100%
+    ) border-box;
+  color: var(--text);
+}
+
+.login-button-secondary:hover {
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(
+      100deg,
+      #8f2cff 0%,
+      #d939d5 46%,
+      #f14381 68%,
+      #ff6b13 100%
+    ) border-box;
+}
+
+/* The app icon should not have a green square behind it. */
+.login-logo {
+  background: transparent;
+}
+
+@media (max-width: 480px) {
+  .login-screen {
+    align-items: flex-start;
+    padding-top: max(28px, env(safe-area-inset-top));
+  }
+
+  .login-card {
+    margin-top: 12px;
+    padding: 28px 22px;
+    border-radius: 24px;
+  }
+
+  .login-logo {
+    width: 80px;
+    height: 80px;
+    border-radius: 20px;
+  }
+}
+.login-logo {
+  display: flex;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 22px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 20px;
   background: #ffffff;
-  color: #111827;
-  font-size: 16px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+.login-logo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* ====================================
+   Login screen: iPhone safe area +
+   Bill Beacon gradient title override
+   ==================================== */
+
+html,
+body {
+  min-height: 100%;
+  min-height: -webkit-fill-available;
+  background: var(--bg);
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* Fill the full visible iPhone viewport, including safe-area space. */
+.login-screen {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+
+  box-sizing: border-box;
+
+  padding-top: max(24px, env(safe-area-inset-top));
+  padding-right: max(20px, env(safe-area-inset-right));
+  padding-bottom: max(24px, env(safe-area-inset-bottom));
+  padding-left: max(20px, env(safe-area-inset-left));
+
+  background: var(--bg);
+}
+
+/* The login card uses the lighter dark app surface. */
+.login-card {
+  background: var(--surface);
+}
+
+/* Match the app's primary purple → pink → orange action gradient. */
+.login-title {
+  display: inline-block;
+  width: 100%;
+  margin: 0;
+
+  background: linear-gradient(
+    100deg,
+    #8f2cff 0%,
+    #d939d5 43%,
+    #f14381 68%,
+    #ff6b13 100%
+  );
+
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+
+  text-align: center;
+}
+
+/* Use normal text as a fallback in browsers that do not support gradient text. */
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .login-title {
+    color: #d939d5;
+    -webkit-text-fill-color: #d939d5;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-screen {
+    align-items: center;
+  }
+}
+/* Firebase password reset link */
+.forgot-password-button {
+  width: fit-content;
+  justify-self: end;
+  margin: -2px 0 2px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #d939d5;
+  font: inherit;
+  font-size: var(--text-sm);
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.google-login-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 10px 24px rgba(255, 255, 255, 0.16);
+.forgot-password-button:hover {
+  filter: brightness(1.2);
+  text-decoration: underline;
 }
 
-.google-login-button:active {
-  transform: translateY(0);
-}
-
-.google-login-button:focus-visible {
-  outline: 3px solid rgba(255, 255, 255, 0.22);
-  outline-offset: 2px;
+.forgot-password-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  text-decoration: none;
 }
