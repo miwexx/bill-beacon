@@ -6219,6 +6219,9 @@ function renderSettings() {
   const settings = Store.getSettings();
   const billCount = Store.getBills().length;
 
+  const currentAccountEmail =
+    window.getBillBeaconUserEmail?.() || "Signed in household account";
+
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
@@ -6240,9 +6243,9 @@ function renderSettings() {
               <div class="form-label">Dark</div>
               <div style="flex:1"></div>
               ${
-                settings.theme === 'dark' || settings.theme === 'system'
-                  ? svgIcon('check', 20)
-                  : ''
+                settings.theme === "dark" || settings.theme === "system"
+                  ? svgIcon("check", 20)
+                  : ""
               }
             </div>
 
@@ -6254,9 +6257,9 @@ function renderSettings() {
               <div class="form-label">Light</div>
               <div style="flex:1"></div>
               ${
-                settings.theme === 'light'
-                  ? svgIcon('check', 20)
-                  : ''
+                settings.theme === "light"
+                  ? svgIcon("check", 20)
+                  : ""
               }
             </div>
           </div>
@@ -6295,7 +6298,7 @@ function renderSettings() {
                               ${escapeHtml(source.frequency)} ·
                               Next: ${formatDate(
                                 source.nextPayDate,
-                                'short'
+                                "short"
                               )}
                             </div>
                           </div>
@@ -6317,7 +6320,7 @@ function renderSettings() {
                         </div>
                       `
                     )
-                    .join('')
+                    .join("")
                 : `
                     <div
                       class="card-pad"
@@ -6341,7 +6344,7 @@ function renderSettings() {
             "
             onclick="openIncomeSourceForm()"
           >
-            <span class="pill-icon">${svgIcon('plus', 18)}</span>
+            <span class="pill-icon">${svgIcon("plus", 18)}</span>
             <span>Add Income Source</span>
           </button>
         </div>
@@ -6352,11 +6355,11 @@ function renderSettings() {
           <div class="card">
             <div class="form-row">
               <div class="form-label">
-                ${svgIcon('internaldrive', 18)}
+                ${svgIcon("internaldrive", 18)}
               </div>
 
               <div style="flex:1;color:var(--text-muted)">
-                ${billCount} bill${billCount === 1 ? '' : 's'} stored on device
+                ${billCount} bill${billCount === 1 ? "" : "s"} synced to household
               </div>
             </div>
 
@@ -6366,7 +6369,7 @@ function renderSettings() {
               style="cursor:pointer"
             >
               <div class="form-label">
-                ${svgIcon('doc', 18)}
+                ${svgIcon("doc", 18)}
               </div>
 
               <div style="flex:1">
@@ -6379,11 +6382,11 @@ function renderSettings() {
                     color:var(--text-muted);
                   "
                 >
-                  Payments, reversals, and bill changes
+                  Payments, reversals, bill changes, and archives
                 </div>
               </div>
 
-              ${svgIcon('chevronRight', 18)}
+              ${svgIcon("chevronRight", 18)}
             </div>
 
             <div
@@ -6391,7 +6394,7 @@ function renderSettings() {
               onclick="exportCSV()"
               style="cursor:pointer"
             >
-              <div class="form-label">${svgIcon('export', 18)}</div>
+              <div class="form-label">${svgIcon("export", 18)}</div>
 
               <div style="flex:1;color:var(--accent)">
                 Export Bills CSV
@@ -6403,7 +6406,7 @@ function renderSettings() {
               onclick="document.getElementById('billImportFile').click()"
               style="cursor:pointer"
             >
-              <div class="form-label">${svgIcon('tray', 18)}</div>
+              <div class="form-label">${svgIcon("tray", 18)}</div>
 
               <div style="flex:1;color:var(--accent)">
                 Import Bills CSV
@@ -6415,15 +6418,15 @@ function renderSettings() {
                 accept=".csv,text/csv"
                 style="display:none"
                 onchange="importBillsCSV(event)"
-              />
+              >
             </div>
 
-                        <div
+            <div
               class="form-row"
               onclick="clearAllAppData()"
               style="cursor:pointer"
             >
-              <div class="form-label">${svgIcon('trash', 18)}</div>
+              <div class="form-label">${svgIcon("trash", 18)}</div>
 
               <div style="flex:1;color:var(--overdue)">
                 Clear all app data
@@ -6432,7 +6435,7 @@ function renderSettings() {
           </div>
 
           <div class="settings-footer">
-            All data is stored on this device only. No cloud, no sync, no account.
+            Household bills and activity are securely synchronized with Cloud Firestore.
           </div>
         </div>
 
@@ -6452,7 +6455,7 @@ function renderSettings() {
 
             <div class="about-row">
               <span class="about-label">Storage</span>
-              <span class="about-value">Local Offline</span>
+              <span class="about-value">Cloud Firestore</span>
             </div>
 
             <div class="about-row">
@@ -6467,7 +6470,17 @@ function renderSettings() {
 
             <div class="about-row">
               <span class="about-label">Account</span>
-              <span class="about-value">Not Required</span>
+
+              <span
+                class="about-value"
+                style="
+                  max-width:62%;
+                  overflow-wrap:anywhere;
+                  text-align:right;
+                "
+              >
+                ${escapeHtml(currentAccountEmail)}
+              </span>
             </div>
           </div>
         </div>
@@ -6507,7 +6520,7 @@ function renderSettings() {
                 margin-top:var(--space-3);
               "
             >
-              The app will work offline after installation. No internet needed.
+              Bills remain available locally and synchronize with your household account when online.
             </p>
           </div>
         </div>
@@ -8703,15 +8716,30 @@ navigate('today');
 }
 
 function confirmDeleteBill(billId, fromForm = false) {
-  if (confirm('Delete this bill? This cannot be undone.')) {
-    Store.deleteBill(billId);
-    if (fromForm) {
-      closeBillForm();
-      navigate('bills');
-    } else {
-      navigate('bills');
-    }
+  const bill = Store.getBill(billId);
+
+  if (!bill) {
+    alert("Bill not found.");
+    return;
   }
+
+  const shouldArchive = confirm(
+    `Archive "${bill.name}"?\n\n` +
+    "It will be removed from your active bill list, " +
+    "but its payment history will be kept."
+  );
+
+  if (!shouldArchive) {
+    return;
+  }
+
+  archiveBill(billId);
+
+  if (fromForm) {
+    closeBillForm();
+  }
+
+  navigate("bills");
 }
 
 function clearAllAppData() {
@@ -9204,12 +9232,12 @@ Store.updateBill = function (billId, updates) {
   queueBillReminderSync(billId, Store.getBill(billId));
 };
 
-const originalDeleteBillForReminders = Store.deleteBill.bind(Store);
+/*const originalDeleteBillForReminders = Store.deleteBill.bind(Store);
 
 Store.deleteBill = function (billId) {
   originalDeleteBillForReminders(billId);
   queueBillReminderSync(billId, null);
-};
+};*/
 
 const originalAddPaymentForReminders = Store.addPayment.bind(Store);
 
@@ -9554,19 +9582,37 @@ function archiveBill(billId) {
   const activeBills = Store.getBills();
   const bill = activeBills.find((item) => item.id === billId);
 
-  if (!bill) {
-    return;
-  }
+  if (!bill) return;
 
+  const archivedAt = new Date().toISOString();
   const archivedBills = getArchivedBills();
 
   archivedBills.push({
     ...bill,
-    archivedAt: new Date().toISOString(),
+    archivedAt
   });
 
   saveArchivedBills(archivedBills);
-  Store.saveBills(activeBills.filter((item) => item.id !== billId));
+
+  Store.saveBills(
+    activeBills.filter((item) => item.id !== billId)
+  );
+
+  recordActivity(
+    "billarchived",
+    bill.installmentPlanId ? "paymentplan" : "bill",
+    bill.installmentPlanId || bill.id,
+    `${bill.name} archived`,
+    `${formatCurrency(bill.amount)} · Due ${formatDate(bill.dueDate, "short")}`,
+    {
+      billId: bill.id,
+      billName: bill.name,
+      amount: Number(bill.amount) || 0,
+      dueDate: bill.dueDate,
+      archivedAt
+    },
+    null
+  );
 
   if (typeof queueBillReminderSync === "function") {
     queueBillReminderSync(billId, null);
@@ -10413,17 +10459,124 @@ document.addEventListener(
 // ====================================
 // INIT
 // ====================================
-
-function init() {
-  initTheme();
-
-  if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("sw.js").catch((error) => {
-      console.warn("Service worker registration failed:", error);
-    });
+function showAppUpdatePrompt(registration) {
+  if (document.getElementById("billBeaconUpdatePrompt")) {
+    return;
   }
-}
 
+  const updatePrompt = document.createElement("div");
+
+  updatePrompt.id = "billBeaconUpdatePrompt";
+
+  updatePrompt.style.cssText = `
+    position: fixed;
+    left: 16px;
+    right: 16px;
+    bottom: calc(88px + env(safe-area-inset-bottom));
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 16px 38px rgba(0, 0, 0, 0.35);
+    font-size: 14px;
+    font-weight: 700;
+  `;
+
+  updatePrompt.innerHTML = `
+    <span>A new Bill Beacon update is ready.</span>
+
+    <button
+      id="billBeaconUpdateButton"
+      type="button"
+      style="
+        flex: 0 0 auto;
+        min-height: 38px;
+        padding: 0 14px;
+        border: 0;
+        border-radius: 10px;
+        background: linear-gradient(
+          100deg,
+          #8f2cff 0%,
+          #d939d5 46%,
+          #f14381 68%,
+          #ff6b13 100%
+        );
+        color: #ffffff;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+      "
+    >
+      Update
+    </button>
+  `;
+
+  document.body.appendChild(updatePrompt);
+
+  document
+    .getElementById("billBeaconUpdateButton")
+    ?.addEventListener("click", () => {
+      const waitingWorker = registration.waiting;
+
+      if (waitingWorker) {
+        waitingWorker.postMessage({ type: "SKIP_WAITING" });
+      }
+    });
+}
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register(
+        "./sw.js"
+      );
+
+      // Check once immediately when the app opens.
+      registration.update();
+
+      // Check again every 60 minutes while the app remains open.
+      setInterval(() => {
+        registration.update();
+      }, 60 * 60 * 1000);
+
+      registration.addEventListener("updatefound", () => {
+        const newWorker = registration.installing;
+
+        if (!newWorker) {
+          return;
+        }
+
+        newWorker.addEventListener("statechange", () => {
+          if (
+            newWorker.state === "installed" &&
+            navigator.serviceWorker.controller
+          ) {
+            showAppUpdatePrompt(registration);
+          }
+        });
+      });
+
+      let refreshing = false;
+
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (refreshing) {
+          return;
+        }
+
+        refreshing = true;
+        window.location.reload();
+      });
+    } catch (error) {
+      console.warn("Service worker registration failed:", error);
+    }
+  });
+}
 document.addEventListener("DOMContentLoaded", init);
 window.addEventListener("storage", () => {
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
