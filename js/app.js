@@ -6452,7 +6452,7 @@ function renderSettings() {
 
             <div class="about-row">
               <span class="about-label">Storage</span>
-              <span class="about-value">Local Offline</span>
+              <span class="about-value">Cloud Storage</span>
             </div>
 
             <div class="about-row">
@@ -9554,19 +9554,37 @@ function archiveBill(billId) {
   const activeBills = Store.getBills();
   const bill = activeBills.find((item) => item.id === billId);
 
-  if (!bill) {
-    return;
-  }
+  if (!bill) return;
 
+  const archivedAt = new Date().toISOString();
   const archivedBills = getArchivedBills();
 
   archivedBills.push({
     ...bill,
-    archivedAt: new Date().toISOString(),
+    archivedAt
   });
 
   saveArchivedBills(archivedBills);
-  Store.saveBills(activeBills.filter((item) => item.id !== billId));
+
+  Store.saveBills(
+    activeBills.filter((item) => item.id !== billId)
+  );
+
+  recordActivity(
+    "billarchived",
+    bill.installmentPlanId ? "paymentplan" : "bill",
+    bill.installmentPlanId || bill.id,
+    `${bill.name} archived`,
+    `${formatCurrency(bill.amount)} · Due ${formatDate(bill.dueDate, "short")}`,
+    {
+      billId: bill.id,
+      billName: bill.name,
+      amount: Number(bill.amount) || 0,
+      dueDate: bill.dueDate,
+      archivedAt
+    },
+    null
+  );
 
   if (typeof queueBillReminderSync === "function") {
     queueBillReminderSync(billId, null);
