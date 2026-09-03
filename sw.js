@@ -1,48 +1,68 @@
-self.addEventListener("push", (event) => {
-  let payload = {
-    title: "Bill Beacon",
-    body: "You have a bill reminder.",
-    url: "/"
-  };
+const CACHE_VERSION = "bill-beacon-v2";
+const CACHE_NAME = CACHE_VERSION;
 
-  if (event.data) {
-    try {
-      payload = event.data.json();
-    } catch {
-      payload.body = event.data.text();
-    }
-  }
+const APP_SHELL = [
+  "./",
+  "./index.html",
+  "./css/style.css",
+  "./js/app.js",
+  "./js/firebase-auth.js",
+  "./js/firebase-sync.js",
+  "./manifest.json",
+  "./icons/bill-beacon-icon.png"
+];
 
+self.addEventListener("install", (event) => {
   event.waitUntil(
-    self.registration.showNotification(payload.title || "Bill Beacon", {
-      body: payload.body || "You have a bill reminder.",
-      icon: "/icons/icon-192.png",
-      badge: "/icons/icon-192.png",
-      data: {
-        url: payload.url || "/"
-      },
-      tag: "bill-beacon-reminder",
-      renotify: true
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
+
+  // Download and activate the new service worker immediately.
+  self.skipWaiting();
 });
 
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-
+self.addEventListener("activate", (event) => {
   event.waitUntil(
-    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      const targetUrl = event.notification?.data?.url || "/";
-
-      for (const client of clientList) {
-        if (client.url.includes(targetUrl) && "focus" in client) {
-          return client.focus();
-        }
-      }
-
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-    })
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames
+          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .map((cacheName) => caches.delete(cacheName))
+      )
+    )
   );
+
+  // Let the new worker control all currently open Bill Beacon tabs/apps.
+  self.clients.claim();
+});
+
+self.addEventListener("fetch", (event) => {
+  if (event.request.method !== "GET") {
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request)
+      .then((networkResponse) => {
+        const responseCopy = networkResponse.clone();
+
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseCopy);
+        });
+
+        return networkResponse;
+      })
+      .catch(() =>
+        caches.match(event.request).then(
+          (cachedResponse) =>
+            cachedResponse ||
+            caches.match("./index.html")
+        )
+      )
+  );
+});
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
