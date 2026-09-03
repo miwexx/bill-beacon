@@ -8785,7 +8785,7 @@ function confirmDeleteBill(billId, fromForm = false) {
   }
 
   const shouldArchive = confirm(
-  "Delete this bill? It will be removed from active bills, Dashboard, Calendar, upcoming lists, and totals, but its payment history will be kept."
+  `Delete ${bill.name}? It will be removed from the app, but its payment history will be kept.`
 );
 
   if (!shouldArchive) {
@@ -9685,25 +9685,6 @@ function archiveBill(billId) {
     queueBillReminderSync(billId, null);
   }
 }
-
-confirmDeleteBill = function (billId, fromForm = false) {
-  const shouldArchive = confirm(
-  `Delete ${bill.name}? It will be removed from your active bills, Dashboard, Calendar, upcoming lists, and totals. Its payment history will be kept.`
-);
-
-  if (!shouldArchive) {
-    return;
-  }
-
-  archiveBill(billId);
-
-  if (fromForm) {
-    closeBillForm();
-  }
-
-  navigate("bills");
-};
-
 function renderPaymentHistory() {
   const activeBills = Store.getBills();
   const archivedBills = getArchivedBills();
