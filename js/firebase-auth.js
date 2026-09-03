@@ -253,5 +253,12 @@ if (document.readyState === "loading") {
 } else {
   initFirebaseLogin();
 }
-
-export { auth, signOut };
+function getCurrentUserEmail() {
+  return auth.currentUser?.email || "";
+}
+window.getBillBeaconUserEmail = getCurrentUserEmail;
+export {
+  auth,
+  signOut,
+  getCurrentUserEmail
+};
