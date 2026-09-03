@@ -7781,7 +7781,7 @@ function openBillQuickActions(billId) {
             "
           >
             <span>${svgIcon('trash', 20)}</span>
-            <span>Remove from list</span>
+            <span>Delete Bill</span>
             <span>${svgIcon('chevronRight', 18)}</span>
           </button>
         </div>
@@ -8441,7 +8441,7 @@ function openBillForm(billId = null, selectedDate = null) {
               onclick="confirmDeleteBill('${bill.id}', true)"
             >
               ${svgIcon('trash', 16)}
-              Archive Bill
+              Delete Bill
             </button>
           ` : ''}
 
@@ -8785,10 +8785,8 @@ function confirmDeleteBill(billId, fromForm = false) {
   }
 
   const shouldArchive = confirm(
-    `Archive "${bill.name}"?\n\n` +
-    "It will be removed from your active bill list, " +
-    "but its payment history will be kept."
-  );
+  "Delete this bill? It will be removed from active bills, Dashboard, Calendar, upcoming lists, and totals, but its payment history will be kept."
+);
 
   if (!shouldArchive) {
     return;
@@ -9663,7 +9661,7 @@ function archiveBill(billId) {
   action: "bill_archived",
   entityType: bill.installmentPlanId ? "paymentplan" : "bill",
   entityId: bill.installmentPlanId || bill.id,
-  title: `${bill.name} archived`,
+  title: `${bill.name} Bill Deleted`,
   detail: `${formatCurrency(bill.amount)} · Due ${formatDate(
     bill.dueDate,
     "short"
@@ -9690,8 +9688,8 @@ function archiveBill(billId) {
 
 confirmDeleteBill = function (billId, fromForm = false) {
   const shouldArchive = confirm(
-    "Archive this bill? It will be removed from active bills, but its payment history will be kept."
-  );
+  `Delete ${bill.name}? It will be removed from your active bills, Dashboard, Calendar, upcoming lists, and totals. Its payment history will be kept.`
+);
 
   if (!shouldArchive) {
     return;
