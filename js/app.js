@@ -1875,7 +1875,13 @@ let currentRoute = 'today';
 let routeParams = {
   billSort: 'dueDate',
 };
+window.addEventListener("billbeacon:signed-out", () => {
+  currentRoute = "today";
 
+  routeParams = {
+    billSort: "dueDate"
+  };
+});
 function navigate(route, params = {}) {
   currentRoute = route;
   routeParams = params;
@@ -8970,10 +8976,6 @@ function render() {
 }
 
 window.render = render;
-/*console.log(
-  "Bill Beacon app.js loaded successfully. window.render:",
-  typeof window.render
-);*/
 /* ============================================
    Bill Tracker Push Notifications
 ============================================ */
