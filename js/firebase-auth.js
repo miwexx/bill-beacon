@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
@@ -123,7 +124,28 @@ async function signIn() {
 
   await signInWithEmailAndPassword(auth, email, password);
 }
+async function resetPassword() {
+  const email = getElement("email-login")?.value.trim() || "";
 
+  if (!email) {
+    setMessage(
+      "Enter your household email first, then choose Forgot password.",
+      true
+    );
+
+    getElement("email-login")?.focus();
+
+    return;
+  }
+
+  setMessage("Sending password-reset email…");
+
+  await sendPasswordResetEmail(auth, email);
+
+  setMessage(
+    "Password-reset email sent. Check your inbox and spam folder."
+  );
+}
 function setBusy(button, busy, busyText, normalText) {
   if (!button) return;
 
@@ -133,7 +155,8 @@ function setBusy(button, busy, busyText, normalText) {
 
 function initFirebaseLogin() {
   const signInButton = getElement("email-signin-button");
-  const createButton = getElement("email-create-button");
+const createButton = getElement("email-create-button");
+const forgotPasswordButton = getElement("forgot-password-button");
 
   if (!signInButton || !createButton) {
     setMessage("Login controls are missing. Refresh and try again.", true);
@@ -174,7 +197,47 @@ function initFirebaseLogin() {
       );
     }
   });
+  forgotPasswordButton?.addEventListener("click", async () => {
+  try {
+    setBusy(
+      forgotPasswordButton,
+      true,
+      "Sending reset email…",
+      "Forgot password?"
+    );
 
+    await resetPassword();
+  } catch (error) {
+    console.error("Firebase password reset failed:", error);
+
+    const code = error?.code || "";
+
+    if (code === "auth/invalid-email") {
+      setMessage("Enter a valid email address.", true);
+    } else if (code === "auth/user-not-found") {
+      /*
+       * In a future public app, you might use a generic response here
+       * so someone cannot test whether an email has an account.
+       * For this private shared-household app, this message is clearer.
+       */
+      setMessage("No household account was found for that email.", true);
+    } else if (code === "auth/too-many-requests") {
+      setMessage("Too many attempts. Wait a moment, then try again.", true);
+    } else {
+      setMessage(
+        error?.message || "Could not send the reset email. Try again.",
+        true
+      );
+    }
+  } finally {
+    setBusy(
+      forgotPasswordButton,
+      false,
+      "Sending reset email…",
+      "Forgot password?"
+    );
+  }
+});
   onAuthStateChanged(auth, (user) => {
     if (user) {
       setMessage("");

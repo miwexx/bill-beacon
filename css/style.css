@@ -2849,3 +2849,29 @@ body {
     align-items: center;
   }
 }
+/* Firebase password reset link */
+.forgot-password-button {
+  width: fit-content;
+  justify-self: end;
+  margin: -2px 0 2px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: #d939d5;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.forgot-password-button:hover {
+  filter: brightness(1.2);
+  text-decoration: underline;
+}
+
+.forgot-password-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+  text-decoration: none;
+}
