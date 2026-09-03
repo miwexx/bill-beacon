@@ -6080,13 +6080,17 @@ function getActivityActionIcon(action) {
         icon: "calendar",
         color: "var(--accent)",
       };
-
+case "bill_archived":
+  return {
+    icon: "tray",
+    color: "var(--text-muted)",
+  }; 
     case "bill_deleted":
       return {
         icon: "trash",
         color: "var(--overdue)",
       };
-
+     
     default:
       return {
         icon: "doc",
@@ -9655,21 +9659,29 @@ function archiveBill(billId) {
     activeBills.filter((item) => item.id !== billId)
   );
 
-  recordActivity(
-    "billarchived",
-    bill.installmentPlanId ? "paymentplan" : "bill",
-    bill.installmentPlanId || bill.id,
-    `${bill.name} archived`,
-    `${formatCurrency(bill.amount)} · Due ${formatDate(bill.dueDate, "short")}`,
-    {
-      billId: bill.id,
-      billName: bill.name,
-      amount: Number(bill.amount) || 0,
-      dueDate: bill.dueDate,
-      archivedAt
-    },
-    null
-  );
+  recordActivity({
+  action: "bill_archived",
+  entityType: bill.installmentPlanId ? "paymentplan" : "bill",
+  entityId: bill.installmentPlanId || bill.id,
+  title: `${bill.name} archived`,
+  detail: `${formatCurrency(bill.amount)} · Due ${formatDate(
+    bill.dueDate,
+    "short"
+  )}`,
+  before: {
+    billId: bill.id,
+    billName: bill.name,
+    amount: Number(bill.amount) || 0,
+    category: bill.category || null,
+    dueDate: bill.dueDate || null,
+    recurrence: bill.recurrence || "None",
+    archived: false,
+  },
+  after: {
+    archived: true,
+    archivedAt,
+  },
+});
 
   if (typeof queueBillReminderSync === "function") {
     queueBillReminderSync(billId, null);
