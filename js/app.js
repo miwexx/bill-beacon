@@ -267,12 +267,34 @@ const Store = {
   return updatedBill;
 },
   deleteBill(id) {
-    const bills = this.getBills().filter(b => b.id !== id);
-    this.saveBills(bills);
-    // Also delete related payments
-    const payments = this.getPayments().filter(p => p.billId !== id);
-    localStorage.setItem('payments', JSON.stringify(payments));
-  },
+  // ── Snapshot BEFORE removal so the log entry survives ──
+  const bill = this.getBill(id);
+  if (bill) {
+    this.addActivity({
+      action: 'bill_deleted',
+      entityType: bill.installmentPlanId ? 'paymentplan' : 'bill',
+      entityId: bill.installmentPlanId || bill.id,
+      title: `${bill.name} deleted`,
+      detail: buildDeletedDetail(bill),
+      before: {
+        id: bill.id,
+        name: bill.name,
+        amount: bill.amount,
+        category: bill.category,
+        dueDate: bill.dueDate ?? null,
+        dueDay: bill.dueDay ?? null,
+        recurrence: bill.recurrence ?? 'None',
+        deletedAt: new Date().toISOString(),
+      },
+      after: null,
+    });
+  }
+  // ── Now remove the bill and its payments ──
+  const bills = this.getBills().filter(b => b.id !== id);
+  this.saveBills(bills);
+  const payments = this.getPayments().filter(p => p.billId !== id);
+  localStorage.setItem('payments', JSON.stringify(payments));
+},
   getPayments() {
     try { return JSON.parse(localStorage.getItem('payments') || '[]'); }
     catch { return []; }
@@ -610,7 +632,32 @@ function formatCurrency(amount) {
   const num = parseFloat(amount) || 0;
   return num.toLocaleString(undefined, { style: 'currency', currency: Store.getSettings().currency || 'USD' });
 }
+function buildDeletedDetail(bill) {
+  const amount = formatCurrency(bill.amount);
 
+  if (bill.recurrence && bill.recurrence !== "None") {
+    return `${amount} · repeats ${bill.recurrence.toLowerCase()}`;
+  }
+
+  if (bill.dueDay) {
+    return `${amount} · due on the ${bill.dueDay}${getOrdinalSuffix(bill.dueDay)}`;
+  }
+
+  if (bill.dueDate) {
+    return `${amount} · due ${formatDate(bill.dueDate, "short")}`;
+  }
+
+  return amount;
+}
+
+function getOrdinalSuffix(day) {
+  const value = Number(day);
+  if ([11, 12, 13].includes(value % 100)) return "th";
+  if (value % 10 === 1) return "st";
+  if (value % 10 === 2) return "nd";
+  if (value % 10 === 3) return "rd";
+  return "th";
+}
 function formatDate(dateStr, format = 'short') {
   const d = new Date(dateStr);
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -6008,26 +6055,36 @@ function getActivityActionIcon(action) {
         icon: "checkCircle",
         color: "var(--paid)",
       };
-      case 'bill_balance_changed':
-  return {
-    icon: 'gear',
-    color: 'var(--accent)',
-  };
+
+    case "bill_balance_changed":
+      return {
+        icon: "gear",
+        color: "var(--accent)",
+      };
+
     case "payment_voided":
     case "payment_undone":
       return {
         icon: "close",
         color: "var(--overdue)",
       };
-      case "bill_updated":
-  return {
-    icon: "gear",
-    color: "var(--accent)",
-  };
+
+    case "bill_updated":
+      return {
+        icon: "gear",
+        color: "var(--accent)",
+      };
+
     case "bill_postponed":
       return {
         icon: "calendar",
         color: "var(--accent)",
+      };
+
+    case "bill_deleted":
+      return {
+        icon: "trash",
+        color: "var(--overdue)",
       };
 
     default:
