@@ -5035,32 +5035,40 @@ function openPaymentPlanActions(planId) {
         </button>
 
         ${
-          unpaidInstallments.length
-            ? `
-              <button
-                type="button"
-                class="btn-primary"
-                style="width:100%"
-                onclick="payPaymentPlanInFull('${planId}')"
-              >
-                ${svgIcon("checkCircle", 20)}
-                Pay in Full
-              </button>
-            `
-            : ""
-        }
+  unpaidInstallments.length
+    ? `
+      <button
+        type="button"
+        class="btn-primary"
+        style="width:100%"
+        onclick="payPaymentPlanInFull('${planId}')"
+      >
+        ${svgIcon("checkCircle", 20)}
+        Pay in Full
+      </button>
+    `
+    : ""
+}
 
-        <button
-          type="button"
-          class="btn-secondary"
-          style="width:100%"
-          onclick="closePaymentPlanActions()"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  `;
+<button
+  type="button"
+  class="btn-secondary"
+  style="width:100%"
+  onclick="openExistingPaymentPlanEditor('${planId}')"
+>
+  ${svgIcon("gear", 20)}
+  Edit Plan
+</button>
+
+<button
+  type="button"
+  class="btn-danger"
+  style="width:100%"
+  onclick="closePaymentPlanActions(() => confirmDeleteBill('${representative.id}'))"
+>
+  ${svgIcon("trash", 20)}
+  Delete Plan
+</button>
 
   document.body.appendChild(container);
   lockBackgroundScroll();
