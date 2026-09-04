@@ -4746,20 +4746,20 @@ function openPaymentPlanDetails(planId) {
 
         <div class="section-header">Summary</div>
         <div class="card" style="margin-bottom:0;">
-          ${detailRow("Total purchase", formatCurrency(totalAmount))}
-          ${detailRow("Paid so far", formatCurrency(paidAmount))}
-          ${detailRow("Remaining balance", formatCurrency(remainingBalance))}
-          ${detailRow("Payments left", `${remainingCount} of ${installmentCount}`)}
+          ${detailRow("Total Purchase", formatCurrency(totalAmount))}
+          ${detailRow("Paid So Far", formatCurrency(paidAmount))}
+          ${detailRow("Remaining Balance", formatCurrency(remainingBalance))}
+          ${detailRow("Payments Left", `${remainingCount} of ${installmentCount}`)}
         </div>
 
         <div class="section-header">Next Payment</div>
         <div class="card" style="margin-bottom:0;">
           ${detailRow(
-            "Next payment",
+            "Next Payment",
             nextInstallment ? formatDate(nextInstallment.dueDate, "full") : "Paid in full"
           )}
           ${detailRow(
-            "Next amount",
+            "Next Amount",
             nextInstallment ? formatCurrency(nextInstallment.amount) : "—"
           )}
         </div>
