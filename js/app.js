@@ -2343,32 +2343,23 @@ const dashboardUpcomingBills = [
           </button>
         </div>
 
-        ${
+       ${
   dashboardUpcomingBills.length
     ? `
-      ${
-        overdueUpcomingBills.length
-          ? `
-            <div class="dashboard-upcoming-month-divider">
-              <span>Overdue</span>
-              <span>
-                ${overdueUpcomingBills.length} bill${
-                  overdueUpcomingBills.length === 1 ? "" : "s"
-                } · ${formatCurrency(
-                  overdueUpcomingBills.reduce(
-                    (total, bill) => total + parseFloat(bill.amount || 0),
-                    0
-                  )
-                )}
-              </span>
-            </div>
-
-            <div class="upcoming-carousel">
-              ${overdueUpcomingBills.map(renderDashboardUpcomingBill).join("")}
-            </div>
-          `
-          : ""
-      }
+      <div class="upcoming-carousel">
+        ${dashboardUpcomingBills
+          .slice(0, 8)
+          .map(renderDashboardUpcomingBill)
+          .join("")}
+      </div>
+    `
+    : `
+      <div class="dashboard-empty-card">
+        ${svgIcon("checkCircle", 22)}
+        <span>No overdue or upcoming bills in the next 7 days</span>
+      </div>
+    `
+}
 
       ${
         upcomingSevenDayBills.length
