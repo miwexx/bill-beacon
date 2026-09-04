@@ -6746,45 +6746,7 @@ function renderSettings() {
           </div>
         </div>
 
-        <div class="settings-section">
-          <div class="section-header">Install on Home Screen</div>
-
-          <div class="card card-pad">
-            <p
-              style="
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-                line-height:1.5;
-              "
-            >
-              To install this app on your iPhone home screen:
-            </p>
-
-            <ol
-              style="
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-                line-height:1.7;
-                padding-left:var(--space-5);
-                margin-top:var(--space-2);
-              "
-            >
-              <li>Tap the <strong>Share</strong> button in Safari</li>
-              <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
-              <li>Tap <strong>Add</strong></li>
-            </ol>
-
-            <p
-              style="
-                font-size:var(--text-xs);
-                color:var(--text-muted);
-                margin-top:var(--space-3);
-              "
-            >
-              Bills remain available locally and synchronize with your household account when online.
-            </p>
-          </div>
-        </div>
+        
       </div>
     </div>
   `;
@@ -9783,7 +9745,45 @@ function addUpcomingReminderSettings() {
       Refresh Schedule
     </button>
   </div>
+  <div class="settings-section">
+          <div class="section-header">Install on Home Screen</div>
 
+          <div class="card card-pad">
+            <p
+              style="
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+                line-height:1.5;
+              "
+            >
+              To install this app on your iPhone home screen:
+            </p>
+
+            <ol
+              style="
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+                line-height:1.7;
+                padding-left:var(--space-5);
+                margin-top:var(--space-2);
+              "
+            >
+              <li>Tap the <strong>Share</strong> button in Safari</li>
+              <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+              <li>Tap <strong>Add</strong></li>
+            </ol>
+
+            <p
+              style="
+                font-size:var(--text-xs);
+                color:var(--text-muted);
+                margin-top:var(--space-3);
+              "
+            >
+              Bills remain available locally and synchronize with your household account when online.
+            </p>
+          </div>
+        </div>
   <button
     id="signout-button"
     class="btn-secondary"
