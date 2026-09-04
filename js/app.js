@@ -10974,8 +10974,8 @@ function saveInstallmentPlan() {
     document.getElementById("installmentStore")?.value.trim() || "";
 
   const totalAmount = parseFloat(
-    document.getElementById("installmentTotalAmount")?.value || 0
-  );
+  document.getElementById("installmentTotal")?.value || 0
+);
 
   const installmentCount = parseInt(
     document.getElementById("installmentCount")?.value || 0,
