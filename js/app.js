@@ -4524,185 +4524,104 @@ function renderPaymentPlans() {
   const activePlans = plans.filter((plan) => plan.nextInstallment);
   const completedPlans = plans.filter((plan) => !plan.nextInstallment);
 
-  const renderPlanCard = (plan, isCompleted = false) => {
-    const planTitle = plan.storeName || plan.provider;
+ const renderPlanCard = (plan, isCompleted = false) => {
+  const planTitle = plan.storeName || plan.provider;
 
-    const planSubtitle = isCompleted
-      ? `${plan.provider} · Paid in full`
-      : plan.storeName
-        ? `${plan.provider} · Payment ${Math.min(
-            plan.paidCount + 1,
-            plan.installmentCount
-          )} of ${plan.installmentCount}`
-        : `Payment ${Math.min(
-            plan.paidCount + 1,
-            plan.installmentCount
-          )} of ${plan.installmentCount}`;
+  const planSubtitle = isCompleted
+    ? `${plan.provider} · Paid in full`
+    : plan.storeName
+      ? `${plan.provider} · Payment ${Math.min(
+          plan.paidCount + 1,
+          plan.installmentCount
+        )} of ${plan.installmentCount}`
+      : `Payment ${Math.min(
+          plan.paidCount + 1,
+          plan.installmentCount
+        )} of ${plan.installmentCount}`;
 
-    const progressPercent = plan.installmentCount
-      ? (plan.paidCount / plan.installmentCount) * 100
-      : 0;
-
-    const nextPaymentLabel = plan.nextInstallment
-      ? `Next ${formatDate(plan.nextInstallment.dueDate, "short")}`
+  const nextPaymentLabel = plan.nextInstallment
+    ? `Next ${formatDate(plan.nextInstallment.dueDate, "short")}`
+    : plan.paidInFullAt
+      ? `Paid ${formatDate(plan.paidInFullAt, "short")}`
       : "Complete";
 
-    return `
-      <button
-        type="button"
-        class="card card-pad"
-        style="
-          width:100%;
-          text-align:left;
-          cursor:pointer;
-          opacity:${isCompleted ? 0.72 : 1};
-          border:1px solid var(--border);
-          color:inherit;
-          background:var(--surface);
-        "
-        onclick="openPaymentPlanDetails('${plan.id}')"
-        aria-label="View payment plan details for ${escapeHtml(planTitle)}"
-      >
-        <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
-          ${paymentPlanVisual(plan.provider, 42)}
+  return `
+    <button
+      type="button"
+      class="card card-pad"
+      style="
+        width:100%;
+        text-align:left;
+        cursor:pointer;
+        opacity:${isCompleted ? 0.72 : 1};
+        color:inherit;
+        background:var(--surface);
+        border:1px solid var(--border);
+      "
+      onclick="openPaymentPlanDetails('${plan.id}')"
+      aria-label="View payment plan details for ${escapeHtml(planTitle)}"
+    >
+      <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
+        ${paymentPlanVisual(plan.provider, 42)}
 
-          <div style="min-width:0; flex:1;">
-            <div
-              style="
-                font-size:var(--text-base);
-                font-weight:800;
-                overflow:hidden;
-                text-overflow:ellipsis;
-                white-space:nowrap;
-              "
-            >
-              ${escapeHtml(planTitle)}
-            </div>
-
-            <div
-              style="
-                margin-top:4px;
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-                overflow:hidden;
-                text-overflow:ellipsis;
-                white-space:nowrap;
-              "
-            >
-              ${escapeHtml(planSubtitle)}
-            </div>
+        <div style="min-width:0; flex:1;">
+          <div
+            style="
+              font-size:var(--text-base);
+              font-weight:800;
+              overflow:hidden;
+              text-overflow:ellipsis;
+              white-space:nowrap;
+            "
+          >
+            ${escapeHtml(planTitle)}
           </div>
 
-          <div style="display:flex; align-items:flex-start; gap:var(--space-2);">
-            <div style="text-align:right;">
-              <div
-                style="
-                  font-size:var(--text-base);
-                  font-weight:800;
-                  color:${isCompleted ? "var(--text-muted)" : "var(--text)"};
-                "
-              >
-                ${
-                  isCompleted
-                    ? "Paid in full"
-                    : `${formatCurrency(plan.remainingBalance)} left`
-                }
-              </div>
-
-              <div
-                style="
-                  margin-top:4px;
-                  font-size:var(--text-xs);
-                  color:var(--text-muted);
-                "
-              >
-                ${nextPaymentLabel}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              class="nav-button"
-              style="
-                width:36px;
-                height:36px;
-                padding:0;
-                margin:-6px -6px 0 0;
-                display:inline-flex;
-                align-items:center;
-                justify-content:center;
-              "
-              onclick="event.stopPropagation(); openPaymentPlanActions('${plan.id}')"
-              aria-label="Payment plan actions for ${escapeHtml(planTitle)}"
-            >
-              ${svgIcon("moreVertical", 20)}
-            </button>
+          <div
+            style="
+              margin-top:4px;
+              font-size:var(--text-sm);
+              color:var(--text-muted);
+              overflow:hidden;
+              text-overflow:ellipsis;
+              white-space:nowrap;
+            "
+          >
+            ${escapeHtml(planSubtitle)}
           </div>
         </div>
 
-        <div
-          style="
-            display:flex;
-            flex-wrap:wrap;
-            gap:var(--space-2);
-            margin-top:var(--space-3);
-          "
-        >
-          <span
+        <div style="min-width:92px; text-align:right;">
+          <div
             style="
-              padding:5px 8px;
-              border-radius:999px;
-              background:var(--surface-2);
-              color:var(--text-muted);
-              font-size:var(--text-xs);
-              font-weight:700;
+              font-size:var(--text-base);
+              font-weight:800;
+              color:${isCompleted ? "var(--text-muted)" : "var(--text)"};
+              white-space:nowrap;
             "
           >
-            Paid ${formatCurrency(plan.paidAmount)}
-          </span>
+            ${
+              isCompleted
+                ? "Paid in full"
+                : `${formatCurrency(plan.remainingBalance)} left`
+            }
+          </div>
 
-          <span
+          <div
             style="
-              padding:5px 8px;
-              border-radius:999px;
-              background:var(--surface-2);
-              color:var(--text-muted);
+              margin-top:4px;
               font-size:var(--text-xs);
-              font-weight:700;
-            "
-          >
-            ${plan.remainingCount} ${
-              plan.remainingCount === 1 ? "payment" : "payments"
-            } left
-          </span>
-
-          <span
-            style="
-              padding:5px 8px;
-              border-radius:999px;
-              background:var(--surface-2);
               color:var(--text-muted);
-              font-size:var(--text-xs);
-              font-weight:700;
+              white-space:nowrap;
             "
           >
             ${escapeHtml(nextPaymentLabel)}
-          </span>
+          </div>
         </div>
-
-        <div
-          class="dashboard-progress-track"
-          style="margin-top:var(--space-3);"
-          aria-label="${plan.paidCount} of ${plan.installmentCount} payments complete"
-        >
-          <div
-            class="dashboard-progress-fill"
-            style="width:${Math.min(progressPercent, 100)}%;"
-          ></div>
-        </div>
-      </button>
-    `;
-  };
+      </div>
+    </button>
+  `;
+};
 
   return `
     <div class="nav-bar">
