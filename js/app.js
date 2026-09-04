@@ -3110,11 +3110,11 @@ function openBillSortSheet() {
   const currentSort = routeParams.billSort || 'dueDate';
 
   const options = [
-    { id: 'dueDate', label: 'Due date', icon: 'calendar' },
-    { id: 'amountLow', label: 'Amount: low to high', icon: 'trendUp' },
-    { id: 'amountHigh', label: 'Amount: high to low', icon: 'trendUp' },
+    { id: 'dueDate', label: 'Due Date', icon: 'calendar' },
+    { id: 'amountLow', label: 'Amount: Low to High', icon: 'trendUp' },
+    { id: 'amountHigh', label: 'Amount: High to Low', icon: 'trendUp' },
     { id: 'name', label: 'Name: A–Z', icon: 'doc' },
-    { id: 'category', label: 'Type / category', icon: 'tray' },
+    { id: 'category', label: 'Category', icon: 'tray' },
   ];
 
   const container = document.createElement('div');
