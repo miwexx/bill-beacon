@@ -8981,13 +8981,21 @@ function confirmDeleteBill(billId, fromForm = false) {
     return;
   }
 
-  const shouldArchive = confirm(
-  `Delete ${bill.name}? It will be removed from the app, but its payment history will be kept.`
-);
+  const isInstallmentPlan = Boolean(bill.installmentPlanId);
 
-  if (!shouldArchive) {
-    return;
-  }
+  const installmentCount = isInstallmentPlan
+    ? Store.getBills().filter(
+        (item) => item.installmentPlanId === bill.installmentPlanId
+      ).length
+    : 1;
+
+  const message = isInstallmentPlan
+    ? `Delete this entire payment plan?\n\nThis will remove all ${installmentCount} installments from active bills, Dashboard, Calendar, upcoming lists, and totals. Payment history will be preserved in archived history.`
+    : `Delete ${bill.name}?\n\nIt will be removed from active bills, Dashboard, Calendar, upcoming lists, and totals. Its payment history will be preserved in archived history.`;
+
+  const shouldArchive = confirm(message);
+
+  if (!shouldArchive) return;
 
   archiveBill(billId);
 
@@ -8996,6 +9004,7 @@ function confirmDeleteBill(billId, fromForm = false) {
   }
 
   navigate("bills");
+  render();
 }
 
 function clearAllAppData() {
@@ -9836,50 +9845,114 @@ function saveArchivedBills(bills) {
 
 function archiveBill(billId) {
   const activeBills = Store.getBills();
-  const bill = activeBills.find((item) => item.id === billId);
+  const selectedBill = activeBills.find((bill) => bill.id === billId);
 
-  if (!bill) return;
+  if (!selectedBill) return;
 
   const archivedAt = new Date().toISOString();
+
+  // A normal bill is archived by itself.
+  // An installment bill archives every installment in the same plan.
+  const billsToArchive = selectedBill.installmentPlanId
+    ? activeBills.filter(
+        (bill) => bill.installmentPlanId === selectedBill.installmentPlanId
+      )
+    : [selectedBill];
+
+  const billsToKeep = activeBills.filter(
+    (bill) => !billsToArchive.some((archivedBill) => archivedBill.id === bill.id)
+  );
+
   const archivedBills = getArchivedBills();
 
-  archivedBills.push({
-    ...bill,
-    archivedAt
+  billsToArchive.forEach((bill) => {
+    const alreadyArchived = archivedBills.some(
+      (archivedBill) => archivedBill.id === bill.id
+    );
+
+    if (!alreadyArchived) {
+      archivedBills.push({
+        ...bill,
+        archivedAt,
+      });
+    }
   });
 
   saveArchivedBills(archivedBills);
+  Store.saveBills(billsToKeep);
 
-  Store.saveBills(
-    activeBills.filter((item) => item.id !== billId)
+  if (selectedBill.installmentPlanId) {
+    const planId = selectedBill.installmentPlanId;
+    const provider = selectedBill.installmentProvider || "Payment Plan";
+    const storeName =
+      selectedBill.installmentStore?.trim() ||
+      String(selectedBill.name || "")
+        .replace(/\s+Payment Plan$/i, "")
+        .trim() ||
+      provider;
+
+    const totalAmount = billsToArchive.reduce(
+      (sum, bill) => sum + Number(bill.amount || 0),
+      0
+    );
+
+    recordActivity(
+      "billarchived",
+      "paymentplan",
+      planId,
+      `${storeName} payment plan deleted`,
+      `${billsToArchive.length} installments archived · ${formatCurrency(totalAmount)}`,
+      {
+        planId,
+        provider,
+        storeName,
+        installmentCount: billsToArchive.length,
+        billIds: billsToArchive.map((bill) => bill.id),
+        archived: false,
+      },
+      {
+        archived: true,
+        archivedAt,
+      }
+    );
+
+    // Remove reminders for every active installment in the deleted plan.
+    if (typeof queueBillReminderSync === "function") {
+      billsToArchive.forEach((bill) => {
+        queueBillReminderSync(bill.id, null);
+      });
+    }
+
+    return;
+  }
+
+  // Existing single-bill archive behavior.
+  recordActivity(
+    "billarchived",
+    "bill",
+    selectedBill.id,
+    `${selectedBill.name} deleted`,
+    `${formatCurrency(selectedBill.amount)} · Due ${formatDate(
+      selectedBill.dueDate,
+      "short"
+    )}`,
+    {
+      billId: selectedBill.id,
+      billName: selectedBill.name,
+      amount: Number(selectedBill.amount || 0),
+      category: selectedBill.category || null,
+      dueDate: selectedBill.dueDate || null,
+      recurrence: selectedBill.recurrence || "None",
+      archived: false,
+    },
+    {
+      archived: true,
+      archivedAt,
+    }
   );
 
-  recordActivity({
-  action: "bill_archived",
-  entityType: bill.installmentPlanId ? "paymentplan" : "bill",
-  entityId: bill.installmentPlanId || bill.id,
-  title: `${bill.name} Bill Deleted`,
-  detail: `${formatCurrency(bill.amount)} · Due ${formatDate(
-    bill.dueDate,
-    "short"
-  )}`,
-  before: {
-    billId: bill.id,
-    billName: bill.name,
-    amount: Number(bill.amount) || 0,
-    category: bill.category || null,
-    dueDate: bill.dueDate || null,
-    recurrence: bill.recurrence || "None",
-    archived: false,
-  },
-  after: {
-    archived: true,
-    archivedAt,
-  },
-});
-
   if (typeof queueBillReminderSync === "function") {
-    queueBillReminderSync(billId, null);
+    queueBillReminderSync(selectedBill.id, null);
   }
 }
 function renderPaymentHistory() {
