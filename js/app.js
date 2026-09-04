@@ -6646,7 +6646,36 @@ function renderActivity() {
 }
 function renderSettings() {
   const settings = Store.getSettings();
-  const billCount = Store.getBills().length;
+  const activeBills = Store.getBills();
+
+const regularBillCount = activeBills.filter(
+  (bill) => !bill.installmentPlanId
+).length;
+
+const paymentPlanCount = new Set(
+  activeBills
+    .filter((bill) => bill.installmentPlanId)
+    .map((bill) => bill.installmentPlanId)
+).size;
+
+const dataSummaryParts = [];
+
+if (regularBillCount > 0) {
+  dataSummaryParts.push(
+    `${regularBillCount} bill${regularBillCount === 1 ? "" : "s"}`
+  );
+}
+
+if (paymentPlanCount > 0) {
+  dataSummaryParts.push(
+    `${paymentPlanCount} payment plan${paymentPlanCount === 1 ? "" : "s"}`
+  );
+}
+
+const dataSummary =
+  dataSummaryParts.length > 0
+    ? dataSummaryParts.join(" · ")
+    : "No active bills or payment plans";
 
   const currentAccountEmail =
     window.getBillBeaconUserEmail?.() || "Signed in household account";
@@ -6788,7 +6817,7 @@ function renderSettings() {
               </div>
 
               <div style="flex:1;color:var(--text-muted)">
-                ${billCount} bill${billCount === 1 ? "" : "s"} synced to household
+                ${dataSummary} Synced
               </div>
             </div>
 
