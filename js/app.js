@@ -4931,25 +4931,32 @@ function openPaymentPlanActions(planId) {
     .filter((bill) => bill.installmentPlanId === planId)
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
-  const unpaidInstallments = installments.filter(
-    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
-  );
-
   if (!installments.length) {
     alert("Payment plan not found.");
     return;
   }
 
+  const unpaidInstallments = installments.filter(
+    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
+
   const representative = installments[0];
-  const provider =
-    representative?.installmentProvider || "Payment Plan";
+  const provider = representative.installmentProvider || "Payment Plan";
+  const storeName =
+    representative.installmentStore?.trim() ||
+    String(representative.name || provider)
+      .replace(/\s*Payment Plan\s*$/i, "")
+      .trim() ||
+    provider;
 
   const remainingBalance = unpaidInstallments.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
   );
 
-  document.getElementById("paymentPlanActionsContainer")?.remove();
+  document
+    .getElementById("paymentPlanActionsContainer")
+    ?.remove();
 
   const container = document.createElement("div");
   container.id = "paymentPlanActionsContainer";
@@ -4990,11 +4997,24 @@ function openPaymentPlanActions(planId) {
           >
             ${paymentPlanVisual(provider, 42)}
 
-            <div style="min-width:0;flex:1">
+            <div style="min-width:0; flex:1">
               <div
                 style="
                   font-size:var(--text-base);
                   font-weight:800;
+                  overflow:hidden;
+                  text-overflow:ellipsis;
+                  white-space:nowrap;
+                "
+              >
+                ${escapeHtml(storeName)}
+              </div>
+
+              <div
+                style="
+                  margin-top:4px;
+                  font-size:var(--text-sm);
+                  color:var(--text-muted);
                 "
               >
                 ${escapeHtml(provider)}
@@ -5024,16 +5044,6 @@ function openPaymentPlanActions(planId) {
           </div>
         </div>
 
-        <button
-          type="button"
-          class="btn-secondary"
-          style="width:100%"
-          onclick="openExistingPaymentPlanEditor('${planId}')"
-        >
-          ${svgIcon("gear", 20)}
-          Edit Plan
-        </button>
-
         ${
           unpaidInstallments.length
             ? `
@@ -5054,9 +5064,20 @@ function openPaymentPlanActions(planId) {
           type="button"
           class="btn-secondary"
           style="width:100%"
-          onclick="closePaymentPlanActions()"
+          onclick="openExistingPaymentPlanEditor('${planId}')"
         >
-          Cancel
+          ${svgIcon("gear", 20)}
+          Edit Plan
+        </button>
+
+        <button
+          type="button"
+          class="btn-danger"
+          style="width:100%"
+          onclick="confirmDeletePaymentPlan('${planId}')"
+        >
+          ${svgIcon("trash", 20)}
+          Delete Plan
         </button>
       </div>
     </div>
@@ -5074,6 +5095,40 @@ function openPaymentPlanActions(planId) {
       .getElementById("paymentPlanActionsSheet")
       ?.classList.add("show");
   });
+}
+function confirmDeletePaymentPlan(planId) {
+  const installments = Store.getBills()
+    .filter((bill) => bill.installmentPlanId === planId)
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  if (!installments.length) {
+    alert("Payment plan not found.");
+    return;
+  }
+
+  const representative = installments[0];
+  const provider = representative.installmentProvider || "Payment Plan";
+  const storeName =
+    representative.installmentStore?.trim() ||
+    String(representative.name || provider)
+      .replace(/\s*Payment Plan\s*$/i, "")
+      .trim() ||
+    provider;
+
+  const confirmed = window.confirm(
+    `Delete ${storeName}?\n\n` +
+      `This removes all ${installments.length} installments from active bills, Dashboard, Calendar, upcoming bills, and active totals. ` +
+      `Payment and activity history should remain available.`
+  );
+
+  if (!confirmed) return;
+
+  closePaymentPlanActions();
+
+  // Wait for the menu-closing transition, then use the established delete flow.
+  window.setTimeout(() => {
+    confirmDeleteBill(representative.id);
+  }, 320);
 }
 function closePaymentPlanActions() {
   document
