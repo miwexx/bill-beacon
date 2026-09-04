@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v6";
+const CACHE_VERSION = "bill-beacon-v8";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -44,20 +44,36 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        const responseCopy = networkResponse.clone();
+        const requestUrl = new URL(event.request.url);
+        const isSameOrigin = requestUrl.origin === self.location.origin;
+        const isCacheable = isSameOrigin && networkResponse.ok;
 
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseCopy);
-        });
+        if (isCacheable) {
+          const responseCopy = networkResponse.clone();
+
+          caches.open(CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseCopy);
+          });
+        }
 
         return networkResponse;
       })
       .catch(() =>
-        caches.match(event.request).then(
-          (cachedResponse) =>
-            cachedResponse ||
-            caches.match("./index.html")
-        )
+        caches.match(event.request).then((cachedResponse) => {
+          if (cachedResponse) {
+            return cachedResponse;
+          }
+
+          const requestUrl = new URL(event.request.url);
+          const isNavigationRequest = event.request.mode === "navigate";
+          const isSameOrigin = requestUrl.origin === self.location.origin;
+
+          if (isNavigationRequest && isSameOrigin) {
+            return caches.match("./index.html");
+          }
+
+          return Response.error();
+        })
       )
   );
 });

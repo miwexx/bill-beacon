@@ -5068,7 +5068,7 @@ function openPaymentPlanActions(planId) {
           ${svgIcon("trash", 20)}
           Delete Plan
         </button>
-        
+
         <button
           type="button"
           class="btn-secondary"
@@ -5126,10 +5126,9 @@ function confirmDeletePaymentPlan(planId) {
 
   closePaymentPlanActions();
 
-  // Wait for the menu-closing transition, then use the established delete flow.
-  window.setTimeout(() => {
-    confirmDeleteBill(representative.id);
-  }, 320);
+window.setTimeout(() => {
+  archivePaymentPlan(planId);
+}, 320);
 }
 function closePaymentPlanActions() {
   document
@@ -5144,6 +5143,70 @@ function closePaymentPlanActions() {
     document.getElementById("paymentPlanActionsContainer")?.remove();
     unlockBackgroundScroll();
   }, 300);
+}
+function archivePaymentPlan(planId) {
+  const allBills = Store.getBills();
+  const deletedBills = allBills.filter(
+    (bill) => bill.installmentPlanId === planId
+  );
+
+  if (!deletedBills.length) {
+    alert("Payment plan not found.");
+    return;
+  }
+
+  const deletedAt = new Date().toISOString();
+
+  deletedBills.forEach((bill) => {
+    recordActivity({
+      action: "bill_deleted",
+      entityType: "paymentplan",
+      entityId: planId,
+      title: `${bill.name} deleted`,
+      detail: `${formatCurrency(bill.amount)} · due ${formatDate(
+        bill.dueDate,
+        "short"
+      )}`,
+      before: {
+        id: bill.id,
+        name: bill.name,
+        amount: Number(bill.amount) || 0,
+        category: bill.category || null,
+        dueDate: bill.dueDate || null,
+        installmentPlanId: planId,
+        deletedAt
+      },
+      after: null
+    });
+  });
+
+  const archivedBills =
+    typeof Store.getArchivedBills === "function"
+      ? Store.getArchivedBills()
+      : [];
+
+  const archivedIds = new Set(archivedBills.map((bill) => bill.id));
+
+  const recordsToArchive = deletedBills
+    .filter((bill) => !archivedIds.has(bill.id))
+    .map((bill) => ({
+      ...bill,
+      deletedAt,
+      deletedReason: "payment_plan_deleted"
+    }));
+
+  if (typeof Store.saveArchivedBills === "function") {
+    Store.saveArchivedBills([
+      ...archivedBills,
+      ...recordsToArchive
+    ]);
+  }
+
+  Store.saveBills(
+    allBills.filter((bill) => bill.installmentPlanId !== planId)
+  );
+
+  render();
 }
 function payPaymentPlanInFull(planId) {
   const paidInFullAt = new Date().toISOString();
