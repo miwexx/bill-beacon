@@ -2799,37 +2799,73 @@ function renderRecurringOccurrenceRow(bill) {
   const sourceBillId = bill.sourceBillId || bill.id;
   const dueDate = new Date(bill.dueDate);
   const status = getOccurrenceStatus(bill, dueDate);
+  const isPaymentPlanInstallment = Boolean(bill.installmentPlanId);
+
   const statusColor =
-    status === 'overdue' ? 'var(--overdue)' : 'var(--text-muted)';
+    status === "paid"
+      ? "var(--paid)"
+      : status === "overdue"
+        ? "var(--overdue)"
+        : "var(--text-muted)";
+
+  const statusLabel =
+    status === "paid"
+      ? `Paid ${formatDate(bill.dueDate, "short")}`
+      : status === "overdue"
+        ? `${getRecurringRelativeLabel(bill.dueDate)} · ${formatDate(
+            bill.dueDate,
+            "short"
+          )}`
+        : `${getRecurringRelativeLabel(bill.dueDate)} · ${formatDate(
+            bill.dueDate,
+            "short"
+          )}`;
+
+  const clickAction = isPaymentPlanInstallment
+    ? `openPaymentPlanDetails('${bill.installmentPlanId}')`
+    : `navigate('detail', {
+        id: '${sourceBillId}',
+        occurrenceDueDate: '${bill.dueDate}',
+        returnRoute: 'recurring'
+      })`;
+
+  const accessibleLabel = isPaymentPlanInstallment
+    ? `View payment plan details for ${bill.name}`
+    : `View ${bill.name} due ${formatDate(bill.dueDate, "full")}`;
+
+  const iconBackground = isPaymentPlanInstallment
+    ? "transparent"
+    : getBillBrand(bill.name)
+      ? "#fff"
+      : `var(--${getCategory(bill.category).color})`;
+
+  const iconColor = isPaymentPlanInstallment
+    ? "var(--accent)"
+    : getBillBrand(bill.name)
+      ? "#1e1e2e"
+      : "#fff";
 
   return `
     <button
       type="button"
       class="bill-row clickable"
-      style="width:100%;text-align:left"
-      onclick="navigate('detail', {
-        id: '${sourceBillId}',
-        occurrenceDueDate: '${bill.dueDate}',
-        returnRoute: 'recurring'
-      })"
-      aria-label="View ${escapeHtml(bill.name)} due ${formatDate(
-        bill.dueDate,
-        'full'
-      )}"
+      style="width:100%; text-align:left;"
+      onclick="${clickAction}"
+      aria-label="${escapeHtml(accessibleLabel)}"
     >
       <div
         class="bill-icon"
         style="
-          background:${
-  bill.installmentPlanId
-    ? 'transparent'
-    : getBillBrand(bill.name)
-      ? '#fff'
-      : `var(--${getCategory(bill.category).color})`
-};
-          color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
-          padding:${getBillBrand(bill.name) ? '3px' : '0'};
+          width:42px;
+          height:42px;
+          min-width:42px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
           overflow:hidden;
+          border-radius:10px;
+          background:${iconBackground};
+          color:${iconColor};
         "
       >
         ${billOrPaymentPlanVisual(bill, 42)}
@@ -2838,15 +2874,37 @@ function renderRecurringOccurrenceRow(bill) {
       <div class="bill-info">
         <div class="bill-name">${escapeHtml(bill.name)}</div>
 
-        <div class="bill-meta" style="color:${statusColor}">
-          ${getRecurringRelativeLabel(bill.dueDate)}
-          · ${formatDate(bill.dueDate, 'short')}
+        <div class="bill-meta" style="color:${statusColor};">
+          ${escapeHtml(statusLabel)}
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:8px">
+      <div style="margin-left:auto; text-align:right;">
         <div class="bill-amount">${formatCurrency(bill.amount)}</div>
-        ${svgIcon('chevronRight', 18)}
+
+        ${
+          isPaymentPlanInstallment
+            ? `
+              <div
+                style="
+                  margin-top:3px;
+                  font-size:var(--text-xs);
+                  color:var(--text-muted);
+                "
+              >
+                ${escapeHtml(
+                  bill.installmentProvider || "Payment plan"
+                )} · Payment ${bill.installmentNumber || 1} of ${
+                  bill.installmentTotal || "?"
+                }
+              </div>
+            `
+            : ""
+        }
+      </div>
+
+      <div style="margin-left:var(--space-2); color:var(--text-muted);">
+        ${svgIcon("chevronRight", 18)}
       </div>
     </button>
   `;
