@@ -263,7 +263,7 @@ const Store = {
       action: 'bill_deleted',
       entityType: bill.installmentPlanId ? 'paymentplan' : 'bill',
       entityId: bill.installmentPlanId || bill.id,
-      title: `${bill.name} deleted`,
+      title: `${bill.name} Deleted`,
       detail: buildDeletedDetail(bill),
       before: {
         id: bill.id,
@@ -1549,7 +1549,7 @@ function showPaymentUndoToast(payment, billName) {
   `;
 
   toast.innerHTML = `
-    <span>${escapeHtml(billName)} marked paid</span>
+    <span>${escapeHtml(billName)} Marked Paid</span>
     <button
       type="button"
       data-payment-undo="${payment.id}"
@@ -1668,7 +1668,7 @@ function markBillPaid(billId) {
     action: "bill_paid",
     entityType: bill.installmentPlanId ? "paymentplan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
-    title: `${bill.name} marked as paid`,
+    title: `${bill.name} Marked as Paid`,
     detail: `${formatCurrency(payment.amount)} · due ${formatDate(
       dueDate,
       "short"
@@ -1697,7 +1697,7 @@ function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
 
   if (!bill) {
-    alert("Bill not found.");
+    alert("Bill Not Found.");
     return;
   }
 
@@ -1729,7 +1729,7 @@ function markBillUnpaid(billId) {
   }
 
   const confirmed = confirm(
-    `Mark ${bill.name} as unpaid for ${formatDate(
+    `Mark ${bill.name} As Unpaid For ${formatDate(
       dueDate,
       "full"
     )}? ${formatCurrency(payment.amount)} will be added back to bills still due.`
@@ -1740,7 +1740,7 @@ function markBillUnpaid(billId) {
   const voidedAt = new Date().toISOString();
 
   Store.updatePayment(payment.id, {
-    status: "voided",
+    status: "Voided",
     voidedAt,
   });
 
@@ -1748,7 +1748,7 @@ function markBillUnpaid(billId) {
     action: "payment_voided",
     entityType: bill.installmentPlanId ? "paymentplan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
-    title: `${bill.name} marked as unpaid`,
+    title: `${bill.name} Marked as Unpaid`,
     detail: `${formatCurrency(payment.amount)} payment voided · due ${formatDate(
       dueDate,
       "short"
@@ -1786,7 +1786,7 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
     `Mark ${bill.name} as paid for ${formatDate(
       dueDate,
       "full"
-    )}? ${formatCurrency(bill.amount)} will be recorded for this occurrence.`
+    )}? ${formatCurrency(bill.amount)} Bill Be Recorded For This Occurrence.`
   );
 
   if (!confirmed) return;
