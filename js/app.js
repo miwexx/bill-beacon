@@ -6817,7 +6817,7 @@ const dataSummary =
               </div>
 
               <div style="flex:1;color:var(--text-muted)">
-                ${dataSummary} Synced
+                ${dataSummary}
               </div>
             </div>
 
@@ -8955,17 +8955,19 @@ function savePaymentLinkPopup(billId) {
   render();
 }
 function saveBill() {
-  const name = document.getElementById('billName')?.value.trim();
-  const amount = parseFloat(document.getElementById('billAmount')?.value || 0);
-  const category = document.getElementById('billCategory')?.value || 'other';
-  const dueDateInput = document.getElementById('billDueDate')?.value;
-  const recurrence = document.getElementById('billRecurrence')?.value || 'None';
-  const dueDayValue = document.getElementById('billDueDay')?.value;
-  const payCycle = document.getElementById('billPayCycle')?.value || 'first';
-  const paymentMethod = document.getElementById('billPaymentMethod')?.value || '';
-  const paymentUrl = document.getElementById('billPaymentUrl')?.value.trim() || '';
-  const autopay = Boolean(document.getElementById('billAutopay')?.checked);
-  const notes = document.getElementById('billNotes')?.value.trim() || '';
+  const name = document.getElementById("billName")?.value.trim();
+  const amount = parseFloat(document.getElementById("billAmount")?.value || 0);
+  const category = document.getElementById("billCategory")?.value || "other";
+  const dueDateInput = document.getElementById("billDueDate")?.value;
+  const recurrence = document.getElementById("billRecurrence")?.value || "None";
+  const dueDayValue = document.getElementById("billDueDay")?.value;
+  const payCycle = document.getElementById("billPayCycle")?.value || "first";
+  const paymentMethod =
+    document.getElementById("billPaymentMethod")?.value || "";
+  const paymentUrl =
+    document.getElementById("billPaymentUrl")?.value.trim() || "";
+  const autopay = Boolean(document.getElementById("billAutopay")?.checked);
+  const notes = document.getElementById("billNotes")?.value.trim() || "";
 
   const reminderOffsets = Array.from(
     document.querySelectorAll('input[name="billReminderOffsets"]:checked')
@@ -8975,33 +8977,39 @@ function saveBill() {
     .sort((a, b) => a - b);
 
   if (!name) {
-    alert('Please enter a bill name.');
+    alert("Please enter a bill name.");
     return;
   }
 
   if (Number.isNaN(amount) || amount < 0) {
-    alert('Please enter a valid amount.');
+    alert("Please enter a valid amount.");
     return;
   }
 
   if (!dueDateInput) {
-    alert('Please choose a due date.');
+    alert("Please choose a due date.");
     return;
   }
 
   const dueDate = dateFromInput(dueDateInput);
 
   if (!dueDate) {
-    alert('Please choose a valid due date.');
+    alert("Please choose a valid due date.");
     return;
   }
 
   const dueDay =
-    recurrence === 'Monthly'
-      ? Math.max(1, Math.min(31, Number(dueDayValue) || new Date(dueDate).getDate()))
-      : new Date(dueDate).getDate();
+    recurrence === "Monthly"
+      ? Math.max(
+          1,
+          Math.min(
+            31,
+            Number(dueDayValue || new Date(dueDate).getDate())
+          )
+        )
+      : null;
 
-  const existingBill = editingBillId ? Store.getBill(editingBillId) : null;
+  const now = new Date().toISOString();
 
   const data = {
     name,
@@ -9018,17 +9026,237 @@ function saveBill() {
     reminderOffsets,
   };
 
-  if (editingBillId) {
-    Store.updateBill(editingBillId, data);
-  } else {
-    Store.addBill({
+  const buildBillSnapshot = (bill) => ({
+    id: bill.id,
+    name: bill.name,
+    amount: Number(bill.amount || 0),
+    category: bill.category || "other",
+    dueDate: bill.dueDate || null,
+    dueDay: bill.dueDay ?? null,
+    recurrence: bill.recurrence || "None",
+    payCycle: bill.payCycle || null,
+    paymentMethod: bill.paymentMethod || "",
+    paymentUrl: bill.paymentUrl || "",
+    autopay: Boolean(bill.autopay),
+    notes: bill.notes || "",
+    reminderOffsets: Array.isArray(bill.reminderOffsets)
+      ? [...bill.reminderOffsets]
+      : [],
+  });
+
+  const getOrdinalSuffix = (day) => {
+    const value = Number(day);
+
+    if (value >= 11 && value <= 13) return "th";
+
+    switch (value % 10) {
+      case 1:
+        return "st";
+      case 2:
+        return "nd";
+      case 3:
+        return "rd";
+      default:
+        return "th";
+    }
+  };
+
+  const formatSchedule = (bill) => {
+    if (bill.recurrence === "Monthly") {
+      const day = Number(bill.dueDay || new Date(bill.dueDate).getDate());
+
+      return `due on the ${day}${getOrdinalSuffix(day)} of each month`;
+    }
+
+    return bill.dueDate
+      ? `due ${formatDate(bill.dueDate, "short")}`
+      : "no due date";
+  };
+
+  const listReminderOffsets = (offsets) => {
+    if (!offsets.length) return "No reminders";
+
+    const labels = offsets.map((offset) =>
+      offset === 0
+        ? "on due date"
+        : `${offset} day${offset === 1 ? "" : "s"} before`
+    );
+
+    return labels.join(", ");
+  };
+
+  const getChangedFields = (before, after) => {
+    const changes = [];
+
+    if (before.name !== after.name) changes.push("name");
+    if (Number(before.amount) !== Number(after.amount)) changes.push("amount");
+    if (before.category !== after.category) changes.push("category");
+    if (before.dueDate !== after.dueDate) changes.push("due date");
+
+    if (Number(before.dueDay || 0) !== Number(after.dueDay || 0)) {
+      changes.push("monthly due day");
+    }
+
+    if (before.recurrence !== after.recurrence) changes.push("schedule");
+    if (before.paymentMethod !== after.paymentMethod) {
+      changes.push("payment method");
+    }
+
+    if (before.paymentUrl !== after.paymentUrl) {
+      changes.push("payment link");
+    }
+
+    if (Boolean(before.autopay) !== Boolean(after.autopay)) {
+      changes.push("Autopay");
+    }
+
+    if (before.notes !== after.notes) changes.push("notes");
+
+    if (
+      JSON.stringify(before.reminderOffsets || []) !==
+      JSON.stringify(after.reminderOffsets || [])
+    ) {
+      changes.push("reminders");
+    }
+
+    return changes;
+  };
+
+  if (!editingBillId) {
+    const newBill = {
       id: uid(),
       ...data,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: now,
+      updatedAt: now,
       postponementHistory: [],
       occurrenceOverrides: [],
+    };
+
+    Store.addBill(newBill);
+
+    recordActivity({
+      action: "bill_created",
+      entityType: "bill",
+      entityId: newBill.id,
+      title: `${newBill.name} added`,
+      detail: `${formatCurrency(newBill.amount)} · ${formatSchedule(newBill)}`,
+      before: null,
+      after: buildBillSnapshot(newBill),
     });
+
+    closeBillForm();
+    render();
+    return;
+  }
+
+  const existingBill = Store.getBill(editingBillId);
+
+  if (!existingBill) {
+    alert("Bill not found. Please refresh and try again.");
+    return;
+  }
+
+  const before = buildBillSnapshot(existingBill);
+
+  const updatedBill = {
+    ...existingBill,
+    ...data,
+    updatedAt: now,
+  };
+
+  const after = buildBillSnapshot(updatedBill);
+  const changedFields = getChangedFields(before, after);
+
+  Store.updateBill(editingBillId, {
+    ...data,
+    updatedAt: now,
+  });
+
+  if (changedFields.length) {
+    const billNameForActivity = after.name || before.name;
+
+    if (Number(before.amount) !== Number(after.amount)) {
+      recordActivity({
+        action: "bill_amount_changed",
+        entityType: "bill",
+        entityId: editingBillId,
+        title: `${billNameForActivity} amount changed`,
+        detail: `${formatCurrency(before.amount)} → ${formatCurrency(after.amount)}`,
+        before,
+        after,
+      });
+    }
+
+    if (
+      before.dueDate !== after.dueDate ||
+      Number(before.dueDay || 0) !== Number(after.dueDay || 0) ||
+      before.recurrence !== after.recurrence
+    ) {
+      recordActivity({
+        action: "bill_schedule_changed",
+        entityType: "bill",
+        entityId: editingBillId,
+        title: `${billNameForActivity} schedule changed`,
+        detail: `${formatSchedule(before)} → ${formatSchedule(after)}`,
+        before,
+        after,
+      });
+    }
+
+    if (Boolean(before.autopay) !== Boolean(after.autopay)) {
+      recordActivity({
+        action: "bill_autopay_changed",
+        entityType: "bill",
+        entityId: editingBillId,
+        title: `${billNameForActivity} Autopay ${
+          after.autopay ? "turned on" : "turned off"
+        }`,
+        detail: after.autopay
+          ? "This bill is marked as paid automatically."
+          : "This bill is no longer marked as paid automatically.",
+        before,
+        after,
+      });
+    }
+
+    if (
+      JSON.stringify(before.reminderOffsets || []) !==
+      JSON.stringify(after.reminderOffsets || [])
+    ) {
+      recordActivity({
+        action: "bill_reminders_changed",
+        entityType: "bill",
+        entityId: editingBillId,
+        title: `${billNameForActivity} reminders changed`,
+        detail: listReminderOffsets(after.reminderOffsets || []),
+        before,
+        after,
+      });
+    }
+
+    const nonSpecialChanges = changedFields.filter(
+      (field) =>
+        ![
+          "amount",
+          "due date",
+          "monthly due day",
+          "schedule",
+          "Autopay",
+          "reminders",
+        ].includes(field)
+    );
+
+    if (nonSpecialChanges.length) {
+      recordActivity({
+        action: "bill_updated",
+        entityType: "bill",
+        entityId: editingBillId,
+        title: `${billNameForActivity} details updated`,
+        detail: `Updated ${nonSpecialChanges.join(", ")}.`,
+        before,
+        after,
+      });
+    }
   }
 
   closeBillForm();
