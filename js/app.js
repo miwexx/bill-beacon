@@ -2385,7 +2385,7 @@ const dashboardUpcomingBills = [
           : ""
       }
     `
-    : `
+    `
       <div class="dashboard-empty-card">
         ${svgIcon("checkCircle", 22)}
         <span>No bills due in the next 7 days</span>
