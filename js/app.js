@@ -250,18 +250,7 @@ const Store = {
       `${formatActivityValue(primaryChange.field, primaryChange.before)} → ` +
       `${formatActivityValue(primaryChange.field, primaryChange.after)}`;
 
-    this.addActivity({
-      action: primaryChange.field === "amount" ? "billbalancechanged" : "billupdated",
-      entityType: updatedBill.installmentPlanId ? "paymentplan" : "bill",
-      entityId: updatedBill.installmentPlanId || updatedBill.id,
-      title:
-        primaryChange.field === "amount"
-          ? `${updatedBill.name} balance changed`
-          : `${updatedBill.name} updated`,
-      detail,
-      before: { [primaryChange.field]: primaryChange.before },
-      after: { [primaryChange.field]: primaryChange.after },
-    });
+   
   }
 
   return updatedBill;
@@ -6525,25 +6514,25 @@ function getActivityLabel(action) {
       return "Payment undone";
 
     case "bill_amount_changed":
-      return "Amount changed";
+      return "Amount Changed";
 
     case "bill_due_date_changed":
-      return "Due date changed";
+      return "Due Date Changed";
 
     case "bill_schedule_changed":
-      return "Schedule changed";
+      return "Schedule Changed";
 
     case "bill_postponed":
-      return "Bill postponed";
+      return "Bill Postponed";
 
     case "recurring_occurrence_postponed":
-      return "Recurring bill postponed";
+      return "Recurring Bill Postponed";
 
     case "bill_autopay_changed":
-      return "Autopay changed";
+      return "Autopay Changed";
 
     case "bill_reminders_changed":
-      return "Reminders changed";
+      return "Reminders Changed";
 
     case "bill_updated":
       return "Bill updated";
