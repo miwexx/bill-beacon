@@ -1952,37 +1952,88 @@ function getNotificationCount() {
   }).length;
 }
 function getDashboardUpcomingGroups(referenceDate = new Date()) {
-  const currentMonthBills = getCalendarBillsForMonth(referenceDate);
-
-  const nextMonthDate = new Date(
+  const startOfToday = new Date(
     referenceDate.getFullYear(),
-    referenceDate.getMonth() + 1,
-    1,
+    referenceDate.getMonth(),
+    referenceDate.getDate(),
     12,
+    0,
     0,
     0
   );
 
-  const nextMonthBills = getCalendarBillsForMonth(nextMonthDate);
+  const endOfUpcomingWindow = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate() + 7,
+    12,
+    0,
+    0,
+    0
+  );
 
-  const isUnpaid = bill =>
-    !isOccurrencePaid(bill, new Date(bill.dueDate));
+  const currentMonthDate = new Date(
+    startOfToday.getFullYear(),
+    startOfToday.getMonth(),
+    1,
+    12,
+    0,
+    0,
+    0
+  );
 
-  const sortDue = (a, b) =>
-    new Date(a.dueDate) - new Date(b.dueDate);
+  const nextMonthDate = new Date(
+    startOfToday.getFullYear(),
+    startOfToday.getMonth() + 1,
+    1,
+    12,
+    0,
+    0,
+    0
+  );
 
-  const currentMonth = currentMonthBills
-    .filter(isUnpaid)
-    .sort(sortDue);
+  const sourceBills = [
+    ...getCalendarBillsForMonth(currentMonthDate),
+    ...getCalendarBillsForMonth(nextMonthDate),
+  ];
 
-  const nextMonth = nextMonthBills
-    .filter(isUnpaid)
-    .sort(sortDue);
+  const seen = new Set();
+
+  const uniqueBills = sourceBills.filter((bill) => {
+    const sourceBillId = bill.isOccurrence ? bill.sourceBillId : bill.id;
+    const key = `${sourceBillId}|${getLocalDateKey(bill.dueDate)}`;
+
+    if (seen.has(key)) return false;
+
+    seen.add(key);
+    return true;
+  });
+
+  const unpaidBills = uniqueBills.filter(
+    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
+
+  const overdue = unpaidBills
+    .filter((bill) => {
+      const dueDate = new Date(bill.dueDate);
+
+      return dueDate < startOfToday;
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+
+  const upcoming = unpaidBills
+    .filter((bill) => {
+      const dueDate = new Date(bill.dueDate);
+
+      return dueDate >= startOfToday && dueDate <= endOfUpcomingWindow;
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 
   return {
-    currentMonth,
-    nextMonth,
-    nextMonthLabel: formatDate(nextMonthDate.toISOString(), 'monthYear')
+    overdue,
+    upcoming,
+    startOfToday,
+    endOfUpcomingWindow,
   };
 }
 
@@ -2107,9 +2158,13 @@ function renderToday() {
   )[0];
 
   const dashboardUpcomingGroups = getDashboardUpcomingGroups(now);
-  const currentMonthUpcomingBills = dashboardUpcomingGroups.currentMonth;
-  const nextMonthUpcomingBills = dashboardUpcomingGroups.nextMonth;
-  const nextMonthLabel = dashboardUpcomingGroups.nextMonthLabel;
+const overdueUpcomingBills = dashboardUpcomingGroups.overdue;
+const upcomingSevenDayBills = dashboardUpcomingGroups.upcoming;
+
+const dashboardUpcomingBills = [
+  ...overdueUpcomingBills,
+  ...upcomingSevenDayBills,
+];
 
   const recentPayments = Store.getPayments()
     .map((payment) => ({
@@ -2289,46 +2344,63 @@ function renderToday() {
         </div>
 
         ${
-          currentMonthUpcomingBills.length || nextMonthUpcomingBills.length
-            ? `
-              ${
-                currentMonthUpcomingBills.length
-                  ? `
-                    <div class="upcoming-carousel">
-                      ${currentMonthUpcomingBills.slice(0, 6).map(renderDashboardUpcomingBill).join("")}
-                    </div>
-                  `
-                  : ""
-              }
+  dashboardUpcomingBills.length
+    ? `
+      ${
+        overdueUpcomingBills.length
+          ? `
+            <div class="dashboard-upcoming-month-divider">
+              <span>Overdue</span>
+              <span>
+                ${overdueUpcomingBills.length} bill${
+                  overdueUpcomingBills.length === 1 ? "" : "s"
+                } · ${formatCurrency(
+                  overdueUpcomingBills.reduce(
+                    (total, bill) => total + parseFloat(bill.amount || 0),
+                    0
+                  )
+                )}
+              </span>
+            </div>
 
-              ${
-                nextMonthUpcomingBills.length
-                  ? `
-                    <div class="dashboard-upcoming-month-divider">
-                      <span>${nextMonthLabel}</span>
-                      <span>
-                        ${nextMonthUpcomingBills.slice(0, 6).length} shown ·
-                        ${formatCurrency(
-                          nextMonthUpcomingBills
-                            .slice(0, 6)
-                            .reduce((total, bill) => total + parseFloat(bill.amount || 0), 0)
-                        )}
-                      </span>
-                    </div>
-                    <div class="upcoming-carousel">
-                      ${nextMonthUpcomingBills.slice(0, 6).map(renderDashboardUpcomingBill).join("")}
-                    </div>
-                  `
-                  : ""
-              }
-            `
-            : `
-              <div class="dashboard-empty-card">
-                ${svgIcon("checkCircle", 22)}
-                <span>No upcoming bills right now</span>
-              </div>
-            `
-        }
+            <div class="upcoming-carousel">
+              ${overdueUpcomingBills.map(renderDashboardUpcomingBill).join("")}
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        upcomingSevenDayBills.length
+          ? `
+            <div class="dashboard-upcoming-month-divider">
+              <span>Next 7 Days</span>
+              <span>
+                ${upcomingSevenDayBills.length} bill${
+                  upcomingSevenDayBills.length === 1 ? "" : "s"
+                } · ${formatCurrency(
+                  upcomingSevenDayBills.reduce(
+                    (total, bill) => total + parseFloat(bill.amount || 0),
+                    0
+                  )
+                )}
+              </span>
+            </div>
+
+            <div class="upcoming-carousel">
+              ${upcomingSevenDayBills.map(renderDashboardUpcomingBill).join("")}
+            </div>
+          `
+          : ""
+      }
+    `
+    : `
+      <div class="dashboard-empty-card">
+        ${svgIcon("checkCircle", 22)}
+        <span>No bills due in the next 7 days</span>
+      </div>
+    `
+}
 
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">Recent Payments</div>
@@ -4779,7 +4851,7 @@ function openPaymentPlanDetails(planId) {
 <div class="card" style="margin-bottom:0;">
   ${detailRow("Total Purchase", formatCurrency(totalAmount))}
   ${detailRow(
-    "Each payment",
+    "Each Payment",
     formatCurrency(
       installmentCount
         ? totalAmount / installmentCount
