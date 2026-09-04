@@ -2909,11 +2909,11 @@ function renderBills() {
   const billSort = routeParams.billSort || 'dueDate';
 
   const sortOptions = {
-    dueDate: 'Due date',
-    amountLow: 'Amount: low to high',
-    amountHigh: 'Amount: high to low',
+    dueDate: 'Due Date',
+    amountLow: 'Amount: Low to High',
+    amountHigh: 'Amount: High to Low',
     name: 'Name: A–Z',
-    category: 'Type / category'
+    category: 'Category'
   };
 
   const sortBills = items => {
@@ -2979,21 +2979,51 @@ function renderBills() {
     );
 
     billContent = sortedCategoryNames
-      .map(
-        categoryName => `
-          <div>
-            <div class="section-header">${categoryName}</div>
+  .map((categoryName) => {
+    const categoryBills = groups[categoryName].sort(
+      (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+    );
 
-            <div class="card">
-              ${groups[categoryName]
-                .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-                .map(bill => billRow(bill, false))
-                .join('')}
-            </div>
-          </div>
-        `
-      )
-      .join('');
+    const billCount = categoryBills.length;
+
+    return `
+      <div>
+        <div
+          class="section-header"
+          style="display:flex; align-items:center; justify-content:space-between; gap:var(--space-3);"
+        >
+          <span>${escapeHtml(categoryName)}</span>
+
+          <span
+            aria-label="${billCount} bill${billCount === 1 ? "" : "s"} in ${escapeHtml(categoryName)}"
+            style="
+              display:inline-flex;
+              align-items:center;
+              justify-content:center;
+              min-width:24px;
+              height:24px;
+              padding:0 8px;
+              border-radius:999px;
+              background:var(--surface-2);
+              border:1px solid var(--border);
+              color:var(--text-muted);
+              font-size:var(--text-xs);
+              font-weight:800;
+              line-height:1;
+              font-variant-numeric:tabular-nums;
+            "
+          >
+            ${billCount}
+          </span>
+        </div>
+
+        <div class="card">
+          ${categoryBills.map((bill) => billRow(bill, false)).join("")}
+        </div>
+      </div>
+    `;
+  })
+  .join("");
   } else if (sortedBills.length) {
     billContent = `
       <div class="card">
