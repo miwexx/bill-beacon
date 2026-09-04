@@ -399,7 +399,7 @@ updatePayment(paymentId, updates) {
       action: "payment_voided",
       entityType: bill?.installmentPlanId ? "payment_plan" : "bill",
       entityId: bill?.installmentPlanId || updatedPayment.billId,
-      title: `${bill?.name || "Bill"} payment reversed`,
+      title: `${bill?.name || "Bill"} Payment Reversed`,
       detail: `${formatCurrency(
         updatedPayment.amount
       )} · Due ${formatDate(dueDate, "short")}`,
@@ -1380,7 +1380,7 @@ function confirmPostponeRecurringOccurrence(
     action: "recurring_occurrence_postponed",
     entityType: "bill",
     entityId: billId,
-    title: `${bill.name} occurrence postponed`,
+    title: `${bill.name} Occurrence Postponed`,
     detail: `${formatDate(
       originalDueDate,
       "short"
@@ -1623,7 +1623,10 @@ function showPaymentUndoToast(payment, billName) {
 function markBillPaid(billId) {
   const bill = Store.getBill(billId);
 
-  if (!bill) return;
+  if (!bill) {
+    alert("Bill not found.");
+    return;
+  }
 
   const today = new Date();
 
@@ -1642,13 +1645,18 @@ function markBillPaid(billId) {
     isOccurrence: isRecurringBill(bill),
   };
 
-  if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) return;
+  if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) {
+    alert("This bill is already marked as paid.");
+    return;
+  }
+
+  const paidAt = new Date().toISOString();
 
   const payment = {
     id: uid(),
     billId: bill.id,
-    paidDate: new Date().toISOString(),
-    amount: bill.amount,
+    paidDate: paidAt,
+    amount: Number(bill.amount || 0),
     paidForDueDate: dueDate,
     status: "active",
     voidedAt: null,
@@ -1658,18 +1666,26 @@ function markBillPaid(billId) {
 
   recordActivity({
     action: "bill_paid",
-    entityType: bill.installmentPlanId ? "payment_plan" : "bill",
+    entityType: bill.installmentPlanId ? "paymentplan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
     title: `${bill.name} marked as paid`,
-    detail: `${formatCurrency(bill.amount)} · Due ${formatDate(
+    detail: `${formatCurrency(payment.amount)} · due ${formatDate(
       dueDate,
       "short"
     )}`,
+    before: {
+      billId: bill.id,
+      dueDate,
+      paymentStatus: "unpaid",
+      amount: Number(bill.amount || 0),
+    },
     after: {
       paymentId: payment.id,
-      amount: parseFloat(bill.amount) || 0,
+      billId: bill.id,
       dueDate,
       paidDate: payment.paidDate,
+      paymentStatus: "active",
+      amount: payment.amount,
       paymentPlanId: bill.installmentPlanId || null,
     },
   });
@@ -1680,7 +1696,10 @@ function markBillPaid(billId) {
 function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
 
-  if (!bill) return;
+  if (!bill) {
+    alert("Bill not found.");
+    return;
+  }
 
   const today = new Date();
 
@@ -1727,24 +1746,29 @@ function markBillUnpaid(billId) {
 
   recordActivity({
     action: "payment_voided",
-    entityType: bill.installmentPlanId ? "payment_plan" : "bill",
+    entityType: bill.installmentPlanId ? "paymentplan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
     title: `${bill.name} marked as unpaid`,
-    detail: `${formatCurrency(payment.amount)} · Due ${formatDate(
+    detail: `${formatCurrency(payment.amount)} payment voided · due ${formatDate(
       dueDate,
       "short"
     )}`,
     before: {
       paymentId: payment.id,
-      status: "active",
-      amount: parseFloat(payment.amount) || 0,
+      billId: bill.id,
       dueDate,
       paidDate: payment.paidDate,
+      paymentStatus: "active",
+      amount: Number(payment.amount || 0),
     },
     after: {
       paymentId: payment.id,
-      status: "voided",
+      billId: bill.id,
+      dueDate,
+      paidDate: payment.paidDate,
+      paymentStatus: "voided",
       voidedAt,
+      amount: Number(payment.amount || 0),
     },
   });
 
@@ -1754,43 +1778,72 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
   const bill = Store.getBill(billId);
 
   if (!bill) {
-    alert('Bill not found.');
+    alert("Bill not found.");
     return;
   }
 
   const confirmed = confirm(
-    `Mark ${bill.name} as paid for ${formatDate(dueDate, 'full')}?\n\n` +
-    `${formatCurrency(bill.amount)} will be recorded for this occurrence.`
+    `Mark ${bill.name} as paid for ${formatDate(
+      dueDate,
+      "full"
+    )}? ${formatCurrency(bill.amount)} will be recorded for this occurrence.`
   );
 
-  if (!confirmed) {
-    return;
-  }
+  if (!confirmed) return;
 
   const occurrenceBill = {
     ...bill,
     id: getOccurrenceKey(bill.id, dueDate),
     sourceBillId: bill.id,
     dueDate,
-    isOccurrence: true
+    isOccurrence: true,
   };
 
   if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) {
-    alert('This occurrence is already marked as paid.');
+    alert("This occurrence is already marked as paid.");
     return;
   }
+
+  const paidAt = new Date().toISOString();
 
   const payment = {
     id: uid(),
     billId: bill.id,
-    paidDate: new Date().toISOString(),
-    amount: bill.amount,
+    paidDate: paidAt,
+    amount: Number(bill.amount || 0),
     paidForDueDate: dueDate,
-    status: 'active',
-    voidedAt: null
+    status: "active",
+    voidedAt: null,
   };
 
   Store.addPayment(payment);
+
+  recordActivity({
+    action: "bill_paid",
+    entityType: bill.installmentPlanId ? "paymentplan" : "bill",
+    entityId: bill.installmentPlanId || bill.id,
+    title: `${bill.name} marked as paid`,
+    detail: `${formatCurrency(payment.amount)} · due ${formatDate(
+      dueDate,
+      "short"
+    )}`,
+    before: {
+      billId: bill.id,
+      occurrenceDueDate: dueDate,
+      paymentStatus: "unpaid",
+      amount: Number(bill.amount || 0),
+    },
+    after: {
+      paymentId: payment.id,
+      billId: bill.id,
+      occurrenceDueDate: dueDate,
+      paidDate: payment.paidDate,
+      paymentStatus: "active",
+      amount: payment.amount,
+      paymentPlanId: bill.installmentPlanId || null,
+    },
+  });
+
   render();
   showPaymentUndoToast(payment, bill.name);
 }
@@ -10359,12 +10412,13 @@ function archiveBill(billId) {
   const activeBills = Store.getBills();
   const selectedBill = activeBills.find((bill) => bill.id === billId);
 
-  if (!selectedBill) return;
+  if (!selectedBill) {
+    alert("Bill not found.");
+    return;
+  }
 
   const archivedAt = new Date().toISOString();
 
-  // A normal bill is archived by itself.
-  // An installment bill archives every installment in the same plan.
   const billsToArchive = selectedBill.installmentPlanId
     ? activeBills.filter(
         (bill) => bill.installmentPlanId === selectedBill.installmentPlanId
@@ -10376,6 +10430,98 @@ function archiveBill(billId) {
   );
 
   const archivedBills = getArchivedBills();
+
+  const buildArchiveSnapshot = (bill) => ({
+    id: bill.id,
+    name: bill.name,
+    amount: Number(bill.amount || 0),
+    category: bill.category || "other",
+    dueDate: bill.dueDate || null,
+    dueDay: bill.dueDay ?? null,
+    recurrence: bill.recurrence || "None",
+    installmentPlanId: bill.installmentPlanId || null,
+    installmentProvider: bill.installmentProvider || null,
+    installmentStore: bill.installmentStore || null,
+    installmentNumber: bill.installmentNumber || null,
+    installmentTotal: bill.installmentTotal || null,
+    archivedAt,
+  });
+
+  const getOrdinalSuffix = (day) => {
+    const value = Number(day);
+
+    if (value >= 11 && value <= 13) return "th";
+
+    switch (value % 10) {
+      case 1:
+        return "st";
+      case 2:
+        return "nd";
+      case 3:
+        return "rd";
+      default:
+        return "th";
+    }
+  };
+
+  const getDueDescription = (bill) => {
+    if (bill.recurrence === "Monthly") {
+      const day = Number(bill.dueDay || new Date(bill.dueDate).getDate());
+
+      return `due on the ${day}${getOrdinalSuffix(day)}`;
+    }
+
+    return bill.dueDate
+      ? `due ${formatDate(bill.dueDate, "short")}`
+      : "no due date";
+  };
+
+  if (selectedBill.installmentPlanId) {
+    const planId = selectedBill.installmentPlanId;
+    const provider = selectedBill.installmentProvider || "Payment plan";
+    const storeName =
+      selectedBill.installmentStore?.trim() ||
+      String(selectedBill.name || "")
+        .replace(/payment plan/i, "")
+        .trim() ||
+      provider;
+
+    const totalPlanAmount = billsToArchive.reduce(
+      (sum, bill) => sum + Number(bill.amount || 0),
+      0
+    );
+
+    recordActivity({
+      action: "payment_plan_cancelled",
+      entityType: "paymentplan",
+      entityId: planId,
+      title: `${storeName} payment plan deleted`,
+      detail: `${provider} · ${billsToArchive.length} payment${
+        billsToArchive.length === 1 ? "" : "s"
+      } · ${formatCurrency(totalPlanAmount)}`,
+      before: {
+        planId,
+        provider,
+        storeName,
+        installmentCount: billsToArchive.length,
+        totalAmount: totalPlanAmount,
+        installments: billsToArchive.map(buildArchiveSnapshot),
+      },
+      after: null,
+    });
+  } else {
+    recordActivity({
+      action: "bill_deleted",
+      entityType: "bill",
+      entityId: selectedBill.id,
+      title: `${selectedBill.name} deleted`,
+      detail: `${formatCurrency(selectedBill.amount)} · ${getDueDescription(
+        selectedBill
+      )}`,
+      before: buildArchiveSnapshot(selectedBill),
+      after: null,
+    });
+  }
 
   billsToArchive.forEach((bill) => {
     const alreadyArchived = archivedBills.some(
@@ -10391,80 +10537,23 @@ function archiveBill(billId) {
   });
 
   saveArchivedBills(archivedBills);
+
   Store.saveBills(billsToKeep);
 
-  if (selectedBill.installmentPlanId) {
-    const planId = selectedBill.installmentPlanId;
-    const provider = selectedBill.installmentProvider || "Payment Plan";
-    const storeName =
-      selectedBill.installmentStore?.trim() ||
-      String(selectedBill.name || "")
-        .replace(/\s+Payment Plan$/i, "")
-        .trim() ||
-      provider;
+  const archivedIds = new Set(billsToArchive.map((bill) => bill.id));
 
-    const totalAmount = billsToArchive.reduce(
-      (sum, bill) => sum + Number(bill.amount || 0),
-      0
-    );
-
-    recordActivity(
-      "billarchived",
-      "paymentplan",
-      planId,
-      `${storeName} payment plan deleted`,
-      `${billsToArchive.length} installments archived · ${formatCurrency(totalAmount)}`,
-      {
-        planId,
-        provider,
-        storeName,
-        installmentCount: billsToArchive.length,
-        billIds: billsToArchive.map((bill) => bill.id),
-        archived: false,
-      },
-      {
-        archived: true,
-        archivedAt,
-      }
-    );
-
-    // Remove reminders for every active installment in the deleted plan.
-    if (typeof queueBillReminderSync === "function") {
-      billsToArchive.forEach((bill) => {
-        queueBillReminderSync(bill.id, null);
-      });
-    }
-
-    return;
-  }
-
-  // Existing single-bill archive behavior.
-  recordActivity(
-    "billarchived",
-    "bill",
-    selectedBill.id,
-    `${selectedBill.name} deleted`,
-    `${formatCurrency(selectedBill.amount)} · Due ${formatDate(
-      selectedBill.dueDate,
-      "short"
-    )}`,
-    {
-      billId: selectedBill.id,
-      billName: selectedBill.name,
-      amount: Number(selectedBill.amount || 0),
-      category: selectedBill.category || null,
-      dueDate: selectedBill.dueDate || null,
-      recurrence: selectedBill.recurrence || "None",
-      archived: false,
-    },
-    {
-      archived: true,
-      archivedAt,
-    }
+  const remainingPayments = Store.getPayments().filter(
+    (payment) => !archivedIds.has(payment.billId)
   );
 
+  localStorage.setItem("payments", JSON.stringify(remainingPayments));
+
+  window.dispatchEvent(new CustomEvent("billbeacondata-changed"));
+
   if (typeof queueBillReminderSync === "function") {
-    queueBillReminderSync(selectedBill.id, null);
+    billsToArchive.forEach((bill) => {
+      queueBillReminderSync(bill.id, null);
+    });
   }
 }
 function renderPaymentHistory() {
