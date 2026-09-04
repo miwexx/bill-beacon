@@ -6420,6 +6420,7 @@ function getActivityActionIcon(action) {
   switch (action) {
     case "bill_created":
     case "bill_imported":
+    case "income_source_created":
       return {
         icon: "plus",
         color: "var(--paid)",
@@ -6433,6 +6434,7 @@ function getActivityActionIcon(action) {
 
     case "payment_voided":
     case "payment_undone":
+    case "payment_plan_cancelled":
       return {
         icon: "close",
         color: "var(--overdue)",
@@ -6454,8 +6456,9 @@ function getActivityActionIcon(action) {
       };
 
     case "bill_autopay_changed":
+    case "payment_plan_created":
       return {
-        icon: "creditCard",
+        icon: "creditcard",
         color: "var(--accent)",
       };
 
@@ -6467,6 +6470,8 @@ function getActivityActionIcon(action) {
 
     case "bill_updated":
     case "recurring_occurrence_updated":
+    case "payment_plan_updated":
+    case "income_source_updated":
       return {
         icon: "gear",
         color: "var(--accent)",
@@ -6482,50 +6487,15 @@ function getActivityActionIcon(action) {
 
     case "bill_restored":
     case "payment_plan_restored":
-      return {
-        icon: "checkCircle",
-        color: "var(--paid)",
-      };
-
-    case "payment_plan_created":
-      return {
-        icon: "creditCard",
-        color: "var(--paid)",
-      };
-
-    case "payment_plan_updated":
-      return {
-        icon: "gear",
-        color: "var(--accent)",
-      };
-
     case "payment_plan_paid_in_full":
       return {
         icon: "checkCircle",
         color: "var(--paid)",
       };
 
-    case "payment_plan_cancelled":
-      return {
-        icon: "close",
-        color: "var(--overdue)",
-      };
-
-    case "income_source_created":
-      return {
-        icon: "plus",
-        color: "var(--paid)",
-      };
-
-    case "income_source_updated":
-      return {
-        icon: "gear",
-        color: "var(--accent)",
-      };
-
     case "backup_restored":
       return {
-        icon: "internalDrive",
+        icon: "internaldrive",
         color: "var(--accent)",
       };
 
@@ -9209,31 +9179,24 @@ function saveBill() {
       : "no due date";
   };
 
-  const listReminderOffsets = (offsets) => {
-    if (!offsets.length) return "No reminders";
-
-    const labels = offsets.map((offset) =>
-      offset === 0
-        ? "on due date"
-        : `${offset} day${offset === 1 ? "" : "s"} before`
-    );
-
-    return labels.join(", ");
-  };
-
   const getChangedFields = (before, after) => {
     const changes = [];
 
     if (before.name !== after.name) changes.push("name");
     if (Number(before.amount) !== Number(after.amount)) changes.push("amount");
     if (before.category !== after.category) changes.push("category");
-    if (before.dueDate !== after.dueDate) changes.push("due date");
 
-    if (Number(before.dueDay || 0) !== Number(after.dueDay || 0)) {
-      changes.push("monthly due day");
+    if (
+      before.dueDate !== after.dueDate ||
+      Number(before.dueDay || 0) !== Number(after.dueDay || 0)
+    ) {
+      changes.push("due date");
     }
 
-    if (before.recurrence !== after.recurrence) changes.push("schedule");
+    if (before.recurrence !== after.recurrence) {
+      changes.push("schedule");
+    }
+
     if (before.paymentMethod !== after.paymentMethod) {
       changes.push("payment method");
     }
@@ -9246,7 +9209,9 @@ function saveBill() {
       changes.push("Autopay");
     }
 
-    if (before.notes !== after.notes) changes.push("notes");
+    if (before.notes !== after.notes) {
+      changes.push("notes");
+    }
 
     if (
       JSON.stringify(before.reminderOffsets || []) !==
@@ -9256,6 +9221,66 @@ function saveBill() {
     }
 
     return changes;
+  };
+
+  const getSingleChangeActivity = (before, after, changedField) => {
+    const billName = after.name || before.name;
+
+    switch (changedField) {
+      case "amount":
+        return {
+          action: "bill_amount_changed",
+          title: `${billName} amount changed`,
+          detail: `${formatCurrency(before.amount)} → ${formatCurrency(after.amount)}`,
+        };
+
+      case "due date":
+      case "schedule":
+        return {
+          action: "bill_schedule_changed",
+          title: `${billName} schedule changed`,
+          detail: `${formatSchedule(before)} → ${formatSchedule(after)}`,
+        };
+
+      case "Autopay":
+        return {
+          action: "bill_autopay_changed",
+          title: `${billName} Autopay ${
+            after.autopay ? "turned on" : "turned off"
+          }`,
+          detail: after.autopay
+            ? "This bill is marked as paid automatically."
+            : "This bill is no longer marked as paid automatically.",
+        };
+
+      case "reminders":
+        return {
+          action: "bill_reminders_changed",
+          title: `${billName} reminders changed`,
+          detail:
+            after.reminderOffsets.length > 0
+              ? `${after.reminderOffsets
+                  .map((offset) =>
+                    offset === 0
+                      ? "on due date"
+                      : `${offset} day${offset === 1 ? "" : "s"} before`
+                  )
+                  .join(", ")}`
+              : "No reminders",
+        };
+
+      case "name":
+      case "category":
+      case "payment method":
+      case "payment link":
+      case "notes":
+      default:
+        return {
+          action: "bill_updated",
+          title: `${billName} details updated`,
+          detail: `Updated ${changedField}.`,
+        };
+    }
   };
 
   if (!editingBillId) {
@@ -9308,91 +9333,34 @@ function saveBill() {
     updatedAt: now,
   });
 
-  if (changedFields.length) {
-    const billNameForActivity = after.name || before.name;
-
-    if (Number(before.amount) !== Number(after.amount)) {
-      recordActivity({
-        action: "bill_amount_changed",
-        entityType: "bill",
-        entityId: editingBillId,
-        title: `${billNameForActivity} Amount Changed`,
-        detail: `${formatCurrency(before.amount)} → ${formatCurrency(after.amount)}`,
-        before,
-        after,
-      });
-    }
-
-    if (
-      before.dueDate !== after.dueDate ||
-      Number(before.dueDay || 0) !== Number(after.dueDay || 0) ||
-      before.recurrence !== after.recurrence
-    ) {
-      recordActivity({
-        action: "bill_schedule_changed",
-        entityType: "bill",
-        entityId: editingBillId,
-        title: `${billNameForActivity} Due Date Changed`,
-        detail: `${formatSchedule(before)} → ${formatSchedule(after)}`,
-        before,
-        after,
-      });
-    }
-
-    if (Boolean(before.autopay) !== Boolean(after.autopay)) {
-      recordActivity({
-        action: "bill_autopay_changed",
-        entityType: "bill",
-        entityId: editingBillId,
-        title: `${billNameForActivity} Autopay ${
-          after.autopay ? "turned on" : "turned off"
-        }`,
-        detail: after.autopay
-          ? "This bill is marked as paid automatically."
-          : "This bill is no longer marked as paid automatically.",
-        before,
-        after,
-      });
-    }
-
-    if (
-      JSON.stringify(before.reminderOffsets || []) !==
-      JSON.stringify(after.reminderOffsets || [])
-    ) {
-      recordActivity({
-        action: "bill_reminders_changed",
-        entityType: "bill",
-        entityId: editingBillId,
-        title: `${billNameForActivity} Reminders Changed`,
-        detail: listReminderOffsets(after.reminderOffsets || []),
-        before,
-        after,
-      });
-    }
-
-    const nonSpecialChanges = changedFields.filter(
-      (field) =>
-        ![
-          "amount",
-          "due date",
-          "monthly due day",
-          "schedule",
-          "Autopay",
-          "reminders",
-        ].includes(field)
+  if (changedFields.length === 1) {
+    const activity = getSingleChangeActivity(
+      before,
+      after,
+      changedFields[0]
     );
 
-    if (nonSpecialChanges.length) {
-      recordActivity({
-        action: "bill_updated",
-        entityType: "bill",
-        entityId: editingBillId,
-        title: `${billNameForActivity} Details Updated`,
-        detail: `Updated ${nonSpecialChanges.join(", ")}.`,
-        before,
-        after,
-      });
-    }
+    recordActivity({
+      ...activity,
+      entityType: "bill",
+      entityId: editingBillId,
+      before,
+      after,
+    });
+  }
+
+  if (changedFields.length > 1) {
+    const billName = after.name || before.name;
+
+    recordActivity({
+      action: "bill_updated",
+      entityType: "bill",
+      entityId: editingBillId,
+      title: `${billName} updated`,
+      detail: `Changed ${changedFields.join(", ")}.`,
+      before,
+      after,
+    });
   }
 
   closeBillForm();
