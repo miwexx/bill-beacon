@@ -5059,7 +5059,16 @@ function openPaymentPlanActions(planId) {
             `
             : ""
         }
-
+        <button
+          type="button"
+          class="btn-danger"
+          style="width:100%"
+          onclick="confirmDeletePaymentPlan('${planId}')"
+        >
+          ${svgIcon("trash", 20)}
+          Delete Plan
+        </button>
+        
         <button
           type="button"
           class="btn-secondary"
@@ -5070,15 +5079,7 @@ function openPaymentPlanActions(planId) {
           Edit Plan
         </button>
 
-        <button
-          type="button"
-          class="btn-danger"
-          style="width:100%"
-          onclick="confirmDeletePaymentPlan('${planId}')"
-        >
-          ${svgIcon("trash", 20)}
-          Delete Plan
-        </button>
+        
       </div>
     </div>
   `;
