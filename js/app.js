@@ -4775,12 +4775,21 @@ function openPaymentPlanDetails(planId) {
         </div>
 
         <div class="section-header">Summary</div>
-        <div class="card" style="margin-bottom:0;">
-          ${detailRow("Total Purchase", formatCurrency(totalAmount))}
-          ${detailRow("Paid So Far", formatCurrency(paidAmount))}
-          ${detailRow("Remaining Balance", formatCurrency(remainingBalance))}
-          ${detailRow("Payments Left", `${remainingCount} of ${installmentCount}`)}
-        </div>
+
+<div class="card" style="margin-bottom:0;">
+  ${detailRow("Total Purchase", formatCurrency(totalAmount))}
+  ${detailRow(
+    "Each payment",
+    formatCurrency(
+      installmentCount
+        ? totalAmount / installmentCount
+        : 0
+    )
+  )}
+  ${detailRow("Paid So Far", formatCurrency(paidAmount))}
+  ${detailRow("Remaining Balance", formatCurrency(remainingBalance))}
+  ${detailRow("Payments Left", `${remainingCount} of ${installmentCount}`)}
+</div>
 
         <div class="section-header">Next Payment</div>
         <div class="card" style="margin-bottom:0;">
