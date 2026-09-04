@@ -2374,7 +2374,7 @@ const dashboardUpcomingBills = [
         upcomingSevenDayBills.length
           ? `
             <div class="dashboard-upcoming-month-divider">
-              <span>Next 7 Days</span>
+              <span>Upcoming Bills</span>
               <span>
                 ${upcomingSevenDayBills.length} bill${
                   upcomingSevenDayBills.length === 1 ? "" : "s"
