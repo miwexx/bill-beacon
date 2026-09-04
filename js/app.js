@@ -6418,16 +6418,17 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
 }
 function getActivityActionIcon(action) {
   switch (action) {
+    case "bill_created":
+    case "bill_imported":
+      return {
+        icon: "plus",
+        color: "var(--paid)",
+      };
+
     case "bill_paid":
       return {
         icon: "checkCircle",
         color: "var(--paid)",
-      };
-
-    case "bill_balance_changed":
-      return {
-        icon: "gear",
-        color: "var(--accent)",
       };
 
     case "payment_voided":
@@ -6437,28 +6438,97 @@ function getActivityActionIcon(action) {
         color: "var(--overdue)",
       };
 
+    case "bill_amount_changed":
+      return {
+        icon: "trendUp",
+        color: "var(--accent)",
+      };
+
+    case "bill_due_date_changed":
+    case "bill_schedule_changed":
+    case "bill_postponed":
+    case "recurring_occurrence_postponed":
+      return {
+        icon: "calendar",
+        color: "var(--accent)",
+      };
+
+    case "bill_autopay_changed":
+      return {
+        icon: "creditCard",
+        color: "var(--accent)",
+      };
+
+    case "bill_reminders_changed":
+      return {
+        icon: "bell",
+        color: "var(--accent)",
+      };
+
     case "bill_updated":
+    case "recurring_occurrence_updated":
       return {
         icon: "gear",
         color: "var(--accent)",
       };
 
-    case "bill_postponed":
-      return {
-        icon: "calendar",
-        color: "var(--accent)",
-      };
-case "bill_archived":
-  return {
-    icon: "tray",
-    color: "var(--text-muted)",
-  }; 
     case "bill_deleted":
+    case "bill_archived":
+    case "income_source_deleted":
       return {
         icon: "trash",
         color: "var(--overdue)",
       };
-     
+
+    case "bill_restored":
+    case "payment_plan_restored":
+      return {
+        icon: "checkCircle",
+        color: "var(--paid)",
+      };
+
+    case "payment_plan_created":
+      return {
+        icon: "creditCard",
+        color: "var(--paid)",
+      };
+
+    case "payment_plan_updated":
+      return {
+        icon: "gear",
+        color: "var(--accent)",
+      };
+
+    case "payment_plan_paid_in_full":
+      return {
+        icon: "checkCircle",
+        color: "var(--paid)",
+      };
+
+    case "payment_plan_cancelled":
+      return {
+        icon: "close",
+        color: "var(--overdue)",
+      };
+
+    case "income_source_created":
+      return {
+        icon: "plus",
+        color: "var(--paid)",
+      };
+
+    case "income_source_updated":
+      return {
+        icon: "gear",
+        color: "var(--accent)",
+      };
+
+    case "backup_restored":
+      return {
+        icon: "internalDrive",
+        color: "var(--accent)",
+      };
+
     default:
       return {
         icon: "doc",
@@ -6469,18 +6539,84 @@ case "bill_archived":
 
 function getActivityLabel(action) {
   switch (action) {
-    case "billbalancechanged":
-      return "Balance changed";
-    case "billupdated":
-      return "Bill updated";
-    case "billpostponed":
-      return "Bill postponed";
-    case "paymentvoided":
-      return "Payment reversed";
-    case "paymentundone":
-      return "Payment undone";
-    case "billpaid":
+    case "bill_created":
+      return "Bill added";
+
+    case "bill_imported":
+      return "Bill imported";
+
+    case "bill_paid":
       return "Bill paid";
+
+    case "payment_voided":
+      return "Payment reversed";
+
+    case "payment_undone":
+      return "Payment undone";
+
+    case "bill_amount_changed":
+      return "Amount changed";
+
+    case "bill_due_date_changed":
+      return "Due date changed";
+
+    case "bill_schedule_changed":
+      return "Schedule changed";
+
+    case "bill_postponed":
+      return "Bill postponed";
+
+    case "recurring_occurrence_postponed":
+      return "Recurring bill postponed";
+
+    case "bill_autopay_changed":
+      return "Autopay changed";
+
+    case "bill_reminders_changed":
+      return "Reminders changed";
+
+    case "bill_updated":
+      return "Bill updated";
+
+    case "recurring_occurrence_updated":
+      return "Recurring bill updated";
+
+    case "bill_deleted":
+      return "Bill deleted";
+
+    case "bill_archived":
+      return "Bill archived";
+
+    case "bill_restored":
+      return "Bill restored";
+
+    case "payment_plan_created":
+      return "Payment plan added";
+
+    case "payment_plan_updated":
+      return "Payment plan updated";
+
+    case "payment_plan_paid_in_full":
+      return "Payment plan paid in full";
+
+    case "payment_plan_cancelled":
+      return "Payment plan cancelled";
+
+    case "payment_plan_restored":
+      return "Payment plan restored";
+
+    case "income_source_created":
+      return "Income source added";
+
+    case "income_source_updated":
+      return "Income source updated";
+
+    case "income_source_deleted":
+      return "Income source deleted";
+
+    case "backup_restored":
+      return "Backup restored";
+
     default:
       return "Recent activity";
   }
@@ -9180,7 +9316,7 @@ function saveBill() {
         action: "bill_amount_changed",
         entityType: "bill",
         entityId: editingBillId,
-        title: `${billNameForActivity} amount changed`,
+        title: `${billNameForActivity} Amount Changed`,
         detail: `${formatCurrency(before.amount)} → ${formatCurrency(after.amount)}`,
         before,
         after,
@@ -9196,7 +9332,7 @@ function saveBill() {
         action: "bill_schedule_changed",
         entityType: "bill",
         entityId: editingBillId,
-        title: `${billNameForActivity} schedule changed`,
+        title: `${billNameForActivity} Due Date Changed`,
         detail: `${formatSchedule(before)} → ${formatSchedule(after)}`,
         before,
         after,
@@ -9227,7 +9363,7 @@ function saveBill() {
         action: "bill_reminders_changed",
         entityType: "bill",
         entityId: editingBillId,
-        title: `${billNameForActivity} reminders changed`,
+        title: `${billNameForActivity} Reminders Changed`,
         detail: listReminderOffsets(after.reminderOffsets || []),
         before,
         after,
@@ -9251,7 +9387,7 @@ function saveBill() {
         action: "bill_updated",
         entityType: "bill",
         entityId: editingBillId,
-        title: `${billNameForActivity} details updated`,
+        title: `${billNameForActivity} Details Updated`,
         detail: `Updated ${nonSpecialChanges.join(", ")}.`,
         before,
         after,
