@@ -10967,125 +10967,188 @@ function getNextInstallmentDate(date, frequencyDays) {
 }
 
 function saveInstallmentPlan() {
-  const provider = document.getElementById("installmentProvider").value;
-  const store = document.getElementById("installmentStore").value.trim();
-  const total = parseFloat(
-    document.getElementById("installmentTotal").value
+  const provider =
+    document.getElementById("installmentProvider")?.value.trim() || "";
+
+  const storeName =
+    document.getElementById("installmentStore")?.value.trim() || "";
+
+  const totalAmount = parseFloat(
+    document.getElementById("installmentTotalAmount")?.value || 0
   );
-  const paymentCount = parseInt(
-    document.getElementById("installmentCount").value,
+
+  const installmentCount = parseInt(
+    document.getElementById("installmentCount")?.value || 0,
     10
   );
+
   const frequencyDays = parseInt(
-    document.getElementById("installmentFrequency").value,
+    document.getElementById("installmentFrequency")?.value || 0,
     10
   );
-  const firstPaymentStatus = document.getElementById(
-    "installmentFirstPaymentStatus"
-  ).value;
-  const firstPaymentDateValue = document.getElementById(
-    "installmentFirstPaymentDate"
-  ).value;
-  const paymentUrl = document.getElementById(
-    "installmentPaymentUrl"
-  ).value.trim();
-  const autopay = document.getElementById("installmentAutopay").checked;
 
-  if (!total || total <= 0) {
-    alert("Please enter the total purchase amount.");
+  const firstPaymentStatus =
+    document.getElementById("installmentFirstPaymentStatus")?.value ||
+    "notPaid";
+
+  const firstPaymentDateInput =
+    document.getElementById("installmentFirstPaymentDate")?.value;
+
+  const paymentUrl =
+    document.getElementById("installmentPaymentUrl")?.value.trim() || "";
+
+  const autopay = Boolean(
+    document.getElementById("installmentAutopay")?.checked
+  );
+
+  const notes =
+    document.getElementById("installmentNotes")?.value.trim() || "";
+
+  if (!provider) {
+    alert("Please choose a payment app.");
     return;
   }
 
-  if (!paymentCount || paymentCount < 2 || paymentCount > 60) {
-    alert("Please enter between 2 and 60 payments.");
+  if (!storeName) {
+    alert("Please enter the store or merchant name.");
     return;
   }
 
-  if (!firstPaymentDateValue) {
-    alert("Please select the first payment date.");
+  if (Number.isNaN(totalAmount) || totalAmount <= 0) {
+    alert("Please enter a valid total purchase amount.");
     return;
   }
 
-  const firstPaymentDate = new Date(`${firstPaymentDateValue}T12:00:00`);
-
-  if (Number.isNaN(firstPaymentDate.getTime())) {
-    alert("Please enter a valid first payment date.");
+  if (Number.isNaN(installmentCount) || installmentCount < 2) {
+    alert("Please choose at least 2 payments.");
     return;
   }
 
-  const planId = uid();
-  const totalCents = Math.round(total * 100);
-  const basePaymentCents = Math.floor(totalCents / paymentCount);
-  const extraCents = totalCents % paymentCount;
+  if (Number.isNaN(frequencyDays) || frequencyDays <= 0) {
+    alert("Please choose a payment frequency.");
+    return;
+  }
+
+  if (!firstPaymentDateInput) {
+    alert("Please choose the first payment date.");
+    return;
+  }
+
+  const firstPaymentDate = dateFromInput(firstPaymentDateInput);
+
+  if (!firstPaymentDate) {
+    alert("Please choose a valid first payment date.");
+    return;
+  }
+
   const createdAt = new Date().toISOString();
+  const planId = uid();
 
-  let paymentDate = new Date(firstPaymentDate);
+  const centsTotal = Math.round(totalAmount * 100);
+  const baseInstallmentCents = Math.floor(centsTotal / installmentCount);
+  const remainderCents = centsTotal % installmentCount;
 
-  for (let index = 0; index < paymentCount; index += 1) {
-    const paymentNumber = index + 1;
+  const installments = Array.from(
+    { length: installmentCount },
+    (_, index) => {
+      const installmentCents =
+        baseInstallmentCents + (index < remainderCents ? 1 : 0);
 
-    const paymentCents =
-      basePaymentCents + (index < extraCents ? 1 : 0);
+      const dueDate = new Date(firstPaymentDate);
+      dueDate.setDate(dueDate.getDate() + frequencyDays * index);
 
-    const paymentAmount = (paymentCents / 100).toFixed(2);
+      return {
+        id: uid(),
+        name: storeName,
+        amount: installmentCents / 100,
+        category: "loans",
+        dueDate: dueDate.toISOString(),
+        dueDay: dueDate.getDate(),
+        recurrence: "None",
+        payCycle: dueDate.getDate() <= 15 ? "first" : "second",
+        paymentMethod: provider,
+        paymentUrl,
+        autopay,
+        notes,
+        reminderOffsets: [7, 1],
+        createdAt,
+        updatedAt: createdAt,
+        postponementHistory: [],
+        occurrenceOverrides: [],
+        installmentPlanId: planId,
+        installmentProvider: provider,
+        installmentStore: storeName,
+        installmentNumber: index + 1,
+        installmentTotal: installmentCount,
+        installmentFrequencyDays: frequencyDays,
+        installmentOriginalTotal: totalAmount,
+      };
+    }
+  );
 
-    const billName = store || "Payment Plan";
- 
+  installments.forEach((installment) => Store.addBill(installment));
 
-    const bill = {
+  if (firstPaymentStatus === "paid") {
+    const firstInstallment = installments[0];
+
+    const payment = {
       id: uid(),
-      name: billName,
-      amount: paymentAmount,
-      dueDate: paymentDate.toISOString(),
-      category: "loans",
-      recurrence: "None",
-      paymentMethod: "",
-      paymentUrl,
-      autopay,
-      notes: `Installment plan: ${provider}. Payment ${paymentNumber} of ${paymentCount}.`,
-      reminderOffsets: [7, 3, 1],
-      installmentPlanId: planId,
-      installmentProvider: provider,
-      installmentStore: store || "",
-      installmentNumber: paymentNumber,
-      installmentTotal: paymentCount,
-      createdAt,
-      updatedAt: createdAt,
+      billId: firstInstallment.id,
+      paidDate: createdAt,
+      amount: Number(firstInstallment.amount || 0),
+      paidForDueDate: firstInstallment.dueDate,
+      status: "active",
+      voidedAt: null,
+      paymentPlanId: planId,
+      paymentType: "initial-payment",
     };
 
-    Store.addBill(bill);
-
-    if (paymentNumber === 1 && firstPaymentStatus === 'paid') {
-  Store.addPayment({
-    id: uid(),
-    billId: bill.id,
-    paidDate: paymentDate.toISOString(),
-    amount: paymentAmount,
-    paidForDueDate: bill.dueDate,
-    status: 'active',
-    voidedAt: null
-  });
-}
-
-    paymentDate = getNextInstallmentDate(
-      paymentDate,
-      frequencyDays
-    );
+    Store.addPayment(payment);
   }
 
+  const firstInstallment = installments[0];
+  const perPaymentAmount = firstInstallment
+    ? Number(firstInstallment.amount || 0)
+    : 0;
+
+  const firstDueLabel = firstInstallment
+    ? formatDate(firstInstallment.dueDate, "short")
+    : "No due date";
+
+  recordActivity({
+    action: "payment_plan_created",
+    entityType: "paymentplan",
+    entityId: planId,
+    title: `${storeName} payment plan added`,
+    detail: `${provider} · ${installmentCount} payments of ${formatCurrency(
+      perPaymentAmount
+    )} · first due ${firstDueLabel}`,
+    before: null,
+    after: {
+      planId,
+      provider,
+      storeName,
+      totalAmount,
+      installmentCount,
+      frequencyDays,
+      firstPaymentStatus,
+      paymentUrl,
+      autopay,
+      notes,
+      createdAt,
+      installments: installments.map((installment) => ({
+        id: installment.id,
+        amount: Number(installment.amount || 0),
+        dueDate: installment.dueDate,
+        installmentNumber: installment.installmentNumber,
+        installmentTotal: installment.installmentTotal,
+      })),
+    },
+  });
+
   closeInstallmentPlanForm();
-  navigate("bills");
-
-  const firstPaymentMessage =
-    firstPaymentStatus === "paid"
-      ? " The first payment was marked paid."
-      : "";
-
-  alert(
-    `Created ${paymentCount} installment bills for ${provider}.${firstPaymentMessage}`
-  );
+  render();
 }
-
 document.addEventListener(
   'click',
   (event) => {
