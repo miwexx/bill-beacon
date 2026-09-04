@@ -1441,16 +1441,6 @@ a { color: var(--accent); text-decoration: none; }
   font-weight: 700;
 }
 
-.upcoming-carousel {
-  display: flex;
-  gap: var(--space-2);
-  overflow-x: auto;
-  padding: 0 0 var(--space-2);
-  margin: 0;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-
 .upcoming-carousel::-webkit-scrollbar {
   display: none;
 }
@@ -2286,10 +2276,22 @@ body {
 .upcoming-carousel {
   display: flex;
   gap: var(--space-2);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   overflow-x: auto;
-  padding: 2px 0 6px;
-  scroll-snap-type: x proximity;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  padding: 0 var(--space-4) var(--space-2) 0;
+  margin: 0;
+  scroll-padding-inline-start: 0;
+  scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  touch-action: pan-x;
+}
+
+.upcoming-carousel::-webkit-scrollbar {
+  display: none;
 }
 
 .upcoming-carousel .dashboard-upcoming-tile {
