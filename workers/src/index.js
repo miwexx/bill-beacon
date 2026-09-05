@@ -1,5 +1,67 @@
+import { createRemoteJWKSet, jwtVerify } from "jose";
 const APP_ORIGIN = 'https://bill-beacon.pages.dev';
+const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
+const FIREBASE_ISSUER =
+  `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
 
+const firebaseKeys = createRemoteJWKSet(
+  new URL(
+    "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+  )
+);
+
+async function verifyFirebaseToken(request) {
+  const authorization = request.headers.get("Authorization") || "";
+
+  if (!authorization.startsWith("Bearer ")) {
+    return {
+      ok: false,
+      status: 401,
+      error: "Missing Firebase authentication token."
+    };
+  }
+
+  const token = authorization.slice("Bearer ".length).trim();
+
+  if (!token) {
+    return {
+      ok: false,
+      status: 401,
+      error: "Missing Firebase authentication token."
+    };
+  }
+
+  try {
+    const { payload } = await jwtVerify(token, firebaseKeys, {
+      audience: FIREBASE_PROJECT_ID,
+      issuer: FIREBASE_ISSUER
+    });
+
+    if (!payload.sub || typeof payload.sub !== "string") {
+      return {
+        ok: false,
+        status: 401,
+        error: "Invalid Firebase user."
+      };
+    }
+
+    return {
+      ok: true,
+      user: {
+        uid: payload.sub,
+        email: typeof payload.email === "string" ? payload.email : null
+      }
+    };
+  } catch (error) {
+    console.warn("Firebase token verification failed:", error?.code);
+
+    return {
+      ok: false,
+      status: 401,
+      error: "Invalid or expired Firebase authentication token."
+    };
+  }
+}
 function corsHeaders(origin) {
   return {
     'access-control-allow-origin': origin,
@@ -63,7 +125,29 @@ export default {
     }
 
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/auth/test") {
+  const authentication = await verifyFirebaseToken(request);
 
+  if (!authentication.ok) {
+    return json(
+      {
+        ok: false,
+        error: authentication.error
+      },
+      authentication.status,
+      origin
+    );
+  }
+
+  return json(
+    {
+      ok: true,
+      user: authentication.user
+    },
+    200,
+    origin
+  );
+}
     if (request.method === 'GET' && url.pathname === '/config') {
       if (!env.VAPID_PUBLIC_KEY) {
         return json(
