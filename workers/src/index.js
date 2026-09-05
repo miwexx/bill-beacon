@@ -73,10 +73,27 @@ function corsHeaders(origin) {
 }
 
 function allowedOrigin(request) {
-  const origin = request.headers.get('Origin');
+  const origin = request.headers.get("Origin");
 
-  if (!origin || origin === APP_ORIGIN) {
-    return origin || APP_ORIGIN;
+  if (!origin) {
+    return APP_ORIGIN;
+  }
+
+  if (origin === APP_ORIGIN) {
+    return origin;
+  }
+
+  try {
+    const url = new URL(origin);
+
+    if (
+      url.protocol === "https:" &&
+      url.hostname.endsWith(".bill-beacon.pages.dev")
+    ) {
+      return origin;
+    }
+  } catch {
+    // Invalid Origin values are not allowed.
   }
 
   return null;
