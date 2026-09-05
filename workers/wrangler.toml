@@ -1,4 +1,4 @@
-name = "bill-beacon"
+name = "bill-beacon-notifications"
 main = "src/index.js"
 compatibility_date = "2025-02-04"
 
