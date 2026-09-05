@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v4.1";
+const CACHE_VERSION = "bill-beacon-v4.2";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
