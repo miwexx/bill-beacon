@@ -10476,7 +10476,6 @@ function archiveBill(billId) {
   }
 
   const archivedAt = new Date().toISOString();
-
   const isPaymentPlan = Boolean(selectedBill.installmentPlanId);
 
   const billsToArchive = isPaymentPlan
@@ -10491,7 +10490,7 @@ function archiveBill(billId) {
 
   const archivedBills = getArchivedBills();
 
-  const createBillSnapshot = (bill) => ({
+  const buildArchiveSnapshot = (bill) => ({
     id: bill.id,
     name: bill.name,
     amount: Number(bill.amount || 0),
@@ -10508,11 +10507,11 @@ function archiveBill(billId) {
   });
 
   const getOrdinalSuffix = (day) => {
-    const number = Number(day);
+    const value = Number(day);
 
-    if (number >= 11 && number <= 13) return "th";
+    if (value >= 11 && value <= 13) return "th";
 
-    switch (number % 10) {
+    switch (value % 10) {
       case 1:
         return "st";
       case 2:
@@ -10539,14 +10538,13 @@ function archiveBill(billId) {
   };
 
   /*
-    Create exactly ONE activity item before removing the active records.
-    Normal bill → bill_deleted.
-    Payment plan → payment_plan_cancelled.
+    Log exactly once:
+    - A normal bill makes one bill_deleted record.
+    - A payment plan makes one payment_plan_cancelled record.
   */
   if (isPaymentPlan) {
     const planId = selectedBill.installmentPlanId;
     const provider = selectedBill.installmentProvider || "Payment plan";
-
     const storeName =
       selectedBill.installmentStore?.trim() ||
       selectedBill.name ||
@@ -10572,7 +10570,7 @@ function archiveBill(billId) {
         installmentCount: billsToArchive.length,
         totalAmount: planTotal,
         archivedAt,
-        installments: billsToArchive.map(createBillSnapshot),
+        installments: billsToArchive.map(buildArchiveSnapshot),
       },
       after: null,
     });
@@ -10585,13 +10583,14 @@ function archiveBill(billId) {
       detail: `${formatCurrency(selectedBill.amount)} · ${getDueDescription(
         selectedBill
       )}`,
-      before: createBillSnapshot(selectedBill),
+      before: buildArchiveSnapshot(selectedBill),
       after: null,
     });
   }
 
   /*
-    Archive every record, but do not create an activity record per installment.
+    Archive every bill record, but deliberately do not log activity here.
+    This prevents one deletion entry per installment.
   */
   billsToArchive.forEach((bill) => {
     const alreadyArchived = archivedBills.some(
@@ -10609,13 +10608,13 @@ function archiveBill(billId) {
   saveArchivedBills(archivedBills);
 
   /*
-    Remove the bill or plan installments from active records.
+    Remove all archived bills/installments from the active bill store.
   */
   Store.saveBills(billsToKeep);
 
   /*
-    Keep the existing app behavior: remove active payment records associated
-    with archived bills from the active payment store.
+    Preserve the app’s current behavior of removing associated active
+    payment records once a bill or plan has been archived.
   */
   const archivedBillIds = new Set(
     billsToArchive.map((bill) => bill.id)
@@ -10625,12 +10624,11 @@ function archiveBill(billId) {
     (payment) => !archivedBillIds.has(payment.billId)
   );
 
-  localStorage.setItem(
-    "payments",
-    JSON.stringify(remainingPayments)
-  );
+  localStorage.setItem("payments", JSON.stringify(remainingPayments));
 
-  window.dispatchEvent(new CustomEvent("billbeacondata-changed"));
+  window.dispatchEvent(
+    new CustomEvent("billbeacon:data-changed")
+  );
 
   if (typeof queueBillReminderSync === "function") {
     billsToArchive.forEach((bill) => {
