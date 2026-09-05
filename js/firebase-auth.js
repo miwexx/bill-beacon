@@ -262,3 +262,21 @@ export {
   signOut,
   getCurrentUserEmail
 };
+async function getCurrentUserIdToken(forceRefresh = false) {
+  const user = auth.currentUser;
+
+  if (!user) {
+    return null;
+  }
+
+  return user.getIdToken(forceRefresh);
+}
+window.getBillBeaconUserEmail = getCurrentUserEmail;
+window.getBillBeaconFirebaseToken = getCurrentUserIdToken;
+
+export {
+  auth,
+  signOut,
+  getCurrentUserEmail,
+  getCurrentUserIdToken
+};
