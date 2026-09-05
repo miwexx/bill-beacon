@@ -605,6 +605,52 @@ function recordActivity({
   before = null,
   after = null,
 }) {
+  const deletionActions = [
+    "bill_deleted",
+    "bill_archived",
+    "payment_plan_cancelled",
+  ];
+
+  const isDeletionActivity = deletionActions.includes(action);
+  const planId =
+    before?.installmentPlanId ||
+    before?.planId ||
+    after?.installmentPlanId ||
+    after?.planId ||
+    null;
+
+  /*
+    Payment-plan deletion can pass through legacy code that tries to log
+    each installment separately. Keep one activity record for that plan
+    deletion action and ignore the duplicate installment records.
+  */
+  if (isDeletionActivity && planId) {
+    const now = Date.now();
+
+    const duplicateAlreadyLogged = Store.getActivityLog().some((entry) => {
+      const entryTimestamp = new Date(entry.timestamp).getTime();
+
+      const entryPlanId =
+        entry.before?.installmentPlanId ||
+        entry.before?.planId ||
+        entry.after?.installmentPlanId ||
+        entry.after?.planId ||
+        null;
+
+      return (
+        deletionActions.includes(entry.action) &&
+        entryPlanId === planId &&
+        Number.isFinite(entryTimestamp) &&
+        now - entryTimestamp >= 0 &&
+        now - entryTimestamp < 5000
+      );
+    });
+
+    if (duplicateAlreadyLogged) {
+      return;
+    }
+  }
+
   Store.addActivity({
     action,
     entityType,
