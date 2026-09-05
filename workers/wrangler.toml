@@ -1,19 +1,13 @@
-name = "bill-beacon-api"
+name = "bill-beacon-notifications"
 main = "src/index.js"
-compatibility_date = "2026-08-18"
+compatibility_date = "2025-02-04"
 
-[[d1_databases]]
-binding = "DB"
-database_name = "bill-beacon"
-database_id = "9d0aeb82-1a9a-4385-8a95-34d16758ee7f"
-migrations_dir = "migrations"
+[observability]
+enabled = true
 
 [[kv_namespaces]]
-binding = "AUTH_KV"
-id = "c3cbe17fb428462ca8e30a1d3100d035"
-
-[vars]
-APP_ORIGIN = "https://7693ea56.bill-beacon.pages.dev"
+binding = "NOTIFICATIONS_KV"
+id = "840fbd5bbad24c4caedeea2e2233fd82"
 
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/5 * * * *"]
