@@ -1866,7 +1866,7 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
     action: "bill_paid",
     entityType: bill.installmentPlanId ? "paymentplan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
-    title: `${bill.name} marked as paid`,
+    title: `${bill.name} Marked as Paid`,
     detail: `${formatCurrency(payment.amount)} · due ${formatDate(
       dueDate,
       "short"
@@ -5358,7 +5358,7 @@ function archivePaymentPlan(planId) {
       action: "bill_deleted",
       entityType: "paymentplan",
       entityId: planId,
-      title: `${bill.name} deleted`,
+      title: `${bill.name} Deleted`,
       detail: `${formatCurrency(bill.amount)} · due ${formatDate(
         bill.dueDate,
         "short"
@@ -10603,7 +10603,7 @@ function archiveBill(billId) {
       action: "payment_plan_cancelled",
       entityType: "paymentplan",
       entityId: planId,
-      title: `${storeName} payment plan deleted`,
+      title: `${storeName} Payment Plan Deleted`,
       detail: `${provider} · ${billsToArchive.length} payment${
         billsToArchive.length === 1 ? "" : "s"
       } · ${formatCurrency(planTotal)}`,
@@ -10623,7 +10623,7 @@ function archiveBill(billId) {
       action: "bill_deleted",
       entityType: "bill",
       entityId: selectedBill.id,
-      title: `${selectedBill.name} deleted`,
+      title: `${selectedBill.name} Deleted`,
       detail: `${formatCurrency(selectedBill.amount)} · ${getDueDescription(
         selectedBill
       )}`,
@@ -11185,7 +11185,7 @@ function saveInstallmentPlan() {
     action: "payment_plan_created",
     entityType: "paymentplan",
     entityId: planId,
-    title: `${storeName} payment plan added`,
+    title: `${storeName} Payment Plan Added`,
     detail: `${provider} · ${installmentCount} payments of ${formatCurrency(
       perPaymentAmount
     )} · first due ${firstDueLabel}`,
