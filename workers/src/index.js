@@ -37,10 +37,10 @@ async function healthStorageCheck(env) {
   });
 
   await env.NOTIFICATIONS_KV.put(key, value, {
-    expirationTtl: 60
-  });
+  expirationTtl: 60
+});
 
-  const stored = await env.NOTIFICATIONS_KV.get(key, 'json');
+const stored = await env.NOTIFICATIONS_KV.get(key, 'json');
 
   await env.NOTIFICATIONS_KV.delete(key);
 
