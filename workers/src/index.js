@@ -13,7 +13,6 @@ function corsHeaders(origin) {
 function allowedOrigin(request) {
   const origin = request.headers.get('Origin');
 
-  // Allow direct browser visits and requests from the deployed app.
   if (!origin || origin === APP_ORIGIN) {
     return origin || APP_ORIGIN;
   }
@@ -64,6 +63,28 @@ export default {
     }
 
     const url = new URL(request.url);
+
+    if (request.method === 'GET' && url.pathname === '/config') {
+      if (!env.VAPID_PUBLIC_KEY) {
+        return json(
+          {
+            ok: false,
+            error: 'VAPID public key is not configured.'
+          },
+          503,
+          origin
+        );
+      }
+
+      return json(
+        {
+          ok: true,
+          vapidPublicKey: env.VAPID_PUBLIC_KEY
+        },
+        200,
+        origin
+      );
+    }
 
     if (request.method === 'GET' && url.pathname === '/health') {
       const lastCronRun = await env.NOTIFICATIONS_KV.get(
