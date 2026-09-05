@@ -125,7 +125,34 @@ const stored = await env.NOTIFICATIONS_KV.get(key, 'json');
 
   return Boolean(stored?.checkedAt);
 }
+function subscriptionKey(uid, endpoint) {
+  const endpointBytes = new TextEncoder().encode(endpoint);
 
+  return crypto.subtle
+    .digest("SHA-256", endpointBytes)
+    .then((hashBuffer) => {
+      const hash = Array.from(new Uint8Array(hashBuffer))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+
+      return `subscriptions:${uid}:${hash}`;
+    });
+}
+
+function isValidPushSubscription(subscription) {
+  return Boolean(
+    subscription &&
+      typeof subscription === "object" &&
+      typeof subscription.endpoint === "string" &&
+      subscription.endpoint.startsWith("https://") &&
+      subscription.keys &&
+      typeof subscription.keys === "object" &&
+      typeof subscription.keys.p256dh === "string" &&
+      subscription.keys.p256dh.length > 0 &&
+      typeof subscription.keys.auth === "string" &&
+      subscription.keys.auth.length > 0
+  );
+}
 export default {
   async fetch(request, env) {
     const origin = allowedOrigin(request);
@@ -142,6 +169,78 @@ export default {
     }
 
     const url = new URL(request.url);
+    if (
+  request.method === "POST" &&
+  url.pathname === "/subscriptions"
+) {
+  const authentication = await verifyFirebaseToken(request);
+
+  if (!authentication.ok) {
+    return json(
+      {
+        ok: false,
+        error: authentication.error
+      },
+      authentication.status,
+      origin
+    );
+  }
+
+  let body;
+
+  try {
+    body = await request.json();
+  } catch {
+    return json(
+      {
+        ok: false,
+        error: "Request body must be valid JSON."
+      },
+      400,
+      origin
+    );
+  }
+
+  const subscription = body?.subscription;
+
+  if (!isValidPushSubscription(subscription)) {
+    return json(
+      {
+        ok: false,
+        error: "A valid push subscription is required."
+      },
+      400,
+      origin
+    );
+  }
+
+  const key = await subscriptionKey(
+    authentication.user.uid,
+    subscription.endpoint
+  );
+
+  const now = new Date().toISOString();
+
+  await env.NOTIFICATIONS_KV.put(
+    key,
+    JSON.stringify({
+      uid: authentication.user.uid,
+      email: authentication.user.email,
+      subscription,
+      createdAt: now,
+      updatedAt: now
+    })
+  );
+
+  return json(
+    {
+      ok: true,
+      saved: true
+    },
+    201,
+    origin
+  );
+}
     if (request.method === "GET" && url.pathname === "/auth/test") {
   const authentication = await verifyFirebaseToken(request);
 
