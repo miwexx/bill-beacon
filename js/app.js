@@ -10477,19 +10477,21 @@ function archiveBill(billId) {
 
   const archivedAt = new Date().toISOString();
 
-  const billsToArchive = selectedBill.installmentPlanId
+  const isPaymentPlan = Boolean(selectedBill.installmentPlanId);
+
+  const billsToArchive = isPaymentPlan
     ? activeBills.filter(
         (bill) => bill.installmentPlanId === selectedBill.installmentPlanId
       )
     : [selectedBill];
 
   const billsToKeep = activeBills.filter(
-    (bill) => !billsToArchive.some((archivedBill) => archivedBill.id === bill.id)
+    (bill) => !billsToArchive.some((item) => item.id === bill.id)
   );
 
   const archivedBills = getArchivedBills();
 
-  const buildArchiveSnapshot = (bill) => ({
+  const createBillSnapshot = (bill) => ({
     id: bill.id,
     name: bill.name,
     amount: Number(bill.amount || 0),
@@ -10506,11 +10508,11 @@ function archiveBill(billId) {
   });
 
   const getOrdinalSuffix = (day) => {
-    const value = Number(day);
+    const number = Number(day);
 
-    if (value >= 11 && value <= 13) return "th";
+    if (number >= 11 && number <= 13) return "th";
 
-    switch (value % 10) {
+    switch (number % 10) {
       case 1:
         return "st";
       case 2:
@@ -10524,7 +10526,9 @@ function archiveBill(billId) {
 
   const getDueDescription = (bill) => {
     if (bill.recurrence === "Monthly") {
-      const day = Number(bill.dueDay || new Date(bill.dueDate).getDate());
+      const day = Number(
+        bill.dueDay || new Date(bill.dueDate).getDate()
+      );
 
       return `due on the ${day}${getOrdinalSuffix(day)}`;
     }
@@ -10534,17 +10538,21 @@ function archiveBill(billId) {
       : "no due date";
   };
 
-  if (selectedBill.installmentPlanId) {
+  /*
+    Create exactly ONE activity item before removing the active records.
+    Normal bill → bill_deleted.
+    Payment plan → payment_plan_cancelled.
+  */
+  if (isPaymentPlan) {
     const planId = selectedBill.installmentPlanId;
     const provider = selectedBill.installmentProvider || "Payment plan";
+
     const storeName =
       selectedBill.installmentStore?.trim() ||
-      String(selectedBill.name || "")
-        .replace(/payment plan/i, "")
-        .trim() ||
+      selectedBill.name ||
       provider;
 
-    const totalPlanAmount = billsToArchive.reduce(
+    const planTotal = billsToArchive.reduce(
       (sum, bill) => sum + Number(bill.amount || 0),
       0
     );
@@ -10556,14 +10564,15 @@ function archiveBill(billId) {
       title: `${storeName} payment plan deleted`,
       detail: `${provider} · ${billsToArchive.length} payment${
         billsToArchive.length === 1 ? "" : "s"
-      } · ${formatCurrency(totalPlanAmount)}`,
+      } · ${formatCurrency(planTotal)}`,
       before: {
         planId,
         provider,
         storeName,
         installmentCount: billsToArchive.length,
-        totalAmount: totalPlanAmount,
-        installments: billsToArchive.map(buildArchiveSnapshot),
+        totalAmount: planTotal,
+        archivedAt,
+        installments: billsToArchive.map(createBillSnapshot),
       },
       after: null,
     });
@@ -10576,11 +10585,14 @@ function archiveBill(billId) {
       detail: `${formatCurrency(selectedBill.amount)} · ${getDueDescription(
         selectedBill
       )}`,
-      before: buildArchiveSnapshot(selectedBill),
+      before: createBillSnapshot(selectedBill),
       after: null,
     });
   }
 
+  /*
+    Archive every record, but do not create an activity record per installment.
+  */
   billsToArchive.forEach((bill) => {
     const alreadyArchived = archivedBills.some(
       (archivedBill) => archivedBill.id === bill.id
@@ -10596,15 +10608,27 @@ function archiveBill(billId) {
 
   saveArchivedBills(archivedBills);
 
+  /*
+    Remove the bill or plan installments from active records.
+  */
   Store.saveBills(billsToKeep);
 
-  const archivedIds = new Set(billsToArchive.map((bill) => bill.id));
-
-  const remainingPayments = Store.getPayments().filter(
-    (payment) => !archivedIds.has(payment.billId)
+  /*
+    Keep the existing app behavior: remove active payment records associated
+    with archived bills from the active payment store.
+  */
+  const archivedBillIds = new Set(
+    billsToArchive.map((bill) => bill.id)
   );
 
-  localStorage.setItem("payments", JSON.stringify(remainingPayments));
+  const remainingPayments = Store.getPayments().filter(
+    (payment) => !archivedBillIds.has(payment.billId)
+  );
+
+  localStorage.setItem(
+    "payments",
+    JSON.stringify(remainingPayments)
+  );
 
   window.dispatchEvent(new CustomEvent("billbeacondata-changed"));
 
