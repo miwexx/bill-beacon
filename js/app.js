@@ -256,33 +256,31 @@ const Store = {
   return updatedBill;
 },
   deleteBill(id) {
-  // ── Snapshot BEFORE removal so the log entry survives ──
   const bill = this.getBill(id);
-  if (bill) {
-    this.addActivity({
-      action: 'bill_deleted',
-      entityType: bill.installmentPlanId ? 'paymentplan' : 'bill',
-      entityId: bill.installmentPlanId || bill.id,
-      title: `${bill.name} Deleted`,
-      detail: buildDeletedDetail(bill),
-      before: {
-        id: bill.id,
-        name: bill.name,
-        amount: bill.amount,
-        category: bill.category,
-        dueDate: bill.dueDate ?? null,
-        dueDay: bill.dueDay ?? null,
-        recurrence: bill.recurrence ?? 'None',
-        deletedAt: new Date().toISOString(),
-      },
-      after: null,
-    });
+
+  if (!bill) {
+    return;
   }
-  // ── Now remove the bill and its payments ──
-  const bills = this.getBills().filter(b => b.id !== id);
+
+  /*
+    deleteBill can run once for each payment-plan installment.
+    It should only remove the bill and related payments.
+    The user-facing delete/archive function records one activity item
+    for the complete action.
+  */
+  const bills = this.getBills().filter((item) => item.id !== id);
+
   this.saveBills(bills);
-  const payments = this.getPayments().filter(p => p.billId !== id);
-  localStorage.setItem('payments', JSON.stringify(payments));
+
+  const payments = this.getPayments().filter(
+    (payment) => payment.billId !== id
+  );
+
+  localStorage.setItem("payments", JSON.stringify(payments));
+
+  window.dispatchEvent(
+    new CustomEvent("billbeacon:data-changed")
+  );
 },
   getPayments() {
     try { return JSON.parse(localStorage.getItem('payments') || '[]'); }
