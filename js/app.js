@@ -9996,7 +9996,7 @@ async function activateBillNotifications() {
     }
 
     alert(
-      "Notifications are on for this device. Bill reminder delivery will be enabled next."
+      "Notifications are on for this device. You’ll receive bill reminders on this device."
     );
   } catch (error) {
     console.error("Notification setup failed:", error);
@@ -10005,6 +10005,77 @@ async function activateBillNotifications() {
         error?.message || "Please try again."
       }`
     );
+  }
+}
+async function sendBillNotificationTest() {
+  const status = document.getElementById("notificationTestStatus");
+
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      throw new Error("Push notifications are not supported in this browser.");
+    }
+
+    if (Notification.permission !== "granted") {
+      throw new Error(
+        "Notifications are not allowed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    if (typeof window.getBillBeaconFirebaseToken !== "function") {
+      throw new Error("Please sign in again before testing notifications.");
+    }
+
+    const firebaseToken = await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error("Please sign in before testing notifications.");
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      throw new Error(
+        "This device is not subscribed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    status.textContent = "Sending test notification...";
+
+    const response = await fetch(`${NOTIFICATION_WORKER_URL}/test`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${firebaseToken}`
+      },
+      body: JSON.stringify({
+        subscription: subscription.toJSON()
+      })
+    });
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      throw new Error(
+        result?.error || "The test notification could not be sent."
+      );
+    }
+
+    status.textContent =
+      "Test request sent. Lock your iPhone and check the Lock Screen or Notification Center.";
+  } catch (error) {
+    console.error("Test notification failed:", error);
+
+    if (status) {
+      status.textContent =
+        error?.message ||
+        "Test notification failed. Check the Cloudflare Worker logs.";
+    } else {
+      alert(
+        error?.message ||
+        "Test notification failed. Check the Cloudflare Worker logs."
+      );
+    }
   }
 }
 function addNotificationSettings() {
@@ -10032,8 +10103,23 @@ function addNotificationSettings() {
         Receive bill reminders on this iPhone.
       </p>
       <button class="btn-primary" onclick="activateBillNotifications()">
-        ${svgIcon("bell", 20)} Turn On Notifications
-      </button>
+  ${svgIcon("bell", 20)} Turn On Notifications
+</button>
+
+<button
+  class="btn-secondary"
+  style="margin-top: var(--space-2);"
+  onclick="sendBillNotificationTest()"
+>
+  ${svgIcon("bell", 20)} Send Test Notification
+</button>
+
+<p
+  id="notificationTestStatus"
+  style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"
+  role="status"
+  aria-live="polite"
+></p>
     </div>
   `;
 
