@@ -9903,9 +9903,7 @@ window.render = render;
 ============================================ */
 
 const NOTIFICATION_WORKER_URL =
-  "https://bill-tracker-reminders.rodz-m-1990.workers.dev";
-
-const VAPID_PUBLIC_KEY = "BFQkR3Ai2QQ8FzCwJyTTBKniWjHXqQnFCIBEmiQPI-COW_NrfhfS-HxP5w3xQMFNERI1-EkzH4HSsFfRejp1jpw";
+  "https://bill-beacon-notifications.rodz-m-1990.workers.dev";
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -9914,7 +9912,26 @@ function urlBase64ToUint8Array(base64String) {
     .replace(/_/g, "/");
 
   const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
+
+  return Uint8Array.from(
+    [...rawData].map((character) => character.charCodeAt(0))
+  );
+}
+
+async function getNotificationVapidPublicKey() {
+  const response = await fetch(
+    `${NOTIFICATION_WORKER_URL}/config`
+  );
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || !data?.vapidPublicKey) {
+    throw new Error(
+      data?.error || "Notification setup is unavailable right now."
+    );
+  }
+
+  return data.vapidPublicKey;
 }
 
 async function activateBillNotifications() {
@@ -9924,19 +9941,22 @@ async function activateBillNotifications() {
       return;
     }
 
-    const savedToken = localStorage.getItem("billTrackerAdminToken");
-    const adminToken =
-      savedToken ||
-      window.prompt("Enter your private notification connection code:");
+    if (typeof window.getBillBeaconFirebaseToken !== "function") {
+      throw new Error("Please sign in again before enabling notifications.");
+    }
 
-    if (!adminToken) {
-      return;
+    const firebaseToken = await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error("Please sign in before enabling notifications.");
     }
 
     const permission = await Notification.requestPermission();
 
     if (permission !== "granted") {
-      alert("Notifications were not allowed. Enable them in iPhone Settings and try again.");
+      alert(
+        "Notifications were not allowed. Enable them in your browser or device settings, then try again."
+      );
       return;
     }
 
@@ -9945,54 +9965,48 @@ async function activateBillNotifications() {
     let subscription = await registration.pushManager.getSubscription();
 
     if (!subscription) {
+      const vapidPublicKey = await getNotificationVapidPublicKey();
+
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
       });
     }
 
     const subscribeResponse = await fetch(
-      `${NOTIFICATION_WORKER_URL}/subscribe`,
+      `${NOTIFICATION_WORKER_URL}/subscriptions`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`,
+          Authorization: `Bearer ${firebaseToken}`
         },
-        body: JSON.stringify(subscription),
+        body: JSON.stringify({
+          subscription: subscription.toJSON()
+        })
       }
     );
 
+    const result = await subscribeResponse.json().catch(() => null);
+
     if (!subscribeResponse.ok) {
-      throw new Error("The notification subscription could not be saved.");
+      throw new Error(
+        result?.error || "The notification subscription could not be saved."
+      );
     }
 
-    const { subscriptionId } = await subscribeResponse.json();
-
-    localStorage.setItem("billTrackerAdminToken", adminToken);
-    localStorage.setItem("billTrackerSubscriptionId", subscriptionId);
-
-    const testResponse = await fetch(`${NOTIFICATION_WORKER_URL}/test`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: JSON.stringify({ subscriptionId }),
-    });
-
-    if (!testResponse.ok) {
-      throw new Error("Subscription saved, but the test notification failed.");
-    }
-
-    await syncAllBillReminders(adminToken, subscriptionId);
-    alert("Notifications are on. A test notification was sent.");
+    alert(
+      "Notifications are on for this device. Bill reminder delivery will be enabled next."
+    );
   } catch (error) {
-    console.error(error);
-    alert(`Notification setup failed: ${error.message}`);
+    console.error("Notification setup failed:", error);
+    alert(
+      `Notification setup failed: ${
+        error?.message || "Please try again."
+      }`
+    );
   }
 }
-
 function addNotificationSettings() {
   if (
     currentRoute !== "settings" ||
@@ -10032,7 +10046,11 @@ render = function () {
   originalBillTrackerRender();
   addNotificationSettings();
 };
-
+/*
+ * Legacy reminder scheduling targets the retired bill-tracker-reminders
+ * Worker. Keep it disabled until protected scheduling endpoints are added
+ * to bill-beacon-notifications.
+ */
 function getReminderSendTime(dueDate, daysBefore) {
   const [year, month, day] = dueDate.slice(0, 10).split("-").map(Number);
 
@@ -10144,7 +10162,11 @@ Store.addPayment = function (payment) {
     queueBillReminderSync(bill.id, null);
   }
 };
-
+/*
+function getReminderSendTime(dueDate, daysBefore) {
+  // existing legacy reminder-sync code
+}
+*/
 /* ============================================
    Full Backup and Restore
 ============================================ */
