@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-const APP_ORIGIN = 'https://bill-beacon.pages.dev';
+
+const APP_ORIGIN = "https://bill-beacon.pages.dev";
 const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
 const FIREBASE_ISSUER =
   `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
@@ -62,13 +63,14 @@ async function verifyFirebaseToken(request) {
     };
   }
 }
+
 function corsHeaders(origin) {
   return {
-    'access-control-allow-origin': origin,
-    'access-control-allow-methods': 'GET, POST, OPTIONS',
-    'access-control-allow-headers': 'content-type, authorization',
-    'access-control-max-age': '86400',
-    vary: 'Origin'
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "content-type, authorization",
+    "access-control-max-age": "86400",
+    vary: "Origin"
   };
 }
 
@@ -103,7 +105,7 @@ function json(data, status = 200, origin = APP_ORIGIN) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
-      'content-type': 'application/json; charset=utf-8',
+      "content-type": "application/json; charset=utf-8",
       ...corsHeaders(origin)
     }
   });
@@ -116,15 +118,16 @@ async function healthStorageCheck(env) {
   });
 
   await env.NOTIFICATIONS_KV.put(key, value, {
-  expirationTtl: 60
-});
+    expirationTtl: 60
+  });
 
-const stored = await env.NOTIFICATIONS_KV.get(key, 'json');
+  const stored = await env.NOTIFICATIONS_KV.get(key, "json");
 
   await env.NOTIFICATIONS_KV.delete(key);
 
   return Boolean(stored?.checkedAt);
 }
+
 function subscriptionKey(uid, endpoint) {
   const endpointBytes = new TextEncoder().encode(endpoint);
 
@@ -153,15 +156,16 @@ function isValidPushSubscription(subscription) {
       subscription.keys.auth.length > 0
   );
 }
+
 export default {
   async fetch(request, env) {
     const origin = allowedOrigin(request);
 
     if (!origin) {
-      return new Response('Forbidden origin', { status: 403 });
+      return new Response("Forbidden origin", { status: 403 });
     }
 
-    if (request.method === 'OPTIONS') {
+    if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
         headers: corsHeaders(origin)
@@ -169,107 +173,179 @@ export default {
     }
 
     const url = new URL(request.url);
+
     if (
-  request.method === "POST" &&
-  url.pathname === "/subscriptions"
-) {
-  const authentication = await verifyFirebaseToken(request);
+      request.method === "POST" &&
+      url.pathname === "/subscriptions"
+    ) {
+      const authentication = await verifyFirebaseToken(request);
 
-  if (!authentication.ok) {
-    return json(
-      {
-        ok: false,
-        error: authentication.error
-      },
-      authentication.status,
-      origin
-    );
-  }
+      if (!authentication.ok) {
+        return json(
+          {
+            ok: false,
+            error: authentication.error
+          },
+          authentication.status,
+          origin
+        );
+      }
 
-  let body;
+      let body;
 
-  try {
-    body = await request.json();
-  } catch {
-    return json(
-      {
-        ok: false,
-        error: "Request body must be valid JSON."
-      },
-      400,
-      origin
-    );
-  }
+      try {
+        body = await request.json();
+      } catch {
+        return json(
+          {
+            ok: false,
+            error: "Request body must be valid JSON."
+          },
+          400,
+          origin
+        );
+      }
 
-  const subscription = body?.subscription;
+      const subscription = body?.subscription;
 
-  if (!isValidPushSubscription(subscription)) {
-    return json(
-      {
-        ok: false,
-        error: "A valid push subscription is required."
-      },
-      400,
-      origin
-    );
-  }
+      if (!isValidPushSubscription(subscription)) {
+        return json(
+          {
+            ok: false,
+            error: "A valid push subscription is required."
+          },
+          400,
+          origin
+        );
+      }
 
-  const key = await subscriptionKey(
-    authentication.user.uid,
-    subscription.endpoint
-  );
+      const key = await subscriptionKey(
+        authentication.user.uid,
+        subscription.endpoint
+      );
 
-  const now = new Date().toISOString();
+      const now = new Date().toISOString();
 
-  await env.NOTIFICATIONS_KV.put(
-    key,
-    JSON.stringify({
-      uid: authentication.user.uid,
-      email: authentication.user.email,
-      subscription,
-      createdAt: now,
-      updatedAt: now
-    })
-  );
+      await env.NOTIFICATIONS_KV.put(
+        key,
+        JSON.stringify({
+          uid: authentication.user.uid,
+          email: authentication.user.email,
+          subscription,
+          createdAt: now,
+          updatedAt: now
+        })
+      );
 
-  return json(
-    {
-      ok: true,
-      saved: true
-    },
-    201,
-    origin
-  );
-}
+      return json(
+        {
+          ok: true,
+          saved: true
+        },
+        201,
+        origin
+      );
+    }
+
+    /*
+     * Temporary route for the visible Send Test Notification button.
+     *
+     * This verifies that:
+     * - The iPhone app can reach the Worker.
+     * - The Firebase login token is valid.
+     * - The app sends a valid push subscription.
+     *
+     * Actual VAPID encryption and Web Push delivery must be added next
+     * using a Cloudflare-Workers-compatible sender.
+     */
+    if (request.method === "POST" && url.pathname === "/test") {
+      const authentication = await verifyFirebaseToken(request);
+
+      if (!authentication.ok) {
+        return json(
+          {
+            ok: false,
+            error: authentication.error
+          },
+          authentication.status,
+          origin
+        );
+      }
+
+      let body;
+
+      try {
+        body = await request.json();
+      } catch {
+        return json(
+          {
+            ok: false,
+            error: "Request body must be valid JSON."
+          },
+          400,
+          origin
+        );
+      }
+
+      const subscription = body?.subscription;
+
+      if (!isValidPushSubscription(subscription)) {
+        return json(
+          {
+            ok: false,
+            error: "A valid push subscription is required."
+          },
+          400,
+          origin
+        );
+      }
+
+      console.log("Test notification request accepted.", {
+        uid: authentication.user.uid,
+        endpoint: subscription.endpoint
+      });
+
+      return json(
+        {
+          ok: false,
+          error:
+            "Test push delivery is not implemented yet. The device subscription was accepted, but the Worker still needs a Web Push sender."
+        },
+        501,
+        origin
+      );
+    }
+
     if (request.method === "GET" && url.pathname === "/auth/test") {
-  const authentication = await verifyFirebaseToken(request);
+      const authentication = await verifyFirebaseToken(request);
 
-  if (!authentication.ok) {
-    return json(
-      {
-        ok: false,
-        error: authentication.error
-      },
-      authentication.status,
-      origin
-    );
-  }
+      if (!authentication.ok) {
+        return json(
+          {
+            ok: false,
+            error: authentication.error
+          },
+          authentication.status,
+          origin
+        );
+      }
 
-  return json(
-    {
-      ok: true,
-      user: authentication.user
-    },
-    200,
-    origin
-  );
-}
-    if (request.method === 'GET' && url.pathname === '/config') {
+      return json(
+        {
+          ok: true,
+          user: authentication.user
+        },
+        200,
+        origin
+      );
+    }
+
+    if (request.method === "GET" && url.pathname === "/config") {
       if (!env.VAPID_PUBLIC_KEY) {
         return json(
           {
             ok: false,
-            error: 'VAPID public key is not configured.'
+            error: "VAPID public key is not configured."
           },
           503,
           origin
@@ -286,18 +362,18 @@ export default {
       );
     }
 
-    if (request.method === 'GET' && url.pathname === '/health') {
+    if (request.method === "GET" && url.pathname === "/health") {
       const lastCronRun = await env.NOTIFICATIONS_KV.get(
-        'system:last-cron-run',
-        'json'
+        "system:last-cron-run",
+        "json"
       );
 
       return json(
         {
           ok: true,
-          service: 'bill-beacon-notifications',
+          service: "bill-beacon-notifications",
           version: 1,
-          storage: 'kv',
+          storage: "kv",
           cron: {
             configured: true,
             lastRunAt: lastCronRun?.at || null
@@ -308,26 +384,26 @@ export default {
       );
     }
 
-    if (request.method === 'GET' && url.pathname === '/health/storage') {
+    if (request.method === "GET" && url.pathname === "/health/storage") {
       try {
         const kvAvailable = await healthStorageCheck(env);
 
         return json(
           {
             ok: kvAvailable,
-            service: 'bill-beacon-notifications',
-            storage: 'kv'
+            service: "bill-beacon-notifications",
+            storage: "kv"
           },
           kvAvailable ? 200 : 503,
           origin
         );
       } catch (error) {
-        console.error('KV health check failed', error);
+        console.error("KV health check failed", error);
 
         return json(
           {
             ok: false,
-            error: 'KV storage is unavailable.'
+            error: "KV storage is unavailable."
           },
           503,
           origin
@@ -335,16 +411,16 @@ export default {
       }
     }
 
-    return json({ error: 'Not found.' }, 404, origin);
+    return json({ error: "Not found." }, 404, origin);
   },
 
   async scheduled(_event, env, ctx) {
     ctx.waitUntil(
       env.NOTIFICATIONS_KV.put(
-        'system:last-cron-run',
+        "system:last-cron-run",
         JSON.stringify({
           at: new Date().toISOString(),
-          source: 'scheduled'
+          source: "scheduled"
         })
       )
     );
