@@ -1,7 +1,7 @@
 name = "bill-beacon-notifications"
 main = "src/index.js"
-compatibility_date = "2025-02-04"
-compatibility_flags = ["nodejs_compat"]
+compatibility_date = "2026-09-06"
+compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules"]
 keep_vars = true
 
 [observability]
