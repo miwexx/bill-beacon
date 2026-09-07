@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import webpush from "web-push";
 
 const APP_ORIGIN = "https://bill-beacon.pages.dev";
 const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
@@ -156,7 +157,35 @@ function isValidPushSubscription(subscription) {
       subscription.keys.auth.length > 0
   );
 }
+function requireVapidConfiguration(env) {
+  if (
+    !env.VAPID_PUBLIC_KEY ||
+    !env.VAPID_PRIVATE_KEY ||
+    !env.VAPID_SUBJECT
+  ) {
+    throw new Error(
+      "VAPID configuration is incomplete. Add VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT in Cloudflare."
+    );
+  }
+}
 
+async function sendPushNotification(subscription, payload, env) {
+  requireVapidConfiguration(env);
+
+  webpush.setVapidDetails(
+    env.VAPID_SUBJECT,
+    env.VAPID_PUBLIC_KEY,
+    env.VAPID_PRIVATE_KEY
+  );
+
+  await webpush.sendNotification(
+    subscription,
+    JSON.stringify(payload),
+    {
+      TTL: 60
+    }
+  );
+}
 export default {
   async fetch(request, env) {
     const origin = allowedOrigin(request);
@@ -259,63 +288,81 @@ export default {
      * using a Cloudflare-Workers-compatible sender.
      */
     if (request.method === "POST" && url.pathname === "/test") {
-      const authentication = await verifyFirebaseToken(request);
+  const authentication = await verifyFirebaseToken(request);
 
-      if (!authentication.ok) {
-        return json(
-          {
-            ok: false,
-            error: authentication.error
-          },
-          authentication.status,
-          origin
-        );
-      }
+  if (!authentication.ok) {
+    return json(
+      {
+        ok: false,
+        error: authentication.error
+      },
+      authentication.status,
+      origin
+    );
+  }
 
-      let body;
+  let body;
 
-      try {
-        body = await request.json();
-      } catch {
-        return json(
-          {
-            ok: false,
-            error: "Request body must be valid JSON."
-          },
-          400,
-          origin
-        );
-      }
+  try {
+    body = await request.json();
+  } catch {
+    return json(
+      {
+        ok: false,
+        error: "Request body must be valid JSON."
+      },
+      400,
+      origin
+    );
+  }
 
-      const subscription = body?.subscription;
+  const subscription = body?.subscription;
 
-      if (!isValidPushSubscription(subscription)) {
-        return json(
-          {
-            ok: false,
-            error: "A valid push subscription is required."
-          },
-          400,
-          origin
-        );
-      }
+  if (!isValidPushSubscription(subscription)) {
+    return json(
+      {
+        ok: false,
+        error: "A valid push subscription is required."
+      },
+      400,
+      origin
+    );
+  }
 
-      console.log("Test notification request accepted.", {
-        uid: authentication.user.uid,
-        endpoint: subscription.endpoint
-      });
+  try {
+    await sendPushNotification(
+      subscription,
+      {
+        title: "Bill Beacon",
+        body: "Test successful — notifications are working on this iPhone.",
+        url: "/"
+      },
+      env
+    );
 
-      return json(
-        {
-          ok: false,
-          error:
-            "Test push delivery is not implemented yet. The device subscription was accepted, but the Worker still needs a Web Push sender."
-        },
-        501,
-        origin
-      );
-    }
+    return json(
+      {
+        ok: true,
+        sent: true
+      },
+      200,
+      origin
+    );
+  } catch (error) {
+    console.error("Test push notification failed:", error);
 
+    return json(
+      {
+        ok: false,
+        error:
+          error?.message ||
+          "The Worker could not send the test notification."
+      },
+      500,
+      origin
+    );
+  }
+}
     if (request.method === "GET" && url.pathname === "/auth/test") {
       const authentication = await verifyFirebaseToken(request);
 
