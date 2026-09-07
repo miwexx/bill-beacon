@@ -241,6 +241,7 @@ function getDatePartsInTimeZone(date, timeZone) {
   });
 
   const parts = formatter.formatToParts(date);
+
   const values = Object.fromEntries(
     parts
       .filter((part) => part.type !== "literal")
@@ -298,17 +299,6 @@ function addDaysToDateKey(dateKey, days) {
     String(date.getUTCMonth() + 1).padStart(2, "0"),
     String(date.getUTCDate()).padStart(2, "0")
   ].join("-");
-}
-
-function daysBetweenDateKeys(fromDateKey, toDateKey) {
-  const from = utcMiddayFromDateKey(fromDateKey);
-  const to = utcMiddayFromDateKey(toDateKey);
-
-  if (!from || !to) {
-    return Number.NaN;
-  }
-
-  return Math.round((to.getTime() - from.getTime()) / 86400000);
 }
 
 function formatDateKey(dateKey) {
@@ -456,6 +446,7 @@ function getOccurrenceOriginalDueDateKeysForMonth(
     const start = utcMiddayFromDateKey(
       makeDateKey(targetYear, targetZeroBasedMonth + 1, 1)
     );
+
     const end = utcMiddayFromDateKey(
       makeDateKey(
         targetYear,
@@ -515,6 +506,7 @@ function getOccurrenceOriginalDueDateKeysForMonth(
   }
 
   const initialZeroBasedMonth = initialMonth - 1;
+
   const monthsSinceInitial =
     (targetYear - initialYear) * 12 +
     (targetZeroBasedMonth - initialZeroBasedMonth);
@@ -940,35 +932,28 @@ async function sendReminderToUserSubscriptions(
           removed: false
         };
       } catch (error) {
-       const isExpiredSubscription =
-  error?.status === 404 || error?.status === 410;
+        const isExpiredSubscription =
+          error?.status === 404 || error?.status === 410;
 
-const isVapidKeyMismatch =
-  error?.status === 400 &&
-  String(error?.body || error?.message || "").includes(
-    "VapidPkHashMismatch"
-  );
+        const isVapidKeyMismatch =
+          error?.status === 400 &&
+          String(error?.body || error?.message || "").includes(
+            "VapidPkHashMismatch"
+          );
 
-if (isExpiredSubscription || isVapidKeyMismatch) {
-  await env.NOTIFICATIONS_KV.delete(key);
+        if (isExpiredSubscription || isVapidKeyMismatch) {
+          await env.NOTIFICATIONS_KV.delete(key);
 
-  console.info(
-    "Removed invalid push subscription.",
-    {
-      uid,
-      status: error.status,
-      reason: isVapidKeyMismatch
-        ? "VapidPkHashMismatch"
-        : "expired-or-gone"
-    }
-  );
-
-  return {
-    sent: false,
-    removed: true,
-    status: error.status
-  };
-}
+          console.info(
+            "Removed invalid push subscription.",
+            {
+              uid,
+              status: error.status,
+              reason: isVapidKeyMismatch
+                ? "VapidPkHashMismatch"
+                : "expired-or-gone"
+            }
+          );
 
           return {
             sent: false,
@@ -1047,9 +1032,6 @@ async function processUserReminders(
       : DEFAULT_TIME_ZONE;
 
   const todayKey = dateKeyInTimeZone(now, timeZone);
-  const [todayYear, todayMonth] = todayKey
-    .split("-")
-    .map(Number);
 
   const bills = Array.isArray(snapshot.bills)
     ? snapshot.bills
@@ -1187,6 +1169,7 @@ async function processUserReminders(
 
 async function runScheduledBillReminders(env) {
   const startedAt = new Date();
+
   const summary = {
     startedAt: startedAt.toISOString(),
     source: "scheduled",
@@ -1201,6 +1184,7 @@ async function runScheduledBillReminders(env) {
 
   try {
     const userIds = await getAllSubscribedUserIds(env);
+
     summary.users = userIds.length;
 
     if (!userIds.length) {
