@@ -171,10 +171,12 @@ async function sendPushNotification(subscription, payload, env) {
   });
 
   if (!response.ok) {
-    throw new Error(
-      `Push service rejected the notification (${response.status}).`
-    );
-  }
+  const errorBody = await response.text().catch(() => "");
+
+  throw new Error(
+    `Push service rejected the notification (${response.status}): ${errorBody}`
+  );
+}
 }
 
 async function healthStorageCheck(env) {
