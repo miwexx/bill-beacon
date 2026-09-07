@@ -2,6 +2,8 @@
   "use strict";
 
   const CARD_ID = "billReminderTestCard";
+  const WORKER_URL =
+    "https://bill-tracker-reminders.rodz-m-1990.workers.dev";
 
   function escapeHtml(value) {
     return String(value)
@@ -14,6 +16,17 @@
 
   function getBills() {
     try {
+      if (
+        window.Store &&
+        typeof window.Store.getBills === "function"
+      ) {
+        const storeBills = window.Store.getBills();
+
+        if (Array.isArray(storeBills)) {
+          return storeBills;
+        }
+      }
+
       const savedBills = JSON.parse(localStorage.getItem("bills") || "[]");
 
       return Array.isArray(savedBills) ? savedBills : [];
@@ -50,13 +63,6 @@
     }).format(amount);
   }
 
-  function formatBillOption(bill, index) {
-    const name = getBillName(bill, index);
-    const amount = formatMoney(bill?.amount);
-
-    return amount ? `${name} — ${amount}` : name;
-  }
-
   function formatDueDate(value) {
     const rawDate = String(value || "").trim();
 
@@ -77,38 +83,43 @@
     }).format(parsedDate);
   }
 
-  function getVisibleSettingsHost() {
+  function formatBillOption(bill, index) {
+    const billName = getBillName(bill, index);
+    const amount = formatMoney(bill?.amount);
+
+    return amount ? `${billName} — ${amount}` : billName;
+  }
+
+  function getSettingsPage() {
     const app = document.getElementById("app");
 
     if (!app || app.offsetParent === null) {
       return null;
     }
 
-    if (!(app.innerText || "").includes("Settings")) {
-      return null;
-    }
+    const settingsTitle = Array.from(
+      app.querySelectorAll("h1, h2, h3, .page-title, .section-title")
+    ).find((element) => element.textContent.trim() === "Settings");
 
-    return app;
+    return settingsTitle ? app : null;
   }
 
-  function getWorkerUrl() {
-    const possibleUrls = [
-      window.BILL_BEACON_NOTIFICATIONS_URL,
-      window.NOTIFICATION_WORKER_URL,
-      window.NOTIFICATIONS_WORKER_URL,
-      localStorage.getItem("billBeaconNotificationsUrl")
-    ];
+  function findInsertBeforeElement(app) {
+    const tabNavigation = app.querySelector(
+      ".bottom-nav, .bottom-tabs, .tab-bar, nav"
+    );
 
-    for (const url of possibleUrls) {
-      if (
-        typeof url === "string" &&
-        /^https:\/\/.+\.workers\.dev\/?$/.test(url.trim())
-      ) {
-        return url.trim().replace(/\/$/, "");
-      }
+    return tabNavigation || null;
+  }
+
+  async function getPushSubscription() {
+    if (!("serviceWorker" in navigator)) {
+      throw new Error("This browser does not support service workers.");
     }
 
-    return "";
+    const registration = await navigator.serviceWorker.ready;
+
+    return registration.pushManager.getSubscription();
   }
 
   function getFirebaseUser() {
@@ -125,16 +136,6 @@
     }
 
     return null;
-  }
-
-  async function getPushSubscription() {
-    if (!("serviceWorker" in navigator)) {
-      throw new Error("This browser does not support service workers.");
-    }
-
-    const registration = await navigator.serviceWorker.ready;
-
-    return registration.pushManager.getSubscription();
   }
 
   function buildCard() {
@@ -215,7 +216,9 @@
         return;
       }
 
-      const selectedIndex = bills.findIndex(
+      const billsNow = getBills();
+
+      const selectedIndex = billsNow.findIndex(
         (bill, index) => getBillId(bill, index) === selectedId
       );
 
@@ -225,7 +228,7 @@
         return;
       }
 
-      const bill = bills[selectedIndex];
+      const bill = billsNow[selectedIndex];
       const billName = getBillName(bill, selectedIndex);
       const amount = Number(bill?.amount);
       const dueDate = String(
@@ -244,14 +247,6 @@
       if (!dueDate) {
         status.textContent =
           "This bill needs a due date before it can be tested.";
-        return;
-      }
-
-      const workerUrl = getWorkerUrl();
-
-      if (!workerUrl) {
-        status.textContent =
-          "The notification Worker URL was not found in the app configuration.";
         return;
       }
 
@@ -279,15 +274,13 @@
         }
 
         const token = await firebaseUser.getIdToken();
-
         const amountText = formatMoney(amount);
         const dueDateText = formatDueDate(dueDate);
-
         const message = `${billName} is due ${dueDateText}. ${amountText}`.trim();
 
         status.textContent = "Sending test reminder…";
 
-        const response = await fetch(`${workerUrl}/test-bill-reminder`, {
+        const response = await fetch(`${WORKER_URL}/test-bill-reminder`, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -332,13 +325,20 @@
   }
 
   function addCardIfSettingsIsVisible() {
-    const app = getVisibleSettingsHost();
+    const app = getSettingsPage();
 
     if (!app || document.getElementById(CARD_ID)) {
       return;
     }
 
-    app.appendChild(buildCard());
+    const card = buildCard();
+    const insertBefore = findInsertBeforeElement(app);
+
+    if (insertBefore) {
+      app.insertBefore(card, insertBefore);
+    } else {
+      app.appendChild(card);
+    }
   }
 
   const observer = new MutationObserver(() => {
