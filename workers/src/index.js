@@ -157,6 +157,7 @@ function isValidPushSubscription(subscription) {
       subscription.keys.auth.length > 0
   );
 }
+
 function requireVapidConfiguration(env) {
   if (
     !env.VAPID_PUBLIC_KEY ||
@@ -198,6 +199,11 @@ async function sendPushNotification(subscription, payload, env) {
     );
   }
 }
+
+function buildBillDeepLink(billId) {
+  return `/?notification=bill&billId=${encodeURIComponent(billId)}`;
+}
+
 export default {
   async fetch(request, env) {
     const origin = allowedOrigin(request);
@@ -288,93 +294,201 @@ export default {
       );
     }
 
-    /*
-     * Temporary route for the visible Send Test Notification button.
-     *
-     * This verifies that:
-     * - The iPhone app can reach the Worker.
-     * - The Firebase login token is valid.
-     * - The app sends a valid push subscription.
-     *
-     * Actual VAPID encryption and Web Push delivery must be added next
-     * using a Cloudflare-Workers-compatible sender.
-     */
     if (request.method === "POST" && url.pathname === "/test") {
-  const authentication = await verifyFirebaseToken(request);
+      const authentication = await verifyFirebaseToken(request);
 
-  if (!authentication.ok) {
-    return json(
-      {
-        ok: false,
-        error: authentication.error
-      },
-      authentication.status,
-      origin
-    );
-  }
+      if (!authentication.ok) {
+        return json(
+          {
+            ok: false,
+            error: authentication.error
+          },
+          authentication.status,
+          origin
+        );
+      }
 
-  let body;
+      let body;
 
-  try {
-    body = await request.json();
-  } catch {
-    return json(
-      {
-        ok: false,
-        error: "Request body must be valid JSON."
-      },
-      400,
-      origin
-    );
-  }
+      try {
+        body = await request.json();
+      } catch {
+        return json(
+          {
+            ok: false,
+            error: "Request body must be valid JSON."
+          },
+          400,
+          origin
+        );
+      }
 
-  const subscription = body?.subscription;
+      const subscription = body?.subscription;
 
-  if (!isValidPushSubscription(subscription)) {
-    return json(
-      {
-        ok: false,
-        error: "A valid push subscription is required."
-      },
-      400,
-      origin
-    );
-  }
+      if (!isValidPushSubscription(subscription)) {
+        return json(
+          {
+            ok: false,
+            error: "A valid push subscription is required."
+          },
+          400,
+          origin
+        );
+      }
 
-  try {
-    await sendPushNotification(
-      subscription,
-      {
-        title: "Bill Beacon",
-        body: "Test successful — notifications are working on this iPhone.",
-        url: "/"
-      },
-      env
-    );
+      try {
+        await sendPushNotification(
+          subscription,
+          {
+            title: "Bill Beacon",
+            body: "Test successful — notifications are working on this iPhone.",
+            url: "/"
+          },
+          env
+        );
 
-    return json(
-      {
-        ok: true,
-        sent: true
-      },
-      200,
-      origin
-    );
-  } catch (error) {
-    console.error("Test push notification failed:", error);
+        return json(
+          {
+            ok: true,
+            sent: true
+          },
+          200,
+          origin
+        );
+      } catch (error) {
+        console.error("Test push notification failed:", error);
 
-    return json(
-      {
-        ok: false,
-        error:
-          error?.message ||
-          "The Worker could not send the test notification."
-      },
-      500,
-      origin
-    );
-  }
-}
+        return json(
+          {
+            ok: false,
+            error:
+              error?.message ||
+              "The Worker could not send the test notification."
+          },
+          500,
+          origin
+        );
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/test-bill-reminder"
+    ) {
+      const authentication = await verifyFirebaseToken(request);
+
+      if (!authentication.ok) {
+        return json(
+          {
+            ok: false,
+            error: authentication.error
+          },
+          authentication.status,
+          origin
+        );
+      }
+
+      let body;
+
+      try {
+        body = await request.json();
+      } catch {
+        return json(
+          {
+            ok: false,
+            error: "Request body must be valid JSON."
+          },
+          400,
+          origin
+        );
+      }
+
+      const subscription = body?.subscription;
+      const bill = body?.bill;
+      const message =
+        typeof body?.message === "string" ? body.message.trim() : "";
+
+      if (!isValidPushSubscription(subscription)) {
+        return json(
+          {
+            ok: false,
+            error: "A valid push subscription is required."
+          },
+          400,
+          origin
+        );
+      }
+
+      if (
+        !bill ||
+        typeof bill.id !== "string" ||
+        !bill.id ||
+        typeof bill.name !== "string" ||
+        !bill.name ||
+        !Number.isFinite(Number(bill.amount)) ||
+        typeof bill.dueDate !== "string" ||
+        !bill.dueDate
+      ) {
+        return json(
+          {
+            ok: false,
+            error: "A valid bill is required."
+          },
+          400,
+          origin
+        );
+      }
+
+      if (!message || message.length > 240) {
+        return json(
+          {
+            ok: false,
+            error: "A valid reminder message is required."
+          },
+          400,
+          origin
+        );
+      }
+
+      try {
+        const billUrl = buildBillDeepLink(bill.id);
+
+        await sendPushNotification(
+          subscription,
+          {
+            title: "Bill Beacon",
+            body: message,
+            url: billUrl,
+            billId: bill.id,
+            kind: "bill-reminder-test"
+          },
+          env
+        );
+
+        return json(
+          {
+            ok: true,
+            sent: true
+          },
+          200,
+          origin
+        );
+      } catch (error) {
+        console.error("Bill reminder test failed:", error);
+
+        return json(
+          {
+            ok: false,
+            error:
+              error?.message ||
+              "The Worker could not send the bill reminder test."
+          },
+          500,
+          origin
+        );
+      }
+    }
+
     if (request.method === "GET" && url.pathname === "/auth/test") {
       const authentication = await verifyFirebaseToken(request);
 
