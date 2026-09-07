@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { PushMessage } from "@pushforge/builder";
+import { buildPushRequest } from "@pushforge/builder";
 
 const APP_ORIGIN = "https://bill-beacon.pages.dev";
 
@@ -180,15 +180,12 @@ function requireVapidConfiguration(env) {
 async function sendPushNotification(subscription, payload, env) {
   requireVapidConfiguration(env);
 
-  const pushMessage = new PushMessage({
+  const pushRequest = await buildPushRequest({
     endpoint: subscription.endpoint,
     keys: {
       p256dh: subscription.keys.p256dh,
       auth: subscription.keys.auth
-    }
-  });
-
-  const request = await pushMessage.buildRequest({
+    },
     vapid: {
       subject: env.VAPID_SUBJECT,
       publicKey: env.VAPID_PUBLIC_KEY,
@@ -198,7 +195,11 @@ async function sendPushNotification(subscription, payload, env) {
     ttl: 60
   });
 
-  const response = await fetch(request);
+  const response = await fetch(pushRequest.url, {
+    method: pushRequest.method,
+    headers: pushRequest.headers,
+    body: pushRequest.body
+  });
 
   if (!response.ok) {
     throw new Error(
