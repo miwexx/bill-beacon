@@ -1,10 +1,23 @@
-import { createRemoteJWKSet, jwtVerify } from "jose";
+import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from "jose";
 import { buildPushHTTPRequest } from "@pushforge/builder";
 
 const APP_ORIGIN = "https://bill-beacon.pages.dev";
 const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
 const FIREBASE_ISSUER =
   `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
+
+const FIRESTORE_SCOPE =
+  "https://www.googleapis.com/auth/datastore";
+
+const FIRESTORE_DOCUMENT_BASE =
+  `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents`;
+
+const FIRESTORE_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+const DEFAULT_TIME_ZONE = "America/New_York";
+const REMINDER_PREFIX = "reminders:";
+const SUBSCRIPTION_PREFIX = "subscriptions:";
+const CRON_STATUS_KEY = "system:last-cron-run";
 
 const firebaseKeys = createRemoteJWKSet(
   new URL(
@@ -171,12 +184,17 @@ async function sendPushNotification(subscription, payload, env) {
   });
 
   if (!response.ok) {
-  const errorBody = await response.text().catch(() => "");
+    const errorBody = await response.text().catch(() => "");
 
-  throw new Error(
-    `Push service rejected the notification (${response.status}): ${errorBody}`
-  );
-}
+    const error = new Error(
+      `Push service rejected the notification (${response.status}): ${errorBody}`
+    );
+
+    error.status = response.status;
+    error.body = errorBody;
+
+    throw error;
+  }
 }
 
 async function healthStorageCheck(env) {
@@ -206,12 +224,1013 @@ function subscriptionKey(uid, endpoint) {
         .map((byte) => byte.toString(16).padStart(2, "0"))
         .join("");
 
-      return `subscriptions:${uid}:${hash}`;
+      return `${SUBSCRIPTION_PREFIX}${uid}:${hash}`;
     });
 }
 
 function buildBillDeepLink(billId) {
   return `/?notification=bill&billId=${encodeURIComponent(billId)}`;
+}
+
+function getDatePartsInTimeZone(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, part.value])
+  );
+
+  return {
+    year: Number(values.year),
+    month: Number(values.month),
+    day: Number(values.day)
+  };
+}
+
+function dateKeyFromParts({ year, month, day }) {
+  return [
+    String(year).padStart(4, "0"),
+    String(month).padStart(2, "0"),
+    String(day).padStart(2, "0")
+  ].join("-");
+}
+
+function dateKeyInTimeZone(value, timeZone) {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return dateKeyFromParts(getDatePartsInTimeZone(date, timeZone));
+}
+
+function utcMiddayFromDateKey(dateKey) {
+  const [year, month, day] = String(dateKey)
+    .split("-")
+    .map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+}
+
+function addDaysToDateKey(dateKey, days) {
+  const date = utcMiddayFromDateKey(dateKey);
+
+  if (!date) {
+    return "";
+  }
+
+  date.setUTCDate(date.getUTCDate() + Number(days || 0));
+
+  return [
+    String(date.getUTCFullYear()).padStart(4, "0"),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function daysBetweenDateKeys(fromDateKey, toDateKey) {
+  const from = utcMiddayFromDateKey(fromDateKey);
+  const to = utcMiddayFromDateKey(toDateKey);
+
+  if (!from || !to) {
+    return Number.NaN;
+  }
+
+  return Math.round((to.getTime() - from.getTime()) / 86400000);
+}
+
+function formatDateKey(dateKey) {
+  const date = utcMiddayFromDateKey(dateKey);
+
+  if (!date) {
+    return dateKey;
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC"
+  }).format(date);
+}
+
+function formatAmount(amount, currency = "USD") {
+  const number = Number(amount);
+
+  if (!Number.isFinite(number)) {
+    return "";
+  }
+
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency
+    }).format(number);
+  } catch {
+    return `$${number.toFixed(2)}`;
+  }
+}
+
+function normalizeReminderOffsets(offsets) {
+  if (!Array.isArray(offsets)) {
+    return [];
+  }
+
+  return [...new Set(
+    offsets
+      .map((value) => Number(value))
+      .filter((value) =>
+        Number.isInteger(value) &&
+        value >= 0 &&
+        value <= 365
+      )
+  )].sort((a, b) => b - a);
+}
+
+function isActiveBill(bill) {
+  if (!bill || typeof bill !== "object") {
+    return false;
+  }
+
+  return !(
+    bill.archived ||
+    bill.cancelled ||
+    bill.status === "cancelled" ||
+    bill.status === "paid-in-full" ||
+    bill.status === "paidInFull"
+  );
+}
+
+function isRecurringBill(bill) {
+  return Boolean(
+    bill &&
+    bill.recurrence &&
+    bill.recurrence !== "None"
+  );
+}
+
+function getMonthlyDueDay(bill, timeZone) {
+  const configuredDay = Number(bill?.dueDay);
+
+  if (
+    Number.isInteger(configuredDay) &&
+    configuredDay >= 1 &&
+    configuredDay <= 31
+  ) {
+    return configuredDay;
+  }
+
+  const dueDateKey = dateKeyInTimeZone(bill?.dueDate, timeZone);
+  const day = Number(dueDateKey.split("-")[2]);
+
+  return Number.isInteger(day) && day >= 1 ? day : null;
+}
+
+function makeDateKey(year, month, day) {
+  return [
+    String(year).padStart(4, "0"),
+    String(month).padStart(2, "0"),
+    String(day).padStart(2, "0")
+  ].join("-");
+}
+
+function daysInMonth(year, zeroBasedMonth) {
+  return new Date(Date.UTC(year, zeroBasedMonth + 1, 0))
+    .getUTCDate();
+}
+
+function getMonthlyOccurrenceDateKey(bill, year, zeroBasedMonth, timeZone) {
+  const configuredDay = getMonthlyDueDay(bill, timeZone);
+
+  if (!configuredDay) {
+    return "";
+  }
+
+  return makeDateKey(
+    year,
+    zeroBasedMonth + 1,
+    Math.min(configuredDay, daysInMonth(year, zeroBasedMonth))
+  );
+}
+
+function recurrenceIntervalMonths(recurrence) {
+  if (recurrence === "Quarterly") return 3;
+  if (recurrence === "Yearly") return 12;
+  return 0;
+}
+
+function getOccurrenceOriginalDueDateKeysForMonth(
+  bill,
+  targetYear,
+  targetZeroBasedMonth,
+  timeZone
+) {
+  if (!isRecurringBill(bill)) {
+    const key = dateKeyInTimeZone(bill?.dueDate, timeZone);
+    return key ? [key] : [];
+  }
+
+  const initialKey = dateKeyInTimeZone(bill?.dueDate, timeZone);
+
+  if (!initialKey) {
+    return [];
+  }
+
+  const [initialYear, initialMonth, initialDay] = initialKey
+    .split("-")
+    .map(Number);
+
+  if (bill.recurrence === "Weekly") {
+    const start = utcMiddayFromDateKey(
+      makeDateKey(targetYear, targetZeroBasedMonth + 1, 1)
+    );
+    const end = utcMiddayFromDateKey(
+      makeDateKey(
+        targetYear,
+        targetZeroBasedMonth + 1,
+        daysInMonth(targetYear, targetZeroBasedMonth)
+      )
+    );
+
+    const candidate = utcMiddayFromDateKey(initialKey);
+
+    while (candidate < start) {
+      candidate.setUTCDate(candidate.getUTCDate() + 7);
+    }
+
+    const results = [];
+
+    while (candidate <= end) {
+      results.push(
+        makeDateKey(
+          candidate.getUTCFullYear(),
+          candidate.getUTCMonth() + 1,
+          candidate.getUTCDate()
+        )
+      );
+
+      candidate.setUTCDate(candidate.getUTCDate() + 7);
+    }
+
+    return results;
+  }
+
+  if (bill.recurrence === "Monthly") {
+    if (
+      targetYear < initialYear ||
+      (
+        targetYear === initialYear &&
+        targetZeroBasedMonth < initialMonth - 1
+      )
+    ) {
+      return [];
+    }
+
+    return [
+      getMonthlyOccurrenceDateKey(
+        bill,
+        targetYear,
+        targetZeroBasedMonth,
+        timeZone
+      )
+    ].filter(Boolean);
+  }
+
+  const interval = recurrenceIntervalMonths(bill.recurrence);
+
+  if (!interval) {
+    return [];
+  }
+
+  const initialZeroBasedMonth = initialMonth - 1;
+  const monthsSinceInitial =
+    (targetYear - initialYear) * 12 +
+    (targetZeroBasedMonth - initialZeroBasedMonth);
+
+  if (monthsSinceInitial < 0 || monthsSinceInitial % interval !== 0) {
+    return [];
+  }
+
+  const dueDay = Math.min(
+    initialDay,
+    daysInMonth(targetYear, targetZeroBasedMonth)
+  );
+
+  return [
+    makeDateKey(
+      targetYear,
+      targetZeroBasedMonth + 1,
+      dueDay
+    )
+  ];
+}
+
+function getOccurrenceOverride(bill, originalDueDateKey, timeZone) {
+  const overrides = Array.isArray(bill?.occurrenceOverrides)
+    ? bill.occurrenceOverrides
+    : [];
+
+  return overrides.find((override) => {
+    return (
+      dateKeyInTimeZone(
+        override?.originalDueDate,
+        timeZone
+      ) === originalDueDateKey
+    );
+  }) || null;
+}
+
+function getEffectiveOccurrence(bill, originalDueDateKey, timeZone) {
+  const override = getOccurrenceOverride(
+    bill,
+    originalDueDateKey,
+    timeZone
+  );
+
+  if (override?.cancelled) {
+    return null;
+  }
+
+  const effectiveDueDateKey =
+    dateKeyInTimeZone(override?.postponedTo, timeZone) ||
+    originalDueDateKey;
+
+  return {
+    originalDueDateKey,
+    dueDateKey: effectiveDueDateKey
+  };
+}
+
+function getOccurrenceForDueDateKey(bill, dueDateKey, timeZone) {
+  const [year, month] = dueDateKey.split("-").map(Number);
+
+  if (!year || !month) {
+    return null;
+  }
+
+  const monthOffsets = [-1, 0, 1];
+
+  for (const monthOffset of monthOffsets) {
+    const monthDate = new Date(
+      Date.UTC(year, month - 1 + monthOffset, 1, 12, 0, 0)
+    );
+
+    const possibleOriginalDates =
+      getOccurrenceOriginalDueDateKeysForMonth(
+        bill,
+        monthDate.getUTCFullYear(),
+        monthDate.getUTCMonth(),
+        timeZone
+      );
+
+    for (const originalDueDateKey of possibleOriginalDates) {
+      const occurrence = getEffectiveOccurrence(
+        bill,
+        originalDueDateKey,
+        timeZone
+      );
+
+      if (occurrence?.dueDateKey === dueDateKey) {
+        return occurrence;
+      }
+    }
+  }
+
+  if (!isRecurringBill(bill)) {
+    const originalDueDateKey = dateKeyInTimeZone(
+      bill?.dueDate,
+      timeZone
+    );
+
+    if (originalDueDateKey === dueDateKey) {
+      return {
+        originalDueDateKey,
+        dueDateKey
+      };
+    }
+  }
+
+  return null;
+}
+
+function isOccurrencePaid(bill, occurrence, payments, timeZone) {
+  if (!bill || !occurrence) {
+    return false;
+  }
+
+  const activePayments = (Array.isArray(payments) ? payments : [])
+    .filter((payment) => {
+      return (
+        payment &&
+        payment.billId === bill.id &&
+        String(payment.status || "").toLowerCase() !== "voided"
+      );
+    })
+    .sort((a, b) => {
+      return new Date(b?.paidDate || 0) -
+        new Date(a?.paidDate || 0);
+    });
+
+  const exactPayment = activePayments.find((payment) => {
+    return (
+      dateKeyInTimeZone(
+        payment?.paidForDueDate,
+        timeZone
+      ) === occurrence.dueDateKey
+    );
+  });
+
+  if (exactPayment) {
+    return true;
+  }
+
+  return activePayments.some((payment) => {
+    if (payment?.paidForDueDate) {
+      return false;
+    }
+
+    const paidDateKey = dateKeyInTimeZone(
+      payment?.paidDate,
+      timeZone
+    );
+
+    return (
+      paidDateKey &&
+      paidDateKey.slice(0, 7) ===
+        occurrence.dueDateKey.slice(0, 7)
+    );
+  });
+}
+
+function buildReminderPayload(
+  bill,
+  dueDateKey,
+  offsetDays,
+  settings
+) {
+  const currency = settings?.currency || "USD";
+  const amount = formatAmount(bill.amount, currency);
+  const formattedDueDate = formatDateKey(dueDateKey);
+
+  return {
+    title: "Payment Reminder",
+    body: `${bill.name} is due ${formattedDueDate}\n${amount}`,
+    url: buildBillDeepLink(bill.id),
+    billId: bill.id,
+    kind: "bill-reminder",
+    dueDate: dueDateKey,
+    offsetDays
+  };
+}
+
+function reminderKey(uid, billId, dueDateKey, offsetDays) {
+  return [
+    REMINDER_PREFIX,
+    uid,
+    ":",
+    billId,
+    ":",
+    dueDateKey,
+    ":",
+    offsetDays
+  ].join("");
+}
+
+async function listAllKvKeys(env, prefix) {
+  const keys = [];
+  let cursor;
+
+  do {
+    const result = await env.NOTIFICATIONS_KV.list({
+      prefix,
+      cursor,
+      limit: 1000
+    });
+
+    keys.push(...result.keys);
+    cursor = result.list_complete ? null : result.cursor;
+  } while (cursor);
+
+  return keys;
+}
+
+async function getUserSubscriptions(env, uid) {
+  const keys = await listAllKvKeys(
+    env,
+    `${SUBSCRIPTION_PREFIX}${uid}:`
+  );
+
+  const records = await Promise.all(
+    keys.map(async (key) => {
+      const record = await env.NOTIFICATIONS_KV.get(key.name, "json");
+
+      if (
+        !record ||
+        record.uid !== uid ||
+        !isValidPushSubscription(record.subscription)
+      ) {
+        return null;
+      }
+
+      return {
+        key: key.name,
+        record
+      };
+    })
+  );
+
+  return records.filter(Boolean);
+}
+
+async function getAllSubscribedUserIds(env) {
+  const keys = await listAllKvKeys(env, SUBSCRIPTION_PREFIX);
+  const userIds = new Set();
+
+  for (const key of keys) {
+    const remainder = key.name.slice(SUBSCRIPTION_PREFIX.length);
+    const separatorIndex = remainder.indexOf(":");
+
+    if (separatorIndex > 0) {
+      userIds.add(remainder.slice(0, separatorIndex));
+    }
+  }
+
+  return [...userIds];
+}
+
+function requireFirebaseServiceAccount(env) {
+  if (!env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    throw new Error(
+      "FIREBASE_SERVICE_ACCOUNT_JSON is required for scheduled reminders."
+    );
+  }
+
+  let serviceAccount;
+
+  try {
+    serviceAccount = JSON.parse(env.FIREBASE_SERVICE_ACCOUNT_JSON);
+  } catch {
+    throw new Error(
+      "FIREBASE_SERVICE_ACCOUNT_JSON must contain valid JSON."
+    );
+  }
+
+  if (
+    !serviceAccount?.client_email ||
+    !serviceAccount?.private_key
+  ) {
+    throw new Error(
+      "FIREBASE_SERVICE_ACCOUNT_JSON must include client_email and private_key."
+    );
+  }
+
+  return serviceAccount;
+}
+
+async function getFirestoreAccessToken(env) {
+  const serviceAccount = requireFirebaseServiceAccount(env);
+  const issuedAt = Math.floor(Date.now() / 1000);
+
+  const privateKey = await importPKCS8(
+    serviceAccount.private_key,
+    "RS256"
+  );
+
+  const assertion = await new SignJWT({
+    scope: FIRESTORE_SCOPE
+  })
+    .setProtectedHeader({
+      alg: "RS256",
+      typ: "JWT"
+    })
+    .setIssuer(serviceAccount.client_email)
+    .setSubject(serviceAccount.client_email)
+    .setAudience(FIRESTORE_TOKEN_URL)
+    .setIssuedAt(issuedAt)
+    .setExpirationTime(issuedAt + 3600)
+    .sign(privateKey);
+
+  const response = await fetch(FIRESTORE_TOKEN_URL, {
+    method: "POST",
+    headers: {
+      "content-type":
+        "application/x-www-form-urlencoded"
+    },
+    body: new URLSearchParams({
+      grant_type:
+        "urn:ietf:params:oauth:grant-type:jwt-bearer",
+      assertion
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+
+    throw new Error(
+      `Could not obtain Firestore access token (${response.status}): ${body}`
+    );
+  }
+
+  const payload = await response.json();
+
+  if (!payload?.access_token) {
+    throw new Error(
+      "Firestore OAuth token response did not include access_token."
+    );
+  }
+
+  return payload.access_token;
+}
+
+function firestoreValueToJs(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  if ("nullValue" in value) return null;
+  if ("stringValue" in value) return value.stringValue;
+  if ("booleanValue" in value) return value.booleanValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return Number(value.doubleValue);
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("referenceValue" in value) return value.referenceValue;
+  if ("bytesValue" in value) return value.bytesValue;
+
+  if ("arrayValue" in value) {
+    return (value.arrayValue.values || [])
+      .map(firestoreValueToJs);
+  }
+
+  if ("mapValue" in value) {
+    return firestoreFieldsToJs(
+      value.mapValue.fields || {}
+    );
+  }
+
+  return null;
+}
+
+function firestoreFieldsToJs(fields) {
+  const result = {};
+
+  for (const [key, value] of Object.entries(fields || {})) {
+    result[key] = firestoreValueToJs(value);
+  }
+
+  return result;
+}
+
+async function getHouseholdSnapshot(uid, accessToken) {
+  const response = await fetch(
+    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(uid)}`,
+    {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    }
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+
+    throw new Error(
+      `Could not load household ${uid} from Firestore (${response.status}): ${body}`
+    );
+  }
+
+  const document = await response.json();
+
+  return firestoreFieldsToJs(document.fields || {});
+}
+
+async function sendReminderToUserSubscriptions(
+  env,
+  uid,
+  payload
+) {
+  const subscriptions = await getUserSubscriptions(env, uid);
+
+  const results = await Promise.allSettled(
+    subscriptions.map(async ({ key, record }) => {
+      try {
+        await sendPushNotification(
+          record.subscription,
+          payload,
+          env
+        );
+
+        return {
+          sent: true,
+          removed: false
+        };
+      } catch (error) {
+        if (error?.status === 404 || error?.status === 410) {
+          await env.NOTIFICATIONS_KV.delete(key);
+
+          console.info(
+            "Removed expired push subscription.",
+            {
+              uid,
+              status: error.status
+            }
+          );
+
+          return {
+            sent: false,
+            removed: true,
+            status: error.status
+          };
+        }
+
+        throw error;
+      }
+    })
+  );
+
+  const sent = results.filter(
+    (result) =>
+      result.status === "fulfilled" &&
+      result.value?.sent
+  ).length;
+
+  const removed = results.filter(
+    (result) =>
+      result.status === "fulfilled" &&
+      result.value?.removed
+  ).length;
+
+  const failures = results.filter(
+    (result) => result.status === "rejected"
+  );
+
+  for (const failure of failures) {
+    console.error(
+      "Push delivery failed; subscription retained for retry.",
+      {
+        uid,
+        error: failure.reason?.message || String(failure.reason)
+      }
+    );
+  }
+
+  return {
+    subscriptionCount: subscriptions.length,
+    sent,
+    removed,
+    failures: failures.length
+  };
+}
+
+async function processUserReminders(
+  env,
+  uid,
+  accessToken,
+  now
+) {
+  const snapshot = await getHouseholdSnapshot(uid, accessToken);
+
+  if (!snapshot) {
+    return {
+      uid,
+      status: "no-household",
+      eligible: 0,
+      sent: 0,
+      skipped: 0,
+      failures: 0
+    };
+  }
+
+  const settings =
+    snapshot.settings && typeof snapshot.settings === "object"
+      ? snapshot.settings
+      : {};
+
+  const timeZone =
+    typeof settings.timeZone === "string" &&
+    settings.timeZone
+      ? settings.timeZone
+      : DEFAULT_TIME_ZONE;
+
+  const todayKey = dateKeyInTimeZone(now, timeZone);
+  const [todayYear, todayMonth] = todayKey
+    .split("-")
+    .map(Number);
+
+  const bills = Array.isArray(snapshot.bills)
+    ? snapshot.bills
+    : [];
+
+  const payments = Array.isArray(snapshot.payments)
+    ? snapshot.payments
+    : [];
+
+  const outcomes = {
+    uid,
+    status: "processed",
+    eligible: 0,
+    sent: 0,
+    skipped: 0,
+    removed: 0,
+    failures: 0
+  };
+
+  for (const bill of bills) {
+    if (!isActiveBill(bill) || !bill.id || !bill.name) {
+      continue;
+    }
+
+    const reminderOffsets = normalizeReminderOffsets(
+      bill.reminderOffsets
+    );
+
+    if (!reminderOffsets.length) {
+      continue;
+    }
+
+    for (const offsetDays of reminderOffsets) {
+      const dueDateKey = addDaysToDateKey(
+        todayKey,
+        offsetDays
+      );
+
+      const occurrence = getOccurrenceForDueDateKey(
+        bill,
+        dueDateKey,
+        timeZone
+      );
+
+      if (!occurrence) {
+        continue;
+      }
+
+      if (
+        isOccurrencePaid(
+          bill,
+          occurrence,
+          payments,
+          timeZone
+        )
+      ) {
+        continue;
+      }
+
+      outcomes.eligible += 1;
+
+      const key = reminderKey(
+        uid,
+        bill.id,
+        occurrence.dueDateKey,
+        offsetDays
+      );
+
+      const priorSend = await env.NOTIFICATIONS_KV.get(
+        key,
+        "json"
+      );
+
+      if (priorSend?.sentAt) {
+        outcomes.skipped += 1;
+        continue;
+      }
+
+      const payload = buildReminderPayload(
+        bill,
+        occurrence.dueDateKey,
+        offsetDays,
+        settings
+      );
+
+      const delivery = await sendReminderToUserSubscriptions(
+        env,
+        uid,
+        payload
+      );
+
+      outcomes.sent += delivery.sent;
+      outcomes.removed += delivery.removed;
+      outcomes.failures += delivery.failures;
+
+      if (delivery.sent > 0) {
+        await env.NOTIFICATIONS_KV.put(
+          key,
+          JSON.stringify({
+            uid,
+            billId: bill.id,
+            dueDate: occurrence.dueDateKey,
+            originalDueDate:
+              occurrence.originalDueDateKey,
+            offsetDays,
+            sentAt: new Date().toISOString(),
+            deliveryCount: delivery.sent
+          }),
+          {
+            expirationTtl: 60 * 60 * 24 * 400
+          }
+        );
+      }
+
+      if (
+        delivery.sent === 0 &&
+        delivery.subscriptionCount > 0 &&
+        delivery.failures > 0
+      ) {
+        console.warn(
+          "Reminder was not marked sent because delivery had temporary failures.",
+          {
+            uid,
+            billId: bill.id,
+            dueDate: occurrence.dueDateKey,
+            offsetDays
+          }
+        );
+      }
+    }
+  }
+
+  return outcomes;
+}
+
+async function runScheduledBillReminders(env) {
+  const startedAt = new Date();
+  const summary = {
+    startedAt: startedAt.toISOString(),
+    source: "scheduled",
+    users: 0,
+    processedUsers: 0,
+    noHouseholdUsers: 0,
+    remindersEligible: 0,
+    notificationsSent: 0,
+    subscriptionsRemoved: 0,
+    failures: 0
+  };
+
+  try {
+    const userIds = await getAllSubscribedUserIds(env);
+    summary.users = userIds.length;
+
+    if (!userIds.length) {
+      return summary;
+    }
+
+    const accessToken = await getFirestoreAccessToken(env);
+
+    for (const uid of userIds) {
+      try {
+        const result = await processUserReminders(
+          env,
+          uid,
+          accessToken,
+          startedAt
+        );
+
+        if (result.status === "no-household") {
+          summary.noHouseholdUsers += 1;
+          continue;
+        }
+
+        summary.processedUsers += 1;
+        summary.remindersEligible += result.eligible;
+        summary.notificationsSent += result.sent;
+        summary.subscriptionsRemoved += result.removed;
+        summary.failures += result.failures;
+      } catch (error) {
+        summary.failures += 1;
+
+        console.error(
+          "Scheduled reminder user processing failed.",
+          {
+            uid,
+            error: error?.message || String(error)
+          }
+        );
+      }
+    }
+
+    return summary;
+  } finally {
+    summary.finishedAt = new Date().toISOString();
+
+    await env.NOTIFICATIONS_KV.put(
+      CRON_STATUS_KEY,
+      JSON.stringify(summary)
+    );
+  }
 }
 
 export default {
@@ -285,13 +1304,15 @@ export default {
 
       const now = new Date().toISOString();
 
+      const existing = await env.NOTIFICATIONS_KV.get(key, "json");
+
       await env.NOTIFICATIONS_KV.put(
         key,
         JSON.stringify({
           uid: authentication.user.uid,
           email: authentication.user.email,
           subscription,
-          createdAt: now,
+          createdAt: existing?.createdAt || now,
           updatedAt: now
         })
       );
@@ -418,7 +1439,9 @@ export default {
       const subscription = body?.subscription;
       const bill = body?.bill;
       const message =
-        typeof body?.message === "string" ? body.message.trim() : "";
+        typeof body?.message === "string"
+          ? body.message.trim()
+          : "";
 
       if (!isValidPushSubscription(subscription)) {
         return json(
@@ -466,7 +1489,7 @@ export default {
         await sendPushNotification(
           subscription,
           {
-            title: 'Payment Reminder',
+            title: "Payment Reminder",
             body: message,
             url: buildBillDeepLink(bill.id),
             billId: bill.id,
@@ -547,7 +1570,7 @@ export default {
 
     if (request.method === "GET" && url.pathname === "/health") {
       const lastCronRun = await env.NOTIFICATIONS_KV.get(
-        "system:last-cron-run",
+        CRON_STATUS_KEY,
         "json"
       );
 
@@ -555,11 +1578,11 @@ export default {
         {
           ok: true,
           service: "bill-beacon-notifications",
-          version: 1,
+          version: 2,
           storage: "kv",
           cron: {
             configured: true,
-            lastRunAt: lastCronRun?.at || null
+            lastRun: lastCronRun || null
           }
         },
         200,
@@ -598,14 +1621,6 @@ export default {
   },
 
   async scheduled(_event, env, ctx) {
-    ctx.waitUntil(
-      env.NOTIFICATIONS_KV.put(
-        "system:last-cron-run",
-        JSON.stringify({
-          at: new Date().toISOString(),
-          source: "scheduled"
-        })
-      )
-    );
+    ctx.waitUntil(runScheduledBillReminders(env));
   }
 };
