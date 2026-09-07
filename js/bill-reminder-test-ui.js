@@ -142,22 +142,40 @@
     return registration.pushManager.getSubscription();
   }
 
-  function getFirebaseUser() {
-    const possibleUsers = [
-      window.firebaseAuth?.currentUser,
-      window.auth?.currentUser,
-      window.firebase?.auth?.()?.currentUser
-    ];
+  async function getFirebaseToken() {
+  const possibleAuthBridges = [
+    window.BillBeaconAuth,
+    window.FirebaseAuth,
+    window.firebaseAuth,
+    window.auth
+  ];
 
-    for (const user of possibleUsers) {
-      if (user && typeof user.getIdToken === "function") {
-        return user;
+  for (const bridge of possibleAuthBridges) {
+    if (bridge && typeof bridge.getIdToken === "function") {
+      const token = await bridge.getIdToken();
+
+      if (token) {
+        return token;
       }
     }
-
-    return null;
   }
 
+  if (
+    window.firebaseAuth?.currentUser &&
+    typeof window.firebaseAuth.currentUser.getIdToken === "function"
+  ) {
+    return window.firebaseAuth.currentUser.getIdToken();
+  }
+
+  if (
+    window.auth?.currentUser &&
+    typeof window.auth.currentUser.getIdToken === "function"
+  ) {
+    return window.auth.currentUser.getIdToken();
+  }
+
+  return "";
+}
   function buildCard() {
     const bills = getBills();
     const card = document.createElement("section");
@@ -270,13 +288,13 @@
         return;
       }
 
-      const firebaseUser = getFirebaseUser();
+      const token = await getFirebaseToken();
 
-      if (!firebaseUser) {
-        status.textContent =
-          "Your sign-in session is not ready. Refresh the app and try again.";
-        return;
-      }
+if (!token) {
+  status.textContent =
+    "Your sign-in session is not ready. Refresh the app and try again.";
+  return;
+}
 
       const originalButtonText = button.textContent;
 
@@ -293,7 +311,7 @@
           );
         }
 
-        const token = await firebaseUser.getIdToken();
+        
         const amountText = formatMoney(amount);
         const dueDateText = formatDueDate(dueDate);
         const message = `${billName} is due ${dueDateText}. ${amountText}`.trim();
