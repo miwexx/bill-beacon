@@ -733,6 +733,13 @@ async function getUserSubscriptions(env, uid) {
         record.uid !== uid ||
         !isValidPushSubscription(record.subscription)
       ) {
+        await env.NOTIFICATIONS_KV.delete(key.name);
+
+        console.info("Removed malformed push subscription record.", {
+          uid,
+          reason: "invalid-subscription-shape"
+        });
+
         return null;
       }
 
@@ -743,9 +750,45 @@ async function getUserSubscriptions(env, uid) {
     })
   );
 
-  return records.filter(Boolean);
-}
+  const latestByEndpoint = new Map();
 
+  for (const item of records.filter(Boolean)) {
+    const endpoint = item.record.subscription.endpoint;
+    const existing = latestByEndpoint.get(endpoint);
+
+    const existingUpdatedAt = new Date(
+      existing?.record?.updatedAt || existing?.record?.createdAt || 0
+    ).getTime();
+
+    const itemUpdatedAt = new Date(
+      item.record.updatedAt || item.record.createdAt || 0
+    ).getTime();
+
+    if (!existing || itemUpdatedAt >= existingUpdatedAt) {
+      if (existing) {
+        await env.NOTIFICATIONS_KV.delete(existing.key);
+      }
+
+      latestByEndpoint.set(endpoint, item);
+    } else {
+      await env.NOTIFICATIONS_KV.delete(item.key);
+    }
+  }
+
+  return [...latestByEndpoint.values()]
+    .sort((a, b) => {
+      const aUpdatedAt = new Date(
+        a.record.updatedAt || a.record.createdAt || 0
+      ).getTime();
+
+      const bUpdatedAt = new Date(
+        b.record.updatedAt || b.record.createdAt || 0
+      ).getTime();
+
+      return bUpdatedAt - aUpdatedAt;
+    })
+    .slice(0, 5);
+}
 async function getAllSubscribedUserIds(env) {
   const keys = await listAllKvKeys(env, SUBSCRIPTION_PREFIX);
   const userIds = new Set();
@@ -918,89 +961,75 @@ async function sendReminderToUserSubscriptions(
 ) {
   const subscriptions = await getUserSubscriptions(env, uid);
 
-  const results = await Promise.allSettled(
-    subscriptions.map(async ({ key, record }) => {
-      try {
-        await sendPushNotification(
-          record.subscription,
-          payload,
-          env
-        );
+  let sent = 0;
+  let removed = 0;
+  let failures = 0;
 
-        return {
-          sent: true,
-          removed: false
-        };
-      } catch (error) {
-        const isExpiredSubscription =
-          error?.status === 404 || error?.status === 410;
+  for (const { key, record } of subscriptions) {
+    try {
+      await sendPushNotification(
+        record.subscription,
+        payload,
+        env
+      );
 
-        const isVapidKeyMismatch =
-          error?.status === 400 &&
-          String(error?.body || error?.message || "").includes(
-            "VapidPkHashMismatch"
-          );
+      sent += 1;
+    } catch (error) {
+      const message = String(
+        error?.body || error?.message || ""
+      );
 
-        if (isExpiredSubscription || isVapidKeyMismatch) {
-          await env.NOTIFICATIONS_KV.delete(key);
+      const isExpiredSubscription =
+        error?.status === 404 || error?.status === 410;
 
-          console.info(
-            "Removed invalid push subscription.",
-            {
-              uid,
-              status: error.status,
-              reason: isVapidKeyMismatch
-                ? "VapidPkHashMismatch"
-                : "expired-or-gone"
-            }
-          );
+      const isVapidKeyMismatch =
+        error?.status === 400 &&
+        message.includes("VapidPkHashMismatch");
 
-          return {
-            sent: false,
-            removed: true,
-            status: error.status
-          };
+      const isInvalidAuthSecret =
+        message.includes("Incorrect auth length");
+
+      if (
+        isExpiredSubscription ||
+        isVapidKeyMismatch ||
+        isInvalidAuthSecret
+      ) {
+        await env.NOTIFICATIONS_KV.delete(key);
+
+        removed += 1;
+
+        console.info("Removed invalid push subscription.", {
+          uid,
+          status: error?.status || null,
+          reason: isVapidKeyMismatch
+            ? "VapidPkHashMismatch"
+            : isInvalidAuthSecret
+              ? "invalid-auth-secret"
+              : "expired-or-gone"
+        });
+
+        continue;
+      }
+
+      failures += 1;
+
+      console.error(
+        "Push delivery failed; subscription retained for retry.",
+        {
+          uid,
+          error: error?.message || String(error)
         }
-
-        throw error;
-      }
-    })
-  );
-
-  const sent = results.filter(
-    (result) =>
-      result.status === "fulfilled" &&
-      result.value?.sent
-  ).length;
-
-  const removed = results.filter(
-    (result) =>
-      result.status === "fulfilled" &&
-      result.value?.removed
-  ).length;
-
-  const failures = results.filter(
-    (result) => result.status === "rejected"
-  );
-
-  for (const failure of failures) {
-    console.error(
-      "Push delivery failed; subscription retained for retry.",
-      {
-        uid,
-        error: failure.reason?.message || String(failure.reason)
-      }
-    );
+      );
+    }
   }
 
   return {
     subscriptionCount: subscriptions.length,
     sent,
     removed,
-    failures: failures.length
+    failures
   };
 }
-
 async function processUserReminders(
   env,
   uid,
