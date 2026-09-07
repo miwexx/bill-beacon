@@ -9966,30 +9966,19 @@ const vapidPublicKey = await getNotificationVapidPublicKey();
 let subscription = await registration.pushManager.getSubscription();
 
 if (subscription) {
-  const currentKey = subscription.options?.applicationServerKey;
-
-  if (currentKey) {
-    const currentKeyBase64 = btoa(
-      String.fromCharCode(...new Uint8Array(currentKey))
-    )
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-
-    if (currentKeyBase64 !== vapidPublicKey) {
-      await subscription.unsubscribe();
-      subscription = null;
-    }
+  try {
+    await subscription.unsubscribe();
+  } catch (error) {
+    console.warn("Could not remove old push subscription:", error);
   }
+
+  subscription = null;
 }
 
-if (!subscription) {
-  subscription = await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-  });
-}
-
+subscription = await registration.pushManager.subscribe({
+  userVisibleOnly: true,
+  applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+});
     const subscribeResponse = await fetch(
       `${NOTIFICATION_WORKER_URL}/subscriptions`,
       {
