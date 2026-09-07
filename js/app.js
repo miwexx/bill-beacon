@@ -9012,11 +9012,13 @@ function openBillForm(billId = null, selectedDate = null) {
 
                   <label class="toggle">
                     <input
-                      type="checkbox"
-                      class="reminder-toggle"
-                      data-days="${reminder.days}"
-                      ${selectedReminders.includes(reminder.days) ? 'checked' : ''}
-                    >
+  type="checkbox"
+  class="reminder-toggle"
+  name="billReminderOffsets"
+  value="${reminder.days}"
+  data-days="${reminder.days}"
+  ${selectedReminders.includes(reminder.days) ? 'checked' : ''}
+>
 
                     <div class="toggle-track">
                       <div class="toggle-thumb"></div>
