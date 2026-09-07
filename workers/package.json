@@ -6,9 +6,9 @@
     "deploy": "wrangler deploy"
   },
   "dependencies": {
-    "jose": "^5.10.0",
-    "web-push": "^3.6.7"
-  },
+  "jose": "^5.10.0",
+  "@pushforge/builder": "^1.0.0"
+},
   "devDependencies": {
     "wrangler": "^4.0.0"
   }

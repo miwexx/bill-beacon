@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import webpush from "web-push";
+import { PushMessage } from "@pushforge/builder";
 
 const APP_ORIGIN = "https://bill-beacon.pages.dev";
 const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
@@ -172,19 +172,31 @@ function requireVapidConfiguration(env) {
 async function sendPushNotification(subscription, payload, env) {
   requireVapidConfiguration(env);
 
-  webpush.setVapidDetails(
-    env.VAPID_SUBJECT,
-    env.VAPID_PUBLIC_KEY,
-    env.VAPID_PRIVATE_KEY
-  );
-
-  await webpush.sendNotification(
-    subscription,
-    JSON.stringify(payload),
-    {
-      TTL: 60
+  const pushMessage = new PushMessage({
+    endpoint: subscription.endpoint,
+    keys: {
+      p256dh: subscription.keys.p256dh,
+      auth: subscription.keys.auth
     }
-  );
+  });
+
+  const request = await pushMessage.buildRequest({
+    vapid: {
+      subject: env.VAPID_SUBJECT,
+      publicKey: env.VAPID_PUBLIC_KEY,
+      privateKey: env.VAPID_PRIVATE_KEY
+    },
+    payload: JSON.stringify(payload),
+    ttl: 60
+  });
+
+  const response = await fetch(request);
+
+  if (!response.ok) {
+    throw new Error(
+      `Push service rejected the notification (${response.status}).`
+    );
+  }
 }
 export default {
   async fetch(request, env) {
