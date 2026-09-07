@@ -146,11 +146,7 @@ async function sendPushNotification(subscription, payload, env) {
   requireVapidConfiguration(env);
 
   const { endpoint, headers, body } = await buildPushHTTPRequest({
-    vapid: {
-      subject: env.VAPID_SUBJECT,
-      publicKey: env.VAPID_PUBLIC_KEY,
-      privateKey: env.VAPID_PRIVATE_KEY
-    },
+    privateJWK: JSON.parse(env.VAPID_PRIVATE_KEY),
     subscription: {
       endpoint: subscription.endpoint,
       keys: {
@@ -159,7 +155,8 @@ async function sendPushNotification(subscription, payload, env) {
       }
     },
     message: {
-      payload: JSON.stringify(payload),
+      payload,
+      adminContact: env.VAPID_SUBJECT,
       options: {
         ttl: 60,
         urgency: "normal"
