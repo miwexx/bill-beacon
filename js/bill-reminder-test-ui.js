@@ -302,7 +302,13 @@ if (!token) {
         
         const amountText = formatMoney(amount);
         const dueDateText = formatDueDate(dueDate);
-        const message = `${billName} is due ${dueDateText}. ${amountText}`.trim();
+        const formattedDueDate = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric"
+}).format(new Date(bill.dueDate));
+
+const message = `${bill.name} is due ${formattedDueDate}\n${formatCurrency(bill.amount)}`;
 
         status.textContent = "Sending test reminder…";
 
