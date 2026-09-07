@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import { buildPushRequest } from "@pushforge/builder";
+import { buildPushHTTPRequest } from "@pushforge/builder";
 
 const APP_ORIGIN = "https://bill-beacon.pages.dev";
 const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
@@ -145,25 +145,29 @@ function requireVapidConfiguration(env) {
 async function sendPushNotification(subscription, payload, env) {
   requireVapidConfiguration(env);
 
-  const pushRequest = await buildPushRequest({
-    endpoint: subscription.endpoint,
-    keys: {
-      p256dh: subscription.keys.p256dh,
-      auth: subscription.keys.auth
+  const { endpoint, headers, body } = await buildPushHTTPRequest({
+    privateJWK: JSON.parse(env.VAPID_PRIVATE_KEY),
+    subscription: {
+      endpoint: subscription.endpoint,
+      keys: {
+        p256dh: subscription.keys.p256dh,
+        auth: subscription.keys.auth
+      }
     },
-    vapid: {
-      subject: env.VAPID_SUBJECT,
-      publicKey: env.VAPID_PUBLIC_KEY,
-      privateKey: env.VAPID_PRIVATE_KEY
-    },
-    payload: JSON.stringify(payload),
-    ttl: 60
+    message: {
+      payload,
+      options: {
+        ttl: 60,
+        urgency: "normal"
+      },
+      adminContact: env.VAPID_SUBJECT
+    }
   });
 
-  const response = await fetch(pushRequest.url, {
-    method: pushRequest.method,
-    headers: pushRequest.headers,
-    body: pushRequest.body
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers,
+    body
   });
 
   if (!response.ok) {
