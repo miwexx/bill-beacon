@@ -2,6 +2,26 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { PushMessage } from "@pushforge/builder";
 
 const APP_ORIGIN = "https://bill-beacon.pages.dev";
+
+function isAllowedOrigin(origin) {
+  if (!origin) {
+    return false;
+  }
+
+  try {
+    const url = new URL(origin);
+
+    return (
+      url.protocol === "https:" &&
+      (
+        url.hostname === "bill-beacon.pages.dev" ||
+        url.hostname.endsWith(".bill-beacon.pages.dev")
+      )
+    );
+  } catch {
+    return false;
+  }
+}
 const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
 const FIREBASE_ISSUER =
   `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
@@ -82,21 +102,8 @@ function allowedOrigin(request) {
     return APP_ORIGIN;
   }
 
-  if (origin === APP_ORIGIN) {
+  if (isAllowedOrigin(origin)) {
     return origin;
-  }
-
-  try {
-    const url = new URL(origin);
-
-    if (
-      url.protocol === "https:" &&
-      url.hostname.endsWith(".bill-beacon.pages.dev")
-    ) {
-      return origin;
-    }
-  } catch {
-    // Invalid Origin values are not allowed.
   }
 
   return null;
