@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v7.1";
+const CACHE_VERSION = "bill-beacon-v7.2";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -18,7 +18,6 @@ self.addEventListener("install", (event) => {
     caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
   );
 
-  // Download and activate the new service worker immediately.
   self.skipWaiting();
 });
 
@@ -33,7 +32,6 @@ self.addEventListener("activate", (event) => {
     )
   );
 
-  // Let the new worker control all currently open Bill Beacon tabs/apps.
   self.clients.claim();
 });
 
@@ -83,7 +81,14 @@ self.addEventListener("push", (event) => {
   let payload = {
     title: "Bill Beacon",
     body: "You have a new bill reminder.",
-    url: "./"
+    url: "./",
+    notificationId: null,
+    billId: null,
+    installmentPlanId: null,
+    occurrenceDueDate: null,
+    dueDate: null,
+    offsetDays: null,
+    kind: "bill-reminder"
   };
 
   try {
@@ -103,14 +108,31 @@ self.addEventListener("push", (event) => {
     }
   }
 
+  const notificationTag =
+    payload.notificationId ||
+    [
+      "bill-beacon",
+      payload.kind || "reminder",
+      payload.billId || "general",
+      payload.dueDate || "undated",
+      payload.offsetDays ?? "none"
+    ].join(":");
+
   event.waitUntil(
     self.registration.showNotification(payload.title, {
       body: payload.body,
       icon: "./icons/bill-beacon-icon.png",
       badge: "./icons/bill-beacon-icon.png",
-      tag: "bill-beacon-reminder",
+      tag: notificationTag,
       renotify: true,
       data: {
+        notificationId: payload.notificationId || null,
+        billId: payload.billId || null,
+        installmentPlanId: payload.installmentPlanId || null,
+        occurrenceDueDate: payload.occurrenceDueDate || null,
+        dueDate: payload.dueDate || null,
+        offsetDays: payload.offsetDays ?? null,
+        kind: payload.kind || "bill-reminder",
         url: payload.url || "./"
       }
     })

@@ -26,9 +26,7 @@ const firebaseKeys = createRemoteJWKSet(
 );
 
 function isAllowedOrigin(origin) {
-  if (!origin) {
-    return false;
-  }
+  if (!origin) return false;
 
   try {
     const url = new URL(origin);
@@ -199,13 +197,16 @@ async function sendPushNotification(subscription, payload, env) {
 
 async function healthStorageCheck(env) {
   const key = `healthcheck:${crypto.randomUUID()}`;
-  const value = JSON.stringify({
-    checkedAt: new Date().toISOString()
-  });
 
-  await env.NOTIFICATIONS_KV.put(key, value, {
-    expirationTtl: 60
-  });
+  await env.NOTIFICATIONS_KV.put(
+    key,
+    JSON.stringify({
+      checkedAt: new Date().toISOString()
+    }),
+    {
+      expirationTtl: 60
+    }
+  );
 
   const stored = await env.NOTIFICATIONS_KV.get(key, "json");
 
@@ -228,8 +229,46 @@ function subscriptionKey(uid, endpoint) {
     });
 }
 
+function createReminderId(uid, billId, dueDateKey, offsetDays) {
+  return [
+    REMINDER_PREFIX,
+    uid,
+    ":",
+    billId,
+    ":",
+    dueDateKey,
+    ":",
+    offsetDays
+  ].join("");
+}
+
+function buildNotificationUrl({
+  billId,
+  installmentPlanId,
+  dueDateKey
+}) {
+  const params = new URLSearchParams();
+
+  params.set(
+    "notification",
+    installmentPlanId ? "payment-plan" : "bill"
+  );
+
+  params.set("billId", billId);
+
+  if (installmentPlanId) {
+    params.set("planId", installmentPlanId);
+  }
+
+  if (dueDateKey) {
+    params.set("dueDate", dueDateKey);
+  }
+
+  return `/?${params.toString()}`;
+}
+
 function buildBillDeepLink(billId) {
-  return `/?notification=bill&billId=${encodeURIComponent(billId)}`;
+  return buildNotificationUrl({ billId });
 }
 
 function getDatePartsInTimeZone(date, timeZone) {
@@ -401,7 +440,12 @@ function daysInMonth(year, zeroBasedMonth) {
     .getUTCDate();
 }
 
-function getMonthlyOccurrenceDateKey(bill, year, zeroBasedMonth, timeZone) {
+function getMonthlyOccurrenceDateKey(
+  bill,
+  year,
+  zeroBasedMonth,
+  timeZone
+) {
   const configuredDay = getMonthlyDueDay(bill, timeZone);
 
   if (!configuredDay) {
@@ -666,38 +710,80 @@ function isOccurrencePaid(bill, occurrence, payments, timeZone) {
   });
 }
 
-function buildReminderPayload(
+function buildReminderPresentation(
   bill,
   dueDateKey,
   offsetDays,
-  settings
+  settings,
+  uid
 ) {
   const currency = settings?.currency || "USD";
   const amount = formatAmount(bill.amount, currency);
   const formattedDueDate = formatDateKey(dueDateKey);
+  const reminderId = createReminderId(
+    uid,
+    bill.id,
+    dueDateKey,
+    offsetDays
+  );
+
+  const isPaymentPlan = Boolean(bill.installmentPlanId);
+  const provider = bill.installmentProvider || "Payment Plan";
+  const merchant =
+    String(bill.installmentStore || "").trim() ||
+    String(bill.name || "").trim() ||
+    provider;
+
+  const installmentNumber = bill.installmentNumber || 1;
+  const installmentTotal = bill.installmentTotal || "?";
+
+  let timingTitle = "Due Soon";
+  let timingText =
+    `is due in ${offsetDays} days, on ${formattedDueDate}.`;
+
+  if (offsetDays === 1) {
+    timingTitle = "Due Tomorrow";
+    timingText = "is due tomorrow.";
+  } else if (offsetDays === 0) {
+    timingTitle = "Due Today";
+    timingText = "is due today.";
+  }
+
+  let title;
+  let body;
+
+  if (isPaymentPlan) {
+    title = `Payment Plan ${timingTitle}: ${provider}`;
+    body =
+      `${merchant} payment ${installmentNumber} of ${installmentTotal} ` +
+      `${timingText}\nAmount due: ${amount}`;
+  } else {
+    title = `${timingTitle}: ${bill.name}`;
+    body =
+      `${bill.name} ${timingText}\nAmount due: ${amount}`;
+  }
 
   return {
-    title: "Payment Reminder",
-    body: `${bill.name} is due ${formattedDueDate}\n${amount}`,
-    url: buildBillDeepLink(bill.id),
+    notificationId: reminderId,
+    title,
+    body,
+    url: buildNotificationUrl({
+      billId: bill.id,
+      installmentPlanId: bill.installmentPlanId || null,
+      dueDateKey
+    }),
     billId: bill.id,
-    kind: "bill-reminder",
+    installmentPlanId: bill.installmentPlanId || null,
+    occurrenceDueDate: dueDateKey,
     dueDate: dueDateKey,
-    offsetDays
+    offsetDays,
+    kind: isPaymentPlan
+      ? "payment-plan-reminder"
+      : "bill-reminder",
+    entityType: isPaymentPlan
+      ? "payment-plan"
+      : "bill"
   };
-}
-
-function reminderKey(uid, billId, dueDateKey, offsetDays) {
-  return [
-    REMINDER_PREFIX,
-    uid,
-    ":",
-    billId,
-    ":",
-    dueDateKey,
-    ":",
-    offsetDays
-  ].join("");
 }
 
 async function listAllKvKeys(env, prefix) {
@@ -789,6 +875,7 @@ async function getUserSubscriptions(env, uid) {
     })
     .slice(0, 5);
 }
+
 async function getAllSubscribedUserIds(env) {
   const keys = await listAllKvKeys(env, SUBSCRIPTION_PREFIX);
   const userIds = new Set();
@@ -927,6 +1014,56 @@ function firestoreFieldsToJs(fields) {
   return result;
 }
 
+function jsValueToFirestore(value) {
+  if (value === null || value === undefined) {
+    return { nullValue: null };
+  }
+
+  if (typeof value === "string") {
+    return { stringValue: value };
+  }
+
+  if (typeof value === "boolean") {
+    return { booleanValue: value };
+  }
+
+  if (typeof value === "number") {
+    if (Number.isInteger(value)) {
+      return { integerValue: String(value) };
+    }
+
+    return { doubleValue: value };
+  }
+
+  if (Array.isArray(value)) {
+    return {
+      arrayValue: {
+        values: value.map(jsValueToFirestore)
+      }
+    };
+  }
+
+  if (typeof value === "object") {
+    return {
+      mapValue: {
+        fields: jsObjectToFirestoreFields(value)
+      }
+    };
+  }
+
+  return { stringValue: String(value) };
+}
+
+function jsObjectToFirestoreFields(object) {
+  const fields = {};
+
+  for (const [key, value] of Object.entries(object || {})) {
+    fields[key] = jsValueToFirestore(value);
+  }
+
+  return fields;
+}
+
 async function getHouseholdSnapshot(uid, accessToken) {
   const response = await fetch(
     `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(uid)}`,
@@ -952,6 +1089,55 @@ async function getHouseholdSnapshot(uid, accessToken) {
   const document = await response.json();
 
   return firestoreFieldsToJs(document.fields || {});
+}
+
+async function writeNotificationInboxRecord(
+  uid,
+  notification,
+  accessToken
+) {
+  const documentId = encodeURIComponent(
+    notification.notificationId
+  );
+
+  const record = {
+    id: notification.notificationId,
+    type: notification.kind,
+    entityType: notification.entityType,
+    billId: notification.billId,
+    installmentPlanId: notification.installmentPlanId,
+    occurrenceDueDate: notification.occurrenceDueDate,
+    dueDate: notification.dueDate,
+    offsetDays: notification.offsetDays,
+    title: notification.title,
+    body: notification.body,
+    url: notification.url,
+    sentAt: new Date().toISOString(),
+    readAt: null,
+    openedAt: null
+  };
+
+  const response = await fetch(
+    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(uid)}/notifications/${documentId}`,
+    {
+      method: "PATCH",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        fields: jsObjectToFirestoreFields(record)
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+
+    throw new Error(
+      `Could not write notification inbox record (${response.status}): ${body}`
+    );
+  }
 }
 
 async function sendReminderToUserSubscriptions(
@@ -1030,6 +1216,7 @@ async function sendReminderToUserSubscriptions(
     failures
   };
 }
+
 async function processUserReminders(
   env,
   uid,
@@ -1045,6 +1232,7 @@ async function processUserReminders(
       eligible: 0,
       sent: 0,
       skipped: 0,
+      removed: 0,
       failures: 0
     };
   }
@@ -1122,15 +1310,16 @@ async function processUserReminders(
 
       outcomes.eligible += 1;
 
-      const key = reminderKey(
-        uid,
-        bill.id,
+      const notification = buildReminderPresentation(
+        bill,
         occurrence.dueDateKey,
-        offsetDays
+        offsetDays,
+        settings,
+        uid
       );
 
       const priorSend = await env.NOTIFICATIONS_KV.get(
-        key,
+        notification.notificationId,
         "json"
       );
 
@@ -1139,17 +1328,10 @@ async function processUserReminders(
         continue;
       }
 
-      const payload = buildReminderPayload(
-        bill,
-        occurrence.dueDateKey,
-        offsetDays,
-        settings
-      );
-
       const delivery = await sendReminderToUserSubscriptions(
         env,
         uid,
-        payload
+        notification
       );
 
       outcomes.sent += delivery.sent;
@@ -1158,7 +1340,7 @@ async function processUserReminders(
 
       if (delivery.sent > 0) {
         await env.NOTIFICATIONS_KV.put(
-          key,
+          notification.notificationId,
           JSON.stringify({
             uid,
             billId: bill.id,
@@ -1173,6 +1355,23 @@ async function processUserReminders(
             expirationTtl: 60 * 60 * 24 * 400
           }
         );
+
+        try {
+          await writeNotificationInboxRecord(
+            uid,
+            notification,
+            accessToken
+          );
+        } catch (error) {
+          console.error(
+            "Push was delivered, but notification inbox history could not be written.",
+            {
+              uid,
+              billId: bill.id,
+              error: error?.message || String(error)
+            }
+          );
+        }
       }
 
       if (
@@ -1610,7 +1809,7 @@ export default {
         {
           ok: true,
           service: "bill-beacon-notifications",
-          version: 2,
+          version: 3,
           storage: "kv",
           cron: {
             configured: true,
