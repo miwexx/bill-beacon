@@ -466,7 +466,7 @@ export default {
         await sendPushNotification(
           subscription,
           {
-            title: '${bill.name} Payment Reminder',
+            title: 'Payment Reminder',
             body: message,
             url: buildBillDeepLink(bill.id),
             billId: bill.id,
