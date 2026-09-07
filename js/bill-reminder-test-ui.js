@@ -12,22 +12,16 @@
       .replaceAll("'", "&#039;");
   }
 
-  function getBills() {
-    const possibleSources = [
-      window.bills,
-      window.appState?.bills,
-      window.state?.bills,
-      window.store?.bills
-    ];
+ function getBills() {
+  try {
+    const savedBills = JSON.parse(localStorage.getItem("bills") || "[]");
 
-    for (const source of possibleSources) {
-      if (Array.isArray(source)) {
-        return source;
-      }
-    }
-
+    return Array.isArray(savedBills) ? savedBills : [];
+  } catch (error) {
+    console.error("Could not read saved bills:", error);
     return [];
   }
+}
 
   function getBillId(bill, index) {
     return String(bill?.id ?? bill?.billId ?? index);
