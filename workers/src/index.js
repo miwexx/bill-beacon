@@ -2,6 +2,15 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { buildPushRequest } from "@pushforge/builder";
 
 const APP_ORIGIN = "https://bill-beacon.pages.dev";
+const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
+const FIREBASE_ISSUER =
+  `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
+
+const firebaseKeys = createRemoteJWKSet(
+  new URL(
+    "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
+  )
+);
 
 function isAllowedOrigin(origin) {
   if (!origin) {
@@ -22,15 +31,36 @@ function isAllowedOrigin(origin) {
     return false;
   }
 }
-const FIREBASE_PROJECT_ID = "bill-beacon-1646c";
-const FIREBASE_ISSUER =
-  `https://securetoken.google.com/${FIREBASE_PROJECT_ID}`;
 
-const firebaseKeys = createRemoteJWKSet(
-  new URL(
-    "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
-  )
-);
+function corsHeaders(origin) {
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-headers": "content-type, authorization",
+    "access-control-max-age": "86400",
+    vary: "Origin"
+  };
+}
+
+function allowedOrigin(request) {
+  const origin = request.headers.get("Origin");
+
+  if (!origin) {
+    return APP_ORIGIN;
+  }
+
+  return isAllowedOrigin(origin) ? origin : null;
+}
+
+function json(data, status = 200, origin = APP_ORIGIN) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      ...corsHeaders(origin)
+    }
+  });
+}
 
 async function verifyFirebaseToken(request) {
   const authorization = request.headers.get("Authorization") || "";
@@ -83,71 +113,6 @@ async function verifyFirebaseToken(request) {
       error: "Invalid or expired Firebase authentication token."
     };
   }
-}
-
-function corsHeaders(origin) {
-  return {
-    "access-control-allow-origin": origin,
-    "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": "content-type, authorization",
-    "access-control-max-age": "86400",
-    vary: "Origin"
-  };
-}
-
-function allowedOrigin(request) {
-  const origin = request.headers.get("Origin");
-
-  if (!origin) {
-    return APP_ORIGIN;
-  }
-
-  if (isAllowedOrigin(origin)) {
-    return origin;
-  }
-
-  return null;
-}
-
-function json(data, status = 200, origin = APP_ORIGIN) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      ...corsHeaders(origin)
-    }
-  });
-}
-
-async function healthStorageCheck(env) {
-  const key = `healthcheck:${crypto.randomUUID()}`;
-  const value = JSON.stringify({
-    checkedAt: new Date().toISOString()
-  });
-
-  await env.NOTIFICATIONS_KV.put(key, value, {
-    expirationTtl: 60
-  });
-
-  const stored = await env.NOTIFICATIONS_KV.get(key, "json");
-
-  await env.NOTIFICATIONS_KV.delete(key);
-
-  return Boolean(stored?.checkedAt);
-}
-
-function subscriptionKey(uid, endpoint) {
-  const endpointBytes = new TextEncoder().encode(endpoint);
-
-  return crypto.subtle
-    .digest("SHA-256", endpointBytes)
-    .then((hashBuffer) => {
-      const hash = Array.from(new Uint8Array(hashBuffer))
-        .map((byte) => byte.toString(16).padStart(2, "0"))
-        .join("");
-
-      return `subscriptions:${uid}:${hash}`;
-    });
 }
 
 function isValidPushSubscription(subscription) {
@@ -208,6 +173,37 @@ async function sendPushNotification(subscription, payload, env) {
   }
 }
 
+async function healthStorageCheck(env) {
+  const key = `healthcheck:${crypto.randomUUID()}`;
+  const value = JSON.stringify({
+    checkedAt: new Date().toISOString()
+  });
+
+  await env.NOTIFICATIONS_KV.put(key, value, {
+    expirationTtl: 60
+  });
+
+  const stored = await env.NOTIFICATIONS_KV.get(key, "json");
+
+  await env.NOTIFICATIONS_KV.delete(key);
+
+  return Boolean(stored?.checkedAt);
+}
+
+function subscriptionKey(uid, endpoint) {
+  const endpointBytes = new TextEncoder().encode(endpoint);
+
+  return crypto.subtle
+    .digest("SHA-256", endpointBytes)
+    .then((hashBuffer) => {
+      const hash = Array.from(new Uint8Array(hashBuffer))
+        .map((byte) => byte.toString(16).padStart(2, "0"))
+        .join("");
+
+      return `subscriptions:${uid}:${hash}`;
+    });
+}
+
 function buildBillDeepLink(billId) {
   return `/?notification=bill&billId=${encodeURIComponent(billId)}`;
 }
@@ -217,7 +213,9 @@ export default {
     const origin = allowedOrigin(request);
 
     if (!origin) {
-      return new Response("Forbidden origin", { status: 403 });
+      return new Response("Forbidden origin", {
+        status: 403
+      });
     }
 
     if (request.method === "OPTIONS") {
@@ -459,14 +457,12 @@ export default {
       }
 
       try {
-        const billUrl = buildBillDeepLink(bill.id);
-
         await sendPushNotification(
           subscription,
           {
             title: "Bill Beacon",
             body: message,
-            url: billUrl,
+            url: buildBillDeepLink(bill.id),
             billId: bill.id,
             kind: "bill-reminder-test"
           },
@@ -579,7 +575,7 @@ export default {
           origin
         );
       } catch (error) {
-        console.error("KV health check failed", error);
+        console.error("KV health check failed:", error);
 
         return json(
           {
