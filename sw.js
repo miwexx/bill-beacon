@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v5.3";
+const CACHE_VERSION = "bill-beacon-v5.4";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -77,6 +77,79 @@ self.addEventListener("fetch", (event) => {
       )
   );
 });
+
+self.addEventListener("push", (event) => {
+  let payload = {
+    title: "Bill Beacon",
+    body: "You have a new bill reminder.",
+    url: "./"
+  };
+
+  try {
+    if (event.data) {
+      const receivedPayload = event.data.json();
+
+      payload = {
+        ...payload,
+        ...receivedPayload
+      };
+    }
+  } catch (error) {
+    console.warn("Could not read Bill Beacon push payload:", error);
+
+    if (event.data) {
+      payload.body = event.data.text() || payload.body;
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: "./icons/bill-beacon-icon.png",
+      badge: "./icons/bill-beacon-icon.png",
+      tag: "bill-beacon-reminder",
+      renotify: true,
+      data: {
+        url: payload.url || "./"
+      }
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  const targetUrl = new URL(
+    event.notification.data?.url || "./",
+    self.location.origin
+  ).href;
+
+  event.waitUntil(
+    clients.matchAll({
+      type: "window",
+      includeUncontrolled: true
+    }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url === targetUrl && "focus" in client) {
+          return client.focus();
+        }
+      }
+
+      for (const client of clientList) {
+        if ("focus" in client) {
+          return client.focus();
+        }
+      }
+
+      if (clients.openWindow) {
+        return clients.openWindow(targetUrl);
+      }
+
+      return undefined;
+    })
+  );
+});
+
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();
