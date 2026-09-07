@@ -3,6 +3,15 @@
 
   const CARD_ID = "billReminderTestCard";
 
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
   function getBills() {
     const possibleSources = [
       window.bills,
@@ -27,10 +36,10 @@
   function getBillName(bill, index) {
     return String(
       bill?.name ??
-        bill?.title ??
-        bill?.merchant ??
-        bill?.payee ??
-        `Bill ${index + 1}`
+      bill?.title ??
+      bill?.merchant ??
+      bill?.payee ??
+      `Bill ${index + 1}`
     );
   }
 
@@ -38,108 +47,97 @@
     const name = getBillName(bill, index);
     const amount = Number(bill?.amount);
 
-    if (Number.isFinite(amount)) {
-      return `${name} — $${amount.toFixed(2)}`;
-    }
-
-    return name;
+    return Number.isFinite(amount)
+      ? `${name} — $${amount.toFixed(2)}`
+      : name;
   }
 
-  function findSettingsContainer() {
-    const selectors = [
-      "#settingsView",
-      "#settings",
-      "[data-view='settings']",
-      ".settings-page",
-      ".settings-content",
-      ".page-content",
-      "main"
-    ];
+  function getVisibleSettingsHost() {
+    const app = document.getElementById("app");
 
-    for (const selector of selectors) {
-      const element = document.querySelector(selector);
-
-      if (element && element.offsetParent !== null) {
-        return element;
-      }
+    if (!app || app.offsetParent === null) {
+      return null;
     }
 
-    return null;
-  }
+    const pageText = app.innerText || "";
 
-  function looksLikeSettingsPage() {
-    const visibleText = document.body?.innerText || "";
+    if (!pageText.includes("Settings")) {
+      return null;
+    }
 
-    return (
-      visibleText.includes("Settings") &&
-      !document.getElementById(CARD_ID)
-    );
+    return app;
   }
 
   function buildCard() {
     const bills = getBills();
-    const section = document.createElement("section");
+    const card = document.createElement("section");
 
-    section.id = CARD_ID;
-    section.style.cssText = [
-      "margin-top: 24px",
-      "padding: 16px",
-      "border: 1px solid rgba(128, 128, 128, 0.35)",
-      "border-radius: 14px",
-      "background: rgba(128, 128, 128, 0.06)"
-    ].join(";");
+    card.id = CARD_ID;
+    card.className = "settings-section";
 
     const options = bills
       .map((bill, index) => {
         const id = getBillId(bill, index);
         const label = formatBillOption(bill, index);
 
-        return `<option value="${escapeHtml(id)}">${escapeHtml(label)}</option>`;
+        return `
+          <option value="${escapeHtml(id)}">
+            ${escapeHtml(label)}
+          </option>
+        `;
       })
       .join("");
 
-    section.innerHTML = `
-      <h3 style="margin: 0 0 8px;">Bill Reminder Testing</h3>
-      <p style="margin: 0 0 14px; opacity: 0.75;">
-        Select a bill to confirm the reminder tester can access your bill list.
-        This does not send a notification yet.
-      </p>
+    card.innerHTML = `
+      <div class="section-header">Bill Reminder Testing</div>
 
-      <label for="billReminderTestSelect" style="display: block; margin-bottom: 6px;">
-        Bill
-      </label>
+      <div class="card card-pad">
+        <p style="margin-top: 0;">
+          Select a bill to confirm the reminder tester can see your bill list.
+          This step does not send a notification.
+        </p>
 
-      <select
-        id="billReminderTestSelect"
-        style="width: 100%; padding: 10px; border-radius: 10px; margin-bottom: 12px;"
-        ${bills.length ? "" : "disabled"}
-      >
-        ${
-          bills.length
-            ? `<option value="">Choose a bill…</option>${options}`
-            : `<option value="">No bills were found yet</option>`
-        }
-      </select>
+        <label
+          for="billReminderTestSelect"
+          style="display: block; margin-bottom: 8px;"
+        >
+          Bill
+        </label>
 
-      <button
-        id="billReminderTestButton"
-        type="button"
-        style="width: 100%; padding: 11px; border-radius: 10px; cursor: pointer;"
-        ${bills.length ? "" : "disabled"}
-      >
-        Check Selected Bill
-      </button>
+        <select
+          id="billReminderTestSelect"
+          style="width: 100%; margin-bottom: 12px;"
+          ${bills.length ? "" : "disabled"}
+        >
+          ${
+            bills.length
+              ? `<option value="">Choose a bill…</option>${options}`
+              : `<option value="">No bills found yet</option>`
+          }
+        </select>
 
-      <p
-        id="billReminderTestStatus"
-        role="status"
-        style="min-height: 20px; margin: 12px 0 0; opacity: 0.8;"
-      ></p>
+        <button
+          id="billReminderTestButton"
+          class="btn btn-primary"
+          type="button"
+          style="width: 100%;"
+          ${bills.length ? "" : "disabled"}
+        >
+          Check Selected Bill
+        </button>
+
+        <p
+          id="billReminderTestStatus"
+          role="status"
+          aria-live="polite"
+          style="min-height: 20px; margin: 12px 0 0;"
+        ></p>
+      </div>
     `;
 
-    const select = section.querySelector("#billReminderTestSelect");
-    const button = section.querySelector("#billReminderTestButton");
-    const status = section.querySelector("#billReminderTestStatus");
+    const select = card.querySelector("#billReminderTestSelect");
+    const button = card.querySelector("#billReminderTestButton");
+    const status = card.querySelector("#billReminderTestStatus");
 
     button.addEventListener("click", () => {
       const selectedId = select.value;
@@ -153,8 +151,8 @@
         (bill, index) => getBillId(bill, index) === selectedId
       );
 
-      if (selectedIndex === -1) {
-        status.textContent = "That bill could not be found. Refresh and try again.";
+      if (selectedIndex < 0) {
+        status.textContent = "That bill is no longer available. Refresh and try again.";
         return;
       }
 
@@ -164,45 +162,35 @@
       )}.`;
     });
 
-    return section;
+    return card;
   }
 
-  function escapeHtml(value) {
-    return String(value)
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
-  }
+  function addCardIfSettingsIsVisible() {
+    const app = getVisibleSettingsHost();
 
-  function addBillReminderTestCard() {
-    if (!looksLikeSettingsPage()) {
+    if (!app || document.getElementById(CARD_ID)) {
       return;
     }
 
-    const container = findSettingsContainer();
-
-    if (!container) {
-      return;
-    }
-
-    container.appendChild(buildCard());
+    app.appendChild(buildCard());
   }
 
   const observer = new MutationObserver(() => {
-    window.requestAnimationFrame(addBillReminderTestCard);
+    window.requestAnimationFrame(addCardIfSettingsIsVisible);
   });
 
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+  function start() {
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
 
-  window.addEventListener("DOMContentLoaded", addBillReminderTestCard);
-  window.addEventListener("hashchange", addBillReminderTestCard);
+    addCardIfSettingsIsVisible();
+  }
 
-  window.BillBeaconReminderTester = {
-    refresh: addBillReminderTestCard
-  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
 })();
