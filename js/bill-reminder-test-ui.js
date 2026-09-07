@@ -12,16 +12,16 @@
       .replaceAll("'", "&#039;");
   }
 
- function getBills() {
-  try {
-    const savedBills = JSON.parse(localStorage.getItem("bills") || "[]");
+  function getBills() {
+    try {
+      const savedBills = JSON.parse(localStorage.getItem("bills") || "[]");
 
-    return Array.isArray(savedBills) ? savedBills : [];
-  } catch (error) {
-    console.error("Could not read saved bills:", error);
-    return [];
+      return Array.isArray(savedBills) ? savedBills : [];
+    } catch (error) {
+      console.error("Could not read saved bills:", error);
+      return [];
+    }
   }
-}
 
   function getBillId(bill, index) {
     return String(bill?.id ?? bill?.billId ?? index);
@@ -37,13 +37,44 @@
     );
   }
 
+  function formatMoney(value) {
+    const amount = Number(value);
+
+    if (!Number.isFinite(amount)) {
+      return "";
+    }
+
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD"
+    }).format(amount);
+  }
+
   function formatBillOption(bill, index) {
     const name = getBillName(bill, index);
-    const amount = Number(bill?.amount);
+    const amount = formatMoney(bill?.amount);
 
-    return Number.isFinite(amount)
-      ? `${name} — $${amount.toFixed(2)}`
-      : name;
+    return amount ? `${name} — ${amount}` : name;
+  }
+
+  function formatDueDate(value) {
+    const rawDate = String(value || "").trim();
+
+    if (!rawDate) {
+      return "";
+    }
+
+    const parsedDate = new Date(`${rawDate}T12:00:00`);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return rawDate;
+    }
+
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric"
+    }).format(parsedDate);
   }
 
   function getVisibleSettingsHost() {
@@ -53,13 +84,57 @@
       return null;
     }
 
-    const pageText = app.innerText || "";
-
-    if (!pageText.includes("Settings")) {
+    if (!(app.innerText || "").includes("Settings")) {
       return null;
     }
 
     return app;
+  }
+
+  function getWorkerUrl() {
+    const possibleUrls = [
+      window.BILL_BEACON_NOTIFICATIONS_URL,
+      window.NOTIFICATION_WORKER_URL,
+      window.NOTIFICATIONS_WORKER_URL,
+      localStorage.getItem("billBeaconNotificationsUrl")
+    ];
+
+    for (const url of possibleUrls) {
+      if (
+        typeof url === "string" &&
+        /^https:\/\/.+\.workers\.dev\/?$/.test(url.trim())
+      ) {
+        return url.trim().replace(/\/$/, "");
+      }
+    }
+
+    return "";
+  }
+
+  function getFirebaseUser() {
+    const possibleUsers = [
+      window.firebaseAuth?.currentUser,
+      window.auth?.currentUser,
+      window.firebase?.auth?.()?.currentUser
+    ];
+
+    for (const user of possibleUsers) {
+      if (user && typeof user.getIdToken === "function") {
+        return user;
+      }
+    }
+
+    return null;
+  }
+
+  async function getPushSubscription() {
+    if (!("serviceWorker" in navigator)) {
+      throw new Error("This browser does not support service workers.");
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+
+    return registration.pushManager.getSubscription();
   }
 
   function buildCard() {
@@ -87,8 +162,7 @@
 
       <div class="card card-pad">
         <p style="margin-top: 0;">
-          Select a bill to confirm the reminder tester can see your bill list.
-          This step does not send a notification.
+          Select a bill and send a one-time test reminder to this device.
         </p>
 
         <label
@@ -117,7 +191,7 @@
           style="width: 100%;"
           ${bills.length ? "" : "disabled"}
         >
-          Check Selected Bill
+          Send Test Reminder
         </button>
 
         <p
@@ -133,7 +207,7 @@
     const button = card.querySelector("#billReminderTestButton");
     const status = card.querySelector("#billReminderTestStatus");
 
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const selectedId = select.value;
 
       if (!selectedId) {
@@ -146,14 +220,112 @@
       );
 
       if (selectedIndex < 0) {
-        status.textContent = "That bill is no longer available. Refresh and try again.";
+        status.textContent =
+          "That bill is no longer available. Refresh and try again.";
         return;
       }
 
-      status.textContent = `Ready to test: ${getBillName(
-        bills[selectedIndex],
-        selectedIndex
-      )}.`;
+      const bill = bills[selectedIndex];
+      const billName = getBillName(bill, selectedIndex);
+      const amount = Number(bill?.amount);
+      const dueDate = String(
+        bill?.nextDueDate ??
+        bill?.dueDate ??
+        bill?.due ??
+        ""
+      ).trim();
+
+      if (!Number.isFinite(amount)) {
+        status.textContent =
+          "This bill needs a valid amount before it can be tested.";
+        return;
+      }
+
+      if (!dueDate) {
+        status.textContent =
+          "This bill needs a due date before it can be tested.";
+        return;
+      }
+
+      const workerUrl = getWorkerUrl();
+
+      if (!workerUrl) {
+        status.textContent =
+          "The notification Worker URL was not found in the app configuration.";
+        return;
+      }
+
+      const firebaseUser = getFirebaseUser();
+
+      if (!firebaseUser) {
+        status.textContent =
+          "Your sign-in session is not ready. Refresh the app and try again.";
+        return;
+      }
+
+      const originalButtonText = button.textContent;
+
+      try {
+        button.disabled = true;
+        button.textContent = "Sending…";
+        status.textContent = "Preparing test reminder…";
+
+        const subscription = await getPushSubscription();
+
+        if (!subscription) {
+          throw new Error(
+            "Notifications are not enabled on this device. Enable them first, then try again."
+          );
+        }
+
+        const token = await firebaseUser.getIdToken();
+
+        const amountText = formatMoney(amount);
+        const dueDateText = formatDueDate(dueDate);
+
+        const message = `${billName} is due ${dueDateText}. ${amountText}`.trim();
+
+        status.textContent = "Sending test reminder…";
+
+        const response = await fetch(`${workerUrl}/test-bill-reminder`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            subscription: subscription.toJSON(),
+            bill: {
+              id: getBillId(bill, selectedIndex),
+              name: billName,
+              amount,
+              dueDate
+            },
+            message
+          })
+        });
+
+        const result = await response.json().catch(() => ({}));
+
+        if (!response.ok || !result.ok) {
+          throw new Error(
+            result.error ||
+            `The notification Worker returned status ${response.status}.`
+          );
+        }
+
+        status.textContent =
+          "Test reminder sent. Check your device notification.";
+      } catch (error) {
+        console.error("Bill reminder test failed:", error);
+
+        status.textContent =
+          error?.message ||
+          "The test reminder could not be sent. Try again.";
+      } finally {
+        button.disabled = false;
+        button.textContent = originalButtonText;
+      }
     });
 
     return card;
