@@ -940,16 +940,35 @@ async function sendReminderToUserSubscriptions(
           removed: false
         };
       } catch (error) {
-        if (error?.status === 404 || error?.status === 410) {
-          await env.NOTIFICATIONS_KV.delete(key);
+       const isExpiredSubscription =
+  error?.status === 404 || error?.status === 410;
 
-          console.info(
-            "Removed expired push subscription.",
-            {
-              uid,
-              status: error.status
-            }
-          );
+const isVapidKeyMismatch =
+  error?.status === 400 &&
+  String(error?.body || error?.message || "").includes(
+    "VapidPkHashMismatch"
+  );
+
+if (isExpiredSubscription || isVapidKeyMismatch) {
+  await env.NOTIFICATIONS_KV.delete(key);
+
+  console.info(
+    "Removed invalid push subscription.",
+    {
+      uid,
+      status: error.status,
+      reason: isVapidKeyMismatch
+        ? "VapidPkHashMismatch"
+        : "expired-or-gone"
+    }
+  );
+
+  return {
+    sent: false,
+    removed: true,
+    status: error.status
+  };
+}
 
           return {
             sent: false,
