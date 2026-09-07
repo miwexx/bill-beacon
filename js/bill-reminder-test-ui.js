@@ -142,36 +142,24 @@
     return registration.pushManager.getSubscription();
   }
 
-  async function getFirebaseToken() {
-  const possibleAuthBridges = [
-    window.BillBeaconAuth,
-    window.FirebaseAuth,
-    window.firebaseAuth,
-    window.auth
-  ];
+async function getFirebaseToken() {
+  if (typeof window.getBillBeaconFirebaseToken === "function") {
+    const token = await window.getBillBeaconFirebaseToken();
 
-  for (const bridge of possibleAuthBridges) {
-    if (bridge && typeof bridge.getIdToken === "function") {
-      const token = await bridge.getIdToken();
-
-      if (token) {
-        return token;
-      }
+    if (token) {
+      return token;
     }
   }
 
   if (
-    window.firebaseAuth?.currentUser &&
-    typeof window.firebaseAuth.currentUser.getIdToken === "function"
+    window.BillBeaconAuth &&
+    typeof window.BillBeaconAuth.getIdToken === "function"
   ) {
-    return window.firebaseAuth.currentUser.getIdToken();
-  }
+    const token = await window.BillBeaconAuth.getIdToken();
 
-  if (
-    window.auth?.currentUser &&
-    typeof window.auth.currentUser.getIdToken === "function"
-  ) {
-    return window.auth.currentUser.getIdToken();
+    if (token) {
+      return token;
+    }
   }
 
   return "";

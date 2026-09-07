@@ -279,3 +279,14 @@ export {
   getCurrentUserEmail,
   getCurrentUserIdToken
 };
+window.BillBeaconAuth = {
+  async getIdToken() {
+    const user = auth.currentUser;
+
+    if (!user) {
+      return "";
+    }
+
+    return user.getIdToken();
+  }
+};
