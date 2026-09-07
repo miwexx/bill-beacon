@@ -3,7 +3,7 @@
 
   const CARD_ID = "billReminderTestCard";
   const WORKER_URL =
-    "https://bill-tracker-reminders.rodz-m-1990.workers.dev";
+    "https://bill-beacon-notifications.rodz-m-1990.workers.dev";
 
   function escapeHtml(value) {
     return String(value)
