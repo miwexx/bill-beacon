@@ -9959,19 +9959,36 @@ async function activateBillNotifications() {
       );
       return;
     }
+const registration = await navigator.serviceWorker.ready;
 
-    const registration = await navigator.serviceWorker.ready;
+const vapidPublicKey = await getNotificationVapidPublicKey();
 
-    let subscription = await registration.pushManager.getSubscription();
+let subscription = await registration.pushManager.getSubscription();
 
-    if (!subscription) {
-      const vapidPublicKey = await getNotificationVapidPublicKey();
+if (subscription) {
+  const currentKey = subscription.options?.applicationServerKey;
 
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-      });
+  if (currentKey) {
+    const currentKeyBase64 = btoa(
+      String.fromCharCode(...new Uint8Array(currentKey))
+    )
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+
+    if (currentKeyBase64 !== vapidPublicKey) {
+      await subscription.unsubscribe();
+      subscription = null;
     }
+  }
+}
+
+if (!subscription) {
+  subscription = await registration.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+  });
+}
 
     const subscribeResponse = await fetch(
       `${NOTIFICATION_WORKER_URL}/subscriptions`,
