@@ -90,27 +90,47 @@
     return amount ? `${billName} — ${amount}` : billName;
   }
 
-  function getSettingsPage() {
-    const app = document.getElementById("app");
+ function getSettingsPage() {
+  const app = document.getElementById("app");
 
-    if (!app || app.offsetParent === null) {
-      return null;
-    }
-
-    const settingsTitle = Array.from(
-      app.querySelectorAll("h1, h2, h3, .page-title, .section-title")
-    ).find((element) => element.textContent.trim() === "Settings");
-
-    return settingsTitle ? app : null;
+  if (!app || app.offsetParent === null) {
+    return null;
   }
 
-  function findInsertBeforeElement(app) {
-    const tabNavigation = app.querySelector(
-      ".bottom-nav, .bottom-tabs, .tab-bar, nav"
+  const pageText = app.innerText || "";
+
+  if (!pageText.includes("Settings")) {
+    return null;
+  }
+
+  return app;
+}
+
+ function findInsertBeforeElement(app) {
+  const tabLabels = [
+    "Dashboard",
+    "Recurring",
+    "Bills",
+    "Insights",
+    "Settings"
+  ];
+
+  const navigationCandidate = Array.from(
+    app.querySelectorAll("nav, div, section")
+  ).find((element) => {
+    const text = (element.innerText || "").trim();
+
+    return (
+      text.includes(tabLabels[0]) &&
+      text.includes(tabLabels[1]) &&
+      text.includes(tabLabels[2]) &&
+      text.includes(tabLabels[3]) &&
+      text.includes(tabLabels[4])
     );
+  });
 
-    return tabNavigation || null;
-  }
+  return navigationCandidate || null;
+}
 
   async function getPushSubscription() {
     if (!("serviceWorker" in navigator)) {
