@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v5.7";
+const CACHE_VERSION = "bill-beacon-v5.8";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -6,6 +6,7 @@ const APP_SHELL = [
   "./index.html",
   "./css/style.css",
   "./js/app.js",
+  "./js/bill-reminder-test-ui.js",
   "./js/firebase-auth.js",
   "./js/firebase-sync.js",
   "./manifest.json",
