@@ -10078,141 +10078,6 @@ async function sendBillNotificationTest() {
     }
   }
 }
-function getBillReminderTestMessage(bill) {
-  const dueDate = new Date(`${bill.dueDate}T12:00:00`);
-  const today = new Date();
-
-  today.setHours(12, 0, 0, 0);
-
-  const millisecondsPerDay = 24 * 60 * 60 * 1000;
-  const daysUntilDue = Math.round(
-    (dueDate.getTime() - today.getTime()) / millisecondsPerDay
-  );
-
-  const amount = formatCurrency(bill.amount);
-
-  if (daysUntilDue === 0) {
-    return `${bill.name} — ${amount} is due today.`;
-  }
-
-  if (daysUntilDue === 1) {
-    return `${bill.name} — ${amount} is due tomorrow.`;
-  }
-
-  if (daysUntilDue === -1) {
-    return `${bill.name} — ${amount} was due yesterday.`;
-  }
-
-  if (daysUntilDue < -1) {
-    return `${bill.name} — ${amount} was due ${Math.abs(daysUntilDue)} days ago.`;
-  }
-
-  return `${bill.name} — ${amount} is due ${formatDate(
-    bill.dueDate,
-    "full"
-  )}.`;
-}
-
-async function sendSelectedBillReminderTest() {
-  const select = document.getElementById("billReminderTestSelect");
-  const status = document.getElementById("billReminderTestStatus");
-  const button = document.getElementById("sendBillReminderTestBtn");
-
-  try {
-    const billId = select?.value;
-    const bill = billId ? Store.getBill(billId) : null;
-
-    if (!bill) {
-      throw new Error("Choose a bill first.");
-    }
-
-    if (Notification.permission !== "granted") {
-      throw new Error(
-        "Notifications are not allowed yet. Tap Turn On Notifications first."
-      );
-    }
-
-    if (typeof window.getBillBeaconFirebaseToken !== "function") {
-      throw new Error("Please sign in again before sending a reminder test.");
-    }
-
-    const firebaseToken = await window.getBillBeaconFirebaseToken();
-
-    if (!firebaseToken) {
-      throw new Error("Please sign in before sending a reminder test.");
-    }
-
-    const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-
-    if (!subscription) {
-      throw new Error(
-        "This device is not subscribed yet. Tap Turn On Notifications first."
-      );
-    }
-
-    if (button) {
-      button.disabled = true;
-    }
-
-    if (status) {
-      status.textContent = "Sending bill reminder test...";
-    }
-
-    const message = getBillReminderTestMessage(bill);
-
-    const response = await fetch(
-      `${NOTIFICATION_WORKER_URL}/test-bill-reminder`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${firebaseToken}`
-        },
-        body: JSON.stringify({
-          subscription: subscription.toJSON(),
-          bill: {
-            id: bill.id,
-            name: bill.name,
-            amount: bill.amount,
-            dueDate: bill.dueDate
-          },
-          message
-        })
-      }
-    );
-
-    const result = await response.json().catch(() => null);
-
-    if (!response.ok || !result?.ok) {
-      throw new Error(
-        result?.error || "The bill reminder test could not be sent."
-      );
-    }
-
-    if (status) {
-      status.textContent =
-        "Reminder sent. Lock your iPhone, then tap the notification to test the bill link.";
-    }
-  } catch (error) {
-    console.error("Bill reminder test failed:", error);
-
-    if (status) {
-      status.textContent =
-        error?.message ||
-        "Bill reminder test failed. Check the Cloudflare Worker logs.";
-    } else {
-      alert(
-        error?.message ||
-        "Bill reminder test failed. Check the Cloudflare Worker logs."
-      );
-    }
-  } finally {
-    if (button) {
-      button.disabled = false;
-    }
-  }
-}
 function addNotificationSettings() {
   if (
     currentRoute !== "settings" ||
@@ -10227,92 +10092,34 @@ function addNotificationSettings() {
     return;
   }
 
-  const bills = Store.getBills()
-    .filter((bill) => bill && bill.id && bill.name)
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const billOptions = bills.length
-    ? bills
-        .map(
-          (bill) =>
-            `<option value="${escapeHTML(bill.id)}">${escapeHTML(
-              bill.name
-            )} — ${escapeHTML(formatCurrency(bill.amount))}</option>`
-        )
-        .join("")
-    : `<option value="">No bills available</option>`;
-
   const section = document.createElement("div");
   section.id = "notificationSettingsCard";
   section.className = "settings-section";
 
   section.innerHTML = `
     <div class="section-header">Notifications</div>
-
     <div class="card card-pad">
       <p style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin-bottom: var(--space-3);">
         Receive bill reminders on this iPhone.
       </p>
-
       <button class="btn-primary" onclick="activateBillNotifications()">
-        ${svgIcon("bell", 20)} Turn On Notifications
-      </button>
+  ${svgIcon("bell", 20)} Turn On Notifications
+</button>
 
-      <button
-        class="btn-secondary"
-        style="margin-top: var(--space-2);"
-        onclick="sendBillNotificationTest()"
-      >
-        ${svgIcon("bell", 20)} Send Test Notification
-      </button>
+<button
+  class="btn-secondary"
+  style="margin-top: var(--space-2);"
+  onclick="sendBillNotificationTest()"
+>
+  ${svgIcon("bell", 20)} Send Test Notification
+</button>
 
-      <p
-        id="notificationTestStatus"
-        style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"
-        role="status"
-        aria-live="polite"
-      ></p>
-    </div>
-
-    <div class="section-header" style="margin-top: var(--space-5);">
-      Bill Reminder Testing
-    </div>
-
-    <div class="card card-pad">
-      <p style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin-bottom: var(--space-3);">
-        Choose a bill to send a realistic test reminder to this device.
-      </p>
-
-      <label
-        for="billReminderTestSelect"
-        style="display: block; font-size: var(--text-sm); font-weight: 600; margin-bottom: var(--space-2);"
-      >
-        Choose a bill
-      </label>
-
-      <select
-        id="billReminderTestSelect"
-        style="width: 100%; margin-bottom: var(--space-3);"
-        ${bills.length ? "" : "disabled"}
-      >
-        ${billOptions}
-      </select>
-
-      <button
-        id="sendBillReminderTestBtn"
-        class="btn-primary"
-        onclick="sendSelectedBillReminderTest()"
-        ${bills.length ? "" : "disabled"}
-      >
-        ${svgIcon("bell", 20)} Send Test Reminder
-      </button>
-
-      <p
-        id="billReminderTestStatus"
-        style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"
-        role="status"
-        aria-live="polite"
-      ></p>
+<p
+  id="notificationTestStatus"
+  style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"
+  role="status"
+  aria-live="polite"
+></p>
     </div>
   `;
 
@@ -10325,33 +10132,6 @@ render = function () {
   originalBillTrackerRender();
   addNotificationSettings();
 };
-function handleNotificationBillDeepLink() {
-  const params = new URLSearchParams(window.location.search);
-
-  if (params.get("notification") !== "bill") {
-    return;
-  }
-
-  const billId = params.get("billId");
-
-  if (!billId || !Store.getBill(billId)) {
-    return;
-  }
-
-  /*
-   * This stores the target briefly so the Bills view can open/highlight it
-   * after normal app navigation renders.
-   */
-  sessionStorage.setItem("billBeaconNotificationBillId", billId);
-
-  /*
-   * The exact navigation/open-detail hook is added in the next step after
-   * we confirm the notification reaches the app with the correct bill ID.
-   */
-  history.replaceState({}, "", window.location.pathname);
-}
-
-window.addEventListener("load", handleNotificationBillDeepLink);
 /*
  * Legacy reminder scheduling targets the retired bill-tracker-reminders
  * Worker. Keep it disabled until protected scheduling endpoints are added
