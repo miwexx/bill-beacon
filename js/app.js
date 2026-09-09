@@ -9789,18 +9789,27 @@ function exportCSV() {
 // ====================================
 
 function closeNotificationCenter() {
-  const overlay = document.getElementById('notificationCenterOverlay');
-  const sheet = document.getElementById('notificationCenterSheet');
+  const overlay = document.getElementById(
+    'notificationCenterOverlay'
+  );
 
-  if (overlay) overlay.classList.remove('show');
-  if (sheet) sheet.classList.remove('show');
+  const sheet = document.getElementById(
+    'notificationCenterSheet'
+  );
 
-      
-  }
+  overlay?.classList.remove('show');
+  sheet?.classList.remove('show');
+
   setTimeout(() => {
-    document.getElementById('notificationCenterContainer')?.remove();
-  }, 300);
+    document
+      .getElementById('notificationCenterContainer')
+      ?.remove();
 
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+window.closeNotificationCenter = closeNotificationCenter;
 function render() {
   const app = document.getElementById("app");
   if (!app) return;
@@ -11282,30 +11291,37 @@ async function openNotificationRecord(notification) {
 
   closeNotificationCenter();
 
+  const occurrenceDueDate =
+    notification.occurrenceDueDate ||
+    notification.dueDate ||
+    null;
+
   if (notification.installmentPlanId) {
     navigate('payment-plans', {
       planId: notification.installmentPlanId,
       billId: notification.billId || null,
-      occurrenceDueDate:
-        notification.occurrenceDueDate ||
-        notification.dueDate ||
-        null,
+      occurrenceDueDate,
     });
 
     return;
   }
 
   if (notification.billId) {
-    navigate('detail', {
-      id: notification.billId,
-      occurrenceDueDate:
-        notification.occurrenceDueDate ||
-        notification.dueDate ||
-        null,
-      returnRoute: 'today',
-    });
+    const bill = Store.getBill(notification.billId);
 
-    return;
+    if (bill) {
+      navigate('detail', {
+        id: notification.billId,
+        occurrenceDueDate,
+        returnRoute: 'today',
+      });
+
+      return;
+    }
+
+    alert(
+      'This notification refers to a bill that is no longer available on this device.'
+    );
   }
 
   navigate('today');
