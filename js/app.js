@@ -444,7 +444,45 @@ updatePayment(paymentId, updates) {
 // ====================================
 // UTILITIES
 // ====================================
+async function refreshBillBeaconApp() {
+  try {
+    if (!("serviceWorker" in navigator)) {
+      window.location.reload();
+      return;
+    }
 
+    const registration = await navigator.serviceWorker.getRegistration();
+
+    if (!registration) {
+      window.location.reload();
+      return;
+    }
+
+    await registration.update();
+
+    if (registration.waiting) {
+      registration.waiting.postMessage({
+        type: "SKIP_WAITING"
+      });
+
+      alert(
+        "Bill Beacon is updating. The app will reload in a moment."
+      );
+
+      return;
+    }
+
+    alert(
+      "Bill Beacon is checking for updates. Close and reopen the app once if an update prompt appears."
+    );
+  } catch (error) {
+    console.error("Could not refresh Bill Beacon:", error);
+
+    alert(
+      "Could not check for an update. Check your internet connection and try again."
+    );
+  }
+}
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }
@@ -6814,7 +6852,15 @@ function renderActivity() {
         >
           ${svgIcon("chevronLeft", 22)}
         </button>
-
+<button
+  class="btn-secondary"
+  type="button"
+  style="width:100%; margin-top:var(--space-3);"
+  onclick="refreshBillBeaconApp()"
+>
+  ${svgIcon("refresh", 18)}
+  Check for App Updates
+</button>
         <div class="nav-title">Activity & Changes</div>
 
         <div style="width:44px"></div>
