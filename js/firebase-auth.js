@@ -9,6 +9,17 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+import {
+  getFirestore,
+  collection,
+  doc,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 const firebaseConfig = {
   apiKey: "AIzaSyCtQjabLSI4qoHPqGn7BQYWwLhOtpa2BLI",
   authDomain: "bill-beacon-1646c.firebaseapp.com",
@@ -21,6 +32,7 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
+const firestore = getFirestore(firebaseApp);
 
 function getElement(id) {
   return document.getElementById(id);
@@ -273,12 +285,30 @@ async function getCurrentUserIdToken(forceRefresh = false) {
 window.getBillBeaconUserEmail = getCurrentUserEmail;
 window.getBillBeaconFirebaseToken = getCurrentUserIdToken;
 
+window.getBillBeaconFirebaseUser = function () {
+  return auth.currentUser || null;
+};
+
+window.getBillBeaconFirestore = function () {
+  return firestore;
+};
+
+window.firebaseCollection = collection;
+window.firebaseDoc = doc;
+window.firebaseQuery = query;
+window.firebaseOrderBy = orderBy;
+window.firebaseLimit = limit;
+window.firebaseOnSnapshot = onSnapshot;
+window.firebaseUpdateDoc = updateDoc;
+
 export {
   auth,
+  firestore,
   signOut,
   getCurrentUserEmail,
   getCurrentUserIdToken
 };
+
 window.BillBeaconAuth = {
   async getIdToken() {
     const user = auth.currentUser;
