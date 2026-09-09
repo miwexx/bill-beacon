@@ -9754,7 +9754,7 @@ function closeNotificationCenter() {
   setTimeout(() => {
     document.getElementById('notificationCenterContainer')?.remove();
   }, 300);
-  
+
 function render() {
   const app = document.getElementById("app");
   if (!app) return;
@@ -11224,6 +11224,7 @@ function getNotificationIcon(notification) {
 
 async function openNotificationRecord(notification) {
   if (!notification) {
+    closeNotificationCenter();
     return;
   }
 
@@ -11238,8 +11239,11 @@ async function openNotificationRecord(notification) {
   if (notification.installmentPlanId) {
     navigate('payment-plans', {
       planId: notification.installmentPlanId,
-      billId: notification.billId,
-      occurrenceDueDate: notification.occurrenceDueDate,
+      billId: notification.billId || null,
+      occurrenceDueDate:
+        notification.occurrenceDueDate ||
+        notification.dueDate ||
+        null,
     });
 
     return;
@@ -11248,7 +11252,10 @@ async function openNotificationRecord(notification) {
   if (notification.billId) {
     navigate('detail', {
       id: notification.billId,
-      occurrenceDueDate: notification.occurrenceDueDate,
+      occurrenceDueDate:
+        notification.occurrenceDueDate ||
+        notification.dueDate ||
+        null,
       returnRoute: 'today',
     });
 
@@ -11257,7 +11264,6 @@ async function openNotificationRecord(notification) {
 
   navigate('today');
 }
-
 function renderNotificationCenterContent() {
   const content = document.getElementById(
     'notificationCenterContent'
@@ -11424,12 +11430,12 @@ openNotificationCenter = async function () {
 
       <div class="sheet-nav">
         <button
-          class="nav-button"
-          type="button"
-          onclick="closeNotificationCenter()"
-        >
-          Close
-        </button>
+  class="nav-button"
+  id="notificationCenterCloseButton"
+  type="button"
+>
+  Close
+</button>
 
         <div class="sheet-title">Notifications</div>
 
@@ -11444,30 +11450,34 @@ openNotificationCenter = async function () {
   `;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
 
-  requestAnimationFrame(() => {
-    document
-      .getElementById('notificationCenterOverlay')
-      ?.classList.add('show');
+lockBackgroundScroll();
 
-    document
-      .getElementById('notificationCenterSheet')
-      ?.classList.add('show');
-  });
+requestAnimationFrame(() => {
+  document
+    .getElementById('notificationCenterOverlay')
+    ?.classList.add('show');
 
-  renderNotificationCenterContent();
+  document
+    .getElementById('notificationCenterSheet')
+    ?.classList.add('show');
+});
 
-  try {
-    await markAllNotificationsRead();
-  } catch (error) {
-    console.error(
-      'Could not mark notifications as read:',
-      error
-    );
-  }
+document
+  .getElementById('notificationCenterCloseButton')
+  ?.addEventListener('click', closeNotificationCenter);
+
+renderNotificationCenterContent();
+
+try {
+  await markAllNotificationsRead();
+} catch (error) {
+  console.error(
+    'Could not mark notifications as read:',
+    error
+  );
+}
 };
-
 let backgroundScrollY = 0;
 
 function lockBackgroundScroll() {
