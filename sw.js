@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v7.2";
+const CACHE_VERSION = "bill-beacon-v7.3";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -151,15 +151,9 @@ self.addEventListener("notificationclick", (event) => {
     clients.matchAll({
       type: "window",
       includeUncontrolled: true
-    }).then((clientList) => {
+    }).then(async (clientList) => {
       for (const client of clientList) {
         if (client.url === targetUrl && "focus" in client) {
-          return client.focus();
-        }
-      }
-
-      for (const client of clientList) {
-        if ("focus" in client) {
           return client.focus();
         }
       }
@@ -172,7 +166,6 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
-
 self.addEventListener("message", (event) => {
   if (event.data?.type === "SKIP_WAITING") {
     self.skipWaiting();

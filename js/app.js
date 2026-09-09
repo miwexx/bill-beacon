@@ -2092,16 +2092,6 @@ function consumeNotificationDeepLink() {
 // ====================================
 // VIEWS
 // ====================================
-function getNotificationCount() {
-  return Store.getBills().filter((bill) => {
-    const status = getBillStatus(bill);
-
-    return (
-      status === 'overdue' ||
-      (status === 'upcoming' && daysUntil(bill.dueDate) <= 7)
-    );
-  }).length;
-}
 function getDashboardUpcomingGroups(referenceDate = new Date()) {
   const startOfToday = new Date(
     referenceDate.getFullYear(),
@@ -9764,158 +9754,7 @@ function closeNotificationCenter() {
   setTimeout(() => {
     document.getElementById('notificationCenterContainer')?.remove();
   }, 300);
-
-
-function openNotificationCenter() {
-  const bills = Store.getBills();
-
-  const overdueBills = bills
-    .filter((bill) => getBillStatus(bill) === 'overdue')
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-  const upcomingBills = bills
-    .filter((bill) => getBillStatus(bill) === 'upcoming')
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-    .slice(0, 5);
-
-  const notifications = [
-    ...overdueBills.map((bill) => ({
-      bill,
-      type: 'overdue',
-      title: 'Payment overdue',
-      message: `${formatCurrency(bill.amount)} was due ${formatDate(
-        bill.dueDate,
-        'short'
-      )}`,
-    })),
-    ...upcomingBills.map((bill) => ({
-      bill,
-      type: 'upcoming',
-      title: relativeDue(bill.dueDate) === 'due today'
-        ? 'Due today'
-        : 'Upcoming bill',
-      message: `${formatCurrency(bill.amount)} · ${formatDate(
-        bill.dueDate,
-        'full'
-      )}`,
-    })),
-  ];
-
-  const container = document.createElement('div');
-  container.id = 'notificationCenterContainer';
-
-  container.innerHTML = `
-    <div
-      class="sheet-overlay"
-      id="notificationCenterOverlay"
-      onclick="closeNotificationCenter()"
-    ></div>
-
-    <div class="sheet" id="notificationCenterSheet">
-      <div class="sheet-handle"></div>
-
-      <div class="sheet-nav">
-        <button class="nav-button" onclick="closeNotificationCenter()">
-          Close
-        </button>
-
-        <div class="sheet-title">Notifications</div>
-
-        <div style="width:54px"></div>
-      </div>
-
-      <div style="padding: var(--space-4);">
-        ${
-          notifications.length
-            ? `
-              <div class="notification-list">
-                ${notifications
-                  .map(({ bill, type, title, message }) => {
-                    const color =
-                      type === 'overdue'
-                        ? 'var(--overdue)'
-                        : 'var(--upcoming)';
-
-                    const background =
-                      type === 'overdue'
-                        ? 'var(--overdue-bg)'
-                        : 'var(--upcoming-bg)';
-
-                    const icon =
-                      type === 'overdue'
-                        ? svgIcon('warning', 18)
-                        : svgIcon('bell', 18);
-
-                    return `
-                      <button
-                        class="notification-row"
-                        onclick="closeNotificationCenter(); navigate('detail', { id: '${bill.id}' })"
-                      >
-                        <div
-                          class="notification-row-icon"
-                          style="color:${color}; background:${background};"
-                        >
-                          ${icon}
-                        </div>
-
-                        <div class="notification-row-copy">
-                          <div class="notification-row-title">
-                            ${title}
-                          </div>
-
-                          <div class="notification-row-message">
-                            ${escapeHtml(bill.name)} · ${message}
-                          </div>
-                        </div>
-
-                        <div class="notification-row-arrow">
-                          ${svgIcon('chevronRight', 18)}
-                        </div>
-                      </button>
-                    `;
-                  })
-                  .join('')}
-              </div>
-            `
-            : `
-              <div class="empty-state">
-                <div class="empty-state-icon">
-                  ${svgIcon('checkCircle', 48)}
-                </div>
-                <div class="empty-state-title">You are all caught up</div>
-                <div class="empty-state-text">
-                  No overdue or upcoming bill reminders right now.
-                </div>
-              </div>
-            `
-        }
-
-        <button
-          class="btn-secondary"
-          style="margin-top: var(--space-4);"
-          onclick="closeNotificationCenter(); navigate('settings')"
-        >
-          ${svgIcon('gear', 18)}
-          Notification Settings
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document
-      .getElementById('notificationCenterOverlay')
-      ?.classList.add('show');
-
-    document
-      .getElementById('notificationCenterSheet')
-      ?.classList.add('show');
-  });
-}
-
+  
 function render() {
   const app = document.getElementById("app");
   if (!app) return;
@@ -10240,127 +10079,6 @@ render = function () {
   originalBillTrackerRender();
   addNotificationSettings();
 };
-/*
- * Legacy reminder scheduling targets the retired bill-tracker-reminders
- * Worker. Keep it disabled until protected scheduling endpoints are added
- * to bill-beacon-notifications.
- */
-function getReminderSendTime(dueDate, daysBefore) {
-  const [year, month, day] = dueDate.slice(0, 10).split("-").map(Number);
-
-  const sendTime = new Date(
-    year,
-    month - 1,
-    day - Number(daysBefore),
-    9,
-    0,
-    0,
-    0
-  );
-
-  return sendTime.toISOString();
-}
-
-async function syncBillReminders(billId, bill, adminToken, subscriptionId) {
-  const reminders = bill
-    ? (bill.reminderOffsets || [])
-        .map((daysBefore) => ({
-          title: bill.autopay
-  ? `Autopay upcoming: ${bill.name}`
-  : `Bill due: ${bill.name}`,
-
-body: bill.autopay
-  ? `${formatCurrency(bill.amount)} will be paid automatically on ${formatDate(
-      bill.dueDate,
-      "full"
-    )}.`
-  : `${formatCurrency(bill.amount)} is due on ${formatDate(
-      bill.dueDate,
-      "full"
-    )}.`,
-          sendAt: getReminderSendTime(bill.dueDate, daysBefore),
-        }))
-        .filter((reminder) => new Date(reminder.sendAt).getTime() > Date.now())
-    : [];
-
-  const response = await fetch(`${NOTIFICATION_WORKER_URL}/sync-bill`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${adminToken}`,
-    },
-    body: JSON.stringify({
-      subscriptionId,
-      billId,
-      reminders,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Could not schedule bill reminders.");
-  }
-}
-
-async function syncAllBillReminders(adminToken, subscriptionId) {
-  const bills = Store.getBills();
-
-  await Promise.all(
-    bills.map((bill) =>
-      syncBillReminders(bill.id, bill, adminToken, subscriptionId)
-    )
-  );
-}
-
-function queueBillReminderSync(billId, bill) {
-  const adminToken = localStorage.getItem("billTrackerAdminToken");
-  const subscriptionId = localStorage.getItem("billTrackerSubscriptionId");
-
-  if (!adminToken || !subscriptionId) {
-    return;
-  }
-
-  syncBillReminders(billId, bill, adminToken, subscriptionId).catch((error) => {
-    console.error("Reminder sync failed:", error);
-  });
-}
-
-const originalAddBillForReminders = Store.addBill.bind(Store);
-
-Store.addBill = function (bill) {
-  originalAddBillForReminders(bill);
-  queueBillReminderSync(bill.id, bill);
-};
-
-const originalUpdateBillForReminders = Store.updateBill.bind(Store);
-
-Store.updateBill = function (billId, updates) {
-  originalUpdateBillForReminders(billId, updates);
-  queueBillReminderSync(billId, Store.getBill(billId));
-};
-
-/*const originalDeleteBillForReminders = Store.deleteBill.bind(Store);
-
-Store.deleteBill = function (billId) {
-  originalDeleteBillForReminders(billId);
-  queueBillReminderSync(billId, null);
-};*/
-
-const originalAddPaymentForReminders = Store.addPayment.bind(Store);
-
-Store.addPayment = function (payment) {
-  const bill = Store.getBill(payment.billId);
-
-  originalAddPaymentForReminders(payment);
-
-  if (bill && bill.recurrence === "None") {
-    queueBillReminderSync(bill.id, null);
-  }
-};
-/*
-function getReminderSendTime(dueDate, daysBefore) {
-  // existing legacy reminder-sync code
-}
-*/
 /* ============================================
    Full Backup and Restore
 ============================================ */
@@ -10503,212 +10221,34 @@ render = function () {
   renderWithBackupSettings();
   addBackupSettings();
 };
+function attachSignOutButton() {
+  const signOutButton = document.getElementById("signout-button");
 
-/* ============================================
-   Upcoming Notification Schedule
-============================================ */
-
-function formatReminderDateTime(dateString) {
-  return new Date(dateString).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-async function loadUpcomingReminders() {
-  const content = document.getElementById("upcomingReminderList");
-
-  if (!content) {
+  if (!signOutButton || signOutButton.dataset.billBeaconBound === "true") {
     return;
   }
 
-  const adminToken = localStorage.getItem("billTrackerAdminToken");
-  const subscriptionId = localStorage.getItem("billTrackerSubscriptionId");
+  signOutButton.dataset.billBeaconBound = "true";
 
-  if (!adminToken || !subscriptionId) {
-    content.innerHTML = `
-      <div style="font-size: var(--text-sm); color: var(--text-muted);">
-        Turn on notifications first to view scheduled reminders.
-      </div>
-    `;
-    return;
-  }
-
-  content.innerHTML = `
-    <div style="font-size: var(--text-sm); color: var(--text-muted);">
-      Loading scheduled reminders…
-    </div>
-  `;
-
-  try {
-    const response = await fetch(
-      `${NOTIFICATION_WORKER_URL}/upcoming-reminders`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`,
-        },
-        body: JSON.stringify({ subscriptionId }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Could not load scheduled reminders.");
-    }
-
-    const { reminders } = await response.json();
-
-    if (!reminders.length) {
-      content.innerHTML = `
-        <div style="font-size: var(--text-sm); color: var(--text-muted);">
-          No future reminders are currently scheduled.
-        </div>
-      `;
-      return;
-    }
-
-    content.innerHTML = reminders
-      .map(
-        (reminder) => `
-          <div class="form-row">
-            <div style="flex: 1;">
-              <div class="form-label">${escapeHtml(reminder.title)}</div>
-              <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px;">
-                ${escapeHtml(reminder.body)}
-              </div>
-            </div>
-            <div style="font-size: var(--text-xs); color: var(--accent); text-align: right; max-width: 130px;">
-              ${formatReminderDateTime(reminder.sendAt)}
-            </div>
-          </div>
-        `
-      )
-      .join("");
-  } catch (error) {
-    content.innerHTML = `
-      <div style="font-size: var(--text-sm); color: var(--status-overdue);">
-        ${escapeHtml(error.message)}
-      </div>
-    `;
-  }
-}
-
-function addUpcomingReminderSettings() {
-  if (
-    currentRoute !== "settings" ||
-    document.getElementById("upcomingReminderSettings")
-  ) {
-    return;
-  }
-
-  const container = document.querySelector(".main-content .content-pad");
-
-  if (!container) {
-    return;
-  }
-
-  const section = document.createElement("div");
-  section.id = "upcomingReminderSettings";
-  section.className = "settings-section";
-
- section.innerHTML = `
-  <div class="section-header">Upcoming Notifications</div>
-
-  <div class="card card-pad">
-    <div id="upcomingReminderList">
-      <div style="font-size: var(--text-sm); color: var(--text-muted);">
-        Loading scheduled reminders…
-      </div>
-    </div>
-
-    <button
-      class="btn-secondary"
-      style="margin-top: var(--space-3); width: 100%;"
-      onclick="loadUpcomingReminders()"
-      type="button"
-    >
-      Refresh Schedule
-    </button>
-  </div>
-  <div class="settings-section">
-          <div class="section-header">Install on Home Screen</div>
-
-          <div class="card card-pad">
-            <p
-              style="
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-                line-height:1.5;
-              "
-            >
-              To install this app on your iPhone home screen:
-            </p>
-
-            <ol
-              style="
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-                line-height:1.7;
-                padding-left:var(--space-5);
-                margin-top:var(--space-2);
-              "
-            >
-              <li>Tap the <strong>Share</strong> button in Safari</li>
-              <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
-              <li>Tap <strong>Add</strong></li>
-            </ol>
-
-            <p
-              style="
-                font-size:var(--text-xs);
-                color:var(--text-muted);
-                margin-top:var(--space-3);
-              "
-            >
-              Bills remain available locally and synchronize with your household account when online.
-            </p>
-          </div>
-        </div>
-  <button
-    id="signout-button"
-    class="btn-secondary"
-    type="button"
-    style="width: 100%; margin-top: var(--space-3);"
-  >
-    Sign Out
-  </button>
-`;
-
-container.appendChild(section);
-
-const signOutButton = document.getElementById("signout-button");
-
-if (signOutButton) {
   signOutButton.addEventListener("click", async () => {
     try {
       const { signOut, auth } = await import("./firebase-auth.js");
+
       await signOut(auth);
     } catch (error) {
       console.error("Firebase sign-out failed:", error);
+
       alert("Could not sign out. Please refresh and try again.");
     }
   });
 }
 
-loadUpcomingReminders();
-}
-
-const renderWithUpcomingReminders = render;
+const renderWithSignOutButton = render;
 
 render = function () {
-  renderWithUpcomingReminders();
-  addUpcomingReminderSettings();
+  renderWithSignOutButton();
+  attachSignOutButton();
 };
-
 /* ============================================
    Archive Bills and Payment History
 ============================================ */
@@ -10889,12 +10429,7 @@ function archiveBill(billId) {
   window.dispatchEvent(
     new CustomEvent("billbeacon:data-changed")
   );
-
-  if (typeof queueBillReminderSync === "function") {
-    billsToArchive.forEach((bill) => {
-      queueBillReminderSync(bill.id, null);
-    });
-  }
+ 
 }
 function renderPaymentHistory() {
   const activeBills = Store.getBills();
