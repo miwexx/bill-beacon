@@ -6852,15 +6852,6 @@ function renderActivity() {
         >
           ${svgIcon("chevronLeft", 22)}
         </button>
-<button
-  class="btn-secondary"
-  type="button"
-  style="width:100%; margin-top:var(--space-3);"
-  onclick="refreshBillBeaconApp()"
->
-  ${svgIcon("refresh", 18)}
-  Check for App Updates
-</button>
         <div class="nav-title">Activity & Changes</div>
 
         <div style="width:44px"></div>
@@ -9950,7 +9941,7 @@ async function activateBillNotifications() {
     }
 
     const response = await fetch(
-      `${NOTIFICATIONWORKERURL}/subscriptions`,
+      `${NOTIFICATION_WORKER_URL}/subscriptions`,
       {
         method: "POST",
         headers: {
@@ -10040,7 +10031,7 @@ async function sendBillNotificationTest() {
     }
 
     const response = await fetch(
-      `${NOTIFICATIONWORKERURL}/test`,
+      `${NOTIFICATION_WORKER_URL}/test`,
       {
         method: "POST",
         headers: {
