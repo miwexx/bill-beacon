@@ -11254,6 +11254,7 @@ function normalizeNotificationRecord(documentSnapshot) {
     sentAt: data.sentAt || null,
     readAt: data.readAt || null,
     openedAt: data.openedAt || null,
+    clearedAt: data.clearedAt || null,
     url: data.url || '/',
   };
 }
@@ -11311,9 +11312,11 @@ function startNotificationInboxListener() {
   'records'
 );
       notificationInboxState.unreadCount =
-        notificationInboxState.notifications.filter(
-          (notification) => !notification.readAt
-        ).length;
+  notificationInboxState.notifications.filter(
+    (notification) =>
+      !notification.readAt &&
+      !notification.clearedAt
+  ).length;
 
       notificationInboxState.loaded = true;
 
@@ -11389,7 +11392,53 @@ async function markAllNotificationsRead() {
     )
   );
 }
+async function clearReadNotifications() {
+  const uid = getCurrentNotificationUserId();
+  const firestore = getNotificationFirestore();
 
+  if (!uid || !firestore) {
+    return;
+  }
+
+  const readNotifications =
+    notificationInboxState.notifications.filter(
+      (notification) =>
+        notification.readAt && !notification.clearedAt
+    );
+
+  if (!readNotifications.length) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Clear ${readNotifications.length} read notification${
+      readNotifications.length === 1 ? '' : 's'
+    } from this list?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const clearedAt = new Date().toISOString();
+
+  await Promise.all(
+    readNotifications.map(async (notification) => {
+      const notificationRef = window.firebaseDoc(
+        firestore,
+        'households',
+        uid,
+        'notifications',
+        notification.id
+      );
+
+      await window.firebaseUpdateDoc(
+        notificationRef,
+        { clearedAt }
+      );
+    })
+  );
+}
 function formatNotificationSentAt(sentAt) {
   if (!sentAt) {
     return '';
@@ -11501,8 +11550,10 @@ function renderNotificationCenterContent() {
 
   const uid = getCurrentNotificationUserId();
   const notifications = sortNotificationRecords(
-    notificationInboxState.notifications
-  );
+  notificationInboxState.notifications.filter(
+    (notification) => !notification.clearedAt
+  )
+);
 
   if (!uid) {
     content.innerHTML = `
@@ -11655,18 +11706,42 @@ openNotificationCenter = async function () {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button
-  class="nav-button"
-  id="notificationCenterCloseButton"
-  type="button"
+  <button
+    class="nav-button"
+    id="notificationCenterCloseButton"
+    type="button"
+  >
+    Close
+  </button>
+
+  <div class="sheet-title">Notifications</div>
+
+  <button
+    class="nav-button"
+    id="clearReadNotificationsButton"
+    type="button"
+    style="font-size: 13px;"
+  >
+    Clear read
+  </button>
+</div>
+
+<div
+  style="
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 var(--space-4) var(--space-2);
+  "
 >
-  Close
-</button>
-
-        <div class="sheet-title">Notifications</div>
-
-        <div style="width:54px"></div>
-      </div>
+  <button
+    class="btn-secondary"
+    id="markAllNotificationsReadButton"
+    type="button"
+    style="min-height: 36px; padding: 0 12px; font-size: 13px;"
+  >
+    Mark all as read
+  </button>
+</div>
 
       <div
         id="notificationCenterContent"
@@ -11692,17 +11767,41 @@ requestAnimationFrame(() => {
 document
   .getElementById('notificationCenterCloseButton')
   ?.addEventListener('click', closeNotificationCenter);
+  document
+  .getElementById('markAllNotificationsReadButton')
+  ?.addEventListener('click', async () => {
+    try {
+      await markAllNotificationsRead();
+    } catch (error) {
+      console.error(
+        'Could not mark all notifications as read:',
+        error
+      );
+      alert(
+        'Could not mark notifications as read. Please try again.'
+      );
+    }
+  });
+
+document
+  .getElementById('clearReadNotificationsButton')
+  ?.addEventListener('click', async () => {
+    try {
+      await clearReadNotifications();
+    } catch (error) {
+      console.error(
+        'Could not clear read notifications:',
+        error
+      );
+      alert(
+        'Could not clear read notifications. Please try again.'
+      );
+    }
+  });
 
 renderNotificationCenterContent();
 
-try {
-  await markAllNotificationsRead();
-} catch (error) {
-  console.error(
-    'Could not mark notifications as read:',
-    error
-  );
-}
+
 };
 let backgroundScrollY = 0;
 
