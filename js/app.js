@@ -10132,8 +10132,55 @@ async function sendBillInboxTest() {
       );
     }
 
+    const billForTest = {
+      id: String(selectedBill?.id || ""),
+      name: String(
+        selectedBill?.name ||
+          selectedBill?.title ||
+          ""
+      ),
+      amount: Number(
+        selectedBill?.amount ??
+          selectedBill?.monthlyAmount ??
+          selectedBill?.amountDue ??
+          selectedBill?.paymentAmount ??
+          0
+      ),
+      dueDate: String(
+        selectedBill?.dueDate ??
+          selectedBill?.nextDueDate ??
+          selectedBill?.date ??
+          ""
+      ),
+      installmentPlanId:
+        selectedBill?.installmentPlanId || null,
+    };
+
+    if (
+      !billForTest.id ||
+      !billForTest.name ||
+      !Number.isFinite(billForTest.amount) ||
+      billForTest.amount <= 0 ||
+      !billForTest.dueDate
+    ) {
+      console.log(
+        "Bill Beacon inbox test bill:",
+        selectedBill
+      );
+
+      console.log(
+        "Bill Beacon normalized test bill:",
+        billForTest
+      );
+
+      throw new Error(
+        "The selected bill is missing a name, amount, or due date. Check the browser console for the bill fields."
+      );
+    }
+
     if (status) {
-      status.textContent = "Sending inbox test notification…";
+      status.textContent =
+        "Sending inbox test notification…";
     }
 
     const response = await fetch(
@@ -10146,9 +10193,8 @@ async function sendBillInboxTest() {
         },
         body: JSON.stringify({
           subscription: subscription.toJSON(),
-          billId: selectedBill.id,
-          billName: selectedBill.name,
-          dueDate: selectedBill.dueDate || null,
+          bill: billForTest,
+          message: `Test reminder for ${billForTest.name}.`,
         }),
       }
     );
