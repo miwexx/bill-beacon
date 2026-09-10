@@ -11313,23 +11313,20 @@ function startNotificationInboxListener() {
 
       notificationInboxState.loaded = true;
 
-      if (currentRoute === 'today') {
-        render();
-      }
-
+      render();
       renderNotificationCenterContent();
     },
     (error) => {
-      console.error('Notification inbox listener failed:', error);
+      console.error(
+        'Notification inbox listener failed:',
+        error
+      );
 
       notificationInboxState.notifications = [];
       notificationInboxState.unreadCount = 0;
       notificationInboxState.loaded = true;
 
-      if (currentRoute === 'today') {
-        render();
-      }
-
+      render();
       renderNotificationCenterContent();
     }
   );
