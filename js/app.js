@@ -10137,7 +10137,7 @@ async function sendBillInboxTest() {
     }
 
     const response = await fetch(
-      `${NOTIFICATION_WORKER_URL}/test-inbox`,
+      `${NOTIFICATION_WORKER_URL}/test-bill-reminder`,
       {
         method: "POST",
         headers: {
