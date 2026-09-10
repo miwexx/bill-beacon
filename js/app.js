@@ -11305,7 +11305,11 @@ function startNotificationInboxListener() {
     (snapshot) => {
       notificationInboxState.notifications =
         snapshot.docs.map(normalizeNotificationRecord);
-
+        console.log(
+  'Notification inbox loaded:',
+  snapshot.docs.length,
+  'records'
+);
       notificationInboxState.unreadCount =
         notificationInboxState.notifications.filter(
           (notification) => !notification.readAt
@@ -11331,7 +11335,17 @@ function startNotificationInboxListener() {
     }
   );
 }
+function ensureNotificationInboxListener() {
+  const uid = getCurrentNotificationUserId();
+  const firestore = getNotificationFirestore();
 
+  if (!uid || !firestore) {
+    return false;
+  }
+
+  startNotificationInboxListener();
+  return true;
+}
 async function markNotificationRead(notificationId, opened = false) {
   const uid = getCurrentNotificationUserId();
   const firestore = getNotificationFirestore();
@@ -11727,15 +11741,31 @@ function unlockBackgroundScroll() {
   });
 }
 document.addEventListener('DOMContentLoaded', () => {
-  refreshNotificationInbox()
-    .then(() => {
-      if (currentRoute === 'today') {
-        render();
-      }
-    })
-    .catch((error) => {
-      console.error('Notification history refresh failed:', error);
-    });
+  let attempts = 0;
+  const maxAttempts = 30;
+
+  const startWhenFirebaseIsReady = () => {
+    attempts += 1;
+
+    if (ensureNotificationInboxListener()) {
+      render();
+      return;
+    }
+
+    if (attempts < maxAttempts) {
+      window.setTimeout(
+        startWhenFirebaseIsReady,
+        500
+      );
+      return;
+    }
+
+    console.warn(
+      'Notification inbox did not start because Firebase was not ready.'
+    );
+  };
+
+  startWhenFirebaseIsReady();
 });
 
 document.addEventListener(
