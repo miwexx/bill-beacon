@@ -11523,7 +11523,10 @@ async function openNotificationRecord(notification) {
   try {
     await markNotificationRead(notification.id, true);
   } catch (error) {
-    console.error('Could not mark notification as opened:', error);
+    console.error(
+      'Could not mark notification as opened:',
+      error
+    );
   }
 
   closeNotificationCenter();
@@ -11533,16 +11536,24 @@ async function openNotificationRecord(notification) {
     notification.dueDate ||
     null;
 
+  /*
+   * Payment-plan reminder:
+   * pass the exact plan ID, related installment bill ID,
+   * and due-date occurrence into the Payment Plans route.
+   */
   if (notification.installmentPlanId) {
     navigate('payment-plans', {
       planId: notification.installmentPlanId,
       billId: notification.billId || null,
       occurrenceDueDate,
     });
-
     return;
   }
 
+  /*
+   * Normal bill reminder:
+   * open the matching bill detail.
+   */
   if (notification.billId) {
     const bill = Store.getBill(notification.billId);
 
@@ -11552,7 +11563,6 @@ async function openNotificationRecord(notification) {
         occurrenceDueDate,
         returnRoute: 'today',
       });
-
       return;
     }
 
@@ -11629,20 +11639,35 @@ function renderNotificationCenterContent() {
       ${notifications
         .map((notification) => {
           const icon = getNotificationIcon(notification);
-          const sentAt = formatNotificationSentAt(
-            notification.sentAt
-          );
-          const unreadStyle = !notification.readAt
-            ? 'font-weight:700;'
-            : '';
+          const isUnread =
+  !notification.readAt && !notification.clearedAt;
+
+const rowStyle = isUnread
+  ? `
+      background: var(--accent-soft);
+      border-left: 4px solid var(--accent);
+      box-shadow: 0 2px 10px rgba(143, 44, 255, 0.14);
+    `
+  : `
+      opacity: 0.58;
+      background: transparent;
+    `;
+
+const titleStyle = isUnread
+  ? 'font-weight: 800; color: var(--text);'
+  : 'font-weight: 600; color: var(--text-muted);';
+
+const messageStyle = isUnread
+  ? 'color: var(--text);'
+  : 'color: var(--text-muted);';
 
           return `
             <button
-              class="notification-row"
-              type="button"
-              data-notification-id="${escapeHtml(notification.id)}"
-              style="${unreadStyle}"
-            >
+  class="notification-row"
+  type="button"
+  data-notification-id="${escapeHtml(notification.id)}"
+  style="${rowStyle}"
+>
               <div
                 class="notification-row-icon"
                 style="
@@ -11653,31 +11678,20 @@ function renderNotificationCenterContent() {
                 ${svgIcon(icon.name, 18)}
               </div>
 
-              <div class="notification-row-copy">
-                <div class="notification-row-title">
-                  ${escapeHtml(notification.title)}
-                </div>
+              <div
+  class="notification-row-title"
+  style="${titleStyle}"
+>
+  ${escapeHtml(notification.title)}
+</div>
 
-                <div class="notification-row-message">
-                  ${escapeHtml(notification.body)}
+<div
+  class="notification-row-message"
+  style="${messageStyle}"
+>
+  ${escapeHtml(notification.body)}
+</div>
                 </div>
-
-                ${
-                  sentAt
-                    ? `
-                      <div
-                        style="
-                          color:var(--text-muted);
-                          font-size:var(--text-xs);
-                          margin-top:4px;
-                        "
-                      >
-                        Sent ${escapeHtml(sentAt)}
-                      </div>
-                    `
-                    : ''
-                }
-              </div>
 
               <div class="notification-row-arrow">
                 ${svgIcon('chevronRight', 18)}
