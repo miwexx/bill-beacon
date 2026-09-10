@@ -11583,23 +11583,27 @@ function renderNotificationCenterContent() {
   }
 
   const uid = getCurrentNotificationUserId();
+
   const notifications = sortNotificationRecords(
-  notificationInboxState.notifications.filter(
-    (notification) => !notification.clearedAt
-  )
-);
+    notificationInboxState.notifications.filter(
+      (notification) => !notification.clearedAt
+    )
+  );
 
   if (!uid) {
     content.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">${svgIcon('lock', 48)}</div>
-        <div class="empty-state-title">Sign in to view notifications</div>
+        <div class="empty-state-icon">
+          ${svgIcon('lock', 48)}
+        </div>
+        <div class="empty-state-title">
+          Sign in to view notifications
+        </div>
         <div class="empty-state-text">
           Your delivered bill reminders will appear here after you sign in.
         </div>
       </div>
     `;
-
     return;
   }
 
@@ -11607,99 +11611,192 @@ function renderNotificationCenterContent() {
     content.innerHTML = `
       <div
         style="
-          color:var(--text-muted);
-          font-size:var(--text-sm);
-          text-align:center;
-          padding:var(--space-6) 0;
+          color: var(--text-muted);
+          font-size: var(--text-sm);
+          text-align: center;
+          padding: var(--space-6) 0;
         "
       >
         Loading notifications…
       </div>
     `;
-
     return;
   }
 
   if (!notifications.length) {
     content.innerHTML = `
       <div class="empty-state">
-        <div class="empty-state-icon">${svgIcon('checkCircle', 48)}</div>
-        <div class="empty-state-title">You’re all caught up</div>
+        <div class="empty-state-icon">
+          ${svgIcon('checkCircle', 48)}
+        </div>
+        <div class="empty-state-title">
+          You’re all caught up
+        </div>
         <div class="empty-state-text">
           Delivered bill and payment-plan reminders will appear here.
         </div>
       </div>
     `;
-
     return;
   }
 
   content.innerHTML = `
-    <div class="notification-list">
-      ${notifications
-        .map((notification) => {
-          const icon = getNotificationIcon(notification);
-          const isUnread =
-  !notification.readAt && !notification.clearedAt;
+    <div
+      class="notification-list"
+      style="
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      "
+    >
+      ${notifications.map((notification) => {
+        const icon = getNotificationIcon(notification);
 
-const rowStyle = isUnread
-  ? `
-      background: var(--accent-soft);
-      border-left: 4px solid var(--accent);
-      box-shadow: 0 2px 10px rgba(143, 44, 255, 0.14);
-    `
-  : `
-      opacity: 0.58;
-      background: transparent;
-    `;
+        const isUnread =
+          !notification.readAt &&
+          !notification.clearedAt;
 
-const titleStyle = isUnread
-  ? 'font-weight: 800; color: var(--text);'
-  : 'font-weight: 600; color: var(--text-muted);';
+        const rowStyle = isUnread
+          ? `
+              width: 100%;
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              padding: 16px;
+              border: 1px solid var(--accent);
+              border-left: 4px solid var(--accent);
+              border-radius: 18px;
+              background: rgba(143, 44, 255, 0.14);
+              color: var(--text);
+              box-shadow: 0 5px 16px rgba(0, 0, 0, 0.16);
+              text-align: left;
+              cursor: pointer;
+            `
+          : `
+              width: 100%;
+              display: flex;
+              align-items: center;
+              gap: 12px;
+              padding: 16px;
+              border: 1px solid var(--border);
+              border-radius: 18px;
+              background: var(--surface);
+              color: var(--text-muted);
+              text-align: left;
+              cursor: pointer;
+              opacity: 0.62;
+            `;
 
-const messageStyle = isUnread
-  ? 'color: var(--text);'
-  : 'color: var(--text-muted);';
+        const titleStyle = isUnread
+          ? `
+              margin: 0;
+              color: var(--text);
+              font-size: var(--text-base);
+              font-weight: 800;
+              line-height: 1.25;
+            `
+          : `
+              margin: 0;
+              color: var(--text-muted);
+              font-size: var(--text-base);
+              font-weight: 650;
+              line-height: 1.25;
+            `;
 
-          return `
-            <button
-  class="notification-row"
-  type="button"
-  data-notification-id="${escapeHtml(notification.id)}"
-  style="${rowStyle}"
->
+        const messageStyle = isUnread
+          ? `
+              margin-top: 4px;
+              color: var(--text-muted);
+              font-size: var(--text-sm);
+              font-weight: 500;
+              line-height: 1.35;
+            `
+          : `
+              margin-top: 4px;
+              color: var(--text-muted);
+              font-size: var(--text-sm);
+              font-weight: 500;
+              line-height: 1.35;
+            `;
+
+        const arrowColor = isUnread
+          ? 'var(--accent)'
+          : 'var(--text-muted)';
+
+        return `
+          <button
+            type="button"
+            class="notification-row"
+            data-notification-id="${escapeHtml(notification.id)}"
+            style="${rowStyle}"
+          >
+            <div
+              class="notification-row-icon"
+              style="
+                flex: 0 0 48px;
+                width: 48px;
+                height: 48px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 14px;
+                color: ${icon.color};
+                background: ${icon.background};
+              "
+            >
+              ${svgIcon(icon.name, 22)}
+            </div>
+
+            <div
+              class="notification-row-copy"
+              style="
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+              "
+            >
               <div
-                class="notification-row-icon"
+                class="notification-row-title"
                 style="
-                  color:${icon.color};
-                  background:${icon.background};
+                  ${titleStyle}
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
                 "
               >
-                ${svgIcon(icon.name, 18)}
+                ${escapeHtml(notification.title)}
               </div>
 
               <div
-  class="notification-row-title"
-  style="${titleStyle}"
->
-  ${escapeHtml(notification.title)}
-</div>
-
-<div
-  class="notification-row-message"
-  style="${messageStyle}"
->
-  ${escapeHtml(notification.body)}
-</div>
-                </div>
-
-              <div class="notification-row-arrow">
-                ${svgIcon('chevronRight', 18)}
+                class="notification-row-message"
+                style="
+                  ${messageStyle}
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                "
+              >
+                ${escapeHtml(notification.body)}
               </div>
-            </button>
-          `;
-        })
-        .join('')}
+            </div>
+
+            <div
+              class="notification-row-arrow"
+              aria-hidden="true"
+              style="
+                flex: 0 0 22px;
+                width: 22px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                color: ${arrowColor};
+              "
+            >
+              ${svgIcon('chevronRight', 20)}
+            </div>
+          </button>
+        `;
+      }).join('')}
     </div>
   `;
 
@@ -11707,7 +11804,8 @@ const messageStyle = isUnread
     .querySelectorAll('[data-notification-id]')
     .forEach((button) => {
       button.addEventListener('click', () => {
-        const notificationId = button.dataset.notificationId;
+        const notificationId =
+          button.dataset.notificationId;
 
         const notification =
           notificationInboxState.notifications.find(
@@ -11719,8 +11817,7 @@ const messageStyle = isUnread
     });
 }
 
-openNotificationCenter = async function () {
-  startNotificationInboxListener();
+async function openNotificationCenter() {
 
   const existingContainer = document.getElementById(
     'notificationCenterContainer'
