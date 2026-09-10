@@ -11209,7 +11209,29 @@ let notificationInboxState = {
 getNotificationCount = function () {
   return notificationInboxState.unreadCount || 0;
 };
+function getNotificationCount() {
+  return notificationInboxState.unreadCount || 0;
+}
 
+async function syncHomeScreenNotificationBadge() {
+  const count = getNotificationCount();
+
+  try {
+    if (count > 0 && "setAppBadge" in navigator) {
+      await navigator.setAppBadge(count);
+      return;
+    }
+
+    if (count === 0 && "clearAppBadge" in navigator) {
+      await navigator.clearAppBadge();
+    }
+  } catch (error) {
+    console.warn(
+      "Could not update the Home Screen badge:",
+      error
+    );
+  }
+}
 function getCurrentNotificationUserId() {
   return window.getBillBeaconFirebaseUser?.()?.uid || null;
 }
@@ -11320,8 +11342,9 @@ function startNotificationInboxListener() {
 
       notificationInboxState.loaded = true;
 
-      render();
-      renderNotificationCenterContent();
+syncHomeScreenNotificationBadge();
+render();
+renderNotificationCenterContent();
     },
     (error) => {
       console.error(
@@ -11374,6 +11397,7 @@ async function markNotificationRead(notificationId, opened = false) {
   }
 
   await window.firebaseUpdateDoc(notificationRef, updates);
+  syncHomeScreenNotificationBadge();
 }
 
 async function markAllNotificationsRead() {
@@ -11722,7 +11746,7 @@ openNotificationCenter = async function () {
     type="button"
     style="font-size: 13px;"
   >
-    Clear read
+    Clear Read
   </button>
 </div>
 
@@ -11739,7 +11763,7 @@ openNotificationCenter = async function () {
     type="button"
     style="min-height: 36px; padding: 0 12px; font-size: 13px;"
   >
-    Mark all as read
+    Mark All As Read
   </button>
 </div>
 
