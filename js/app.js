@@ -10071,6 +10071,115 @@ async function sendBillNotificationTest() {
     }
   }
 }
+async function sendBillInboxTest() {
+  const status = document.getElementById(
+    "notificationTestStatus"
+  );
+
+  try {
+    if (
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
+      throw new Error(
+        "Push notifications are not supported in this browser."
+      );
+    }
+
+    if (Notification.permission !== "granted") {
+      throw new Error(
+        "Notifications are not allowed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    if (
+      typeof window.getBillBeaconFirebaseToken !== "function"
+    ) {
+      throw new Error(
+        "Please sign in again before testing notifications."
+      );
+    }
+
+    const firebaseToken =
+      await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error(
+        "Please sign in before testing notifications."
+      );
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+
+    const subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      throw new Error(
+        "This device is not subscribed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    const activeBills = Store.getBills().filter(
+      (bill) => !bill.archivedAt
+    );
+
+    const selectedBill = activeBills[0];
+
+    if (!selectedBill) {
+      throw new Error(
+        "Add an active bill before sending an inbox test."
+      );
+    }
+
+    if (status) {
+      status.textContent = "Sending inbox test notification…";
+    }
+
+    const response = await fetch(
+      `${NOTIFICATION_WORKER_URL}/test-inbox`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${firebaseToken}`,
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          billId: selectedBill.id,
+          billName: selectedBill.name,
+          dueDate: selectedBill.dueDate || null,
+        }),
+      }
+    );
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      throw new Error(
+        result?.error ||
+          "The inbox test notification could not be sent."
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        "Inbox test sent. Open the bell to confirm the test item appears.";
+    }
+  } catch (error) {
+    console.error("Inbox test notification failed:", error);
+
+    const message =
+      error?.message ||
+      "Inbox test failed. Check the Cloudflare Worker logs.";
+
+    if (status) {
+      status.textContent = message;
+    } else {
+      alert(message);
+    }
+  }
+}
 function addNotificationSettings() {
   if (
     currentRoute !== "settings" ||
@@ -10106,7 +10215,14 @@ function addNotificationSettings() {
 >
   ${svgIcon("bell", 20)} Send Test Notification
 </button>
-
+<button
+  class="btn-secondary"
+  style="margin-top: var(--space-2);"
+  onclick="sendBillInboxTest()"
+  type="button"
+>
+  ${svgIcon("bell", 20)} Send Inbox Test
+</button>
 <p
   id="notificationTestStatus"
   style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"
