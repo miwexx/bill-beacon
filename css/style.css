@@ -2875,3 +2875,37 @@ body {
   opacity: 0.65;
   text-decoration: none;
 }
+/* iPhone PWA: keep normal app content below the status-bar safe area. */
+:root {
+  --bb-safe-top: env(safe-area-inset-top, 0px);
+  --bb-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Make the normal app shell fill the screen correctly in standalone mode. */
+html,
+body {
+  min-height: 100%;
+  background: var(--bg);
+}
+
+/* The regular page navigation must never slide beneath the status bar. */
+.nav-bar {
+  padding-top: var(--bb-safe-top);
+  min-height: calc(56px + var(--bb-safe-top));
+}
+
+/* Keep the navigation row at its normal visual height below the safe area. */
+.nav-bar-content {
+  min-height: 56px;
+}
+
+/* Protect page content and the bottom tab bar on iPhones. */
+.main-content {
+  padding-top: 0;
+  padding-bottom: calc(88px + var(--bb-safe-bottom));
+}
+
+.tab-bar {
+  padding-bottom: var(--bb-safe-bottom);
+  min-height: calc(72px + var(--bb-safe-bottom));
+}
