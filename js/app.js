@@ -3464,7 +3464,7 @@ function renderBills() {
                 onclick="openAddMenu()"
               >
                 ${svgIcon('plus', 18)}
-                Add bill
+                Add Recurring Bill
               </button>
             </div>
           `
@@ -3907,7 +3907,7 @@ function renderCalendar() {
                   onclick="openBillForm()"
                 >
                   ${svgIcon("plus", 18)}
-                  Add bill
+                  Add Recurring Bill
                 </button>
               </div>
             `
@@ -4105,7 +4105,7 @@ overflow:hidden;
                 onclick="closeCalendarDay();openCalendarAddMenu('${dateString}')"
               >
                 ${svgIcon("plus", 18)}
-                Add Bill
+                Add Recurring Bill
               </button>
             `
             : `
@@ -4125,7 +4125,7 @@ overflow:hidden;
                   onclick="closeCalendarDay();openCalendarAddMenu('${dateString}')"
                 >
                   ${svgIcon("plus", 18)}
-                  Add Bill
+                  Add Recurring Bill
                 </button>
               </div>
             `
@@ -8077,7 +8077,7 @@ function openAddMenu() {
           onclick="closeAddMenu(); openBillForm()"
         >
           ${svgIcon('plus', 20)}
-          Add bill
+          Add Recurring Bill
         </button>
 
         <button
@@ -8146,7 +8146,7 @@ window.openCalendarAddMenu = function(dateString) {
           onclick="closeCalendarAddMenu(); openBillForm(null, '${selectedDate}')"
         >
           ${svgIcon('plus', 20)}
-          Add bill
+          Add Recurring Bill
         </button>
 
         <button
