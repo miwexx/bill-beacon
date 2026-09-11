@@ -198,7 +198,7 @@ async function sendPushNotification(subscription, payload, env) {
 async function healthStorageCheck(env) {
   const key = `healthcheck:${crypto.randomUUID()}`;
 
-  await env.NOTIFICATIONS_KV.put(
+  await env.NOTIFICATIONSKV.put(
     key,
     JSON.stringify({
       checkedAt: new Date().toISOString()
@@ -210,7 +210,7 @@ async function healthStorageCheck(env) {
 
   const stored = await env.NOTIFICATIONSKV.get(key, "json");
 
-  await env.NOTIFICATIONS_KV.delete(key);
+  await env.NOTIFICATIONSKV.delete(key);
 
   return Boolean(stored?.checkedAt);
 }
@@ -784,7 +784,7 @@ async function listAllKvKeys(env, prefix) {
   let cursor;
 
   do {
-    const result = await env.NOTIFICATIONS_KV.list({
+    const result = await env.NOTIFICATIONSKV.list({
       prefix,
       cursor,
       limit: 1000
@@ -812,7 +812,7 @@ async function getUserSubscriptions(env, uid) {
         record.uid !== uid ||
         !isValidPushSubscription(record.subscription)
       ) {
-        await env.NOTIFICATIONS_KV.delete(key.name);
+        await env.NOTIFICATIONSKV.delete(key.name);
 
         console.info("Removed malformed push subscription record.", {
           uid,
@@ -845,12 +845,12 @@ async function getUserSubscriptions(env, uid) {
 
     if (!existing || itemUpdatedAt >= existingUpdatedAt) {
       if (existing) {
-        await env.NOTIFICATIONS_KV.delete(existing.key);
+        await env.NOTIFICATIONSKV.delete(existing.key);
       }
 
       latestByEndpoint.set(endpoint, item);
     } else {
-      await env.NOTIFICATIONS_KV.delete(item.key);
+      await env.NOTIFICATIONSKV.delete(item.key);
     }
   }
 
@@ -1173,7 +1173,7 @@ async function sendReminderToUserSubscriptions(
         isVapidKeyMismatch ||
         isInvalidAuthSecret
       ) {
-        await env.NOTIFICATIONS_KV.delete(key);
+        await env.NOTIFICATIONSKV.delete(key);
 
         removed += 1;
 
@@ -1332,7 +1332,7 @@ async function processUserReminders(
       outcomes.failures += delivery.failures;
 
       if (delivery.sent > 0) {
-        await env.NOTIFICATIONS_KV.put(
+        await env.NOTIFICATIONSKV.put(
           notification.notificationId,
           JSON.stringify({
             uid,
@@ -1450,7 +1450,7 @@ async function runScheduledBillReminders(env) {
   } finally {
     summary.finishedAt = new Date().toISOString();
 
-    await env.NOTIFICATIONS_KV.put(
+    await env.NOTIFICATIONSKV.put(
       CRON_STATUS_KEY,
       JSON.stringify(summary)
     );
@@ -1530,7 +1530,7 @@ export default {
 
       const existing = await env.NOTIFICATIONSKV.get(key, "json");
 
-      await env.NOTIFICATIONS_KV.put(
+      await env.NOTIFICATIONSKV.put(
         key,
         JSON.stringify({
           uid: authentication.user.uid,
