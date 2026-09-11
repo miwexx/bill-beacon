@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v8.9.7";
+const CACHE_VERSION = "bill-beacon-v8.9.8";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -36,53 +36,13 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") {
-    return;
-  }
-
-  const requestUrl = new URL(event.request.url);
-
-  /*
-   * Do not intercept requests to Firebase, Google, the notification
-   * Worker, or any other external domain. These must reach the network
-   * directly and must never be replaced with Response.error().
-   */
-  if (requestUrl.origin !== self.location.origin) {
-    return;
-  }
-
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      return fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.ok) {
-            const responseCopy = networkResponse.clone();
-
-            caches.open(CACHE_NAME).then((cache) => {
-              cache.put(event.request, responseCopy);
-            });
-          }
-
-          return networkResponse;
-        })
-        .catch(() => {
-          if (event.request.mode === "navigate") {
-            return caches.match("./index.html");
-          }
-
-          return new Response("", {
-            status: 503,
-            statusText: "Offline"
-          });
-        });
-    })
-  );
-});
+/*
+ * Intentionally no fetch event handler.
+ *
+ * Cloudflare Pages serves the current app files directly from the network.
+ * This avoids intercepting Firebase authentication, Firestore sync, or the
+ * separate notification Worker API during notification subscription setup.
+ */
 
 async function setHomeScreenBadge(count) {
   try {
