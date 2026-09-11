@@ -6,7 +6,6 @@ const APP_SHELL = [
   "./index.html",
   "./css/style.css",
   "./js/app.js",
-  "./js/bill-reminder-test-ui.js",
   "./js/firebase-auth.js",
   "./js/firebase-sync.js",
   "./manifest.json",
@@ -15,7 +14,9 @@ const APP_SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(APP_SHELL);
+    })
   );
 
   self.skipWaiting();
@@ -23,13 +24,13 @@ self.addEventListener("install", (event) => {
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) =>
-      Promise.all(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
         cacheNames
           .filter((cacheName) => cacheName !== CACHE_NAME)
           .map((cacheName) => caches.delete(cacheName))
-      )
-    )
+      );
+    })
   );
 
   self.clients.claim();
@@ -46,8 +47,10 @@ self.addEventListener("fetch", (event) => {
         const requestUrl = new URL(event.request.url);
         const isSameOrigin =
           requestUrl.origin === self.location.origin;
+
         const isCacheable =
-          isSameOrigin && networkResponse.ok;
+          isSameOrigin &&
+          networkResponse.ok;
 
         if (isCacheable) {
           const responseCopy = networkResponse.clone();
@@ -66,8 +69,10 @@ self.addEventListener("fetch", (event) => {
           }
 
           const requestUrl = new URL(event.request.url);
+
           const isNavigationRequest =
             event.request.mode === "navigate";
+
           const isSameOrigin =
             requestUrl.origin === self.location.origin;
 
@@ -170,14 +175,6 @@ self.addEventListener("push", (event) => {
       }
     });
 
-  /*
-   * The Worker payload currently does not include an exact unread
-   * notification total, so the safe background behavior is to show 1:
-   * at least one unread Bill Beacon reminder exists.
-   *
-   * When the app opens, app.js can replace this with the exact
-   * Firestore unread count.
-   */
   const badgePromise = setHomeScreenBadge(1);
 
   event.waitUntil(
@@ -205,7 +202,10 @@ self.addEventListener("notificationclick", (event) => {
     })
     .then(async (clientList) => {
       for (const client of clientList) {
-        if (client.url === targetUrl && "focus" in client) {
+        if (
+          client.url === targetUrl &&
+          "focus" in client
+        ) {
           return client.focus();
         }
       }
