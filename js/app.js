@@ -11513,7 +11513,37 @@ function getNotificationIcon(notification) {
     background: 'var(--upcoming-bg)',
   };
 }
+function dateFromNotificationDateKey(value) {
+  if (!value) {
+    return null;
+  }
 
+  const rawValue = String(value);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
+    const [year, month, day] = rawValue
+      .split('-')
+      .map(Number);
+
+    return new Date(
+      year,
+      month - 1,
+      day,
+      12,
+      0,
+      0,
+      0
+    ).toISOString();
+  }
+
+  const date = new Date(rawValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+}
 async function openNotificationRecord(notification) {
   if (!notification) {
     closeNotificationCenter();
@@ -11531,10 +11561,14 @@ async function openNotificationRecord(notification) {
 
   closeNotificationCenter();
 
-  const occurrenceDueDate =
-    notification.occurrenceDueDate ||
-    notification.dueDate ||
-    null;
+  const rawOccurrenceDueDate =
+  notification.occurrenceDueDate ||
+  notification.dueDate ||
+  null;
+
+const occurrenceDueDate = rawOccurrenceDueDate
+  ? dateFromNotificationDateKey(rawOccurrenceDueDate)
+  : null;
 
   /*
    * Payment-plan reminder:
