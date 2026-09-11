@@ -2390,7 +2390,6 @@ body {
 #app {
   min-height: 100dvh;
   background: var(--bg);
-  padding-top: env(safe-area-inset-top, 0px);
   box-sizing: border-box;
 }
 
