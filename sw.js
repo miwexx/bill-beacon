@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v8.9.6";
+const CACHE_VERSION = "bill-beacon-v8.9.7";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -41,48 +41,46 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  const requestUrl = new URL(event.request.url);
+
+  /*
+   * Do not intercept requests to Firebase, Google, the notification
+   * Worker, or any other external domain. These must reach the network
+   * directly and must never be replaced with Response.error().
+   */
+  if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        const requestUrl = new URL(event.request.url);
-        const isSameOrigin =
-          requestUrl.origin === self.location.origin;
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
 
-        const isCacheable =
-          isSameOrigin &&
-          networkResponse.ok;
+      return fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.ok) {
+            const responseCopy = networkResponse.clone();
 
-        if (isCacheable) {
-          const responseCopy = networkResponse.clone();
-
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseCopy);
-          });
-        }
-
-        return networkResponse;
-      })
-      .catch(() =>
-        caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            return cachedResponse;
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseCopy);
+            });
           }
 
-          const requestUrl = new URL(event.request.url);
-
-          const isNavigationRequest =
-            event.request.mode === "navigate";
-
-          const isSameOrigin =
-            requestUrl.origin === self.location.origin;
-
-          if (isNavigationRequest && isSameOrigin) {
+          return networkResponse;
+        })
+        .catch(() => {
+          if (event.request.mode === "navigate") {
             return caches.match("./index.html");
           }
 
-          return Response.error();
-        })
-      )
+          return new Response("", {
+            status: 503,
+            statusText: "Offline"
+          });
+        });
+    })
   );
 });
 
