@@ -11657,71 +11657,80 @@ function renderNotificationCenterContent() {
           !notification.clearedAt;
 
         const rowStyle = isUnread
-          ? `
-              width: 100%;
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              padding: 16px;
-              border: 1px solid var(--accent);
-              border-left: 4px solid var(--accent);
-              border-radius: 18px;
-              background: rgba(143, 44, 255, 0.14);
-              color: var(--text);
-              box-shadow: 0 5px 16px rgba(0, 0, 0, 0.16);
-              text-align: left;
-              cursor: pointer;
-            `
-          : `
-              width: 100%;
-              display: flex;
-              align-items: center;
-              gap: 12px;
-              padding: 16px;
-              border: 1px solid var(--border);
-              border-radius: 18px;
-              background: var(--surface);
-              color: var(--text-muted);
-              text-align: left;
-              cursor: pointer;
-              opacity: 0.62;
-            `;
+  ? `
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(143, 44, 255, 0.34);
+      border-left: 3px solid #00d4c7;
+      border-radius: 16px;
+      background:
+        linear-gradient(
+          135deg,
+          rgba(143, 44, 255, 0.18),
+          rgba(19, 16, 36, 0.96)
+        );
+      color: #f8f7ff;
+      box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035);
+      text-align: left;
+      cursor: pointer;
+    `
+  : `
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.075);
+      border-radius: 16px;
+      background: rgba(21, 21, 29, 0.82);
+      color: rgba(248, 247, 255, 0.58);
+      box-shadow: none;
+      text-align: left;
+      cursor: pointer;
+    `;
 
-        const titleStyle = isUnread
-          ? `
-              margin: 0;
-              color: var(--text);
-              font-size: var(--text-base);
-              font-weight: 800;
-              line-height: 1.25;
-            `
-          : `
-              margin: 0;
-              color: var(--text-muted);
-              font-size: var(--text-base);
-              font-weight: 650;
-              line-height: 1.25;
-            `;
+const titleStyle = isUnread
+  ? `
+      margin: 0;
+      color: #f8f7ff;
+      font-size: 16px;
+      font-weight: 750;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    `
+  : `
+      margin: 0;
+      color: rgba(248, 247, 255, 0.58);
+      font-size: 16px;
+      font-weight: 650;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    `;
 
-        const messageStyle = isUnread
-          ? `
-              margin-top: 4px;
-              color: var(--text-muted);
-              font-size: var(--text-sm);
-              font-weight: 500;
-              line-height: 1.35;
-            `
-          : `
-              margin-top: 4px;
-              color: var(--text-muted);
-              font-size: var(--text-sm);
-              font-weight: 500;
-              line-height: 1.35;
-            `;
+const messageStyle = isUnread
+  ? `
+      margin-top: 4px;
+      color: rgba(225, 220, 242, 0.76);
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.35;
+    `
+  : `
+      margin-top: 4px;
+      color: rgba(225, 220, 242, 0.45);
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.35;
+    `;
 
-        const arrowColor = isUnread
-          ? 'var(--accent)'
-          : 'var(--text-muted)';
+const arrowColor = isUnread
+  ? '#00d4c7'
+  : 'rgba(225, 220, 242, 0.40)';
 
         return `
           <button
@@ -11733,16 +11742,21 @@ function renderNotificationCenterContent() {
             <div
               class="notification-row-icon"
               style="
-                flex: 0 0 48px;
-                width: 48px;
-                height: 48px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 14px;
-                color: ${icon.color};
-                background: ${icon.background};
-              "
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: ${isUnread ? '#00d4c7' : 'rgba(0, 212, 199, 0.55)'};
+  background: ${isUnread
+    ? 'rgba(0, 212, 199, 0.10)'
+    : 'rgba(0, 212, 199, 0.055)'};
+  border: 1px solid ${isUnread
+    ? 'rgba(0, 212, 199, 0.10)'
+    : 'rgba(255, 255, 255, 0.04)'};
+"
             >
               ${svgIcon(icon.name, 22)}
             </div>
