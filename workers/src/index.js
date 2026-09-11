@@ -208,7 +208,7 @@ async function healthStorageCheck(env) {
     }
   );
 
-  const stored = await env.NOTIFICATIONS_KV.get(key, "json");
+  const stored = await env.NOTIFICATIONSKV.get(key, "json");
 
   await env.NOTIFICATIONS_KV.delete(key);
 
@@ -805,7 +805,7 @@ async function getUserSubscriptions(env, uid) {
 
   const records = await Promise.all(
     keys.map(async (key) => {
-      const record = await env.NOTIFICATIONS_KV.get(key.name, "json");
+      const record = await env.NOTIFICATIONSKV.get(key.name, "json");
 
       if (
         !record ||
@@ -1311,7 +1311,7 @@ async function processUserReminders(
         uid
       );
 
-      const priorSend = await env.NOTIFICATIONS_KV.get(
+      const priorSend = await env.NOTIFICATIONSKV.get(
         notification.notificationId,
         "json"
       );
@@ -1528,7 +1528,7 @@ export default {
 
       const now = new Date().toISOString();
 
-      const existing = await env.NOTIFICATIONS_KV.get(key, "json");
+      const existing = await env.NOTIFICATIONSKV.get(key, "json");
 
       await env.NOTIFICATIONS_KV.put(
         key,
@@ -1793,7 +1793,7 @@ export default {
     }
 
     if (request.method === "GET" && url.pathname === "/health") {
-      const lastCronRun = await env.NOTIFICATIONS_KV.get(
+      const lastCronRun = await env.NOTIFICATIONSKV.get(
         CRON_STATUS_KEY,
         "json"
       );
