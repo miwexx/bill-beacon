@@ -9,6 +9,17 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
+import {
+  getFirestore,
+  collection,
+  doc,
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
+  updateDoc
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
 const firebaseConfig = {
   apiKey: "AIzaSyCtQjabLSI4qoHPqGn7BQYWwLhOtpa2BLI",
   authDomain: "bill-beacon-1646c.firebaseapp.com",
@@ -21,6 +32,7 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
+const firestore = getFirestore(firebaseApp);
 
 function getElement(id) {
   return document.getElementById(id);
@@ -36,7 +48,7 @@ function setMessage(message = "", isError = false) {
 }
 
 function showLogin() {
-    window.dispatchEvent(new CustomEvent("billbeacon:signed-out"));
+  window.dispatchEvent(new CustomEvent("billbeacon:signed-out"));
 
   const loginScreen = getElement("login-screen");
   const app = getElement("app");
@@ -47,6 +59,7 @@ function showLogin() {
     app.style.display = "none";
   }
 }
+
 function showApp() {
   const loginScreen = getElement("login-screen");
   const app = getElement("app");
@@ -67,6 +80,7 @@ function showApp() {
     })
   );
 }
+
 function friendlyError(error) {
   const code = error?.code || "";
 
@@ -124,6 +138,7 @@ async function signIn() {
 
   await signInWithEmailAndPassword(auth, email, password);
 }
+
 async function resetPassword() {
   const email = getElement("email-login")?.value.trim() || "";
 
@@ -134,7 +149,6 @@ async function resetPassword() {
     );
 
     getElement("email-login")?.focus();
-
     return;
   }
 
@@ -146,6 +160,7 @@ async function resetPassword() {
     "Password-reset email sent. Check your inbox and spam folder."
   );
 }
+
 function setBusy(button, busy, busyText, normalText) {
   if (!button) return;
 
@@ -155,8 +170,8 @@ function setBusy(button, busy, busyText, normalText) {
 
 function initFirebaseLogin() {
   const signInButton = getElement("email-signin-button");
-const createButton = getElement("email-create-button");
-const forgotPasswordButton = getElement("forgot-password-button");
+  const createButton = getElement("email-create-button");
+  const forgotPasswordButton = getElement("forgot-password-button");
 
   if (!signInButton || !createButton) {
     setMessage("Login controls are missing. Refresh and try again.", true);
@@ -197,47 +212,44 @@ const forgotPasswordButton = getElement("forgot-password-button");
       );
     }
   });
+
   forgotPasswordButton?.addEventListener("click", async () => {
-  try {
-    setBusy(
-      forgotPasswordButton,
-      true,
-      "Sending reset email…",
-      "Forgot password?"
-    );
+    try {
+      setBusy(
+        forgotPasswordButton,
+        true,
+        "Sending reset email…",
+        "Forgot password?"
+      );
 
-    await resetPassword();
-  } catch (error) {
-    console.error("Firebase password reset failed:", error);
+      await resetPassword();
+    } catch (error) {
+      console.error("Firebase password reset failed:", error);
 
-    const code = error?.code || "";
+      const code = error?.code || "";
 
-    if (code === "auth/invalid-email") {
-      setMessage("Enter a valid email address.", true);
-    } else if (code === "auth/user-not-found") {
-      /*
-       * In a future public app, you might use a generic response here
-       * so someone cannot test whether an email has an account.
-       * For this private shared-household app, this message is clearer.
-       */
-      setMessage("No household account was found for that email.", true);
-    } else if (code === "auth/too-many-requests") {
-      setMessage("Too many attempts. Wait a moment, then try again.", true);
-    } else {
-      setMessage(
-        error?.message || "Could not send the reset email. Try again.",
-        true
+      if (code === "auth/invalid-email") {
+        setMessage("Enter a valid email address.", true);
+      } else if (code === "auth/user-not-found") {
+        setMessage("No household account was found for that email.", true);
+      } else if (code === "auth/too-many-requests") {
+        setMessage("Too many attempts. Wait a moment, then try again.", true);
+      } else {
+        setMessage(
+          error?.message || "Could not send the reset email. Try again.",
+          true
+        );
+      }
+    } finally {
+      setBusy(
+        forgotPasswordButton,
+        false,
+        "Sending reset email…",
+        "Forgot password?"
       );
     }
-  } finally {
-    setBusy(
-      forgotPasswordButton,
-      false,
-      "Sending reset email…",
-      "Forgot password?"
-    );
-  }
-});
+  });
+
   onAuthStateChanged(auth, (user) => {
     if (user) {
       setMessage("");
@@ -249,16 +261,62 @@ const forgotPasswordButton = getElement("forgot-password-button");
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initFirebaseLogin, { once: true });
+  document.addEventListener("DOMContentLoaded", initFirebaseLogin, {
+    once: true
+  });
 } else {
   initFirebaseLogin();
 }
+
 function getCurrentUserEmail() {
   return auth.currentUser?.email || "";
 }
+
+async function getCurrentUserIdToken(forceRefresh = false) {
+  const user = auth.currentUser;
+
+  if (!user) {
+    return null;
+  }
+
+  return user.getIdToken(forceRefresh);
+}
+
 window.getBillBeaconUserEmail = getCurrentUserEmail;
+window.getBillBeaconFirebaseToken = getCurrentUserIdToken;
+
+window.getBillBeaconFirebaseUser = function () {
+  return auth.currentUser || null;
+};
+
+window.getBillBeaconFirestore = function () {
+  return firestore;
+};
+
+window.firebaseCollection = collection;
+window.firebaseDoc = doc;
+window.firebaseQuery = query;
+window.firebaseOrderBy = orderBy;
+window.firebaseLimit = limit;
+window.firebaseOnSnapshot = onSnapshot;
+window.firebaseUpdateDoc = updateDoc;
+
 export {
   auth,
+  firestore,
   signOut,
-  getCurrentUserEmail
+  getCurrentUserEmail,
+  getCurrentUserIdToken
+};
+
+window.BillBeaconAuth = {
+  async getIdToken() {
+    const user = auth.currentUser;
+
+    if (!user) {
+      return "";
+    }
+
+    return user.getIdToken();
+  }
 };

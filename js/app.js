@@ -444,7 +444,45 @@ updatePayment(paymentId, updates) {
 // ====================================
 // UTILITIES
 // ====================================
+async function refreshBillBeaconApp() {
+  try {
+    if (!("serviceWorker" in navigator)) {
+      window.location.reload();
+      return;
+    }
 
+    const registration = await navigator.serviceWorker.getRegistration();
+
+    if (!registration) {
+      window.location.reload();
+      return;
+    }
+
+    await registration.update();
+
+    if (registration.waiting) {
+      registration.waiting.postMessage({
+        type: "SKIP_WAITING"
+      });
+
+      alert(
+        "Bill Beacon is updating. The app will reload in a moment."
+      );
+
+      return;
+    }
+
+    alert(
+      "Bill Beacon is checking for updates. Close and reopen the app once if an update prompt appears."
+    );
+  } catch (error) {
+    console.error("Could not refresh Bill Beacon:", error);
+
+    alert(
+      "Could not check for an update. Check your internet connection and try again."
+    );
+  }
+}
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 9);
 }
@@ -2003,40 +2041,95 @@ function initTheme() {
 // ====================================
 // ROUTER
 // ====================================
-
 let currentRoute = 'today';
-let routeParams = {
-  billSort: 'dueDate',
-};
-window.addEventListener("billbeacon:signed-out", () => {
-  currentRoute = "today";
+let routeParams = { billSort: 'dueDate' };
 
-  routeParams = {
-    billSort: "dueDate"
-  };
+window.addEventListener('billbeacon:authenticated', () => {
+  startNotificationInboxListener();
+
+  if (!consumeNotificationDeepLink() && currentRoute === 'today') {
+    render();
+  }
 });
+
+window.addEventListener('billbeacon:signed-out', () => {
+  clearNotificationInboxState();
+
+  currentRoute = 'today';
+  routeParams = { billSort: 'dueDate' };
+});
+
 function navigate(route, params = {}) {
   currentRoute = route;
   routeParams = params;
+
   render();
+
   window.scrollTo(0, 0);
+
   const main = document.querySelector('.main-content');
-  if (main) main.scrollTop = 0;
+
+  if (main) {
+    main.scrollTop = 0;
+  }
+}
+function getNotificationDeepLink() {
+  const params = new URLSearchParams(window.location.search);
+
+  const notificationType = params.get('notification');
+  const billId = params.get('billId');
+  const planId = params.get('planId');
+  const dueDate = params.get('dueDate');
+
+  if (!notificationType || !billId) {
+    return null;
+  }
+
+  if (notificationType === 'payment-plan' && planId) {
+    return {
+      route: 'payment-plans',
+      params: {
+        planId,
+        billId,
+        occurrenceDueDate: dueDate || null,
+      },
+    };
+  }
+
+  if (notificationType === 'bill') {
+    return {
+      route: 'detail',
+      params: {
+        id: billId,
+        occurrenceDueDate: dueDate || null,
+        returnRoute: 'today',
+      },
+    };
+  }
+
+  return null;
 }
 
+function consumeNotificationDeepLink() {
+  const destination = getNotificationDeepLink();
+
+  if (!destination) {
+    return false;
+  }
+
+  window.history.replaceState(
+    {},
+    document.title,
+    window.location.pathname
+  );
+
+  navigate(destination.route, destination.params);
+
+  return true;
+}
 // ====================================
 // VIEWS
 // ====================================
-function getNotificationCount() {
-  return Store.getBills().filter((bill) => {
-    const status = getBillStatus(bill);
-
-    return (
-      status === 'overdue' ||
-      (status === 'upcoming' && daysUntil(bill.dueDate) <= 7)
-    );
-  }).length;
-}
 function getDashboardUpcomingGroups(referenceDate = new Date()) {
   const startOfToday = new Date(
     referenceDate.getFullYear(),
@@ -6759,7 +6852,6 @@ function renderActivity() {
         >
           ${svgIcon("chevronLeft", 22)}
         </button>
-
         <div class="nav-title">Activity & Changes</div>
 
         <div style="width:44px"></div>
@@ -9012,11 +9104,13 @@ function openBillForm(billId = null, selectedDate = null) {
 
                   <label class="toggle">
                     <input
-                      type="checkbox"
-                      class="reminder-toggle"
-                      data-days="${reminder.days}"
-                      ${selectedReminders.includes(reminder.days) ? 'checked' : ''}
-                    >
+  type="checkbox"
+  class="reminder-toggle"
+  name="billReminderOffsets"
+  value="${reminder.days}"
+  data-days="${reminder.days}"
+  ${selectedReminders.includes(reminder.days) ? 'checked' : ''}
+>
 
                     <div class="toggle-track">
                       <div class="toggle-thumb"></div>
@@ -9686,169 +9780,27 @@ function exportCSV() {
 // ====================================
 
 function closeNotificationCenter() {
-  const overlay = document.getElementById('notificationCenterOverlay');
-  const sheet = document.getElementById('notificationCenterSheet');
+  const overlay = document.getElementById(
+    'notificationCenterOverlay'
+  );
 
-  if (overlay) overlay.classList.remove('show');
-  if (sheet) sheet.classList.remove('show');
+  const sheet = document.getElementById(
+    'notificationCenterSheet'
+  );
 
-      
-  }
+  overlay?.classList.remove('show');
+  sheet?.classList.remove('show');
+
   setTimeout(() => {
-    document.getElementById('notificationCenterContainer')?.remove();
+    document
+      .getElementById('notificationCenterContainer')
+      ?.remove();
+
+    unlockBackgroundScroll();
   }, 300);
-
-
-function openNotificationCenter() {
-  const bills = Store.getBills();
-
-  const overdueBills = bills
-    .filter((bill) => getBillStatus(bill) === 'overdue')
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-
-  const upcomingBills = bills
-    .filter((bill) => getBillStatus(bill) === 'upcoming')
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate))
-    .slice(0, 5);
-
-  const notifications = [
-    ...overdueBills.map((bill) => ({
-      bill,
-      type: 'overdue',
-      title: 'Payment overdue',
-      message: `${formatCurrency(bill.amount)} was due ${formatDate(
-        bill.dueDate,
-        'short'
-      )}`,
-    })),
-    ...upcomingBills.map((bill) => ({
-      bill,
-      type: 'upcoming',
-      title: relativeDue(bill.dueDate) === 'due today'
-        ? 'Due today'
-        : 'Upcoming bill',
-      message: `${formatCurrency(bill.amount)} · ${formatDate(
-        bill.dueDate,
-        'full'
-      )}`,
-    })),
-  ];
-
-  const container = document.createElement('div');
-  container.id = 'notificationCenterContainer';
-
-  container.innerHTML = `
-    <div
-      class="sheet-overlay"
-      id="notificationCenterOverlay"
-      onclick="closeNotificationCenter()"
-    ></div>
-
-    <div class="sheet" id="notificationCenterSheet">
-      <div class="sheet-handle"></div>
-
-      <div class="sheet-nav">
-        <button class="nav-button" onclick="closeNotificationCenter()">
-          Close
-        </button>
-
-        <div class="sheet-title">Notifications</div>
-
-        <div style="width:54px"></div>
-      </div>
-
-      <div style="padding: var(--space-4);">
-        ${
-          notifications.length
-            ? `
-              <div class="notification-list">
-                ${notifications
-                  .map(({ bill, type, title, message }) => {
-                    const color =
-                      type === 'overdue'
-                        ? 'var(--overdue)'
-                        : 'var(--upcoming)';
-
-                    const background =
-                      type === 'overdue'
-                        ? 'var(--overdue-bg)'
-                        : 'var(--upcoming-bg)';
-
-                    const icon =
-                      type === 'overdue'
-                        ? svgIcon('warning', 18)
-                        : svgIcon('bell', 18);
-
-                    return `
-                      <button
-                        class="notification-row"
-                        onclick="closeNotificationCenter(); navigate('detail', { id: '${bill.id}' })"
-                      >
-                        <div
-                          class="notification-row-icon"
-                          style="color:${color}; background:${background};"
-                        >
-                          ${icon}
-                        </div>
-
-                        <div class="notification-row-copy">
-                          <div class="notification-row-title">
-                            ${title}
-                          </div>
-
-                          <div class="notification-row-message">
-                            ${escapeHtml(bill.name)} · ${message}
-                          </div>
-                        </div>
-
-                        <div class="notification-row-arrow">
-                          ${svgIcon('chevronRight', 18)}
-                        </div>
-                      </button>
-                    `;
-                  })
-                  .join('')}
-              </div>
-            `
-            : `
-              <div class="empty-state">
-                <div class="empty-state-icon">
-                  ${svgIcon('checkCircle', 48)}
-                </div>
-                <div class="empty-state-title">You are all caught up</div>
-                <div class="empty-state-text">
-                  No overdue or upcoming bill reminders right now.
-                </div>
-              </div>
-            `
-        }
-
-        <button
-          class="btn-secondary"
-          style="margin-top: var(--space-4);"
-          onclick="closeNotificationCenter(); navigate('settings')"
-        >
-          ${svgIcon('gear', 18)}
-          Notification Settings
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.body.appendChild(container);
-  lockBackgroundScroll();
-
-  requestAnimationFrame(() => {
-    document
-      .getElementById('notificationCenterOverlay')
-      ?.classList.add('show');
-
-    document
-      .getElementById('notificationCenterSheet')
-      ?.classList.add('show');
-  });
 }
 
+window.closeNotificationCenter = closeNotificationCenter;
 function render() {
   const app = document.getElementById("app");
   if (!app) return;
@@ -9903,9 +9855,7 @@ window.render = render;
 ============================================ */
 
 const NOTIFICATION_WORKER_URL =
-  "https://bill-tracker-reminders.rodz-m-1990.workers.dev";
-
-const VAPID_PUBLIC_KEY = "BFQkR3Ai2QQ8FzCwJyTTBKniWjHXqQnFCIBEmiQPI-COW_NrfhfS-HxP5w3xQMFNERI1-EkzH4HSsFfRejp1jpw";
+  "https://bill-beacon-notifications.rodz-m-1990.workers.dev";
 
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
@@ -9914,85 +9864,368 @@ function urlBase64ToUint8Array(base64String) {
     .replace(/_/g, "/");
 
   const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map((character) => character.charCodeAt(0)));
+
+  return Uint8Array.from(
+    [...rawData].map((character) => character.charCodeAt(0))
+  );
+}
+
+async function getNotificationVapidPublicKey() {
+  const response = await fetch(
+    `${NOTIFICATION_WORKER_URL}/config`
+  );
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok || !data?.vapidPublicKey) {
+    throw new Error(
+      data?.error || "Notification setup is unavailable right now."
+    );
+  }
+
+  return data.vapidPublicKey;
 }
 
 async function activateBillNotifications() {
   try {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      alert("Push notifications are not supported in this browser.");
-      return;
+    if (
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
+      throw new Error(
+        "Push notifications are not supported in this browser."
+      );
     }
 
-    const savedToken = localStorage.getItem("billTrackerAdminToken");
-    const adminToken =
-      savedToken ||
-      window.prompt("Enter your private notification connection code:");
+    if (
+      typeof window.getBillBeaconFirebaseToken !==
+      "function"
+    ) {
+      throw new Error(
+        "Please sign in again before enabling notifications."
+      );
+    }
 
-    if (!adminToken) {
-      return;
+    const firebaseToken =
+      await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error(
+        "Please sign in before enabling notifications."
+      );
     }
 
     const permission = await Notification.requestPermission();
 
     if (permission !== "granted") {
-      alert("Notifications were not allowed. Enable them in iPhone Settings and try again.");
-      return;
+      throw new Error(
+        "Notifications were not allowed. Enable them in your browser or device settings, then try again."
+      );
     }
 
     const registration = await navigator.serviceWorker.ready;
 
-    let subscription = await registration.pushManager.getSubscription();
+    const vapidPublicKey =
+      await getNotificationVapidPublicKey();
+
+    let subscription =
+      await registration.pushManager.getSubscription();
 
     if (!subscription) {
-      subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
-      });
+      subscription =
+        await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey:
+            urlBase64ToUint8Array(vapidPublicKey)
+        });
     }
 
-    const subscribeResponse = await fetch(
-      `${NOTIFICATION_WORKER_URL}/subscribe`,
+    const response = await fetch(
+      `${NOTIFICATION_WORKER_URL}/subscriptions`,
       {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`,
+          "content-type": "application/json",
+          authorization: `Bearer ${firebaseToken}`
         },
-        body: JSON.stringify(subscription),
+        body: JSON.stringify({
+          subscription: subscription.toJSON()
+        })
       }
     );
 
-    if (!subscribeResponse.ok) {
-      throw new Error("The notification subscription could not be saved.");
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      throw new Error(
+        result?.error ||
+          "The notification subscription could not be saved."
+      );
     }
 
-    const { subscriptionId } = await subscribeResponse.json();
-
-    localStorage.setItem("billTrackerAdminToken", adminToken);
-    localStorage.setItem("billTrackerSubscriptionId", subscriptionId);
-
-    const testResponse = await fetch(`${NOTIFICATION_WORKER_URL}/test`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${adminToken}`,
-      },
-      body: JSON.stringify({ subscriptionId }),
-    });
-
-    if (!testResponse.ok) {
-      throw new Error("Subscription saved, but the test notification failed.");
-    }
-
-    await syncAllBillReminders(adminToken, subscriptionId);
-    alert("Notifications are on. A test notification was sent.");
+    alert(
+      "Notifications are on for this device. You’ll receive bill reminders on this device."
+    );
   } catch (error) {
-    console.error(error);
-    alert(`Notification setup failed: ${error.message}`);
+    console.error("Notification setup failed:", error);
+
+    alert(
+      `Notification setup failed: ${
+        error?.message || "Please try again."
+      }`
+    );
   }
 }
+async function sendBillNotificationTest() {
+  const status = document.getElementById(
+    "notificationTestStatus"
+  );
 
+  try {
+    if (
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
+      throw new Error(
+        "Push notifications are not supported in this browser."
+      );
+    }
+
+    if (Notification.permission !== "granted") {
+      throw new Error(
+        "Notifications are not allowed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    if (
+      typeof window.getBillBeaconFirebaseToken !==
+      "function"
+    ) {
+      throw new Error(
+        "Please sign in again before testing notifications."
+      );
+    }
+
+    const firebaseToken =
+      await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error(
+        "Please sign in before testing notifications."
+      );
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+
+    const subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      throw new Error(
+        "This device is not subscribed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    if (status) {
+      status.textContent = "Sending test notification…";
+    }
+
+    const response = await fetch(
+      `${NOTIFICATION_WORKER_URL}/test`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${firebaseToken}`
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON()
+        })
+      }
+    );
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      throw new Error(
+        result?.error ||
+          "The test notification could not be sent."
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        "Test request sent. Lock your iPhone and check the Lock Screen or Notification Center.";
+    }
+  } catch (error) {
+    console.error("Test notification failed:", error);
+
+    const message =
+      error?.message ||
+      "Test notification failed. Check the Cloudflare Worker logs.";
+
+    if (status) {
+      status.textContent = message;
+    } else {
+      alert(message);
+    }
+  }
+}
+async function sendBillInboxTest() {
+  const status = document.getElementById(
+    "notificationTestStatus"
+  );
+
+  try {
+    if (
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
+      throw new Error(
+        "Push notifications are not supported in this browser."
+      );
+    }
+
+    if (Notification.permission !== "granted") {
+      throw new Error(
+        "Notifications are not allowed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    if (
+      typeof window.getBillBeaconFirebaseToken !== "function"
+    ) {
+      throw new Error(
+        "Please sign in again before testing notifications."
+      );
+    }
+
+    const firebaseToken =
+      await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error(
+        "Please sign in before testing notifications."
+      );
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+
+    const subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      throw new Error(
+        "This device is not subscribed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    const activeBills = Store.getBills().filter(
+      (bill) => !bill.archivedAt
+    );
+
+    const selectedBill = activeBills[0];
+
+    if (!selectedBill) {
+      throw new Error(
+        "Add an active bill before sending an inbox test."
+      );
+    }
+
+    const billForTest = {
+      id: String(selectedBill?.id || ""),
+      name: String(
+        selectedBill?.name ||
+          selectedBill?.title ||
+          ""
+      ),
+      amount: Number(
+        selectedBill?.amount ??
+          selectedBill?.monthlyAmount ??
+          selectedBill?.amountDue ??
+          selectedBill?.paymentAmount ??
+          0
+      ),
+      dueDate: String(
+        selectedBill?.dueDate ??
+          selectedBill?.nextDueDate ??
+          selectedBill?.date ??
+          ""
+      ),
+      installmentPlanId:
+        selectedBill?.installmentPlanId || null,
+    };
+
+    if (
+      !billForTest.id ||
+      !billForTest.name ||
+      !Number.isFinite(billForTest.amount) ||
+      billForTest.amount <= 0 ||
+      !billForTest.dueDate
+    ) {
+      console.log(
+        "Bill Beacon inbox test bill:",
+        selectedBill
+      );
+
+      console.log(
+        "Bill Beacon normalized test bill:",
+        billForTest
+      );
+
+      throw new Error(
+        "The selected bill is missing a name, amount, or due date. Check the browser console for the bill fields."
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        "Sending inbox test notification…";
+    }
+
+    const response = await fetch(
+      `${NOTIFICATION_WORKER_URL}/test-bill-reminder`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${firebaseToken}`,
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          bill: billForTest,
+          message: `Test reminder for ${billForTest.name}.`,
+        }),
+      }
+    );
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      throw new Error(
+        result?.error ||
+          "The inbox test notification could not be sent."
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        "Inbox test sent. Open the bell to confirm the test item appears.";
+    }
+  } catch (error) {
+    console.error("Inbox test notification failed:", error);
+
+    const message =
+      error?.message ||
+      "Inbox test failed. Check the Cloudflare Worker logs.";
+
+    if (status) {
+      status.textContent = message;
+    } else {
+      alert(message);
+    }
+  }
+}
 function addNotificationSettings() {
   if (
     currentRoute !== "settings" ||
@@ -10018,8 +10251,15 @@ function addNotificationSettings() {
         Receive bill reminders on this iPhone.
       </p>
       <button class="btn-primary" onclick="activateBillNotifications()">
-        ${svgIcon("bell", 20)} Turn On Notifications
-      </button>
+  ${svgIcon("bell", 20)} Turn On Notifications
+</button>
+
+<p
+  id="notificationTestStatus"
+  style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"
+  role="status"
+  aria-live="polite"
+></p>
     </div>
   `;
 
@@ -10032,119 +10272,6 @@ render = function () {
   originalBillTrackerRender();
   addNotificationSettings();
 };
-
-function getReminderSendTime(dueDate, daysBefore) {
-  const [year, month, day] = dueDate.slice(0, 10).split("-").map(Number);
-
-  const sendTime = new Date(
-    year,
-    month - 1,
-    day - Number(daysBefore),
-    9,
-    0,
-    0,
-    0
-  );
-
-  return sendTime.toISOString();
-}
-
-async function syncBillReminders(billId, bill, adminToken, subscriptionId) {
-  const reminders = bill
-    ? (bill.reminderOffsets || [])
-        .map((daysBefore) => ({
-          title: bill.autopay
-  ? `Autopay upcoming: ${bill.name}`
-  : `Bill due: ${bill.name}`,
-
-body: bill.autopay
-  ? `${formatCurrency(bill.amount)} will be paid automatically on ${formatDate(
-      bill.dueDate,
-      "full"
-    )}.`
-  : `${formatCurrency(bill.amount)} is due on ${formatDate(
-      bill.dueDate,
-      "full"
-    )}.`,
-          sendAt: getReminderSendTime(bill.dueDate, daysBefore),
-        }))
-        .filter((reminder) => new Date(reminder.sendAt).getTime() > Date.now())
-    : [];
-
-  const response = await fetch(`${NOTIFICATION_WORKER_URL}/sync-bill`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${adminToken}`,
-    },
-    body: JSON.stringify({
-      subscriptionId,
-      billId,
-      reminders,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error("Could not schedule bill reminders.");
-  }
-}
-
-async function syncAllBillReminders(adminToken, subscriptionId) {
-  const bills = Store.getBills();
-
-  await Promise.all(
-    bills.map((bill) =>
-      syncBillReminders(bill.id, bill, adminToken, subscriptionId)
-    )
-  );
-}
-
-function queueBillReminderSync(billId, bill) {
-  const adminToken = localStorage.getItem("billTrackerAdminToken");
-  const subscriptionId = localStorage.getItem("billTrackerSubscriptionId");
-
-  if (!adminToken || !subscriptionId) {
-    return;
-  }
-
-  syncBillReminders(billId, bill, adminToken, subscriptionId).catch((error) => {
-    console.error("Reminder sync failed:", error);
-  });
-}
-
-const originalAddBillForReminders = Store.addBill.bind(Store);
-
-Store.addBill = function (bill) {
-  originalAddBillForReminders(bill);
-  queueBillReminderSync(bill.id, bill);
-};
-
-const originalUpdateBillForReminders = Store.updateBill.bind(Store);
-
-Store.updateBill = function (billId, updates) {
-  originalUpdateBillForReminders(billId, updates);
-  queueBillReminderSync(billId, Store.getBill(billId));
-};
-
-/*const originalDeleteBillForReminders = Store.deleteBill.bind(Store);
-
-Store.deleteBill = function (billId) {
-  originalDeleteBillForReminders(billId);
-  queueBillReminderSync(billId, null);
-};*/
-
-const originalAddPaymentForReminders = Store.addPayment.bind(Store);
-
-Store.addPayment = function (payment) {
-  const bill = Store.getBill(payment.billId);
-
-  originalAddPaymentForReminders(payment);
-
-  if (bill && bill.recurrence === "None") {
-    queueBillReminderSync(bill.id, null);
-  }
-};
-
 /* ============================================
    Full Backup and Restore
 ============================================ */
@@ -10287,212 +10414,34 @@ render = function () {
   renderWithBackupSettings();
   addBackupSettings();
 };
+function attachSignOutButton() {
+  const signOutButton = document.getElementById("signout-button");
 
-/* ============================================
-   Upcoming Notification Schedule
-============================================ */
-
-function formatReminderDateTime(dateString) {
-  return new Date(dateString).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-async function loadUpcomingReminders() {
-  const content = document.getElementById("upcomingReminderList");
-
-  if (!content) {
+  if (!signOutButton || signOutButton.dataset.billBeaconBound === "true") {
     return;
   }
 
-  const adminToken = localStorage.getItem("billTrackerAdminToken");
-  const subscriptionId = localStorage.getItem("billTrackerSubscriptionId");
+  signOutButton.dataset.billBeaconBound = "true";
 
-  if (!adminToken || !subscriptionId) {
-    content.innerHTML = `
-      <div style="font-size: var(--text-sm); color: var(--text-muted);">
-        Turn on notifications first to view scheduled reminders.
-      </div>
-    `;
-    return;
-  }
-
-  content.innerHTML = `
-    <div style="font-size: var(--text-sm); color: var(--text-muted);">
-      Loading scheduled reminders…
-    </div>
-  `;
-
-  try {
-    const response = await fetch(
-      `${NOTIFICATION_WORKER_URL}/upcoming-reminders`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${adminToken}`,
-        },
-        body: JSON.stringify({ subscriptionId }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Could not load scheduled reminders.");
-    }
-
-    const { reminders } = await response.json();
-
-    if (!reminders.length) {
-      content.innerHTML = `
-        <div style="font-size: var(--text-sm); color: var(--text-muted);">
-          No future reminders are currently scheduled.
-        </div>
-      `;
-      return;
-    }
-
-    content.innerHTML = reminders
-      .map(
-        (reminder) => `
-          <div class="form-row">
-            <div style="flex: 1;">
-              <div class="form-label">${escapeHtml(reminder.title)}</div>
-              <div style="font-size: var(--text-xs); color: var(--text-muted); margin-top: 4px;">
-                ${escapeHtml(reminder.body)}
-              </div>
-            </div>
-            <div style="font-size: var(--text-xs); color: var(--accent); text-align: right; max-width: 130px;">
-              ${formatReminderDateTime(reminder.sendAt)}
-            </div>
-          </div>
-        `
-      )
-      .join("");
-  } catch (error) {
-    content.innerHTML = `
-      <div style="font-size: var(--text-sm); color: var(--status-overdue);">
-        ${escapeHtml(error.message)}
-      </div>
-    `;
-  }
-}
-
-function addUpcomingReminderSettings() {
-  if (
-    currentRoute !== "settings" ||
-    document.getElementById("upcomingReminderSettings")
-  ) {
-    return;
-  }
-
-  const container = document.querySelector(".main-content .content-pad");
-
-  if (!container) {
-    return;
-  }
-
-  const section = document.createElement("div");
-  section.id = "upcomingReminderSettings";
-  section.className = "settings-section";
-
- section.innerHTML = `
-  <div class="section-header">Upcoming Notifications</div>
-
-  <div class="card card-pad">
-    <div id="upcomingReminderList">
-      <div style="font-size: var(--text-sm); color: var(--text-muted);">
-        Loading scheduled reminders…
-      </div>
-    </div>
-
-    <button
-      class="btn-secondary"
-      style="margin-top: var(--space-3); width: 100%;"
-      onclick="loadUpcomingReminders()"
-      type="button"
-    >
-      Refresh Schedule
-    </button>
-  </div>
-  <div class="settings-section">
-          <div class="section-header">Install on Home Screen</div>
-
-          <div class="card card-pad">
-            <p
-              style="
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-                line-height:1.5;
-              "
-            >
-              To install this app on your iPhone home screen:
-            </p>
-
-            <ol
-              style="
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-                line-height:1.7;
-                padding-left:var(--space-5);
-                margin-top:var(--space-2);
-              "
-            >
-              <li>Tap the <strong>Share</strong> button in Safari</li>
-              <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
-              <li>Tap <strong>Add</strong></li>
-            </ol>
-
-            <p
-              style="
-                font-size:var(--text-xs);
-                color:var(--text-muted);
-                margin-top:var(--space-3);
-              "
-            >
-              Bills remain available locally and synchronize with your household account when online.
-            </p>
-          </div>
-        </div>
-  <button
-    id="signout-button"
-    class="btn-secondary"
-    type="button"
-    style="width: 100%; margin-top: var(--space-3);"
-  >
-    Sign Out
-  </button>
-`;
-
-container.appendChild(section);
-
-const signOutButton = document.getElementById("signout-button");
-
-if (signOutButton) {
   signOutButton.addEventListener("click", async () => {
     try {
       const { signOut, auth } = await import("./firebase-auth.js");
+
       await signOut(auth);
     } catch (error) {
       console.error("Firebase sign-out failed:", error);
+
       alert("Could not sign out. Please refresh and try again.");
     }
   });
 }
 
-loadUpcomingReminders();
-}
-
-const renderWithUpcomingReminders = render;
+const renderWithSignOutButton = render;
 
 render = function () {
-  renderWithUpcomingReminders();
-  addUpcomingReminderSettings();
+  renderWithSignOutButton();
+  attachSignOutButton();
 };
-
 /* ============================================
    Archive Bills and Payment History
 ============================================ */
@@ -10673,12 +10622,7 @@ function archiveBill(billId) {
   window.dispatchEvent(
     new CustomEvent("billbeacon:data-changed")
   );
-
-  if (typeof queueBillReminderSync === "function") {
-    billsToArchive.forEach((bill) => {
-      queueBillReminderSync(bill.id, null);
-    });
-  }
+ 
 }
 function renderPaymentHistory() {
   const activeBills = Store.getBills();
@@ -11243,116 +11187,678 @@ let notificationInboxState = {
   notifications: [],
   unreadCount: 0,
   loaded: false,
+  unsubscribe: null,
+  uid: null,
 };
 
 getNotificationCount = function () {
   return notificationInboxState.unreadCount || 0;
 };
-
-function getNotificationConnection() {
-  const adminToken = localStorage.getItem('billTrackerAdminToken');
-  const subscriptionId = localStorage.getItem('billTrackerSubscriptionId');
-
-  if (!adminToken || !subscriptionId) {
-    return null;
-  }
-
-  return { adminToken, subscriptionId };
+function getNotificationCount() {
+  return notificationInboxState.unreadCount || 0;
 }
 
-async function refreshNotificationInbox() {
-  const connection = getNotificationConnection();
+async function syncHomeScreenNotificationBadge() {
+  const count = getNotificationCount();
 
-  if (!connection) {
-    notificationInboxState = {
-      notifications: [],
-      unreadCount: 0,
-      loaded: true,
-    };
+  try {
+    if (count > 0 && "setAppBadge" in navigator) {
+      await navigator.setAppBadge(count);
+      return;
+    }
 
-    return notificationInboxState;
+    if (count === 0 && "clearAppBadge" in navigator) {
+      await navigator.clearAppBadge();
+    }
+  } catch (error) {
+    console.warn(
+      "Could not update the Home Screen badge:",
+      error
+    );
+  }
+}
+function getCurrentNotificationUserId() {
+  return window.getBillBeaconFirebaseUser?.()?.uid || null;
+}
+
+function getNotificationFirestore() {
+  return window.getBillBeaconFirestore?.() || null;
+}
+
+function stopNotificationInboxListener() {
+  if (typeof notificationInboxState.unsubscribe === 'function') {
+    notificationInboxState.unsubscribe();
   }
 
-  const response = await fetch(`${NOTIFICATION_WORKER_URL}/notifications`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${connection.adminToken}`,
-    },
-    body: JSON.stringify({
-      subscriptionId: connection.subscriptionId,
-    }),
-  });
+  notificationInboxState.unsubscribe = null;
+  notificationInboxState.uid = null;
+}
 
-  if (!response.ok) {
-    throw new Error('Could not load notification history.');
-  }
+function clearNotificationInboxState() {
+  stopNotificationInboxListener();
 
-  const data = await response.json();
+  notificationInboxState.notifications = [];
+  notificationInboxState.unreadCount = 0;
+  notificationInboxState.loaded = false;
+}
 
-  notificationInboxState = {
-    notifications: Array.isArray(data.notifications) ? data.notifications : [],
-    unreadCount: Number(data.unreadCount) || 0,
-    loaded: true,
+function normalizeNotificationRecord(documentSnapshot) {
+  const data = documentSnapshot.data() || {};
+
+  return {
+    id: documentSnapshot.id,
+    type: data.type || 'bill-reminder',
+    entityType: data.entityType || 'bill',
+    billId: data.billId || null,
+    installmentPlanId: data.installmentPlanId || null,
+    occurrenceDueDate: data.occurrenceDueDate || null,
+    dueDate: data.dueDate || null,
+    offsetDays: Number.isFinite(Number(data.offsetDays))
+      ? Number(data.offsetDays)
+      : null,
+    title: data.title || 'Bill Beacon reminder',
+    body: data.body || '',
+    sentAt: data.sentAt || null,
+    readAt: data.readAt || null,
+    openedAt: data.openedAt || null,
+    clearedAt: data.clearedAt || null,
+    url: data.url || '/',
   };
-
-  return notificationInboxState;
 }
 
-async function markNotificationInboxRead() {
-  const connection = getNotificationConnection();
+function sortNotificationRecords(notifications) {
+  return [...notifications].sort((first, second) => {
+    const firstTime = new Date(first.sentAt || 0).getTime();
+    const secondTime = new Date(second.sentAt || 0).getTime();
 
-  if (!connection || notificationInboxState.unreadCount === 0) {
+    return secondTime - firstTime;
+  });
+}
+
+function startNotificationInboxListener() {
+  const uid = getCurrentNotificationUserId();
+  const firestore = getNotificationFirestore();
+
+  if (!uid || !firestore) {
+    clearNotificationInboxState();
     return;
   }
 
-  const response = await fetch(
-    `${NOTIFICATION_WORKER_URL}/notifications/mark-read`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${connection.adminToken}`,
-      },
-      body: JSON.stringify({
-        subscriptionId: connection.subscriptionId,
-      }),
-    }
+  if (
+    notificationInboxState.uid === uid &&
+    typeof notificationInboxState.unsubscribe === 'function'
+  ) {
+    return;
+  }
+
+  stopNotificationInboxListener();
+
+  notificationInboxState.uid = uid;
+
+  const notificationsRef = window.firebaseCollection(
+    firestore,
+    'households',
+    uid,
+    'notifications'
   );
 
-  if (!response.ok) {
-    throw new Error('Could not mark notifications as read.');
+  const notificationsQuery = window.firebaseQuery(
+    notificationsRef,
+    window.firebaseOrderBy('sentAt', 'desc'),
+    window.firebaseLimit(100)
+  );
+
+  notificationInboxState.unsubscribe = window.firebaseOnSnapshot(
+    notificationsQuery,
+    (snapshot) => {
+      notificationInboxState.notifications =
+        snapshot.docs.map(normalizeNotificationRecord);
+        console.log(
+  'Notification inbox loaded:',
+  snapshot.docs.length,
+  'records'
+);
+      notificationInboxState.unreadCount =
+  notificationInboxState.notifications.filter(
+    (notification) =>
+      !notification.readAt &&
+      !notification.clearedAt
+  ).length;
+
+      notificationInboxState.loaded = true;
+
+syncHomeScreenNotificationBadge();
+render();
+renderNotificationCenterContent();
+    },
+    (error) => {
+      console.error(
+        'Notification inbox listener failed:',
+        error
+      );
+
+      notificationInboxState.notifications = [];
+      notificationInboxState.unreadCount = 0;
+      notificationInboxState.loaded = true;
+
+      render();
+      renderNotificationCenterContent();
+    }
+  );
+}
+function ensureNotificationInboxListener() {
+  const uid = getCurrentNotificationUserId();
+  const firestore = getNotificationFirestore();
+
+  if (!uid || !firestore) {
+    return false;
   }
 
-  notificationInboxState = {
-    ...notificationInboxState,
-    unreadCount: 0,
-    notifications: notificationInboxState.notifications.map((notification) => ({
-      ...notification,
-      read: true,
-      readAt: notification.readAt || new Date().toISOString(),
-    })),
+  startNotificationInboxListener();
+  return true;
+}
+async function markNotificationRead(notificationId, opened = false) {
+  const uid = getCurrentNotificationUserId();
+  const firestore = getNotificationFirestore();
+
+  if (!uid || !firestore || !notificationId) {
+    return;
+  }
+
+  const notificationRef = window.firebaseDoc(
+    firestore,
+    'households',
+    uid,
+    'notifications',
+    notificationId
+  );
+
+  const updates = {
+    readAt: new Date().toISOString(),
   };
+
+  if (opened) {
+    updates.openedAt = new Date().toISOString();
+  }
+
+  await window.firebaseUpdateDoc(notificationRef, updates);
+  syncHomeScreenNotificationBadge();
 }
 
-openNotificationCenter = async function () {
-  let history;
-  let loadError = '';
+async function markAllNotificationsRead() {
+  const unreadNotifications =
+    notificationInboxState.notifications.filter(
+      (notification) => !notification.readAt
+    );
+
+  if (!unreadNotifications.length) {
+    return;
+  }
+
+  await Promise.all(
+    unreadNotifications.map((notification) =>
+      markNotificationRead(notification.id)
+    )
+  );
+}
+async function clearReadNotifications() {
+  const uid = getCurrentNotificationUserId();
+  const firestore = getNotificationFirestore();
+
+  if (!uid || !firestore) {
+    return;
+  }
+
+  const readNotifications =
+    notificationInboxState.notifications.filter(
+      (notification) =>
+        notification.readAt && !notification.clearedAt
+    );
+
+  if (!readNotifications.length) {
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Clear ${readNotifications.length} read notification${
+      readNotifications.length === 1 ? '' : 's'
+    } from this list?`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  const clearedAt = new Date().toISOString();
+
+  await Promise.all(
+    readNotifications.map(async (notification) => {
+      const notificationRef = window.firebaseDoc(
+        firestore,
+        'households',
+        uid,
+        'notifications',
+        notification.id
+      );
+
+      await window.firebaseUpdateDoc(
+        notificationRef,
+        { clearedAt }
+      );
+    })
+  );
+}
+function formatNotificationSentAt(sentAt) {
+  if (!sentAt) {
+    return '';
+  }
+
+  const date = new Date(sentAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function getNotificationIcon(notification) {
+  const title = String(notification.title || '').toLowerCase();
+  const body = String(notification.body || '').toLowerCase();
+
+  if (
+    title.includes('due today') ||
+    title.includes('overdue') ||
+    body.includes('due today')
+  ) {
+    return {
+      name: 'warning',
+      color: 'var(--overdue)',
+      background: 'var(--overdue-bg)',
+    };
+  }
+
+  if (notification.entityType === 'payment-plan') {
+    return {
+      name: 'creditcard',
+      color: 'var(--accent)',
+      background: 'var(--upcoming-bg)',
+    };
+  }
+
+  return {
+    name: 'bell',
+    color: 'var(--accent)',
+    background: 'var(--upcoming-bg)',
+  };
+}
+function dateFromNotificationDateKey(value) {
+  if (!value) {
+    return null;
+  }
+
+  const rawValue = String(value);
+
+  if (/^\d{4}-\d{2}-\d{2}$/.test(rawValue)) {
+    const [year, month, day] = rawValue
+      .split('-')
+      .map(Number);
+
+    return new Date(
+      year,
+      month - 1,
+      day,
+      12,
+      0,
+      0,
+      0
+    ).toISOString();
+  }
+
+  const date = new Date(rawValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return date.toISOString();
+}
+async function openNotificationRecord(notification) {
+  if (!notification) {
+    closeNotificationCenter();
+    return;
+  }
 
   try {
-    history = await refreshNotificationInbox();
-    await markNotificationInboxRead();
+    await markNotificationRead(notification.id, true);
   } catch (error) {
-    console.error(error);
-    history = notificationInboxState;
-    loadError = error.message;
+    console.error(
+      'Could not mark notification as opened:',
+      error
+    );
   }
 
-  if (currentRoute === 'today') {
-    render();
+  closeNotificationCenter();
+
+  const rawOccurrenceDueDate =
+  notification.occurrenceDueDate ||
+  notification.dueDate ||
+  null;
+
+const occurrenceDueDate = rawOccurrenceDueDate
+  ? dateFromNotificationDateKey(rawOccurrenceDueDate)
+  : null;
+
+  /*
+   * Payment-plan reminder:
+   * pass the exact plan ID, related installment bill ID,
+   * and due-date occurrence into the Payment Plans route.
+   */
+  if (notification.installmentPlanId) {
+    navigate('payment-plans', {
+      planId: notification.installmentPlanId,
+      billId: notification.billId || null,
+      occurrenceDueDate,
+    });
+    return;
   }
 
-  const notifications = history.notifications || [];
+  /*
+   * Normal bill reminder:
+   * open the matching bill detail.
+   */
+  if (notification.billId) {
+    const bill = Store.getBill(notification.billId);
+
+    if (bill) {
+      navigate('detail', {
+        id: notification.billId,
+        occurrenceDueDate,
+        returnRoute: 'today',
+      });
+      return;
+    }
+
+    alert(
+      'This notification refers to a bill that is no longer available on this device.'
+    );
+  }
+
+  navigate('today');
+}
+function renderNotificationCenterContent() {
+  const content = document.getElementById(
+    'notificationCenterContent'
+  );
+
+  if (!content) {
+    return;
+  }
+
+  const uid = getCurrentNotificationUserId();
+
+  const notifications = sortNotificationRecords(
+    notificationInboxState.notifications.filter(
+      (notification) => !notification.clearedAt
+    )
+  );
+
+  if (!uid) {
+    content.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          ${svgIcon('lock', 48)}
+        </div>
+        <div class="empty-state-title">
+          Sign in to view notifications
+        </div>
+        <div class="empty-state-text">
+          Your delivered bill reminders will appear here after you sign in.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  if (!notificationInboxState.loaded) {
+    content.innerHTML = `
+      <div
+        style="
+          color: var(--text-muted);
+          font-size: var(--text-sm);
+          text-align: center;
+          padding: var(--space-6) 0;
+        "
+      >
+        Loading notifications…
+      </div>
+    `;
+    return;
+  }
+
+  if (!notifications.length) {
+    content.innerHTML = `
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          ${svgIcon('checkCircle', 48)}
+        </div>
+        <div class="empty-state-title">
+          You’re all caught up
+        </div>
+        <div class="empty-state-text">
+          Delivered bill and payment-plan reminders will appear here.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  content.innerHTML = `
+    <div
+      class="notification-list"
+      style="
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      "
+    >
+      ${notifications.map((notification) => {
+        const icon = getNotificationIcon(notification);
+
+        const isUnread =
+          !notification.readAt &&
+          !notification.clearedAt;
+
+        const rowStyle = isUnread
+  ? `
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(143, 44, 255, 0.34);
+      border-left: 3px solid #00d4c7;
+      border-radius: 16px;
+      background:
+        linear-gradient(
+          135deg,
+          rgba(143, 44, 255, 0.18),
+          rgba(19, 16, 36, 0.96)
+        );
+      color: #f8f7ff;
+      box-shadow:
+        0 8px 22px rgba(0, 0, 0, 0.22),
+        inset 0 1px 0 rgba(255, 255, 255, 0.035);
+      text-align: left;
+      cursor: pointer;
+    `
+  : `
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.075);
+      border-radius: 16px;
+      background: rgba(21, 21, 29, 0.82);
+      color: rgba(248, 247, 255, 0.58);
+      box-shadow: none;
+      text-align: left;
+      cursor: pointer;
+    `;
+
+const titleStyle = isUnread
+  ? `
+      margin: 0;
+      color: #f8f7ff;
+      font-size: 16px;
+      font-weight: 750;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    `
+  : `
+      margin: 0;
+      color: rgba(248, 247, 255, 0.58);
+      font-size: 16px;
+      font-weight: 650;
+      line-height: 1.25;
+      letter-spacing: -0.01em;
+    `;
+
+const messageStyle = isUnread
+  ? `
+      margin-top: 4px;
+      color: rgba(225, 220, 242, 0.76);
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.35;
+    `
+  : `
+      margin-top: 4px;
+      color: rgba(225, 220, 242, 0.45);
+      font-size: 14px;
+      font-weight: 500;
+      line-height: 1.35;
+    `;
+
+const arrowColor = isUnread
+  ? '#00d4c7'
+  : 'rgba(225, 220, 242, 0.40)';
+
+        return `
+          <button
+            type="button"
+            class="notification-row"
+            data-notification-id="${escapeHtml(notification.id)}"
+            style="${rowStyle}"
+          >
+            <div
+              class="notification-row-icon"
+              style="
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  color: ${isUnread ? '#00d4c7' : 'rgba(0, 212, 199, 0.55)'};
+  background: ${isUnread
+    ? 'rgba(0, 212, 199, 0.10)'
+    : 'rgba(0, 212, 199, 0.055)'};
+  border: 1px solid ${isUnread
+    ? 'rgba(0, 212, 199, 0.10)'
+    : 'rgba(255, 255, 255, 0.04)'};
+"
+            >
+              ${svgIcon(icon.name, 22)}
+            </div>
+
+            <div
+              class="notification-row-copy"
+              style="
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+              "
+            >
+              <div
+                class="notification-row-title"
+                style="
+                  ${titleStyle}
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                "
+              >
+                ${escapeHtml(notification.title)}
+              </div>
+
+              <div
+                class="notification-row-message"
+                style="
+                  ${messageStyle}
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                  white-space: nowrap;
+                "
+              >
+                ${escapeHtml(notification.body)}
+              </div>
+            </div>
+
+            <div
+              class="notification-row-arrow"
+              aria-hidden="true"
+              style="
+                flex: 0 0 22px;
+                width: 22px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                color: ${arrowColor};
+              "
+            >
+              ${svgIcon('chevronRight', 20)}
+            </div>
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  content
+    .querySelectorAll('[data-notification-id]')
+    .forEach((button) => {
+      button.addEventListener('click', () => {
+        const notificationId =
+          button.dataset.notificationId;
+
+        const notification =
+          notificationInboxState.notifications.find(
+            (item) => item.id === notificationId
+          );
+
+        openNotificationRecord(notification);
+      });
+    });
+}
+
+async function openNotificationCenter() {
+
+  const existingContainer = document.getElementById(
+    'notificationCenterContainer'
+  );
+
+  if (existingContainer) {
+    existingContainer.remove();
+  }
 
   const container = document.createElement('div');
   container.id = 'notificationCenterContainer';
@@ -11368,133 +11874,103 @@ openNotificationCenter = async function () {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeNotificationCenter()">
-          Close
-        </button>
+  <button
+    class="nav-button"
+    id="notificationCenterCloseButton"
+    type="button"
+  >
+    Close
+  </button>
 
-        <div class="sheet-title">Notifications</div>
+  <div class="sheet-title">Notifications</div>
 
-        <div style="width:54px"></div>
-      </div>
+  <button
+    class="nav-button"
+    id="clearReadNotificationsButton"
+    type="button"
+    style="font-size: 13px;"
+  >
+    Clear Read
+  </button>
+</div>
 
-      <div style="padding: var(--space-4);">
-        ${
-          loadError
-            ? `
-              <div class="empty-state">
-                <div class="empty-state-icon">${svgIcon('warning', 48)}</div>
-                <div class="empty-state-title">Could not load notifications</div>
-                <div class="empty-state-text">${escapeHtml(loadError)}</div>
-              </div>
-            `
-            : !getNotificationConnection()
-            ? `
-              <div class="empty-state">
-                <div class="empty-state-icon">${svgIcon('bell', 48)}</div>
-                <div class="empty-state-title">Notifications are not connected</div>
-                <div class="empty-state-text">
-                  Turn on notifications in Settings first.
-                </div>
-              </div>
-            `
-            : notifications.length
-            ? `
-              <div class="notification-list">
-                ${notifications
-                  .map((notification) => {
-                    const icon = svgIcon(
-                      notification.title.toLowerCase().includes('overdue')
-                        ? 'warning'
-                        : 'bell',
-                      18
-                    );
+<div
+  style="
+    display: flex;
+    justify-content: flex-end;
+    padding: 0 var(--space-4) var(--space-2);
+  "
+>
+  <button
+    class="btn-secondary"
+    id="markAllNotificationsReadButton"
+    type="button"
+    style="min-height: 36px; padding: 0 12px; font-size: 13px;"
+  >
+    Mark All As Read
+  </button>
+</div>
 
-                    const canOpenBill = Boolean(notification.billId);
-
-                    return `
-                      <button
-                        class="notification-row"
-                        onclick="
-                          closeNotificationCenter();
-                          ${
-                            canOpenBill
-                              ? `navigate('detail', { id: '${notification.billId}' });`
-                              : ''
-                          }
-                        "
-                      >
-                        <div
-                          class="notification-row-icon"
-                          style="
-                            color:var(--accent);
-                            background:var(--upcoming-bg);
-                          "
-                        >
-                          ${icon}
-                        </div>
-
-                        <div class="notification-row-copy">
-                          <div class="notification-row-title">
-                            ${escapeHtml(notification.title)}
-                          </div>
-
-                          <div class="notification-row-message">
-                            ${escapeHtml(notification.body)}
-                          </div>
-
-                          <div
-                            style="
-                              font-size:var(--text-xs);
-                              color:var(--text-muted);
-                              margin-top:4px;
-                            "
-                          >
-                            Sent ${formatReminderDateTime(notification.sentAt)}
-                          </div>
-                        </div>
-
-                        ${
-                          canOpenBill
-                            ? `
-                              <div class="notification-row-arrow">
-                                ${svgIcon('chevronRight', 18)}
-                              </div>
-                            `
-                            : ''
-                        }
-                      </button>
-                    `;
-                  })
-                  .join('')}
-              </div>
-            `
-            : `
-              <div class="empty-state">
-                <div class="empty-state-icon">${svgIcon('checkCircle', 48)}</div>
-                <div class="empty-state-title">You’re all caught up</div>
-              </div>
-            `
-        }
-
-        
-      </div>
+      <div
+        id="notificationCenterContent"
+        style="padding:var(--space-4);"
+      ></div>
     </div>
   `;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
 
-  requestAnimationFrame(() => {
-    document
-      .getElementById('notificationCenterOverlay')
-      ?.classList.add('show');
+lockBackgroundScroll();
 
-    document
-      .getElementById('notificationCenterSheet')
-      ?.classList.add('show');
+requestAnimationFrame(() => {
+  document
+    .getElementById('notificationCenterOverlay')
+    ?.classList.add('show');
+
+  document
+    .getElementById('notificationCenterSheet')
+    ?.classList.add('show');
+});
+
+document
+  .getElementById('notificationCenterCloseButton')
+  ?.addEventListener('click', closeNotificationCenter);
+  document
+  .getElementById('markAllNotificationsReadButton')
+  ?.addEventListener('click', async () => {
+    try {
+      await markAllNotificationsRead();
+    } catch (error) {
+      console.error(
+        'Could not mark all notifications as read:',
+        error
+      );
+      alert(
+        'Could not mark notifications as read. Please try again.'
+      );
+    }
   });
-};
 
+document
+  .getElementById('clearReadNotificationsButton')
+  ?.addEventListener('click', async () => {
+    try {
+      await clearReadNotifications();
+    } catch (error) {
+      console.error(
+        'Could not clear read notifications:',
+        error
+      );
+      alert(
+        'Could not clear read notifications. Please try again.'
+      );
+    }
+  });
+
+renderNotificationCenterContent();
+
+
+};
 let backgroundScrollY = 0;
 
 function lockBackgroundScroll() {
@@ -11532,15 +12008,31 @@ function unlockBackgroundScroll() {
   });
 }
 document.addEventListener('DOMContentLoaded', () => {
-  refreshNotificationInbox()
-    .then(() => {
-      if (currentRoute === 'today') {
-        render();
-      }
-    })
-    .catch((error) => {
-      console.error('Notification history refresh failed:', error);
-    });
+  let attempts = 0;
+  const maxAttempts = 30;
+
+  const startWhenFirebaseIsReady = () => {
+    attempts += 1;
+
+    if (ensureNotificationInboxListener()) {
+      render();
+      return;
+    }
+
+    if (attempts < maxAttempts) {
+      window.setTimeout(
+        startWhenFirebaseIsReady,
+        500
+      );
+      return;
+    }
+
+    console.warn(
+      'Notification inbox did not start because Firebase was not ready.'
+    );
+  };
+
+  startWhenFirebaseIsReady();
 });
 
 document.addEventListener(
