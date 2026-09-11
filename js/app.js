@@ -10254,21 +10254,6 @@ function addNotificationSettings() {
   ${svgIcon("bell", 20)} Turn On Notifications
 </button>
 
-<button
-  class="btn-secondary"
-  style="margin-top: var(--space-2);"
-  onclick="sendBillNotificationTest()"
->
-  ${svgIcon("bell", 20)} Send Test Notification
-</button>
-<button
-  class="btn-secondary"
-  style="margin-top: var(--space-2);"
-  onclick="sendBillInboxTest()"
-  type="button"
->
-  ${svgIcon("bell", 20)} Send Inbox Test
-</button>
 <p
   id="notificationTestStatus"
   style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"

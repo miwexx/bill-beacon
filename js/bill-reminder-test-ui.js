@@ -164,7 +164,7 @@ async function getFirebaseToken() {
 
   return "";
 }
-  function buildCard() {
+ /* function buildCard() {
     const bills = getBills();
     const card = document.createElement("section");
 
@@ -354,7 +354,7 @@ const message = `${bill.name} is due ${formattedDueDate}\n${formatCurrency(bill.
     });
 
     return card;
-  }
+  }   */
 
   function addCardIfSettingsIsVisible() {
     const app = getSettingsPage();
