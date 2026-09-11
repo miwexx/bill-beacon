@@ -737,30 +737,23 @@ function buildReminderPresentation(
   const installmentNumber = bill.installmentNumber || 1;
   const installmentTotal = bill.installmentTotal || "?";
 
-  let timingTitle = "Due Soon";
-  let timingText =
-    `is due in ${offsetDays} days, on ${formattedDueDate}.`;
+  let timingTitle = 'Due Soon';
 
-  if (offsetDays === 1) {
-    timingTitle = "Due Tomorrow";
-    timingText = "is due tomorrow.";
-  } else if (offsetDays === 0) {
-    timingTitle = "Due Today";
-    timingText = "is due today.";
-  }
+if (offsetDays === 1) {
+  timingTitle = 'Due Tomorrow';
+} else if (offsetDays === 0) {
+  timingTitle = 'Due Today';
+}
 
   let title;
   let body;
 
   if (isPaymentPlan) {
     title = `Payment Plan ${timingTitle}: ${provider}`;
-    body =
-      `${merchant} payment ${installmentNumber} of ${installmentTotal} ` +
-      `${timingText}\nAmount due: ${amount}`;
+    body = `Payment ${installmentNumber} of ${installmentTotal} · Amount due: ${amount}`;
   } else {
     title = `${timingTitle}: ${bill.name}`;
-    body =
-      `${bill.name} ${timingText}\nAmount due: ${amount}`;
+    body = `Amount due: ${amount}`;
   }
 
   return {
