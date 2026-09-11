@@ -8,8 +8,8 @@ keep_vars = true
 enabled = true
 
 [[kv_namespaces]]
-binding = "NOTIFICATIONS_KV"
+binding = "NOTIFICATIONSKV"
 id = "840fbd5bbad24c4caedeea2e2233fd82"
 
 [triggers]
-crons = ["0 14 * * *"]
+crons = ["*/5 * * * *"]
