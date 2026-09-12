@@ -5074,7 +5074,7 @@ function renderPaymentPlans() {
     `;
   };
 
-  const renderJumpButton = (targetId, label = "See more") => `
+  const renderJumpButton = (targetId, label = "See More") => `
     <button
       type="button"
       onclick="document.getElementById('${targetId}').scrollIntoView({ behavior: 'smooth' })"
@@ -5168,7 +5168,7 @@ function renderPaymentPlans() {
                     color:var(--text-muted);
                   "
                 >
-                  Remaining balance
+                  Remaining Balance
                 </div>
 
                 <div
@@ -5191,9 +5191,9 @@ function renderPaymentPlans() {
                     color:var(--text-muted);
                   "
                 >
-                  ${activePlans.length} active ${
-                    activePlans.length === 1 ? "plan" : "plans"
-                  } remaining
+                  ${activePlans.length} Active ${
+                    activePlans.length === 1 ? "plan" : "Plans"
+                  } Remaining
                 </div>
               </section>
 
@@ -5286,7 +5286,7 @@ function renderPaymentPlans() {
           cursor:pointer;
         "
       >
-        See more
+        See More
       </button>
     `
     : ""
@@ -5385,7 +5385,7 @@ function renderPaymentPlans() {
           cursor:pointer;
         "
       >
-        See more
+        See More
       </button>
     `
     : ""
@@ -5477,7 +5477,7 @@ function renderPaymentPlans() {
 "
                     >
                       ${svgIcon("clock", 18)}
-                      See history (${completedPlans.length})
+                      History
                     </button>
                   `
                   : ""
@@ -5498,7 +5498,7 @@ function showMoreActivePaymentPlans() {
   const isExpanded = extraPlans.style.display !== "none";
 
   extraPlans.style.display = isExpanded ? "none" : "grid";
-  toggleButton.textContent = isExpanded ? "Show more" : "Show less";
+  toggleButton.textContent = isExpanded ? "Show more" : "Show Less";
 
   if (isExpanded) {
     toggleButton.scrollIntoView({
@@ -5622,7 +5622,7 @@ function openPaymentPlanSchedule(type = "month") {
 
   const isCurrentMonth = type === "month";
   const title = isCurrentMonth
-    ? "This month's payments"
+    ? "This Month's Payments"
     : "Upcoming payment schedule";
 
   const groups = getPaymentPlanScheduleGroups(type);
@@ -6781,7 +6781,7 @@ function openCategorySpendingSheet(categoryId) {
                   color:var(--text-muted);
                 "
               >
-                This month
+                This Month
               </div>
 
               <div
@@ -10723,7 +10723,7 @@ window.toggleMonthBills = function() {
   const isOpen = extraBills.classList.toggle('is-open');
 
   button.innerHTML = isOpen
-    ? `Show less ${svgIcon('chevronRight', 18)}`
+    ? `Show Less ${svgIcon('chevronRight', 18)}`
     : `Show all ${document.querySelectorAll('#moreMonthBills .bill-row').length + 5} bills ${svgIcon('chevronRight', 18)}`;
 
   button.classList.toggle('is-open', isOpen);
