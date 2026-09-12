@@ -4806,30 +4806,14 @@ function renderPaymentPlans() {
     0
   );
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
+  const dueNextPlans = activePlans.slice(0, 4);
+  const upcomingPlans = activePlans.slice(4);
 
-  const dueSoonLimit = new Date(startOfToday);
-  dueSoonLimit.setDate(dueSoonLimit.getDate() + 7);
+  const visibleUpcomingPlans = upcomingPlans.slice(0, 4);
+  const visibleCompletedPlans = completedPlans.slice(0, 4);
+  const moreCompletedPlans = completedPlans.slice(4);
 
-  const dueSoonPlans = activePlans.filter((plan) => {
-    const dueDate = new Date(plan.nextInstallment.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-
-    return dueDate >= startOfToday && dueDate <= dueSoonLimit;
-  });
-
-  const upcomingPlans = activePlans.filter((plan) => {
-    const dueDate = new Date(plan.nextInstallment.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-
-    return dueDate > dueSoonLimit;
-  });
-
-  const visibleDueSoonPlans = dueSoonPlans.slice(0, 2);
-  const visibleUpcomingPlans = upcomingPlans.slice(0, 2);
-
-  const dueSoonTotal = dueSoonPlans.reduce(
+  const dueNextTotal = dueNextPlans.reduce(
     (sum, plan) => sum + parseFloat(plan.nextInstallment?.amount || 0),
     0
   );
@@ -5084,7 +5068,7 @@ function renderPaymentPlans() {
     `;
   };
 
-  const renderSeeMoreButton = (targetId) => `
+  const renderJumpButton = (targetId, label = "See more") => `
     <button
       type="button"
       onclick="document.getElementById('${targetId}').scrollIntoView({ behavior: 'smooth' })"
@@ -5100,7 +5084,7 @@ function renderPaymentPlans() {
         cursor:pointer;
       "
     >
-      See more
+      ${label}
     </button>
   `;
 
@@ -5208,7 +5192,7 @@ function renderPaymentPlans() {
               </section>
 
               ${
-                visibleDueSoonPlans.length
+                dueNextPlans.length
                   ? `
                     <section
                       class="card"
@@ -5257,7 +5241,7 @@ function renderPaymentPlans() {
                               font-weight:850;
                             "
                           >
-                            ${dueSoonPlans.length}
+                            ${dueNextPlans.length}
                           </span>
                         </div>
 
@@ -5268,19 +5252,19 @@ function renderPaymentPlans() {
                             white-space:nowrap;
                           "
                         >
-                          ${formatCurrency(dueSoonTotal)}
+                          ${formatCurrency(dueNextTotal)}
                         </div>
                       </div>
 
                       <div>
-                        ${visibleDueSoonPlans
+                        ${dueNextPlans
                           .map((plan) => renderOverviewRow(plan, true))
                           .join("")}
                       </div>
 
                       ${
-                        dueSoonPlans.length > 2
-                          ? renderSeeMoreButton("more-due-payment-plans")
+                        activePlans.length > 4
+                          ? renderJumpButton("active-payment-plans")
                           : ""
                       }
                     </section>
@@ -5310,11 +5294,36 @@ function renderPaymentPlans() {
                       >
                         <div
                           style="
+                            display:flex;
+                            align-items:center;
+                            gap:10px;
                             font-size:var(--text-xl);
                             font-weight:850;
                           "
                         >
                           Upcoming
+
+                          <span
+                            style="
+                              display:inline-flex;
+                              align-items:center;
+                              justify-content:center;
+                              min-width:28px;
+                              height:28px;
+                              padding:0 8px;
+                              border-radius:999px;
+                              color:#efcaff;
+                              background:linear-gradient(
+                                105deg,
+                                rgba(143, 54, 255, 0.35),
+                                rgba(246, 76, 174, 0.28)
+                              );
+                              font-size:var(--text-sm);
+                              font-weight:850;
+                            "
+                          >
+                            ${upcomingPlans.length}
+                          </span>
                         </div>
 
                         <div
@@ -5335,8 +5344,8 @@ function renderPaymentPlans() {
                       </div>
 
                       ${
-                        upcomingPlans.length > 2
-                          ? renderSeeMoreButton("more-upcoming-payment-plans")
+                        upcomingPlans.length > 4
+                          ? renderJumpButton("active-payment-plans")
                           : ""
                       }
                     </section>
@@ -5345,14 +5354,13 @@ function renderPaymentPlans() {
               }
 
               ${
-                dueSoonPlans.length > 2
+                activePlans.length
                   ? `
-                    <section id="more-due-payment-plans">
-                      <div class="section-header">More due soon</div>
+                    <section id="active-payment-plans">
+                      <div class="section-header">Active plans</div>
 
                       <div class="content-gap">
-                        ${dueSoonPlans
-                          .slice(2)
+                        ${activePlans
                           .map((plan) => renderPlanCard(plan))
                           .join("")}
                       </div>
@@ -5362,30 +5370,52 @@ function renderPaymentPlans() {
               }
 
               ${
-                upcomingPlans.length > 2
+                visibleCompletedPlans.length
                   ? `
-                    <section id="more-upcoming-payment-plans">
-                      <div class="section-header">More upcoming plans</div>
-
-                      <div class="content-gap">
-                        ${upcomingPlans
-                          .slice(2)
-                          .map((plan) => renderPlanCard(plan))
-                          .join("")}
-                      </div>
-                    </section>
-                  `
-                  : ""
-              }
-
-              ${
-                completedPlans.length
-                  ? `
-                    <section>
+                    <section id="completed-payment-plans">
                       <div class="section-header">Completed</div>
 
                       <div class="content-gap">
-                        ${completedPlans
+                        ${visibleCompletedPlans
+                          .map((plan) => renderPlanCard(plan, true))
+                          .join("")}
+                      </div>
+
+                      ${
+                        moreCompletedPlans.length
+                          ? `
+                            <button
+                              type="button"
+                              onclick="document.getElementById('more-completed-payment-plans').scrollIntoView({ behavior: 'smooth' })"
+                              style="
+                                width:100%;
+                                padding:var(--space-3) var(--space-4);
+                                border:0;
+                                color:#c76aff;
+                                background:transparent;
+                                font-size:var(--text-base);
+                                font-weight:850;
+                                cursor:pointer;
+                              "
+                            >
+                              Show more
+                            </button>
+                          `
+                          : ""
+                      }
+                    </section>
+                  `
+                  : ""
+              }
+
+              ${
+                moreCompletedPlans.length
+                  ? `
+                    <section id="more-completed-payment-plans">
+                      <div class="section-header">More completed plans</div>
+
+                      <div class="content-gap">
+                        ${moreCompletedPlans
                           .map((plan) => renderPlanCard(plan, true))
                           .join("")}
                       </div>
