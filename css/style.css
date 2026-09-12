@@ -3162,3 +3162,7 @@ body {
   font-size: var(--text-xs);
   font-weight: 700;
 }
+.recurring-calendar-selected-title-group {
+  min-width: 0;
+  transform: translateY(3px);
+}
