@@ -4408,11 +4408,14 @@ function openDashboardStatusSheet(status) {
 
       <div class="sheet-nav">
         <button
-          class="nav-button"
-          onclick="closeDashboardStatusSheet()"
-        >
-          Close
-        </button>
+  type="button"
+  class="nav-button"
+  onclick="closeDashboardStatusSheet()"
+  aria-label="Back to dashboard"
+  style="color:var(--text);"
+>
+  ${svgIcon("chevronLeft", 22)}
+</button>
 
         <div class="sheet-title">${title}</div>
         <div style="width:54px"></div>
@@ -5292,7 +5295,7 @@ function renderPaymentPlans() {
           cursor:pointer;
         "
       >
-        <span class="gradient-action-text">See more</span>
+        <span class="gradient-action-text">See More</span>
       </button>
     `
     : ""
@@ -5391,7 +5394,7 @@ function renderPaymentPlans() {
           cursor:pointer;
         "
       >
-        <span class="gradient-action-text">See more</span>
+        <span class="gradient-action-text">See More</span>
       </button>
     `
     : ""
@@ -8810,14 +8813,25 @@ const backLabel = backRoute === 'today'
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <button class="nav-button" onclick="${backAction}">
-          ${svgIcon("chevronLeft", 22)}
-          ${backLabel}
-        </button>
+        <button
+  type="button"
+  class="nav-button"
+  onclick="${backAction}"
+  aria-label="Back to ${backLabel}"
+  style="color:var(--text);"
+>
+  ${svgIcon("chevronLeft", 22)}
+  ${backLabel}
+</button>
 
-        <button class="nav-button" onclick="openBillForm('${sourceBillId}')">
-          Edit
-        </button>
+        <button
+  type="button"
+  class="nav-button"
+  onclick="openBillForm('${sourceBillId}')"
+  style="color:var(--text);"
+>
+  Edit
+</button>
       </div>
     </div>
 
@@ -9071,7 +9085,9 @@ function billRow(bill, clickable = false) {
   const quickActionArgs = bill.isOccurrence
     ? `'${detailBillId}', '${detailDueDate}'`
     : `'${detailBillId}'`;
-  const rowClick = '';
+  const rowClick = `
+  onclick="openBillQuickActions('${detailBillId}')"
+`;
 
   return `
     <div class="bill-row">
@@ -9509,17 +9525,20 @@ function openBillQuickActions(billId) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button
-          class="nav-button"
-          onclick="closeBillQuickActions()"
-        >
-          Cancel
-        </button>
+  <button
+    type="button"
+    class="nav-button"
+    onclick="closeBillQuickActions()"
+    aria-label="Back to bill"
+    style="color:var(--text);"
+  >
+    ${svgIcon("chevronLeft", 22)}
+  </button>
 
-        <div class="sheet-title">Bill Actions</div>
+  <div class="sheet-title">Bill Actions</div>
 
-        <div style="width:54px"></div>
-      </div>
+  <div style="width:54px"></div>
+</div>
 
       <div class="sheet-body">
         <div class="bill-sheet-header">
