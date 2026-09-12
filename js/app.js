@@ -4762,7 +4762,6 @@ function renderPaymentPlans() {
       );
 
       const paidAmount = Math.max(totalAmount - remainingBalance, 0);
-
       const installmentCount = sortedInstallments.length;
       const paidCount = paidInstallments.length;
       const remainingCount = Math.max(installmentCount - paidCount, 0);
@@ -4807,15 +4806,35 @@ function renderPaymentPlans() {
     0
   );
 
-  const dueSoonPlans = activePlans.slice(0, 2);
-  const laterPlans = activePlans.slice(2);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+
+  const dueSoonLimit = new Date(startOfToday);
+  dueSoonLimit.setDate(dueSoonLimit.getDate() + 7);
+
+  const dueSoonPlans = activePlans.filter((plan) => {
+    const dueDate = new Date(plan.nextInstallment.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+
+    return dueDate >= startOfToday && dueDate <= dueSoonLimit;
+  });
+
+  const upcomingPlans = activePlans.filter((plan) => {
+    const dueDate = new Date(plan.nextInstallment.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+
+    return dueDate > dueSoonLimit;
+  });
+
+  const visibleDueSoonPlans = dueSoonPlans.slice(0, 2);
+  const visibleUpcomingPlans = upcomingPlans.slice(0, 2);
 
   const dueSoonTotal = dueSoonPlans.reduce(
     (sum, plan) => sum + parseFloat(plan.nextInstallment?.amount || 0),
     0
   );
 
-  const upcomingTotal = laterPlans.reduce(
+  const upcomingTotal = upcomingPlans.reduce(
     (sum, plan) => sum + parseFloat(plan.nextInstallment?.amount || 0),
     0
   );
@@ -4975,6 +4994,116 @@ function renderPaymentPlans() {
     `;
   };
 
+  const renderOverviewRow = (plan, showPill = false) => {
+    const title = plan.storeName || plan.provider;
+    const dueDate = formatDate(plan.nextInstallment.dueDate, "short");
+    const paymentAmount = formatCurrency(plan.nextInstallment.amount);
+    const paymentNumber = Math.min(
+      plan.paidCount + 1,
+      plan.installmentCount
+    );
+
+    return `
+      <button
+        type="button"
+        onclick="openPaymentPlanDetails('${plan.id}')"
+        style="
+          display:flex;
+          width:100%;
+          align-items:center;
+          gap:var(--space-3);
+          padding:var(--space-3) var(--space-4);
+          color:inherit;
+          text-align:left;
+          cursor:pointer;
+          background:transparent;
+          border:0;
+        "
+        aria-label="View ${escapeHtml(title)} payment plan"
+      >
+        ${paymentPlanVisual(plan.provider, 42)}
+
+        <div style="min-width:0; flex:1;">
+          <div
+            style="
+              overflow:hidden;
+              font-size:var(--text-base);
+              font-weight:800;
+              text-overflow:ellipsis;
+              white-space:nowrap;
+            "
+          >
+            ${escapeHtml(title)}
+          </div>
+
+          <div
+            style="
+              margin-top:3px;
+              overflow:hidden;
+              font-size:var(--text-sm);
+              color:var(--text-muted);
+              text-overflow:ellipsis;
+              white-space:nowrap;
+            "
+          >
+            Payment ${paymentNumber} of ${plan.installmentCount} · Due ${dueDate}
+          </div>
+        </div>
+
+        ${
+          showPill
+            ? `
+              <div
+                style="
+                  padding:7px 12px;
+                  border:1px solid rgba(226, 185, 255, 0.68);
+                  border-radius:999px;
+                  color:var(--text);
+                  font-size:var(--text-base);
+                  font-weight:800;
+                  white-space:nowrap;
+                "
+              >
+                ${paymentAmount}
+              </div>
+            `
+            : `
+              <div
+                style="
+                  color:var(--text);
+                  font-size:var(--text-base);
+                  font-weight:800;
+                  white-space:nowrap;
+                "
+              >
+                ${paymentAmount}
+              </div>
+            `
+        }
+      </button>
+    `;
+  };
+
+  const renderSeeMoreButton = (targetId) => `
+    <button
+      type="button"
+      onclick="document.getElementById('${targetId}').scrollIntoView({ behavior: 'smooth' })"
+      style="
+        width:100%;
+        padding:var(--space-3) var(--space-4);
+        border:0;
+        border-top:1px solid rgba(192, 151, 255, 0.14);
+        color:#c76aff;
+        background:transparent;
+        font-size:var(--text-base);
+        font-weight:850;
+        cursor:pointer;
+      "
+    >
+      See more
+    </button>
+  `;
+
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
@@ -5076,11 +5205,10 @@ function renderPaymentPlans() {
                     activePlans.length === 1 ? "plan" : "plans"
                   } remaining
                 </div>
-
               </section>
 
               ${
-                dueSoonPlans.length
+                visibleDueSoonPlans.length
                   ? `
                     <section
                       class="card"
@@ -5145,109 +5273,14 @@ function renderPaymentPlans() {
                       </div>
 
                       <div>
-                        ${dueSoonPlans
-                          .map((plan) => {
-                            const title = plan.storeName || plan.provider;
-                            const dueDate = formatDate(
-                              plan.nextInstallment.dueDate,
-                              "short"
-                            );
-                            const paymentAmount = formatCurrency(
-                              plan.nextInstallment.amount
-                            );
-
-                            return `
-                              <button
-                                type="button"
-                                onclick="openPaymentPlanDetails('${plan.id}')"
-                                style="
-                                  display:flex;
-                                  width:100%;
-                                  align-items:center;
-                                  gap:var(--space-3);
-                                  padding:var(--space-3) var(--space-4);
-                                  color:inherit;
-                                  text-align:left;
-                                  cursor:pointer;
-                                  background:transparent;
-                                  border:0;
-                                "
-                                aria-label="View ${escapeHtml(title)} payment plan"
-                              >
-                                ${paymentPlanVisual(plan.provider, 42)}
-
-                                <div style="min-width:0; flex:1;">
-                                  <div
-                                    style="
-                                      overflow:hidden;
-                                      font-size:var(--text-base);
-                                      font-weight:800;
-                                      text-overflow:ellipsis;
-                                      white-space:nowrap;
-                                    "
-                                  >
-                                    ${escapeHtml(title)}
-                                  </div>
-
-                                  <div
-                                    style="
-                                      margin-top:3px;
-                                      overflow:hidden;
-                                      font-size:var(--text-sm);
-                                      color:var(--text-muted);
-                                      text-overflow:ellipsis;
-                                      white-space:nowrap;
-                                    "
-                                  >
-                                    Payment ${
-                                      Math.min(
-                                        plan.paidCount + 1,
-                                        plan.installmentCount
-                                      )
-                                    } of ${plan.installmentCount} · Due ${dueDate}
-                                  </div>
-                                </div>
-
-                                <div
-                                  style="
-                                    padding:7px 12px;
-                                    border:1px solid rgba(226, 185, 255, 0.68);
-                                    border-radius:999px;
-                                    color:var(--text);
-                                    font-size:var(--text-base);
-                                    font-weight:800;
-                                    white-space:nowrap;
-                                  "
-                                >
-                                  ${paymentAmount}
-                                </div>
-                              </button>
-                            `;
-                          })
+                        ${visibleDueSoonPlans
+                          .map((plan) => renderOverviewRow(plan, true))
                           .join("")}
                       </div>
 
                       ${
-                        activePlans.length > dueSoonPlans.length
-                          ? `
-                            <button
-                              type="button"
-                              onclick="document.getElementById('all-payment-plans').scrollIntoView({ behavior: 'smooth' })"
-                              style="
-                                width:100%;
-                                padding:var(--space-3) var(--space-4);
-                                border:0;
-                                border-top:1px solid rgba(192, 151, 255, 0.14);
-                                color:#c76aff;
-                                background:transparent;
-                                font-size:var(--text-base);
-                                font-weight:850;
-                                cursor:pointer;
-                              "
-                            >
-                              See all plans
-                            </button>
-                          `
+                        dueSoonPlans.length > 2
+                          ? renderSeeMoreButton("more-due-payment-plans")
                           : ""
                       }
                     </section>
@@ -5256,7 +5289,7 @@ function renderPaymentPlans() {
               }
 
               ${
-                laterPlans.length
+                visibleUpcomingPlans.length
                   ? `
                     <section
                       class="card"
@@ -5295,110 +5328,55 @@ function renderPaymentPlans() {
                         </div>
                       </div>
 
-                      ${laterPlans
-                        .slice(0, 2)
-                        .map((plan) => {
-                          const title = plan.storeName || plan.provider;
-                          const dueDate = formatDate(
-                            plan.nextInstallment.dueDate,
-                            "short"
-                          );
+                      <div>
+                        ${visibleUpcomingPlans
+                          .map((plan) => renderOverviewRow(plan))
+                          .join("")}
+                      </div>
 
-                          return `
-                            <button
-                              type="button"
-                              onclick="openPaymentPlanDetails('${plan.id}')"
-                              style="
-                                display:flex;
-                                width:100%;
-                                align-items:center;
-                                gap:var(--space-3);
-                                padding:var(--space-3) var(--space-4);
-                                color:inherit;
-                                text-align:left;
-                                cursor:pointer;
-                                background:transparent;
-                                border:0;
-                              "
-                              aria-label="View ${escapeHtml(title)} payment plan"
-                            >
-                              ${paymentPlanVisual(plan.provider, 42)}
-
-                              <div style="min-width:0; flex:1;">
-                                <div
-                                  style="
-                                    overflow:hidden;
-                                    font-size:var(--text-base);
-                                    font-weight:800;
-                                    text-overflow:ellipsis;
-                                    white-space:nowrap;
-                                  "
-                                >
-                                  ${escapeHtml(title)}
-                                </div>
-
-                                <div
-                                  style="
-                                    margin-top:3px;
-                                    overflow:hidden;
-                                    font-size:var(--text-sm);
-                                    color:var(--text-muted);
-                                    text-overflow:ellipsis;
-                                    white-space:nowrap;
-                                  "
-                                >
-                                  Payment ${
-                                    Math.min(
-                                      plan.paidCount + 1,
-                                      plan.installmentCount
-                                    )
-                                  } of ${plan.installmentCount} · Due ${dueDate}
-                                </div>
-                              </div>
-
-                              <div
-                                style="
-                                  font-size:var(--text-base);
-                                  font-weight:800;
-                                  white-space:nowrap;
-                                "
-                              >
-                                ${formatCurrency(plan.nextInstallment.amount)}
-                              </div>
-                            </button>
-                          `;
-                        })
-                        .join("")}
-
-                      <button
-                        type="button"
-                        onclick="document.getElementById('all-payment-plans').scrollIntoView({ behavior: 'smooth' })"
-                        style="
-                          width:100%;
-                          padding:var(--space-3) var(--space-4);
-                          border:0;
-                          border-top:1px solid rgba(192, 151, 255, 0.14);
-                          color:#c76aff;
-                          background:transparent;
-                          font-size:var(--text-base);
-                          font-weight:850;
-                          cursor:pointer;
-                        "
-                      >
-                        See all plans
-                      </button>
+                      ${
+                        upcomingPlans.length > 2
+                          ? renderSeeMoreButton("more-upcoming-payment-plans")
+                          : ""
+                      }
                     </section>
                   `
                   : ""
               }
 
-              <section id="all-payment-plans">
-                <div class="section-header">All active plans</div>
+              ${
+                dueSoonPlans.length > 2
+                  ? `
+                    <section id="more-due-payment-plans">
+                      <div class="section-header">More due soon</div>
 
-                <div class="content-gap">
-                  ${activePlans.map((plan) => renderPlanCard(plan)).join("")}
-                </div>
-              </section>
+                      <div class="content-gap">
+                        ${dueSoonPlans
+                          .slice(2)
+                          .map((plan) => renderPlanCard(plan))
+                          .join("")}
+                      </div>
+                    </section>
+                  `
+                  : ""
+              }
+
+              ${
+                upcomingPlans.length > 2
+                  ? `
+                    <section id="more-upcoming-payment-plans">
+                      <div class="section-header">More upcoming plans</div>
+
+                      <div class="content-gap">
+                        ${upcomingPlans
+                          .slice(2)
+                          .map((plan) => renderPlanCard(plan))
+                          .join("")}
+                      </div>
+                    </section>
+                  `
+                  : ""
+              }
 
               ${
                 completedPlans.length
@@ -6684,7 +6662,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
                       ${
                         activePlans.length === 1
                           ? nextPlanPayment.provider
-                          : `${activePlans.length} active plans`
+                          : `${activePlans.length} Active Plans`
                       }
                     </div>
                   </div>
