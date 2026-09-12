@@ -2398,7 +2398,7 @@ function renderToday() {
                 <span
   style="
     position:absolute;
-    top:0;
+    top:-3;
     right:0;
     display:flex;
     align-items:center;

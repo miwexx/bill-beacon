@@ -3037,3 +3037,25 @@ body {
   outline: 2px solid #c76aff;
   outline-offset: 2px;
 }
+.recurring-calendar-day.is-today {
+  color: #f7efff;
+  border: 1.5px solid transparent;
+  border-radius: 11px;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(
+      105deg,
+      #8f36ff 0%,
+      #c44cff 34%,
+      #f64cae 65%,
+      #ff7138 100%
+    ) border-box;
+  box-shadow:
+    0 0 0 1px rgba(197, 90, 255, 0.05),
+    0 4px 12px rgba(172, 68, 255, 0.16);
+}
+
+.recurring-calendar-day.is-today span {
+  color: #f7efff;
+  font-weight: 850;
+}
