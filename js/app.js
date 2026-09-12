@@ -11473,10 +11473,7 @@ async function activateBillNotifications() {
       );
     }
 
-    alert(
-      "Notifications are on for this device. You’ll receive bill reminders on this device."
-    );
-  } catch (error) {
+    await refreshNotificationSettingsCard();  } catch (error) {
     console.error("Notification setup failed:", error);
 
     alert(
@@ -11485,6 +11482,124 @@ async function activateBillNotifications() {
       }`
     );
   }
+}
+async function getNotificationDeviceState() {
+  const isSupported =
+    "Notification" in window &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window;
+
+  if (!isSupported) {
+    return {
+      supported: false,
+      permission: "unsupported",
+      subscribed: false
+    };
+  }
+
+  const permission = Notification.permission;
+
+  if (permission !== "granted") {
+    return {
+      supported: true,
+      permission,
+      subscribed: false
+    };
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+
+    return {
+      supported: true,
+      permission,
+      subscribed: Boolean(subscription)
+    };
+  } catch (error) {
+    console.warn("Could not read notification subscription state.", error);
+
+    return {
+      supported: true,
+      permission,
+      subscribed: false
+    };
+  }
+}
+async function refreshNotificationSettingsCard() {
+  const button = document.getElementById(
+    "notificationPermissionButton"
+  );
+
+  const status = document.getElementById(
+    "notificationPermissionStatus"
+  );
+
+  if (!button || !status) {
+    return;
+  }
+
+  const state = await getNotificationDeviceState();
+
+  if (!state.supported) {
+    button.disabled = true;
+    button.style.opacity = "0.55";
+    button.style.cursor = "not-allowed";
+
+    button.innerHTML = `
+      ${svgIcon("bell", 20)}
+      Notifications Unavailable
+    `;
+
+    status.textContent =
+      "Notifications are not supported in this browser.";
+
+    return;
+  }
+
+  if (state.permission === "denied") {
+    button.disabled = true;
+    button.style.opacity = "0.55";
+    button.style.cursor = "not-allowed";
+
+    button.innerHTML = `
+      ${svgIcon("bell", 20)}
+      Notifications Blocked
+    `;
+
+    status.textContent =
+      "Notifications are blocked. Enable them in your iPhone or browser settings.";
+
+    return;
+  }
+
+  if (state.subscribed) {
+    button.disabled = true;
+    button.style.opacity = "0.72";
+    button.style.cursor = "default";
+
+    button.innerHTML = `
+      ${svgIcon("checkCircle", 20)}
+      Notifications On
+    `;
+
+    status.textContent =
+      "Bill reminders are enabled on this device.";
+
+    return;
+  }
+
+  button.disabled = false;
+  button.style.opacity = "1";
+  button.style.cursor = "pointer";
+
+  button.innerHTML = `
+    ${svgIcon("bell", 20)}
+    Turn On Notifications
+  `;
+
+  status.textContent =
+    "Receive bill reminders on this iPhone.";
 }
 async function sendBillNotificationTest() {
   const status = document.getElementById(
@@ -11744,36 +11859,63 @@ function addNotificationSettings() {
     return;
   }
 
-  const container = document.querySelector(".main-content .content-pad");
+  const container = document.querySelector(
+    ".main-content .content-pad"
+  );
 
   if (!container) {
     return;
   }
 
   const section = document.createElement("div");
+
   section.id = "notificationSettingsCard";
   section.className = "settings-section";
 
   section.innerHTML = `
     <div class="section-header">Notifications</div>
-    <div class="card card-pad">
-      <p style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin-bottom: var(--space-3);">
-        Receive bill reminders on this iPhone.
-      </p>
-      <button class="btn-primary" onclick="activateBillNotifications()">
-  ${svgIcon("bell", 20)} Turn On Notifications
-</button>
 
-<p
-  id="notificationTestStatus"
-  style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"
-  role="status"
-  aria-live="polite"
-></p>
+    <div class="card card-pad">
+      <p
+        id="notificationPermissionStatus"
+        style="
+          font-size:var(--text-sm);
+          color:var(--text-muted);
+          line-height:1.5;
+          margin-bottom:var(--space-3);
+        "
+      >
+        Checking notification status…
+      </p>
+
+      <button
+        id="notificationPermissionButton"
+        type="button"
+        class="btn-primary"
+        style="width:100%;"
+        onclick="activateBillNotifications()"
+      >
+        ${svgIcon("bell", 20)}
+        Turn On Notifications
+      </button>
+
+      <p
+        id="notificationTestStatus"
+        style="
+          font-size:var(--text-sm);
+          color:var(--text-muted);
+          line-height:1.5;
+          margin:var(--space-2) 0 0;
+        "
+        role="status"
+        aria-live="polite"
+      ></p>
     </div>
   `;
 
   container.appendChild(section);
+
+  refreshNotificationSettingsCard();
 }
 
 const originalBillTrackerRender = render;
