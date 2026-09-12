@@ -3434,12 +3434,12 @@ function renderBills() {
         <div class="nav-title">Bills</div>
 
         <button
-          class="nav-button"
-          onclick="openAddMenu()"
-          aria-label="Add a bill or payment plan"
-        >
-          ${svgIcon('plus', 18)}
-        </button>
+  class="nav-button"
+  onclick="openBillForm()"
+  aria-label="Add a bill"
+>
+  ${svgIcon("plus", 18)}
+</button>
       </div>
     </div>
 
@@ -3459,13 +3459,13 @@ function renderBills() {
               </div>
 
               <button
-                class="btn-primary"
-                style="margin-top:var(--space-4)"
-                onclick="openAddMenu()"
-              >
-                ${svgIcon('plus', 18)}
-                Add Recurring Bill
-              </button>
+  class="btn-primary"
+  style="margin-top:var(--space-4)"
+  onclick="openBillForm()"
+>
+  ${svgIcon("plus", 18)}
+  Add Bill
+</button>
             </div>
           `
           : `
@@ -5989,7 +5989,7 @@ function openCompletedPlansHistory() {
       "
       role="dialog"
       aria-modal="true"
-      aria-label="Completed payment plans"
+      aria-label="Completed Payment Plans"
     >
       <div class="nav-bar">
         <div class="nav-bar-content">
@@ -6018,8 +6018,8 @@ function openCompletedPlansHistory() {
               font-size:var(--text-sm);
             "
           >
-            ${completedPlans.length} completed ${
-              completedPlans.length === 1 ? "plan" : "plans"
+            ${completedPlans.length} Completed ${
+              completedPlans.length === 1 ? "Plan" : "Plans"
             }
           </div>
 
@@ -6030,7 +6030,7 @@ function openCompletedPlansHistory() {
               letter-spacing:-0.03em;
             "
           >
-            Payment history
+            Payment History
           </div>
 
           <div
@@ -6053,7 +6053,7 @@ function openCompletedPlansHistory() {
                     <div class="empty-state-icon">
                       ${svgIcon("creditcard", 44)}
                     </div>
-                    <div class="empty-state-title">No completed plans</div>
+                    <div class="empty-state-title">No Completed Plans</div>
                     <div class="empty-state-text">
                       Completed payment plans will appear here.
                     </div>

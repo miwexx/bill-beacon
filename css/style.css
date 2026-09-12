@@ -64,7 +64,7 @@
   --text-faint: #444458;
 
   /* Signature teal-green accent */
-  --accent: #00D4AA;
+  --accent: #b45cff;
   --accent-bright: #00F0BE;
   --accent-dim: rgba(0, 212, 170, 0.15);
   --accent-glow: rgba(0, 212, 170, 0.4);
@@ -122,7 +122,7 @@
   --text-muted: #8E8EA0;
   --text-faint: #C0C0CC;
 
-  --accent: #00B894;
+  --accent: #b45cff;
   --accent-bright: #00D4AA;
   --accent-dim: rgba(0, 184, 148, 0.1);
   --accent-glow: rgba(0, 184, 148, 0.3);
@@ -2910,4 +2910,17 @@ body {
 .tab-bar {
   padding-bottom: var(--bb-safe-bottom);
   min-height: calc(72px + var(--bb-safe-bottom));
+}
+.nav-button {
+  color: #b45cff;
+}
+
+.nav-button:hover,
+.nav-button:focus-visible {
+  color: #d17aff;
+}
+
+.sheet-nav .nav-button,
+.nav-bar .nav-button {
+  color: #b45cff;
 }
