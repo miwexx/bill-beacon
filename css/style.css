@@ -1290,10 +1290,13 @@ a { color: var(--accent); text-decoration: none; }
 
 .dashboard-progress-fill {
   height: 100%;
-  min-width: 0;
-  background: var(--accent);
+  background: linear-gradient(
+    90deg,
+    var(--paid),
+    #22c55e
+  );
   border-radius: inherit;
-  box-shadow: 0 0 14px var(--accent-glow);
+  transition: width 0.3s ease;
 }
 
 .dashboard-progress-meta {

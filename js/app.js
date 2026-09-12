@@ -7618,7 +7618,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
                   cursor:pointer;
                   border:1px solid var(--border);
                 "
-                aria-label="View payment plans"
+                aria-label="View Payment Plans"
               >
                 <div
                   style="
@@ -9341,16 +9341,16 @@ function getBillScheduleLabel(bill) {
 
   switch (bill.recurrence) {
     case 'Weekly':
-      return `Repeats weekly`;
+      return `Repeats Weekly`;
 
     case 'Monthly':
-      return `Due on the ${ordinal(day)} of each month`;
+      return `Due on The ${ordinal(day)} of Each Month`;
 
     case 'Quarterly':
-      return `Repeats every 3 months`;
+      return `Repeats Every 3 Months`;
 
     case 'Yearly':
-      return `Repeats yearly`;
+      return `Repeats Yearly`;
 
     default:
       return `Due ${formatDate(bill.dueDate, 'full')}`;
@@ -9503,7 +9503,7 @@ function tabBar() {
   { id: 'today', label: 'Dashboard', icon: 'home' },
   { id: 'recurring', label: 'Recurring', icon: 'calendar' },
   { id: 'bills', label: 'Bills', icon: 'tray' },
-  { id: 'payment-plans', label: 'Plans', icon: 'creditcard' },
+  { id: 'payment-plans', label: 'Installments', icon: 'creditcard' },
   { id: 'insights', label: 'Insights', icon: 'chart' },
 ];
 
