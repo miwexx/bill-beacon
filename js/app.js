@@ -5368,7 +5368,7 @@ function renderPaymentPlans() {
                       </div>
 
                       ${
-  upcomingPlans.length > 4
+  upcomingPlans.length > 0
     ? `
       <button
         type="button"
@@ -5409,6 +5409,15 @@ function renderPaymentPlans() {
         ${
           moreActivePlans.length
             ? `
+                <div
+                id="extra-active-payment-plans"
+                class="content-gap"
+                style="display:none; margin-top:var(--space-3);"
+              >
+                ${moreActivePlans
+                  .map((plan) => renderPlanCard(plan))
+                  .join("")}
+              </div>
               <button
                 type="button"
                 id="toggle-active-payment-plans"
@@ -5426,18 +5435,8 @@ function renderPaymentPlans() {
                   cursor:pointer;
                 "
               >
-                Show more
+                Show More
               </button>
-
-              <div
-                id="extra-active-payment-plans"
-                class="content-gap"
-                style="display:none; margin-top:var(--space-3);"
-              >
-                ${moreActivePlans
-                  .map((plan) => renderPlanCard(plan))
-                  .join("")}
-              </div>
             `
             : ""
         }
@@ -5453,21 +5452,29 @@ function renderPaymentPlans() {
                       type="button"
                       onclick="openCompletedPlansHistory()"
                       style="
-                        display:flex;
-                        width:100%;
-                        align-items:center;
-                        justify-content:center;
-                        gap:10px;
-                        margin-top:var(--space-3);
-                        padding:15px var(--space-4);
-                        border:1px solid rgba(192, 151, 255, 0.34);
-                        border-radius:14px;
-                        color:#c76aff;
-                        background:rgba(143, 54, 255, 0.07);
-                        font-size:var(--text-base);
-                        font-weight:850;
-                        cursor:pointer;
-                      "
+  display:flex;
+  width:100%;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin-top:var(--space-3);
+  padding:15px var(--space-4);
+  border:0;
+  border-radius:14px;
+  color:#fff;
+  background:linear-gradient(
+    105deg,
+    #8f36ff 0%,
+    #c44cff 34%,
+    #f64cae 65%,
+    #ff7138 100%
+  );
+  box-shadow:0 12px 32px rgba(231, 68, 182, 0.22);
+  font-family:inherit;
+  font-size:var(--text-base);
+  font-weight:850;
+  cursor:pointer;
+"
                     >
                       ${svgIcon("clock", 18)}
                       See history (${completedPlans.length})
@@ -5492,6 +5499,13 @@ function showMoreActivePaymentPlans() {
 
   extraPlans.style.display = isExpanded ? "none" : "grid";
   toggleButton.textContent = isExpanded ? "Show more" : "Show less";
+
+  if (isExpanded) {
+    toggleButton.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }
 }
 window.showMoreActivePaymentPlans = showMoreActivePaymentPlans;
 function getUnpaidPaymentPlanInstallments() {
@@ -5763,20 +5777,20 @@ function openPaymentPlanSchedule(type = "month") {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <div style="width:54px"></div>
+  <button
+    type="button"
+    class="nav-button"
+    onclick="closePaymentPlanSchedule()"
+    aria-label="Back to payment plans"
+    style="color:#b45cff;"
+  >
+    ${svgIcon("chevronLeft", 22)}
+  </button>
 
-        <div class="sheet-title">${title}</div>
+  <div class="sheet-title">${title}</div>
 
-        <button
-          type="button"
-          class="nav-button"
-          onclick="closePaymentPlanSchedule()"
-          aria-label="Close payment schedule"
-          style="color:#b45cff;"
-        >
-          ${svgIcon("close", 22)}
-        </button>
-      </div>
+  <div style="width:54px"></div>
+</div>
 
       <div class="sheet-body content-gap">
         ${
