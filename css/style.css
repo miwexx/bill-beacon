@@ -2924,3 +2924,70 @@ body {
 .nav-bar .nav-button {
   color: #b45cff;
 }
+.tab-bar {
+  background: rgba(10, 10, 14, 0.96);
+  border-top: 1px solid rgba(192, 151, 255, 0.14);
+  box-shadow: 0 -10px 28px rgba(0, 0, 0, 0.28);
+}
+
+.tab-item {
+  position: relative;
+  min-width: 0;
+  color: #868197;
+  border-radius: 14px;
+  transition:
+    color 180ms ease,
+    background 180ms ease,
+    transform 180ms ease;
+}
+
+.tab-item .tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tab-item.active {
+  color: #d07aff;
+  background: rgba(143, 54, 255, 0.16);
+  box-shadow:
+    inset 0 0 0 1px rgba(202, 92, 255, 0.2),
+    0 6px 18px rgba(143, 54, 255, 0.1);
+}
+
+.tab-item.active::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 28px;
+  height: 3px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #8f36ff 0%,
+    #c44cff 45%,
+    #f64cae 72%,
+    #ff7138 100%
+  );
+  box-shadow: 0 0 12px rgba(215, 93, 255, 0.7);
+}
+
+.tab-item.active .tab-icon {
+  color: #c76aff;
+}
+
+.tab-item.active span {
+  color: #dca7ff;
+  font-weight: 800;
+}
+
+.tab-item:active {
+  transform: scale(0.96);
+}
+
+.tab-item:focus-visible {
+  outline: 2px solid #c76aff;
+  outline-offset: 2px;
+}
