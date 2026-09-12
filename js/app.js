@@ -7592,7 +7592,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
           >
             <span>
               ${unpaidBillsThisMonth.length}
-              bill${unpaidBillsThisMonth.length === 1 ? "" : "s"} remaining
+              Bill${unpaidBillsThisMonth.length === 1 ? "" : "s"} Remaining
             </span>
 
             <span>
@@ -8423,7 +8423,17 @@ const regularBillCount = activeBills.filter(
 
 const paymentPlanCount = new Set(
   activeBills
-    .filter((bill) => bill.installmentPlanId)
+    .filter((bill) => {
+      return (
+        bill.installmentPlanId &&
+        !bill.archivedAt &&
+        !bill.cancelledAt &&
+        !bill.paidInFullAt &&
+        bill.status !== "cancelled" &&
+        bill.status !== "paid-in-full" &&
+        bill.status !== "paidInFull"
+      );
+    })
     .map((bill) => bill.installmentPlanId)
 ).size;
 
@@ -8623,9 +8633,9 @@ const dataSummary =
             >
               <div class="form-label">${svgIcon("export", 18)}</div>
 
-              <div style="flex:1;color:var(--accent)">
-                Export Bills CSV
-              </div>
+              <div style="flex:1;color:var(--text)">
+  Export Bills CSV
+</div>
             </div>
 
             <div
@@ -8635,9 +8645,9 @@ const dataSummary =
             >
               <div class="form-label">${svgIcon("tray", 18)}</div>
 
-              <div style="flex:1;color:var(--accent)">
-                Import Bills CSV
-              </div>
+              <div style="flex:1;color:var(--text)">
+  Import Bills CSV
+</div>
 
               <input
                 id="billImportFile"
@@ -8656,7 +8666,7 @@ const dataSummary =
               <div class="form-label">${svgIcon("trash", 18)}</div>
 
               <div style="flex:1;color:var(--overdue)">
-                Clear all app data
+                Clear All App Data
               </div>
             </div>
           </div>
