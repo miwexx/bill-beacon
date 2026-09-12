@@ -2828,6 +2828,16 @@ function getCycleForBill(bill) {
   return new Date(bill.dueDate).getDate() <= 15 ? 'early' : 'late';
 }
 
+function getStartOfLocalDay(date = new Date()) {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    12,
+    0,
+    0
+  );
+}
 function renderCompactRecurringCalendar() {
   const viewDate = routeParams.month
     ? new Date(`${routeParams.month.slice(0, 10)}T12:00:00`)
@@ -2840,40 +2850,50 @@ function renderCompactRecurringCalendar() {
   const today = new Date();
 
   const currentMonthStart = new Date(
-  today.getFullYear(),
-  today.getMonth(),
-  1
-);
+    today.getFullYear(),
+    today.getMonth(),
+    1
+  );
 
-const viewedMonthStart = new Date(year, month, 1);
+  const viewedMonthStart = new Date(year, month, 1);
 
-const monthBills =
-  viewedMonthStart < currentMonthStart
-    ? []
-    : getCalendarBillsForMonth(viewDate);
+  const monthBills =
+    viewedMonthStart < currentMonthStart
+      ? []
+      : getCalendarBillsForMonth(viewDate);
+
+  const selectedDateKey = routeParams.recurringSelectedDate
+    ? getLocalDateKey(routeParams.recurringSelectedDate)
+    : null;
 
   const cells = [];
 
   for (let i = 0; i < firstDay.getDay(); i += 1) {
-    cells.push('<div class="recurring-calendar-day is-empty"></div>');
+    cells.push(`
+      <div class="recurring-calendar-day is-empty"></div>
+    `);
   }
 
   for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(year, month, day);
+    const date = new Date(year, month, day, 12, 0, 0);
+    const dateString = date.toISOString();
 
     const dayBills = monthBills.filter((bill) => {
-      return new Date(bill.dueDate).getDate() === day;
+      return getLocalDateKey(bill.dueDate) === getLocalDateKey(dateString);
     });
 
     const isToday = date.toDateString() === today.toDateString();
 
-    const hasOverdue = dayBills.some(
-      (bill) => getCalendarBillStatus(bill) === "overdue"
-    );
+    const isSelected =
+      selectedDateKey === getLocalDateKey(dateString);
 
-    const hasUpcoming = dayBills.some(
-      (bill) => getCalendarBillStatus(bill) === "upcoming"
-    );
+    const hasOverdue = dayBills.some((bill) => {
+      return getCalendarBillStatus(bill) === "overdue";
+    });
+
+    const hasUpcoming = dayBills.some((bill) => {
+      return getCalendarBillStatus(bill) === "upcoming";
+    });
 
     const hasPaid = dayBills.some(isCalendarBillPaid);
 
@@ -2884,18 +2904,25 @@ const monthBills =
         ? "overdue"
         : hasUpcoming
           ? "upcoming"
-          : "paid";
+          : hasPaid
+            ? "paid"
+            : "upcoming";
 
-      marker = `<i class="recurring-calendar-marker ${markerClass}"></i>`;
+      marker = `
+        <i class="recurring-calendar-marker ${markerClass}"></i>
+      `;
     }
 
     cells.push(`
       <button
-        class="recurring-calendar-day ${
-          isToday ? "is-today" : ""
-        } ${hasOverdue ? "has-overdue" : ""}"
-        onclick="openCalendarDay('${date.toISOString()}')"
-        aria-label="View bills for ${formatDate(date.toISOString(), "full")}"
+        type="button"
+        class="recurring-calendar-day
+          ${isToday ? "is-today" : ""}
+          ${isSelected ? "is-selected" : ""}
+          ${hasOverdue ? "has-overdue" : ""}"
+        onclick="toggleRecurringCalendarDay('${dateString}')"
+        aria-label="View bills for ${formatDate(dateString, "full")}"
+        aria-pressed="${isSelected ? "true" : "false"}"
       >
         <span>${day}</span>
         ${marker}
@@ -2903,13 +2930,92 @@ const monthBills =
     `);
   }
 
+  const selectedDate = routeParams.recurringSelectedDate
+    ? new Date(
+        `${routeParams.recurringSelectedDate.slice(0, 10)}T12:00:00`
+      )
+    : null;
+
+  const selectedDayBills = selectedDate
+    ? monthBills.filter((bill) => {
+        return (
+          getLocalDateKey(bill.dueDate) ===
+          getLocalDateKey(selectedDate.toISOString())
+        );
+      })
+    : [];
+
+  const selectedDayHtml = selectedDate
+    ? `
+      <div class="recurring-calendar-selected-day">
+        <div class="recurring-calendar-selected-header">
+          <div>
+            <div class="section-header" style="margin:0;">
+              ${formatDate(selectedDate.toISOString(), "full")}
+            </div>
+
+            <div class="recurring-list-subtitle">
+              ${
+                selectedDayBills.length
+                  ? `${selectedDayBills.length} ${
+                      selectedDayBills.length === 1
+                        ? "bill"
+                        : "bills"
+                    } scheduled`
+                  : "No bills scheduled"
+              }
+            </div>
+          </div>
+
+          <button
+            type="button"
+            class="nav-button"
+            onclick="toggleRecurringCalendarDay('${
+              selectedDate.toISOString()
+            }')"
+            aria-label="Close selected day"
+            style="color:var(--text-muted);"
+          >
+            ${svgIcon("close", 20)}
+          </button>
+        </div>
+
+        ${
+          selectedDayBills.length
+            ? `
+              <div
+                class="card recurring-calendar-selected-list"
+                style="margin-bottom:0;"
+              >
+                ${selectedDayBills
+                  .map((bill) => renderRecurringOccurrenceRow(bill))
+                  .join("")}
+              </div>
+            `
+            : `
+              <div class="recurring-calendar-empty-day">
+                ${svgIcon("calendar", 20)}
+                <span>
+                  No recurring bills or plan installments are due this day.
+                </span>
+              </div>
+            `
+        }
+      </div>
+    `
+    : "";
+
   const prevMonth = new Date(year, month - 1, 1).toISOString();
   const nextMonth = new Date(year, month + 1, 1).toISOString();
 
   return `
-    <section class="recurring-calendar-card" aria-label="Recurring bills calendar">
+    <section
+      class="recurring-calendar-card"
+      aria-label="Recurring bills calendar"
+    >
       <div class="recurring-calendar-heading">
         <button
+          type="button"
           class="month-nav-btn"
           onclick="navigate('recurring', { month: '${prevMonth}' })"
           aria-label="Previous month"
@@ -2920,6 +3026,7 @@ const monthBills =
         <strong>${formatDate(viewDate.toISOString(), "monthYear")}</strong>
 
         <button
+          type="button"
           class="month-nav-btn"
           onclick="navigate('recurring', { month: '${nextMonth}' })"
           aria-label="Next month"
@@ -2937,22 +3044,31 @@ const monthBills =
       <div class="recurring-calendar-grid">
         ${cells.join("")}
       </div>
+
+      ${selectedDayHtml}
     </section>
   `;
 }
-const RECURRING_SECTION_LIMIT = 3;
+function toggleRecurringCalendarDay(dateString) {
+  const clickedDateKey = getLocalDateKey(dateString);
 
-function getStartOfLocalDay(date = new Date()) {
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    12,
-    0,
-    0
-  );
+  const selectedDateKey = routeParams.recurringSelectedDate
+    ? getLocalDateKey(routeParams.recurringSelectedDate)
+    : null;
+
+  if (selectedDateKey === clickedDateKey) {
+    const { recurringSelectedDate, ...remainingParams } = routeParams;
+
+    navigate("recurring", remainingParams);
+    return;
+  }
+
+  navigate("recurring", {
+    ...routeParams,
+    recurringSelectedDate: dateString
+  });
 }
-
+const RECURRING_SECTION_LIMIT = 3;
 function getRecurringRelativeLabel(dateString, now = new Date()) {
   const startOfToday = getStartOfLocalDay(now);
   const dueDate = getStartOfLocalDay(new Date(dateString));
@@ -3113,6 +3229,23 @@ function toggleRecurringSection(sectionId) {
     : `<span>Show More</span>${svgIcon('chevronRight', 18)}`;
 
   button.setAttribute('aria-expanded', String(isOpen));
+}
+function toggleRecurringCalendarDay(dateString) {
+  const clickedDate = getLocalDateKey(dateString);
+  const selectedDate = routeParams.recurringSelectedDate
+    ? getLocalDateKey(routeParams.recurringSelectedDate)
+    : null;
+
+  if (selectedDate === clickedDate) {
+    const { recurringSelectedDate, ...remainingParams } = routeParams;
+    navigate("recurring", remainingParams);
+    return;
+  }
+
+  navigate("recurring", {
+    ...routeParams,
+    recurringSelectedDate: dateString
+  });
 }
 function renderRecurring() {
   const now = new Date();
