@@ -1817,6 +1817,34 @@ function markSelectedPlanInstallmentPaid(planId) {
   closePaymentPlanDetails();
   markBillPaid(installment.id);
 }
+function updatePlanPaymentSelection(planId) {
+  const select = document.getElementById(
+    "paymentPlanInstallmentSelect"
+  );
+
+  const button = document.getElementById(
+    "markSelectedPlanPaymentButton"
+  );
+
+  const installmentId = select?.value;
+
+  if (!installmentId || !button) {
+    return;
+  }
+
+  const installment = Store.getBill(installmentId);
+
+  if (!installment || installment.installmentPlanId !== planId) {
+    return;
+  }
+
+  const number = installment.installmentNumber || "—";
+
+  button.innerHTML = `
+    ${svgIcon("checkCircle", 18)}
+    Mark Payment ${number} as Paid
+  `;
+}
 function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
 
@@ -6256,76 +6284,81 @@ function openPaymentPlanDetails(planId) {
     })
     .join("");
 
-  const paymentSelectorHtml = unpaidInstallments.length
-    ? `
-      <div class="section-header">Make a Payment</div>
+ const paymentSelectorHtml = unpaidInstallments.length
+  ? `
+    <div class="section-header">Make a Payment</div>
 
-      <div class="card card-pad" style="margin-bottom:0;">
-        <div
-          style="
-            font-size:var(--text-sm);
-            color:var(--text-muted);
-            margin-bottom:var(--space-3);
-          "
-        >
-          Choose a scheduled payment to mark as paid.
-        </div>
+    <div class="card card-pad" style="margin-bottom:0;">
+      <select
+        id="paymentPlanInstallmentSelect"
+        class="form-input"
+        onchange="updatePlanPaymentSelection('${planId}')"
+        aria-label="Choose a scheduled payment"
+        style="
+          width:100%;
+          height:52px;
+          padding:0 14px;
+          border:1px solid var(--border);
+          border-radius:12px;
+          background:var(--surface-2);
+          color:var(--text);
+          font-size:var(--text-sm);
+          font-weight:800;
+        "
+      >
+        ${unpaidInstallments
+          .map((bill) => {
+            const number = bill.installmentNumber || "—";
+            const total = bill.installmentTotal || installmentCount;
 
-        <select
-          id="paymentPlanInstallmentSelect"
-          class="form-input"
-          style="
-            width:100%;
-            height:52px;
-            font-size:var(--text-base);
-            font-weight:700;
-          "
-        >
-          ${unpaidInstallments
-            .map((bill) => {
-              const number = bill.installmentNumber || "—";
-              const total = bill.installmentTotal || installmentCount;
+            return `
+              <option value="${bill.id}">
+                Payment ${number} of ${total} ·
+                ${formatDate(bill.dueDate, "short")} ·
+                ${formatCurrency(bill.amount)}
+              </option>
+            `;
+          })
+          .join("")}
+      </select>
 
-              return `
-                <option value="${bill.id}">
-                  Payment ${number} of ${total} ·
-                  ${formatDate(bill.dueDate, "short")} ·
-                  ${formatCurrency(bill.amount)}
-                </option>
-              `;
-            })
-            .join("")}
-        </select>
+      <button
+        id="markSelectedPlanPaymentButton"
+        type="button"
+        class="btn-primary"
+        style="
+          width:100%;
+          margin:var(--space-3) 0 0;
+        "
+        onclick="markSelectedPlanInstallmentPaid('${planId}')"
+      >
+        ${svgIcon("checkCircle", 18)}
+        ${nextInstallment
+          ? `Mark Payment ${
+              nextInstallment.installmentNumber || "—"
+            } as Paid`
+          : "Mark Payment as Paid"}
+      </button>
+    </div>
+  `
+  : `
+    <div class="section-header">Make a Payment</div>
 
-        <button
-          type="button"
-          class="btn-primary"
-          style="width:100%; margin:var(--space-3) 0 0;"
-          onclick="markSelectedPlanInstallmentPaid('${planId}')"
-        >
-          ${svgIcon("checkCircle", 18)}
-          Mark Selected Payment as Paid
-        </button>
+    <div class="card card-pad" style="margin-bottom:0;">
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:var(--space-2);
+          color:var(--paid);
+          font-weight:800;
+        "
+      >
+        ${svgIcon("checkCircle", 20)}
+        This payment plan is paid in full.
       </div>
-    `
-    : `
-      <div class="section-header">Make a Payment</div>
-
-      <div class="card card-pad" style="margin-bottom:0;">
-        <div
-          style="
-            display:flex;
-            align-items:center;
-            gap:var(--space-2);
-            color:var(--paid);
-            font-weight:800;
-          "
-        >
-          ${svgIcon("checkCircle", 20)}
-          This payment plan is paid in full.
-        </div>
-      </div>
-    `;
+    </div>
+  `;
 
   const container = document.createElement("div");
   container.id = "paymentPlanDetailsContainer";
