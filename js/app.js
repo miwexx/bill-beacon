@@ -2921,7 +2921,7 @@ function renderCompactRecurringCalendar() {
           ${isSelected ? "is-selected" : ""}
           ${hasOverdue ? "has-overdue" : ""}"
         onclick="toggleRecurringCalendarDay('${dateString}')"
-        aria-label="View bills for ${formatDate(dateString, "full")}"
+        aria-label="View Bills For ${formatDate(dateString, "full")}"
         aria-pressed="${isSelected ? "true" : "false"}"
       >
         <span>${day}</span>
@@ -2947,27 +2947,32 @@ function renderCompactRecurringCalendar() {
 
   const selectedDayHtml = selectedDate
     ? `
-      <div class="recurring-calendar-selected-day">
-        <div class="recurring-calendar-selected-header">
-          <div>
-            <div class="section-header" style="margin:0;">
-              ${formatDate(selectedDate.toISOString(), "full")}
-            </div>
+      <div class="recurring-calendar-selected-header">
+  <div class="recurring-calendar-selected-title-group">
+    <div class="recurring-calendar-selected-date">
+      <span class="recurring-calendar-selected-date-icon">
+        ${svgIcon("calendar", 18)}
+      </span>
 
-            <div class="recurring-list-subtitle">
-              ${
-                selectedDayBills.length
-                  ? `${selectedDayBills.length} ${
-                      selectedDayBills.length === 1
-                        ? "bill"
-                        : "bills"
-                    } scheduled`
-                  : "No bills scheduled"
-              }
-            </div>
-          </div>
+      <span>
+        ${formatDate(selectedDate.toISOString(), "full")}
+      </span>
+    </div>
 
-          <button
+    <div class="recurring-calendar-selected-count">
+      ${
+        selectedDayBills.length
+          ? `${selectedDayBills.length} ${
+              selectedDayBills.length === 1
+                ? "bill"
+                : "bills"
+            } scheduled`
+          : "No bills scheduled"
+      }
+    </div>
+  </div>
+
+  <button
             type="button"
             class="nav-button"
             onclick="toggleRecurringCalendarDay('${
@@ -2996,7 +3001,7 @@ function renderCompactRecurringCalendar() {
               <div class="recurring-calendar-empty-day">
                 ${svgIcon("calendar", 20)}
                 <span>
-                  No recurring bills or plan installments are due this day.
+                  Nothing Scheduled For This Day.
                 </span>
               </div>
             `
@@ -3011,14 +3016,14 @@ function renderCompactRecurringCalendar() {
   return `
     <section
       class="recurring-calendar-card"
-      aria-label="Recurring bills calendar"
+      aria-label="Recurring Bills Calendar"
     >
       <div class="recurring-calendar-heading">
         <button
           type="button"
           class="month-nav-btn"
           onclick="navigate('recurring', { month: '${prevMonth}' })"
-          aria-label="Previous month"
+          aria-label="Previous Month"
         >
           ${svgIcon("chevronLeft", 18)}
         </button>
@@ -3029,7 +3034,7 @@ function renderCompactRecurringCalendar() {
           type="button"
           class="month-nav-btn"
           onclick="navigate('recurring', { month: '${nextMonth}' })"
-          aria-label="Next month"
+          aria-label="Next Month"
         >
           ${svgIcon("chevronRight", 18)}
         </button>
