@@ -2377,6 +2377,7 @@ function renderToday() {
           class="nav-button dashboard-icon-button"
           onclick="navigate('settings')"
           aria-label="Open settings"
+          style="color:var(--text-muted);"
         >
           ${svgIcon("gear", 22)}
         </button>
@@ -2387,7 +2388,7 @@ function renderToday() {
           class="nav-button dashboard-icon-button"
           onclick="openNotificationCenter()"
           aria-label="Open notifications"
-          style="position:relative"
+          style="position:relative; color:var(--text-muted);"
         >
           ${svgIcon("bell", 22)}
 
@@ -2395,25 +2396,30 @@ function renderToday() {
             notificationCount > 0
               ? `
                 <span
-                  style="
-                    position:absolute;
-                    top:2px;
-                    right:2px;
-                    min-width:16px;
-                    height:16px;
-                    padding:0 4px;
-                    border-radius:999px;
-                    background:var(--overdue);
-                    color:white;
-                    font-size:10px;
-                    font-weight:700;
-                    line-height:16px;
-                    text-align:center;
-                    border:2px solid var(--bg);
-                  "
-                >
-                  ${notificationCount > 9 ? "9+" : notificationCount}
-                </span>
+  style="
+    position:absolute;
+    top:0;
+    right:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-width:17px;
+    height:17px;
+    padding:0 4px;
+    box-sizing:border-box;
+    border:2px solid var(--bg);
+    border-radius:999px;
+    background:var(--overdue);
+    color:#fff;
+    font-size:10px;
+    font-weight:800;
+    line-height:1;
+    text-align:center;
+    font-variant-numeric:tabular-nums;
+  "
+>
+  ${notificationCount > 9 ? "9+" : notificationCount}
+</span>
               `
               : ""
           }
