@@ -3234,7 +3234,7 @@ function renderRecurring() {
                         onclick="toggleRecurringSection('${id}')"
                         aria-expanded="false"
                       >
-                        <span>Show More</span>
+                        <span class="gradient-action-text">Show more</span>
                         ${svgIcon('chevronRight', 18)}
                       </button>
                     `
@@ -5504,7 +5504,11 @@ function showMoreActivePaymentPlans() {
   const isExpanded = extraPlans.style.display !== "none";
 
   extraPlans.style.display = isExpanded ? "none" : "grid";
-  toggleButton.textContent = isExpanded ? "Show more" : "Show Less";
+  toggleButton.innerHTML = `
+  <span class="gradient-action-text">
+    ${isExpanded ? "Show More" : "Show Less"}
+  </span>
+`;
 
   if (isExpanded) {
     toggleButton.scrollIntoView({

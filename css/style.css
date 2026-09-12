@@ -3059,3 +3059,34 @@ body {
   color: #f7efff;
   font-weight: 850;
 }
+.gradient-action-text {
+  color: transparent !important;
+  background: linear-gradient(
+    105deg,
+    #8f36ff 0%,
+    #c44cff 34%,
+    #f64cae 65%,
+    #ff7138 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  font-weight: 850;
+}
+.show-more-bills-button {
+  color: transparent !important;
+}
+
+.show-more-bills-button span:first-child {
+  color: transparent;
+  background: linear-gradient(
+    105deg,
+    #8f36ff 0%,
+    #c44cff 34%,
+    #f64cae 65%,
+    #ff7138 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
