@@ -17,7 +17,7 @@ const CATEGORIES = [
   { id: 'transportation', label: 'Transportation', icon: 'car', color: 'cat-transportation' },
   { id: 'loans', label: 'Loans', icon: 'percent', color: 'cat-loans' },
   { id: 'creditcards', label: 'Credit Cards', icon: 'creditcard', color: 'cat-creditcards' },
-  { id: 'paymentplans', label: 'Payment Plans', icon: 'Subscription', color: 'cat-paymentplans' },
+  { id: 'paymentplans', label: 'Installments', icon: 'Subscription', color: 'cat-paymentplans' },
   { id: 'health', label: 'Health', icon: 'cross', color: 'cat-health' },
   { id: 'education', label: 'Education', icon: 'graduationcap', color: 'cat-education' },
   { id: 'other', label: 'Other', icon: 'doc', color: 'cat-other' },
@@ -5302,7 +5302,7 @@ function renderPaymentPlans() {
       <div class="nav-bar-content">
         <div class="nav-button" aria-hidden="true"></div>
 
-        <div class="nav-title">Payment Plans</div>
+        <div class="nav-title">Installments</div>
 
         <button
           type="button"
@@ -5395,7 +5395,7 @@ function renderPaymentPlans() {
                   "
                 >
                   ${activePlans.length} Active ${
-                    activePlans.length === 1 ? "plan" : "Plans"
+                    activePlans.length === 1 ? "Installment" : "Installments"
                   } Remaining
                 </div>
               </section>
@@ -5601,7 +5601,7 @@ function renderPaymentPlans() {
   visibleActivePlans.length
     ? `
       <section id="active-payment-plans">
-        <div class="section-header">Active plans</div>
+        <div class="section-header">Active Installments</div>
 
         <div class="content-gap">
           ${visibleActivePlans
@@ -6196,7 +6196,7 @@ function openCompletedPlansHistory() {
       "
       role="dialog"
       aria-modal="true"
-      aria-label="Completed Payment Plans"
+      aria-label="Completed Installments"
     >
       <div class="nav-bar">
         <div class="nav-bar-content">
@@ -7618,7 +7618,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
                   cursor:pointer;
                   border:1px solid var(--border);
                 "
-                aria-label="View Payment Plans"
+                aria-label="View Installments"
               >
                 <div
                   style="
@@ -7648,7 +7648,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
 
                   <div style="min-width:0;flex:1">
                     <div style="font-size:var(--text-base);font-weight:800">
-                      Payment Plans
+                      Installments
                     </div>
 
                     <div
@@ -7661,7 +7661,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
                       ${
                         activePlans.length === 1
                           ? nextPlanPayment.provider
-                          : `${activePlans.length} Active Plans`
+                          : `${activePlans.length} Installments`
                       }
                     </div>
                   </div>
