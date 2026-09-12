@@ -9047,56 +9047,84 @@ function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const payCycleLabel = getPayCycleLabel(bill);
   const dueDate = new Date(bill.dueDate);
-  const dueDay = bill.recurrence === 'Monthly'
+
+  const dueDay = bill.recurrence === "Monthly"
     ? getMonthlyDueDay(bill)
     : dueDate.getDate();
 
   const ordinal = (day) => {
     const mod100 = day % 100;
-    if (mod100 >= 11 && mod100 <= 13) return `${day}th`;
+
+    if (mod100 >= 11 && mod100 <= 13) {
+      return `${day}th`;
+    }
+
     switch (day % 10) {
-      case 1: return `${day}st`;
-      case 2: return `${day}nd`;
-      case 3: return `${day}rd`;
-      default: return `${day}th`;
+      case 1:
+        return `${day}st`;
+      case 2:
+        return `${day}nd`;
+      case 3:
+        return `${day}rd`;
+      default:
+        return `${day}th`;
     }
   };
 
   const scheduleText =
-    bill.recurrence && bill.recurrence !== 'None'
-      ? bill.recurrence === 'Monthly'
+    bill.recurrence && bill.recurrence !== "None"
+      ? bill.recurrence === "Monthly"
         ? `Due on the ${ordinal(dueDay)} of each month`
         : getBillScheduleLabel(bill)
-      : `Due on ${formatDate(bill.dueDate, 'full')}`;
-  const payCycleClass =
-    bill.payCycle === 'first' ||
-    (!bill.payCycle && dueDay <= 15)
-      ? 'pay-cycle-first'
-      : 'pay-cycle-second';
+      : `Due on ${formatDate(bill.dueDate, "full")}`;
 
-  // Occurrences have their own due date but use the source template ID.
+  const payCycleClass =
+    bill.payCycle === "first" ||
+    (!bill.payCycle && dueDay <= 15)
+      ? "pay-cycle-first"
+      : "pay-cycle-second";
+
+  // Recurring occurrences keep their own date but use the original bill ID.
   const detailBillId = bill.isOccurrence
     ? bill.sourceBillId
     : bill.id;
 
   const detailDueDate = bill.isOccurrence
     ? bill.dueDate
-    : '';
-  const quickActionArgs = bill.isOccurrence
-    ? `'${detailBillId}', '${detailDueDate}'`
-    : `'${detailBillId}'`;
+    : "";
+
   const rowClick = `
-  onclick="openBillQuickActions('${detailBillId}')"
-`;
+    onclick="openBillQuickActions('${detailBillId}')"
+    role="button"
+    tabindex="0"
+    onkeydown="
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openBillQuickActions('${detailBillId}');
+      }
+    "
+  `;
+
+  const moreButtonAction = bill.isOccurrence
+    ? `navigate('detail', {
+        id: '${detailBillId}',
+        occurrenceDueDate: '${detailDueDate}',
+        returnRoute: 'recurring'
+      })`
+    : `openBillQuickActions('${detailBillId}')`;
 
   return `
-    <div class="bill-row">
+    <div class="bill-row clickable" ${rowClick}>
       <div
         class="bill-icon"
         style="
-          background:${getBillBrand(bill.name) ? '#fff' : `var(--${cat.color})`};
-          color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
-          padding:${getBillBrand(bill.name) ? '3px' : '0'};
+          background:${
+            getBillBrand(bill.name)
+              ? "#fff"
+              : `var(--${cat.color})`
+          };
+          color:${getBillBrand(bill.name) ? "#1e1e2e" : "white"};
+          padding:${getBillBrand(bill.name) ? "3px" : "0"};
           overflow:hidden;
         "
       >
@@ -9119,8 +9147,15 @@ function billRow(bill, clickable = false) {
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:6px">
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+      <div style="display:flex; align-items:center; gap:6px">
+        <div
+          style="
+            display:flex;
+            flex-direction:column;
+            align-items:flex-end;
+            gap:4px;
+          "
+        >
           <div class="bill-amount">
             ${formatCurrency(bill.amount)}
           </div>
@@ -9132,19 +9167,11 @@ function billRow(bill, clickable = false) {
           aria-label="More options for ${escapeHtml(bill.name)}"
           title="More options"
           onclick="
-  event.stopPropagation();
-  ${
-    bill.isOccurrence
-      ? `navigate('detail', {
-          id: '${detailBillId}',
-          occurrenceDueDate: '${detailDueDate}',
-          returnRoute: 'recurring'
-        })`
-      : `openBillQuickActions('${detailBillId}')`
-  }
-"
+            event.stopPropagation();
+            ${moreButtonAction}
+          "
         >
-          ${svgIcon('moreVertical', 22)}
+          ${svgIcon("moreVertical", 22)}
         </button>
       </div>
     </div>
@@ -10013,18 +10040,26 @@ function openBillForm(billId = null, selectedDate = null) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillForm()">Cancel</button>
+  <button
+    type="button"
+    class="nav-button"
+    onclick="closeBillForm()"
+    style="color:var(--text);"
+  >
+    Cancel
+  </button>
 
-        <div class="sheet-title">${bill ? 'Edit Bill' : 'New Bill'}</div>
+  <div class="sheet-title">${bill ? 'Edit Bill' : 'New Bill'}</div>
 
-        <button
-          class="nav-button"
-          onclick="saveBill()"
-          style="font-weight:700"
-        >
-          Save
-        </button>
-      </div>
+  <button
+    type="button"
+    class="nav-button"
+    onclick="saveBill()"
+    style="color:var(--text); font-weight:700;"
+  >
+    Save
+  </button>
+</div>
 
       <div class="sheet-body">
         <div class="content-gap">
