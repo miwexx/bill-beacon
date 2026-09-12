@@ -5390,11 +5390,10 @@ function renderPaymentPlans() {
     `
     : ""
 }
-                    </section>
+                       </section>
                   `
                   : ""
               }
-
              ${
   visibleActivePlans.length
     ? `
@@ -5412,6 +5411,7 @@ function renderPaymentPlans() {
             ? `
               <button
                 type="button"
+                id="toggle-active-payment-plans"
                 onclick="showMoreActivePaymentPlans()"
                 style="
                   width:100%;
@@ -5477,25 +5477,349 @@ function renderPaymentPlans() {
               }
             `
         }
-      </div>
+            </div>
     </div>
   `;
 }
+
 function showMoreActivePaymentPlans() {
   const extraPlans = document.getElementById("extra-active-payment-plans");
+  const toggleButton = document.getElementById("toggle-active-payment-plans");
 
-  if (!extraPlans) return;
+  if (!extraPlans || !toggleButton) return;
 
-  extraPlans.style.display = "grid";
+  const isExpanded = extraPlans.style.display !== "none";
 
-  const button = event?.currentTarget;
+  extraPlans.style.display = isExpanded ? "none" : "grid";
+  toggleButton.textContent = isExpanded ? "Show more" : "Show less";
+}
+window.showMoreActivePaymentPlans = showMoreActivePaymentPlans;
+function getUnpaidPaymentPlanInstallments() {
+  return Store.getBills()
+    .filter((bill) => Boolean(bill.installmentPlanId))
+    .filter((bill) => !isOccurrencePaid(bill, new Date(bill.dueDate)))
+    .map((bill) => {
+      const provider = bill.installmentProvider || "Payment Plan";
 
-  if (button) {
-    button.remove();
-  }
+      const storeName =
+        bill.installmentStore?.trim() ||
+        String(bill.name || "")
+          .replace(/\s+Payment Plan$/i, "")
+          .trim() ||
+        provider;
+
+      return {
+        id: bill.id,
+        planId: bill.installmentPlanId,
+        provider,
+        storeName,
+        amount: parseFloat(bill.amount || 0),
+        dueDate: bill.dueDate,
+        installmentNumber: bill.installmentNumber || null,
+        installmentTotal: bill.installmentTotal || null,
+      };
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
 
-window.showMoreActivePaymentPlans = showMoreActivePaymentPlans;
+function getPaymentPlanScheduleGroups(type) {
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    12,
+    0,
+    0,
+    0
+  );
+
+  const currentMonthStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+    12,
+    0,
+    0,
+    0
+  );
+
+  const nextMonthStart = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    1,
+    12,
+    0,
+    0,
+    0
+  );
+
+  const installments = getUnpaidPaymentPlanInstallments().filter((item) => {
+    const dueDate = new Date(item.dueDate);
+
+    if (type === "month") {
+      return (
+        dueDate >= startOfToday &&
+        dueDate >= currentMonthStart &&
+        dueDate < nextMonthStart
+      );
+    }
+
+    return dueDate >= nextMonthStart;
+  });
+
+  const groups = installments.reduce((result, installment) => {
+    const dueDate = new Date(installment.dueDate);
+    const key = `${dueDate.getFullYear()}-${String(
+      dueDate.getMonth() + 1
+    ).padStart(2, "0")}`;
+
+    if (!result[key]) {
+      result[key] = {
+        date: new Date(dueDate.getFullYear(), dueDate.getMonth(), 1),
+        items: [],
+      };
+    }
+
+    result[key].items.push(installment);
+    return result;
+  }, {});
+
+  return Object.values(groups).sort((a, b) => a.date - b.date);
+}
+
+function closePaymentPlanSchedule() {
+  document
+    .getElementById("paymentPlanScheduleOverlay")
+    ?.classList.remove("show");
+
+  document
+    .getElementById("paymentPlanScheduleSheet")
+    ?.classList.remove("show");
+
+  setTimeout(() => {
+    document.getElementById("paymentPlanScheduleContainer")?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function openPaymentPlanSchedule(type = "month") {
+  document.getElementById("paymentPlanScheduleContainer")?.remove();
+
+  const isCurrentMonth = type === "month";
+  const title = isCurrentMonth
+    ? "This month's payments"
+    : "Upcoming payment schedule";
+
+  const groups = getPaymentPlanScheduleGroups(type);
+
+  const renderInstallment = (item) => {
+    const dueDate = new Date(item.dueDate);
+    const day = dueDate.getDate();
+    const month = formatDate(item.dueDate, "monthShort");
+
+    const installmentText =
+      item.installmentNumber && item.installmentTotal
+        ? `Payment ${item.installmentNumber} of ${item.installmentTotal}`
+        : item.provider;
+
+    return `
+      <button
+        type="button"
+        class="bill-row"
+        style="
+          width:100%;
+          text-align:left;
+          background:transparent;
+          border:0;
+          color:inherit;
+          cursor:pointer;
+        "
+        onclick="closePaymentPlanSchedule(); openPaymentPlanDetails('${item.planId}')"
+        aria-label="View ${escapeHtml(item.storeName)} payment plan"
+      >
+        <div
+          style="
+            width:46px;
+            min-width:46px;
+            padding:6px 0;
+            border-radius:12px;
+            text-align:center;
+            color:var(--text);
+            background:rgba(143, 54, 255, 0.12);
+          "
+        >
+          <div style="font-size:var(--text-xs); color:var(--text-muted);">
+            ${month}
+          </div>
+
+          <div style="margin-top:2px; font-size:var(--text-lg); font-weight:900;">
+            ${day}
+          </div>
+        </div>
+
+        <div
+          style="
+            width:42px;
+            height:42px;
+            min-width:42px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            overflow:hidden;
+          "
+        >
+          ${paymentPlanVisual(item.provider, 38)}
+        </div>
+
+        <div class="bill-info">
+          <div class="bill-name">${escapeHtml(item.storeName)}</div>
+
+          <div class="bill-meta">
+            ${escapeHtml(item.provider)} · ${escapeHtml(installmentText)}
+          </div>
+        </div>
+
+        <div
+          style="
+            margin-left:auto;
+            padding:7px 11px;
+            border:1px solid rgba(226, 185, 255, 0.68);
+            border-radius:999px;
+            font-size:var(--text-sm);
+            font-weight:800;
+            white-space:nowrap;
+          "
+        >
+          ${formatCurrency(item.amount)}
+        </div>
+      </button>
+    `;
+  };
+
+  const renderGroup = (group) => {
+    const groupTotal = group.items.reduce(
+      (sum, item) => sum + item.amount,
+      0
+    );
+
+    return `
+      <section>
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:var(--space-3);
+            margin:var(--space-3) 0 var(--space-2);
+          "
+        >
+          <div
+            style="
+              font-size:var(--text-xl);
+              font-weight:900;
+              letter-spacing:-0.02em;
+            "
+          >
+            ${formatDate(group.date.toISOString(), "monthYear")}
+          </div>
+
+          <div
+            style="
+              font-size:var(--text-base);
+              font-weight:800;
+              color:var(--text-muted);
+            "
+          >
+            ${formatCurrency(groupTotal)}
+          </div>
+        </div>
+
+        <div class="card">
+          ${group.items.map(renderInstallment).join("")}
+        </div>
+      </section>
+    `;
+  };
+
+  const container = document.createElement("div");
+  container.id = "paymentPlanScheduleContainer";
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="paymentPlanScheduleOverlay"
+      onclick="closePaymentPlanSchedule()"
+    ></div>
+
+    <div
+      class="sheet"
+      id="paymentPlanScheduleSheet"
+      style="max-height:94vh;"
+      role="dialog"
+      aria-modal="true"
+      aria-label="${title}"
+    >
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <div style="width:54px"></div>
+
+        <div class="sheet-title">${title}</div>
+
+        <button
+          type="button"
+          class="nav-button"
+          onclick="closePaymentPlanSchedule()"
+          aria-label="Close payment schedule"
+          style="color:#b45cff;"
+        >
+          ${svgIcon("close", 22)}
+        </button>
+      </div>
+
+      <div class="sheet-body content-gap">
+        ${
+          groups.length
+            ? groups.map(renderGroup).join("")
+            : `
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon("checkCircle", 44)}
+                </div>
+
+                <div class="empty-state-title">Nothing scheduled</div>
+
+                <div class="empty-state-text">
+                  ${
+                    isCurrentMonth
+                      ? "You have no remaining payment-plan installments due this month."
+                      : "You have no remaining payment-plan installments after this month."
+                  }
+                </div>
+              </div>
+            `
+        }
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document
+      .getElementById("paymentPlanScheduleOverlay")
+      ?.classList.add("show");
+
+    document
+      .getElementById("paymentPlanScheduleSheet")
+      ?.classList.add("show");
+  });
+}
+
+window.openPaymentPlanSchedule = openPaymentPlanSchedule;
+window.closePaymentPlanSchedule = closePaymentPlanSchedule;
 function getCompletedPaymentPlans() {
   const installmentBills = Store.getBills().filter((bill) =>
     Boolean(bill.installmentPlanId)
