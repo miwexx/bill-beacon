@@ -9094,16 +9094,24 @@ function billRow(bill, clickable = false) {
     : "";
 
   const rowClick = `
-    onclick="openBillQuickActions('${detailBillId}')"
-    role="button"
-    tabindex="0"
-    onkeydown="
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        openBillQuickActions('${detailBillId}');
-      }
-    "
-  `;
+  onclick="navigate('detail', {
+    id: '${detailBillId}',
+    occurrenceDueDate: '${detailDueDate}',
+    returnRoute: 'bills'
+  })"
+  role="button"
+  tabindex="0"
+  onkeydown="
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      navigate('detail', {
+        id: '${detailBillId}',
+        occurrenceDueDate: '${detailDueDate}',
+        returnRoute: 'bills'
+      });
+    }
+  "
+`;
 
   const moreButtonAction = bill.isOccurrence
     ? `navigate('detail', {
