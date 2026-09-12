@@ -4985,7 +4985,7 @@ function renderPaymentPlans() {
         <button
           type="button"
           class="nav-button"
-          onclick="navigate('bills')"
+          onclick="closeAddMenu(); openInstallmentPlanForm()"
           aria-label="Add a payment plan"
           title="Add payment plan"
           style="color:#b45cff;"
@@ -5029,7 +5029,7 @@ function renderPaymentPlans() {
                     );
                     box-shadow:0 12px 32px rgba(231, 68, 182, 0.24);
                   "
-                  onclick="navigate('bills')"
+                  onclick="closeAddMenu(); openInstallmentPlanForm()"
                 >
                   ${svgIcon("plus", 18)}
                   Add payment plan
@@ -5039,7 +5039,7 @@ function renderPaymentPlans() {
             : `
               <section
                 style="
-                  padding:var(--space-4) 0 var(--space-2);
+                  padding:var(--space-4) 0 var(--space-4);
                   text-align:center;
                 "
               >
@@ -5077,29 +5077,6 @@ function renderPaymentPlans() {
                   } remaining
                 </div>
 
-                <button
-                  type="button"
-                  class="button button-primary"
-                  style="
-                    width:min(100%, 296px);
-                    justify-content:center;
-                    margin-top:var(--space-5);
-                    color:#fff;
-                    border:0;
-                    background:linear-gradient(
-                      105deg,
-                      #8f36ff 0%,
-                      #c44cff 34%,
-                      #f64cae 65%,
-                      #ff7138 100%
-                    );
-                    box-shadow:0 12px 32px rgba(231, 68, 182, 0.24);
-                  "
-                  onclick="navigate('bills')"
-                >
-                  ${svgIcon("creditcard", 19)}
-                  Review next payments
-                </button>
               </section>
 
               ${
