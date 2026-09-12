@@ -3234,7 +3234,7 @@ function renderRecurring() {
                         onclick="toggleRecurringSection('${id}')"
                         aria-expanded="false"
                       >
-                        <span class="gradient-action-text">Show more</span>
+                        <span class="gradient-action-text">Show More</span>
                         ${svgIcon('chevronRight', 18)}
                       </button>
                     `
@@ -5292,7 +5292,7 @@ function renderPaymentPlans() {
           cursor:pointer;
         "
       >
-        See More
+        <span class="gradient-action-text">See more</span>
       </button>
     `
     : ""
@@ -5391,7 +5391,7 @@ function renderPaymentPlans() {
           cursor:pointer;
         "
       >
-        See More
+        <span class="gradient-action-text">See more</span>
       </button>
     `
     : ""
@@ -5441,7 +5441,7 @@ function renderPaymentPlans() {
                   cursor:pointer;
                 "
               >
-                Show More
+                <span class="gradient-action-text">Show More</span>
               </button>
             `
             : ""
