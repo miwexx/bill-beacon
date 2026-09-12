@@ -2614,14 +2614,28 @@ function renderToday() {
                 })"
                 aria-label="View next due bill"
               >
-                <div class="next-due-icon">
-                  ${svgIcon(
-                    getBillStatusForDashboard(nextDueBill) === "overdue"
-                      ? "warning"
-                      : "clock",
-                    18
-                  )}
-                </div>
+                <div
+  class="next-due-icon"
+  style="
+    background:${
+      nextDueBill.installmentPlanId
+        ? "transparent"
+        : getBillBrand(nextDueBill.name)
+          ? "#fff"
+          : `var(--${getCategory(nextDueBill.category).color})`
+    };
+    color:${
+      nextDueBill.installmentPlanId
+        ? "var(--accent)"
+        : getBillBrand(nextDueBill.name)
+          ? "#1e1e2e"
+          : "#fff"
+    };
+    overflow:hidden;
+  "
+>
+  ${billOrPaymentPlanVisual(nextDueBill, 30)}
+</div>
 
                 <div class="next-due-copy">
                   <div class="next-due-label">

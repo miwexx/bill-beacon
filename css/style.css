@@ -3166,3 +3166,13 @@ body {
   min-width: 0;
   transform: translateY(3px);
 }
+.next-due-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  border-radius: 12px;
+  overflow: hidden;
+}
