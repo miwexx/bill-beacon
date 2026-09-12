@@ -2536,7 +2536,7 @@ function renderToday() {
           <button
             class="dashboard-status-card status-upcoming-card"
             onclick="openDashboardStatusSheet('due')"
-            aria-label="View bills due"
+            aria-label="View Bills Due"
           >
             <div class="dashboard-status-number text-upcoming">
               ${upcomingCount}
@@ -3717,7 +3717,7 @@ function renderCalendar() {
         } ${hasOverdue ? "calendar-day-overdue" : ""}"
         onclick="openCalendarDay('${date.toISOString()}')"
         aria-label="View ${
-          dayBills.length ? `${dayBills.length} bills due on ` : ""
+          dayBills.length ? `${dayBills.length} Bills Due On ` : ""
         }${formatDate(date.toISOString(), "full")}"
       >
         <span>${day}</span>
@@ -4120,7 +4120,7 @@ overflow:hidden;
                   ${svgIcon("calendar", 44)}
                 </div>
 
-                <div class="empty-state-title">No bills due</div>
+                <div class="empty-state-title">No Bills Due</div>
 
                 <div class="empty-state-text">
                   There are no bills scheduled for this date.
@@ -5235,7 +5235,7 @@ function renderPaymentPlans() {
                             font-weight:850;
                           "
                         >
-                          Due next
+                          Due Next
 
                           <span
                             style="
@@ -9098,25 +9098,16 @@ function billRow(bill, clickable = false) {
     : "";
 
   const rowClick = `
-  onclick="navigate('detail', {
-    id: '${detailBillId}',
-    occurrenceDueDate: '${detailDueDate}',
-    returnRoute: 'bills'
-  })"
+  onclick="openBillDetailsSheet('${detailBillId}')"
   role="button"
   tabindex="0"
   onkeydown="
     if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
-      navigate('detail', {
-        id: '${detailBillId}',
-        occurrenceDueDate: '${detailDueDate}',
-        returnRoute: 'bills'
-      });
+      openBillDetailsSheet('${detailBillId}');
     }
   "
 `;
-
   const moreButtonAction = bill.isOccurrence
     ? `navigate('detail', {
         id: '${detailBillId}',
