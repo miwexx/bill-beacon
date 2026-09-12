@@ -9540,9 +9540,71 @@ function openBillQuickActions(billId) {
 
   if (!bill) return;
 
-  const dueDate = new Date(bill.dueDate);
+  const sourceBillId = bill.isOccurrence
+    ? bill.sourceBillId
+    : bill.id;
 
-  const isPaid = isOccurrencePaid(bill, dueDate);
+  const occurrenceDueDate = bill.isOccurrence
+    ? bill.dueDate
+    : getBillOccurrenceDueDate(bill, new Date());
+
+  const detailBill = bill.isOccurrence
+    ? bill
+    : {
+        ...bill,
+        sourceBillId: bill.id,
+        dueDate: occurrenceDueDate,
+        isOccurrence: isRecurringBill(bill)
+      };
+
+  const isPaid = isOccurrencePaid(
+    detailBill,
+    new Date(occurrenceDueDate)
+  );
+
+  const paymentActionHtml = isPaid
+    ? `
+      <button
+        type="button"
+        class="bill-sheet-action"
+        onclick="
+          closeBillQuickActions();
+          ${
+            isRecurringBill(bill)
+              ? `markBillOccurrenceUnpaid(
+                  '${sourceBillId}',
+                  '${occurrenceDueDate}'
+                )`
+              : `markBillUnpaid('${sourceBillId}')`
+          };
+        "
+      >
+        <span>${svgIcon("close", 20)}</span>
+        <span>Mark as Unpaid</span>
+        <span>${svgIcon("chevronRight", 18)}</span>
+      </button>
+    `
+    : `
+      <button
+        type="button"
+        class="bill-sheet-action"
+        onclick="
+          closeBillQuickActions();
+          ${
+            isRecurringBill(bill)
+              ? `confirmMarkPaidOccurrence(
+                  '${sourceBillId}',
+                  '${occurrenceDueDate}'
+                )`
+              : `markBillPaid('${sourceBillId}')`
+          };
+        "
+      >
+        <span>${svgIcon("checkCircle", 20)}</span>
+        <span>Mark as Paid</span>
+        <span>${svgIcon("chevronRight", 18)}</span>
+      </button>
+    `;
 
   const sheetHtml = `
     <div
@@ -9555,95 +9617,59 @@ function openBillQuickActions(billId) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-  <button
-    type="button"
-    class="nav-button"
-    onclick="closeBillQuickActions()"
-    aria-label="Back to bill"
-    style="color:var(--text);"
-  >
-    ${svgIcon("chevronLeft", 22)}
-  </button>
+        <button
+          type="button"
+          class="nav-button"
+          onclick="closeBillQuickActions()"
+          aria-label="Close bill actions"
+          style="color:var(--text);"
+        >
+          ${svgIcon("chevronLeft", 22)}
+        </button>
 
-  <div class="sheet-title">Bill Actions</div>
+        <div class="sheet-title">Bill Actions</div>
 
-  <div style="width:54px"></div>
-</div>
+        <div style="width:54px"></div>
+      </div>
 
       <div class="sheet-body">
-         <div class="bill-sheet-actions">
+        <div class="bill-sheet-actions">
           <button
+            type="button"
             class="bill-sheet-action"
             onclick="
               closeBillQuickActions();
-              navigate('detail', { id: '${bill.id}' });
+              openBillForm('${sourceBillId}');
             "
           >
-            <span>${svgIcon('doc', 20)}</span>
-            <span>Bill Details</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-
-          <button
-            class="bill-sheet-action"
-            onclick="
-              closeBillQuickActions();
-              openBillForm('${bill.id}');
-            "
-          >
-            <span>${svgIcon('gear', 20)}</span>
+            <span>${svgIcon("gear", 20)}</span>
             <span>Edit Details</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
+            <span>${svgIcon("chevronRight", 18)}</span>
           </button>
 
-          ${
-  !isPaid
-    ? `
-      <button
-        class="bill-sheet-action"
-        onclick="
-          closeBillQuickActions();
-          ${
-            isRecurringBill(bill)
-              ? `openPostponeRecurringOccurrenceSheet(
-                  '${bill.id}',
-                  '${getOccurrenceDueDate(
-                    bill,
-                    new Date().getFullYear(),
-                    new Date().getMonth()
-                  )}'
-                );`
-              : `openPostponeBillSheet('${bill.id}');`
-          }
-        "
-      >
-        <span>${svgIcon('calendar', 20)}</span>
-        <span>Postpone</span>
-        <span>${svgIcon('chevronRight', 18)}</span>
-      </button>
-    `
-    : ''
-}
+          ${paymentActionHtml}
+
           <button
+            type="button"
             class="bill-sheet-action bill-sheet-action-danger"
             onclick="
               closeBillQuickActions();
-              openBillActionRemove('${bill.id}');
+              openBillActionRemove('${sourceBillId}');
             "
           >
-            <span>${svgIcon('trash', 20)}</span>
+            <span>${svgIcon("trash", 20)}</span>
             <span>Delete Bill</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
+            <span>${svgIcon("chevronRight", 18)}</span>
           </button>
         </div>
       </div>
     </div>
   `;
 
-  document.getElementById('billQuickActionsContainer')?.remove();
+  document.getElementById("billQuickActionsContainer")?.remove();
 
-  const container = document.createElement('div');
-  container.id = 'billQuickActionsContainer';
+  const container = document.createElement("div");
+  container.id = "billQuickActionsContainer";
   container.innerHTML = sheetHtml;
 
   document.body.appendChild(container);
@@ -9652,12 +9678,12 @@ function openBillQuickActions(billId) {
 
   requestAnimationFrame(() => {
     document
-      .getElementById('billQuickActionsOverlay')
-      ?.classList.add('show');
+      .getElementById("billQuickActionsOverlay")
+      ?.classList.add("show");
 
     document
-      .getElementById('billQuickActionsSheet')
-      ?.classList.add('show');
+      .getElementById("billQuickActionsSheet")
+      ?.classList.add("show");
   });
 }
 function closeBillQuickActions(callback) {
