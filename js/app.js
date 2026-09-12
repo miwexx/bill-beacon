@@ -9576,20 +9576,7 @@ function openBillQuickActions(billId) {
 </div>
 
       <div class="sheet-body">
-        <div class="bill-sheet-header">
-          <div class="bill-sheet-heading">
-            <div class="bill-sheet-title">
-              ${escapeHtml(bill.name)}
-            </div>
-
-            <div class="bill-sheet-subtitle">
-              ${formatCurrency(bill.amount)}
-              · Due ${formatDate(bill.dueDate, "short")}
-            </div>
-          </div>
-        </div>
-
-        <div class="bill-sheet-actions">
+         <div class="bill-sheet-actions">
           <button
             class="bill-sheet-action"
             onclick="
