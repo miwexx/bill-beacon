@@ -1822,7 +1822,7 @@ function markBillUnpaid(billId) {
   const voidedAt = new Date().toISOString();
 
   Store.updatePayment(payment.id, {
-    status: "Voided",
+    status: "voided",
     voidedAt,
   });
 
@@ -8698,33 +8698,47 @@ function renderBillDetail() {
 
   const occurrenceDueDate = routeParams.occurrenceDueDate || null;
 const returnRoute = routeParams.returnRoute || null;
-  const detailBill = occurrenceDueDate
-    ? {
-        ...bill,
-        id: getOccurrenceKey(bill.id, occurrenceDueDate),
-        sourceBillId: bill.id,
-        dueDate: occurrenceDueDate,
-        isOccurrence: true
-      }
-    : {
-        ...bill,
-        dueDate: getBillOccurrenceDueDate(bill, new Date()),
-        isOccurrence: isRecurringBill(bill)
-      };
 
-  const referenceDate = new Date(detailBill.dueDate);
-  const payment = getActivePaymentForOccurrence(
+const isRecurring = isRecurringBill(bill);
+
+// Use the exact occurrence selected by the caller.
+// If no occurrence was provided, preserve the bill's stored due date;
+// do not silently replace it with the current month's recurring date.
+const selectedDueDate = occurrenceDueDate || bill.dueDate;
+
+const detailBill = isRecurring
+  ? {
+      ...bill,
+      id: getOccurrenceKey(bill.id, selectedDueDate),
+      sourceBillId: bill.id,
+      dueDate: selectedDueDate,
+      originalDueDate: selectedDueDate,
+      isOccurrence: true
+    }
+  : {
+      ...bill,
+      dueDate: selectedDueDate,
+      isOccurrence: false
+    };
+
+const referenceDate = new Date(selectedDueDate);
+
+const payment = getActivePaymentForOccurrence(
   detailBill,
   referenceDate
 );
 
 const status = payment
-  ? 'paid'
+  ? "paid"
   : getOccurrenceStatus(detailBill, referenceDate);
-  const cat = getCategory(bill.category);
-  const sourceBillId = bill.id;
-  const isCalendarOccurrence = Boolean(occurrenceDueDate);
 
+const cat = getCategory(bill.category);
+const sourceBillId = bill.id;
+
+// This means the user reached a specific recurring occurrence,
+// including an implicit occurrence for a recurring bill opened
+// from the normal Bills list.
+const isCalendarOccurrence = isRecurring && Boolean(occurrenceDueDate);
   const backRoute = returnRoute || (
   isCalendarOccurrence ? 'recurring' : 'bills'
 );
@@ -8740,75 +8754,65 @@ const backLabel = backRoute === 'today'
   : backRoute === 'recurring'
     ? 'Recurring'
     : 'Bills';
+const markPaidAction = isRecurring
+  ? `confirmMarkPaidOccurrence(
+      '${sourceBillId}',
+      '${detailBill.dueDate}'
+    )`
+  : `markBillPaid('${sourceBillId}')`;
 
+const markUnpaidAction = isRecurring
+  ? `markBillOccurrenceUnpaid(
+      '${sourceBillId}',
+      '${detailBill.dueDate}'
+    )`
+  : `markBillUnpaid('${sourceBillId}')`;
+
+const postponeAction = isRecurring
+  ? `openPostponeRecurringOccurrenceSheet(
+      '${sourceBillId}',
+      '${detailBill.originalDueDate || detailBill.dueDate}'
+    )`
+  : `openPostponeBillSheet('${sourceBillId}')`;
   const paymentAction = !payment
-    ? `
-      <div
-        style="
-          display:grid;
-          grid-template-columns:1fr 1fr;
-          gap:var(--space-2);
-          margin-top:var(--space-4);
-        "
+  ? `
+    <div
+      style="
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:var(--space-2);
+        margin-top:var(--space-4);
+      "
+    >
+      <button
+        class="btn-primary"
+        style="margin:0;min-width:0;padding-left:12px;padding-right:12px"
+        onclick="${markPaidAction}"
       >
-        <button
-          class="btn-primary"
-          style="margin:0;min-width:0;padding-left:12px;padding-right:12px"
-          onclick="confirmMarkPaidOccurrence(
-            '${sourceBillId}',
-            '${detailBill.dueDate}'
-          )"
-        >
-          ${svgIcon("checkCircle", 18)}
-          Mark as Paid
-        </button>
+        ${svgIcon("checkCircle", 18)}
+        Mark as Paid
+      </button>
 
-        ${
-          isCalendarOccurrence
-            ? `
-              <button
-  class="bb-outline-pill"
-  style="
-    width:100%;
-    min-width:0;
-    margin:0;
-    padding:0 12px;
-  "
-  onclick="openPostponeRecurringOccurrenceSheet(
-    '${sourceBillId}',
-    '${detailBill.originalDueDate || detailBill.dueDate}'
-  )"
->
-  ${svgIcon('calendar', 18)}
-  <span>Postpone</span>
-</button>
-            `
-            : `
-              <button
-                class="bb-outline-pill"
-                style="width:100%;min-width:0;margin:0;padding:0 12px"
-                onclick="openPostponeBillSheet('${sourceBillId}')"
-              >
-                ${svgIcon("calendar", 18)}
-                <span>Postpone</span>
-              </button>
-            `
-        }
-      </div>
-    `
-    : `
       <button
         class="bb-outline-pill"
-        style="width:100%;min-height:46px;margin-top:var(--space-4);"
-        onclick="markBillOccurrenceUnpaid(
-          '${sourceBillId}',
-          '${detailBill.dueDate}'
-        )"
+        style="width:100%;min-width:0;margin:0;padding:0 12px"
+        onclick="${postponeAction}"
       >
-        ${svgIcon("close", 18)}
-        <span>Mark as Unpaid</span>
+        ${svgIcon("calendar", 18)}
+        <span>Postpone</span>
       </button>
-    `;
+    </div>
+  `
+  : `
+    <button
+      class="bb-outline-pill"
+      style="width:100%;min-height:46px;margin-top:var(--space-4);"
+      onclick="${markUnpaidAction}"
+    >
+      ${svgIcon("close", 18)}
+      <span>Mark as Unpaid</span>
+    </button>
+  `;
 
   return `
     <div class="nav-bar">
