@@ -5269,10 +5269,28 @@ function renderPaymentPlans() {
                       </div>
 
                       ${
-                        activePlans.length > 4
-                          ? renderJumpButton("active-payment-plans")
-                          : ""
-                      }
+  activePlans.length > 4
+    ? `
+      <button
+        type="button"
+        onclick="openPaymentPlanSchedule('month')"
+        style="
+          width:100%;
+          padding:var(--space-3) var(--space-4);
+          border:0;
+          border-top:1px solid rgba(192, 151, 255, 0.14);
+          color:#c76aff;
+          background:transparent;
+          font-size:var(--text-base);
+          font-weight:850;
+          cursor:pointer;
+        "
+      >
+        See more
+      </button>
+    `
+    : ""
+}
                     </section>
                   `
                   : ""
@@ -5350,71 +5368,83 @@ function renderPaymentPlans() {
                       </div>
 
                       ${
-                        upcomingPlans.length > 4
-                          ? renderJumpButton("active-payment-plans")
-                          : ""
-                      }
+  upcomingPlans.length > 4
+    ? `
+      <button
+        type="button"
+        onclick="openPaymentPlanSchedule('upcoming')"
+        style="
+          width:100%;
+          padding:var(--space-3) var(--space-4);
+          border:0;
+          border-top:1px solid rgba(192, 151, 255, 0.14);
+          color:#c76aff;
+          background:transparent;
+          font-size:var(--text-base);
+          font-weight:850;
+          cursor:pointer;
+        "
+      >
+        See more
+      </button>
+    `
+    : ""
+}
                     </section>
                   `
                   : ""
               }
 
-              ${
-                visibleActivePlans.length
-                  ? `
-                    <section id="active-payment-plans">
-                      <div class="section-header">Active plans</div>
+             ${
+  visibleActivePlans.length
+    ? `
+      <section id="active-payment-plans">
+        <div class="section-header">Active plans</div>
 
-                      <div class="content-gap">
-                        ${visibleActivePlans
-                          .map((plan) => renderPlanCard(plan))
-                          .join("")}
-                      </div>
+        <div class="content-gap">
+          ${visibleActivePlans
+            .map((plan) => renderPlanCard(plan))
+            .join("")}
+        </div>
 
-                      ${
-                        moreActivePlans.length
-                          ? `
-                            <button
-                              type="button"
-                              onclick="document.getElementById('more-active-payment-plans').scrollIntoView({ behavior: 'smooth' })"
-                              style="
-                                width:100%;
-                                margin-top:var(--space-2);
-                                padding:var(--space-3) var(--space-4);
-                                border:1px solid rgba(192, 151, 255, 0.28);
-                                border-radius:14px;
-                                color:#c76aff;
-                                background:transparent;
-                                font-size:var(--text-base);
-                                font-weight:850;
-                                cursor:pointer;
-                              "
-                            >
-                              Show more
-                            </button>
-                          `
-                          : ""
-                      }
-                    </section>
-                  `
-                  : ""
-              }
+        ${
+          moreActivePlans.length
+            ? `
+              <button
+                type="button"
+                onclick="showMoreActivePaymentPlans()"
+                style="
+                  width:100%;
+                  margin-top:var(--space-2);
+                  padding:var(--space-3) var(--space-4);
+                  border:1px solid rgba(192, 151, 255, 0.28);
+                  border-radius:14px;
+                  color:#c76aff;
+                  background:transparent;
+                  font-size:var(--text-base);
+                  font-weight:850;
+                  cursor:pointer;
+                "
+              >
+                Show more
+              </button>
 
-              ${
-                moreActivePlans.length
-                  ? `
-                    <section id="more-active-payment-plans">
-                      <div class="section-header">More active plans</div>
-
-                      <div class="content-gap">
-                        ${moreActivePlans
-                          .map((plan) => renderPlanCard(plan))
-                          .join("")}
-                      </div>
-                    </section>
-                  `
-                  : ""
-              }
+              <div
+                id="extra-active-payment-plans"
+                class="content-gap"
+                style="display:none; margin-top:var(--space-3);"
+              >
+                ${moreActivePlans
+                  .map((plan) => renderPlanCard(plan))
+                  .join("")}
+              </div>
+            `
+            : ""
+        }
+      </section>
+    `
+    : ""
+}
 
               ${
                 completedPlans.length
@@ -5451,6 +5481,21 @@ function renderPaymentPlans() {
     </div>
   `;
 }
+function showMoreActivePaymentPlans() {
+  const extraPlans = document.getElementById("extra-active-payment-plans");
+
+  if (!extraPlans) return;
+
+  extraPlans.style.display = "grid";
+
+  const button = event?.currentTarget;
+
+  if (button) {
+    button.remove();
+  }
+}
+
+window.showMoreActivePaymentPlans = showMoreActivePaymentPlans;
 function getCompletedPaymentPlans() {
   const installmentBills = Store.getBills().filter((bill) =>
     Boolean(bill.installmentPlanId)
@@ -5532,124 +5577,65 @@ function openCompletedPlansHistory() {
   const completedPlans = getCompletedPaymentPlans();
 
   const renderHistoryCard = (plan) => {
-    const title = plan.storeName || plan.provider;
+  const title = plan.storeName || plan.provider;
 
-    const completedLabel = plan.paidInFullAt
-      ? `Paid ${formatDate(plan.paidInFullAt, "short")}`
-      : "Paid in full";
+  return `
+    <button
+      type="button"
+      onclick="closeCompletedPlansHistory(); openPaymentPlanDetails('${plan.id}')"
+      style="
+        display:flex;
+        width:100%;
+        align-items:center;
+        gap:var(--space-3);
+        padding:var(--space-4);
+        text-align:left;
+        color:inherit;
+        cursor:pointer;
+        background:var(--surface);
+        border:1px solid rgba(192, 151, 255, 0.18);
+        border-radius:16px;
+      "
+      aria-label="View completed payment plan for ${escapeHtml(title)}"
+    >
+      ${paymentPlanVisual(plan.provider, 42)}
 
-    return `
-      <button
-        type="button"
-        onclick="closeCompletedPlansHistory(); openPaymentPlanDetails('${plan.id}')"
-        style="
-          width:100%;
-          padding:var(--space-4);
-          text-align:left;
-          color:inherit;
-          cursor:pointer;
-          background:var(--surface);
-          border:1px solid rgba(192, 151, 255, 0.18);
-          border-radius:16px;
-        "
-        aria-label="View completed payment plan for ${escapeHtml(title)}"
-      >
-        <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
-          ${paymentPlanVisual(plan.provider, 42)}
-
-          <div style="min-width:0; flex:1;">
-            <div
-              style="
-                overflow:hidden;
-                font-size:var(--text-base);
-                font-weight:800;
-                text-overflow:ellipsis;
-                white-space:nowrap;
-              "
-            >
-              ${escapeHtml(title)}
-            </div>
-
-            <div
-              style="
-                margin-top:4px;
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-              "
-            >
-              ${escapeHtml(plan.provider)} · ${plan.paidCount} of ${
-                plan.installmentCount
-              } payments
-            </div>
-          </div>
-
-          <div style="text-align:right;">
-            <div
-              style="
-                font-size:var(--text-sm);
-                font-weight:800;
-                color:var(--text-muted);
-                white-space:nowrap;
-              "
-            >
-              Paid in full
-            </div>
-
-            <div
-              style="
-                margin-top:4px;
-                font-size:var(--text-xs);
-                color:var(--text-muted);
-                white-space:nowrap;
-              "
-            >
-              ${completedLabel}
-            </div>
-          </div>
-        </div>
-
+      <div style="min-width:0; flex:1;">
         <div
           style="
-            height:6px;
-            margin-top:14px;
             overflow:hidden;
-            border-radius:999px;
-            background:rgba(174, 96, 255, 0.14);
+            font-size:var(--text-base);
+            font-weight:800;
+            text-overflow:ellipsis;
+            white-space:nowrap;
           "
         >
-          <div
-            style="
-              width:100%;
-              height:100%;
-              border-radius:inherit;
-              background:linear-gradient(
-                105deg,
-                #8f36ff 0%,
-                #c44cff 34%,
-                #f64cae 65%,
-                #ff7138 100%
-              );
-            "
-          ></div>
+          ${escapeHtml(title)}
         </div>
 
         <div
           style="
-            display:flex;
-            justify-content:space-between;
-            gap:var(--space-3);
-            margin-top:8px;
-            font-size:var(--text-xs);
+            margin-top:4px;
+            font-size:var(--text-sm);
             color:var(--text-muted);
           "
         >
-          <span>Plan complete</span>
-          <span>${formatCurrency(plan.totalAmount)} paid</span>
+          Paid in full
         </div>
-      </button>
-    `;
-  };
+      </div>
 
+      <div
+        style="
+          font-size:var(--text-base);
+          font-weight:800;
+          white-space:nowrap;
+        "
+      >
+        ${formatCurrency(plan.totalAmount)} paid
+      </div>
+    </button>
+  `;
+};
   const container = document.createElement("div");
   container.id = "completed-plans-history";
 
@@ -5678,7 +5664,7 @@ function openCompletedPlansHistory() {
             class="nav-button"
             onclick="closeCompletedPlansHistory()"
             aria-label="Close completed plans history"
-            style="color:#10d6c2;"
+            style="color:#b45cff;"
           >
             ${svgIcon("close", 22)}
           </button>
