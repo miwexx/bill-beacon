@@ -8030,12 +8030,12 @@ function fab() {
 
 function tabBar() {
   const tabs = [
-    { id: 'today', label: 'Dashboard', icon: 'home' },
-    { id: 'recurring', label: 'Recurring', icon: 'calendar' },
-    { id: 'bills', label: 'Bills', icon: 'tray' },
-    { id: 'insights', label: 'Insights', icon: 'chart' },
-    { id: 'settings', label: 'Settings', icon: 'gear' },
-  ];
+  { id: 'today', label: 'Dashboard', icon: 'home' },
+  { id: 'recurring', label: 'Recurring', icon: 'calendar' },
+  { id: 'bills', label: 'Bills', icon: 'tray' },
+  { id: 'payment-plans', label: 'Plans', icon: 'creditcard' },
+  { id: 'insights', label: 'Insights', icon: 'chart' },
+];
 
   return `
     <div class="tab-bar">
@@ -9839,8 +9839,14 @@ function render() {
       content = renderToday();
   }
 
-  const showTabBar = ["today", "recurring", "bills", "insights", "settings"]
-    .includes(currentRoute);
+  const showTabBar = [
+  "today",
+  "recurring",
+  "bills",
+  "payment-plans",
+  "insights",
+  "settings"
+].includes(currentRoute);
 
   if (showTabBar) {
     content += tabBar();
