@@ -12493,11 +12493,7 @@ householdSection.innerHTML = `
   <div class="section-header">Shared Household</div>
 
   <div class="card card-pad">
-    <div style="font-weight: 800">
-      Share Bill Beacon
-    </div>
-
-    <button
+      <button
       id="createHouseholdInviteButton"
       class="btn-primary"
       type="button"
