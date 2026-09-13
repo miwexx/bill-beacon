@@ -1056,10 +1056,9 @@ function jsObjectToFirestoreFields(object) {
 
   return fields;
 }
-
-async function getHouseholdSnapshot(uid, accessToken) {
+async function getUserProfile(uid, accessToken) {
   const response = await fetch(
-    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(uid)}`,
+    `${FIRESTORE_DOCUMENT_BASE}/users/${encodeURIComponent(uid)}`,
     {
       headers: {
         authorization: `Bearer ${accessToken}`
@@ -1075,7 +1074,8 @@ async function getHouseholdSnapshot(uid, accessToken) {
     const body = await response.text().catch(() => "");
 
     throw new Error(
-      `Could not load household ${uid} from Firestore (${response.status}): ${body}`
+      `Could not load user profile ${uid} from Firestore: ` +
+      `${response.status} ${body}`
     );
   }
 
@@ -1084,6 +1084,35 @@ async function getHouseholdSnapshot(uid, accessToken) {
   return firestoreFieldsToJs(document.fields || {});
 }
 
+async function getHouseholdSnapshot(householdId, accessToken) {
+  const response = await fetch(
+    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(
+      householdId
+    )}`,
+    {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    }
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+
+    throw new Error(
+      `Could not load household ${householdId} from Firestore: ` +
+      `${response.status} ${body}`
+    );
+  }
+
+  const document = await response.json();
+
+  return firestoreFieldsToJs(document.fields || {});
+}
 async function writeNotificationInboxRecord(
   uid,
   notification,
@@ -1209,18 +1238,35 @@ async function sendReminderToUserSubscriptions(
     failures
   };
 }
+async function processUserReminders(env, uid, accessToken, now) {
+  const profile = await getUserProfile(uid, accessToken);
 
-async function processUserReminders(
-  env,
-  uid,
-  accessToken,
-  now
-) {
-  const snapshot = await getHouseholdSnapshot(uid, accessToken);
+  const householdId =
+    typeof profile?.householdId === "string"
+      ? profile.householdId.trim()
+      : "";
+
+  if (!householdId) {
+    return {
+      uid,
+      status: "no-household",
+      eligible: 0,
+      sent: 0,
+      skipped: 0,
+      removed: 0,
+      failures: 0
+    };
+  }
+
+  const snapshot = await getHouseholdSnapshot(
+    householdId,
+    accessToken
+  );
 
   if (!snapshot) {
     return {
       uid,
+      householdId,
       status: "no-household",
       eligible: 0,
       sent: 0,

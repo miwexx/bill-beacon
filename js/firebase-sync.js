@@ -139,8 +139,12 @@ async function resolveHouseholdId(user) {
   const userRef = doc(db, "users", user.uid);
   const userSnapshot = await getDoc(userRef);
 
-  let householdId = "";
-
+  /*
+   * Existing profile:
+   * This includes invited household members.
+   * Never change its role, household ID, or membership here.
+   * The secure invite endpoint is responsible for creating it.
+   */
   if (userSnapshot.exists()) {
     const profile = userSnapshot.data();
 
@@ -148,17 +152,21 @@ async function resolveHouseholdId(user) {
       typeof profile.householdId === "string" &&
       profile.householdId.trim()
     ) {
-      householdId = profile.householdId.trim();
+      return profile.householdId.trim();
     }
+
+    throw new Error(
+      "Your household profile is incomplete. Please ask the household owner to send a new invite."
+    );
   }
 
   /*
-   * Existing-owner migration:
-   * Keep the original household document exactly where it is.
+   * First-owner migration only:
+   * A brand-new account without a profile becomes the owner of
+   * its own household. For your current account, this keeps the
+   * existing household document at households/{your UID}.
    */
-  if (!householdId) {
-    householdId = user.uid;
-  }
+  const householdId = user.uid;
 
   await setDoc(
     userRef,
@@ -166,6 +174,7 @@ async function resolveHouseholdId(user) {
       householdId,
       role: "owner",
       email: user.email || "",
+      createdAt: now,
       updatedAt: now
     },
     { merge: true }
