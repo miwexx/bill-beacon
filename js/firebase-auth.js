@@ -167,7 +167,78 @@ function setBusy(button, busy, busyText, normalText) {
   button.disabled = busy;
   button.textContent = busy ? busyText : normalText;
 }
+function getHouseholdInviteToken() {
+  return new URLSearchParams(window.location.search).get("invite") || "";
+}
 
+function clearHouseholdInviteTokenFromUrl() {
+  const cleanUrl = new URL(window.location.href);
+
+  cleanUrl.searchParams.delete("invite");
+
+  window.history.replaceState(
+    {},
+    document.title,
+    `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`
+  );
+}
+
+async function handleHouseholdInvite(user) {
+  const inviteToken = getHouseholdInviteToken();
+
+  if (!inviteToken || !user) {
+    return false;
+  }
+
+  const shouldJoin = window.confirm(
+    "Join this shared household? You will be able to see and manage its shared bills."
+  );
+
+  if (!shouldJoin) {
+    return false;
+  }
+
+  try {
+    const idToken = await user.getIdToken();
+
+    const response = await fetch(
+      "https://bill-beacon-api.miwexx.workers.dev/api/household-invites/accept",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          inviteToken
+        })
+      }
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      throw new Error(result.error || "Could not join the household.");
+    }
+
+    clearHouseholdInviteTokenFromUrl();
+
+    window.alert("You joined the shared household.");
+
+    window.location.reload();
+
+    return true;
+  } catch (error) {
+    console.error("Household invite acceptance failed:", error);
+
+    window.alert(
+      error?.message ||
+        "Could not join the household. Check the invite and try again."
+    );
+
+    return false;
+  }
+}
 function initFirebaseLogin() {
   const signInButton = getElement("email-signin-button");
   const createButton = getElement("email-create-button");
@@ -250,14 +321,19 @@ function initFirebaseLogin() {
     }
   });
 
-  onAuthStateChanged(auth, (user) => {
-    if (user) {
-      setMessage("");
+  onAuthStateChanged(auth, async (user) => {
+  if (user) {
+    setMessage("");
+
+    const joinedHousehold = await handleHouseholdInvite(user);
+
+    if (!joinedHousehold) {
       showApp();
-    } else {
-      showLogin();
     }
-  });
+  } else {
+    showLogin();
+  }
+});
 }
 
 if (document.readyState === "loading") {
