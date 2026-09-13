@@ -12488,18 +12488,33 @@ function addBackupSettings() {
 const householdSection = document.createElement("div");
 
 householdSection.className = "settings-section";
-
 householdSection.innerHTML = `
   <div class="section-header">Shared Household</div>
 
-  <div class="card card-pad">
-      <button
+  <div
+    class="card"
+    style="
+      padding: var(--space-3);
+    "
+  >
+    <div
+      style="
+        font-weight: 800;
+        font-size: var(--text-sm);
+        margin-bottom: 8px;
+      "
+    >
+      Share Bill Beacon
+    </div>
+
+    <button
       id="createHouseholdInviteButton"
       class="btn-primary"
       type="button"
       style="
         width: 100%;
-        margin-top: var(--space-4);
+        min-height: 44px;
+        margin-top: 0;
       "
       onclick="window.createHouseholdInvite()"
     >
@@ -12512,15 +12527,14 @@ householdSection.innerHTML = `
       role="status"
       aria-live="polite"
       style="
-        min-height: 20px;
-        margin-top: 12px;
-        font-size: var(--text-sm);
+        min-height: 0;
+        margin-top: 6px;
+        font-size: var(--text-xs);
         color: var(--text-muted);
       "
     ></div>
   </div>
 `;
-
 container.appendChild(householdSection);
 container.appendChild(section);
 }
