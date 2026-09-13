@@ -129,11 +129,17 @@ function renderUpdatedApp() {
 }
 async function resolveHouseholdId(user) {
   if (!user?.uid) {
-    throw new Error("You must be signed in to access a household.");
+    throw new Error(
+      "You must be signed in to access a household."
+    );
   }
+
+  const now = new Date().toISOString();
 
   const userRef = doc(db, "users", user.uid);
   const userSnapshot = await getDoc(userRef);
+
+  let householdId = "";
 
   if (userSnapshot.exists()) {
     const profile = userSnapshot.data();
@@ -142,16 +148,17 @@ async function resolveHouseholdId(user) {
       typeof profile.householdId === "string" &&
       profile.householdId.trim()
     ) {
-      return profile.householdId;
+      householdId = profile.householdId.trim();
     }
   }
 
   /*
-   * First household migration:
-   * Preserve your current Firestore data exactly where it already lives:
-   * households/{current user UID}.
+   * Existing-owner migration:
+   * Keep the original household document exactly where it is.
    */
-  const householdId = user.uid;
+  if (!householdId) {
+    householdId = user.uid;
+  }
 
   await setDoc(
     userRef,
@@ -159,8 +166,27 @@ async function resolveHouseholdId(user) {
       householdId,
       role: "owner",
       email: user.email || "",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: now
+    },
+    { merge: true }
+  );
+
+  const ownerMemberRef = doc(
+    db,
+    "households",
+    householdId,
+    "members",
+    user.uid
+  );
+
+  await setDoc(
+    ownerMemberRef,
+    {
+      uid: user.uid,
+      email: user.email || "",
+      role: "owner",
+      joinedAt: now,
+      updatedAt: now
     },
     { merge: true }
   );
