@@ -32,6 +32,7 @@ const STORAGE_KEYS = [
 ];
 
 let activeUserId = null;
+let activeHouseholdId = null;
 let cloudIsReady = false;
 let saving = false;
 let saveTimer = null;
@@ -126,16 +127,55 @@ function renderUpdatedApp() {
     window.render();
   }
 }
+async function resolveHouseholdId(user) {
+  if (!user?.uid) {
+    throw new Error("You must be signed in to access a household.");
+  }
 
+  const userRef = doc(db, "users", user.uid);
+  const userSnapshot = await getDoc(userRef);
+
+  if (userSnapshot.exists()) {
+    const profile = userSnapshot.data();
+
+    if (
+      typeof profile.householdId === "string" &&
+      profile.householdId.trim()
+    ) {
+      return profile.householdId;
+    }
+  }
+
+  /*
+   * First household migration:
+   * Preserve your current Firestore data exactly where it already lives:
+   * households/{current user UID}.
+   */
+  const householdId = user.uid;
+
+  await setDoc(
+    userRef,
+    {
+      householdId,
+      role: "owner",
+      email: user.email || "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    { merge: true }
+  );
+
+  return householdId;
+}
 async function saveNow() {
-  if (!activeUserId || !cloudIsReady || saving) {
+  if (!activeUserId || !activeHouseholdId || !cloudIsReady || saving) {
     return;
   }
 
   saving = true;
 
   try {
-    const householdRef = doc(db, "households", activeUserId);
+    const householdRef = doc(db, "households", activeHouseholdId);
     const snapshot = createLocalSnapshot();
 
     await setDoc(householdRef, snapshot, { merge: true });
@@ -150,7 +190,7 @@ async function saveNow() {
 }
 
 function queueSave() {
-  if (!activeUserId || !cloudIsReady) {
+  if (!activeUserId || !activeHouseholdId || !cloudIsReady) {
     return;
   }
 
@@ -167,14 +207,37 @@ async function startHouseholdSync(user) {
   }
 
   if (activeUserId === user.uid && cloudIsReady) {
-    return;
-  }
+  return;
+}
 
-  stopHouseholdSync();
+stopHouseholdSync();
 
-  activeUserId = user.uid;
+activeUserId = user.uid;
 
-  const householdRef = doc(db, "households", activeUserId);
+try {
+  activeHouseholdId = await resolveHouseholdId(user);
+} catch (error) {
+  activeUserId = null;
+  activeHouseholdId = null;
+
+  console.error(
+    "Bill Beacon household profile setup failed:",
+    error
+  );
+
+  alert(
+    "Bill Beacon could not set up your household profile. " +
+    "Please refresh and try again."
+  );
+
+  return;
+}
+
+const householdRef = doc(
+  db,
+  "households",
+  activeHouseholdId
+);
 
   try {
     const cloudDocument = await getDoc(householdRef);
@@ -261,7 +324,8 @@ function stopHouseholdSync() {
   }
 
   activeUserId = null;
-  cloudIsReady = false;
+activeHouseholdId = null;
+cloudIsReady = false;
   saving = false;
   lastCloudUpdatedAt = null;
 }
