@@ -202,7 +202,7 @@ async function handleHouseholdInvite(user) {
     const idToken = await user.getIdToken();
 
     const response = await fetch(
-  "https://bill-beacon-api.miwexx.workers.dev/api/household-invites/accept",
+  "https://bill-beacon-notifications.rodz-m-1990.workers.dev/api/household-invites/accept",
   {
     method: "POST",
     headers: {
