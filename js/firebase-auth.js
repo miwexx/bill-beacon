@@ -210,8 +210,8 @@ async function handleHouseholdInvite(user) {
           Authorization: `Bearer ${idToken}`
         },
         body: JSON.stringify({
-          inviteToken
-        })
+  token: inviteToken
+})
       }
     );
 
