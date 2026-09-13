@@ -202,18 +202,18 @@ async function handleHouseholdInvite(user) {
     const idToken = await user.getIdToken();
 
     const response = await fetch(
-      "https://bill-beacon-api.miwexx.workers.dev/api/household-invites/accept",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-  token: inviteToken
-})
-      }
-    );
+  "https://bill-beacon-api.miwexx.workers.dev/api/household-invites/accept",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`
+    },
+    body: JSON.stringify({
+      token: inviteToken
+    })
+  }
+);
 
     const result = await response.json().catch(() => ({}));
 
