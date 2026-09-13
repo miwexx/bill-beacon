@@ -32,6 +32,7 @@ const STORAGE_KEYS = [
 ];
 
 let activeUserId = null;
+let activeHouseholdId = null;
 let cloudIsReady = false;
 let saving = false;
 let saveTimer = null;
@@ -126,16 +127,90 @@ function renderUpdatedApp() {
     window.render();
   }
 }
+async function resolveHouseholdId(user) {
+  if (!user?.uid) {
+    throw new Error(
+      "You must be signed in to access a household."
+    );
+  }
 
+  const now = new Date().toISOString();
+
+  const userRef = doc(db, "users", user.uid);
+  const userSnapshot = await getDoc(userRef);
+
+  /*
+   * Existing profile:
+   * This includes invited household members.
+   * Never change its role, household ID, or membership here.
+   * The secure invite endpoint is responsible for creating it.
+   */
+  if (userSnapshot.exists()) {
+    const profile = userSnapshot.data();
+
+    if (
+      typeof profile.householdId === "string" &&
+      profile.householdId.trim()
+    ) {
+      return profile.householdId.trim();
+    }
+
+    throw new Error(
+      "Your household profile is incomplete. Please ask the household owner to send a new invite."
+    );
+  }
+
+  /*
+   * First-owner migration only:
+   * A brand-new account without a profile becomes the owner of
+   * its own household. For your current account, this keeps the
+   * existing household document at households/{your UID}.
+   */
+  const householdId = user.uid;
+
+  await setDoc(
+    userRef,
+    {
+      householdId,
+      role: "owner",
+      email: user.email || "",
+      createdAt: now,
+      updatedAt: now
+    },
+    { merge: true }
+  );
+
+  const ownerMemberRef = doc(
+    db,
+    "households",
+    householdId,
+    "members",
+    user.uid
+  );
+
+  await setDoc(
+    ownerMemberRef,
+    {
+      uid: user.uid,
+      email: user.email || "",
+      role: "owner",
+      joinedAt: now,
+      updatedAt: now
+    },
+    { merge: true }
+  );
+
+  return householdId;
+}
 async function saveNow() {
-  if (!activeUserId || !cloudIsReady || saving) {
+  if (!activeUserId || !activeHouseholdId || !cloudIsReady || saving) {
     return;
   }
 
   saving = true;
 
   try {
-    const householdRef = doc(db, "households", activeUserId);
+    const householdRef = doc(db, "households", activeHouseholdId);
     const snapshot = createLocalSnapshot();
 
     await setDoc(householdRef, snapshot, { merge: true });
@@ -150,7 +225,7 @@ async function saveNow() {
 }
 
 function queueSave() {
-  if (!activeUserId || !cloudIsReady) {
+  if (!activeUserId || !activeHouseholdId || !cloudIsReady) {
     return;
   }
 
@@ -167,14 +242,37 @@ async function startHouseholdSync(user) {
   }
 
   if (activeUserId === user.uid && cloudIsReady) {
-    return;
-  }
+  return;
+}
 
-  stopHouseholdSync();
+stopHouseholdSync();
 
-  activeUserId = user.uid;
+activeUserId = user.uid;
 
-  const householdRef = doc(db, "households", activeUserId);
+try {
+  activeHouseholdId = await resolveHouseholdId(user);
+} catch (error) {
+  activeUserId = null;
+  activeHouseholdId = null;
+
+  console.error(
+    "Bill Beacon household profile setup failed:",
+    error
+  );
+
+  alert(
+    "Bill Beacon could not set up your household profile. " +
+    "Please refresh and try again."
+  );
+
+  return;
+}
+
+const householdRef = doc(
+  db,
+  "households",
+  activeHouseholdId
+);
 
   try {
     const cloudDocument = await getDoc(householdRef);
@@ -261,7 +359,8 @@ function stopHouseholdSync() {
   }
 
   activeUserId = null;
-  cloudIsReady = false;
+activeHouseholdId = null;
+cloudIsReady = false;
   saving = false;
   lastCloudUpdatedAt = null;
 }

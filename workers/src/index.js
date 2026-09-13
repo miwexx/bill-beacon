@@ -1056,10 +1056,9 @@ function jsObjectToFirestoreFields(object) {
 
   return fields;
 }
-
-async function getHouseholdSnapshot(uid, accessToken) {
+async function getUserProfile(uid, accessToken) {
   const response = await fetch(
-    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(uid)}`,
+    `${FIRESTORE_DOCUMENT_BASE}/users/${encodeURIComponent(uid)}`,
     {
       headers: {
         authorization: `Bearer ${accessToken}`
@@ -1075,7 +1074,8 @@ async function getHouseholdSnapshot(uid, accessToken) {
     const body = await response.text().catch(() => "");
 
     throw new Error(
-      `Could not load household ${uid} from Firestore (${response.status}): ${body}`
+      `Could not load user profile ${uid} from Firestore: ` +
+      `${response.status} ${body}`
     );
   }
 
@@ -1084,6 +1084,35 @@ async function getHouseholdSnapshot(uid, accessToken) {
   return firestoreFieldsToJs(document.fields || {});
 }
 
+async function getHouseholdSnapshot(householdId, accessToken) {
+  const response = await fetch(
+    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(
+      householdId
+    )}`,
+    {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    }
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+
+    throw new Error(
+      `Could not load household ${householdId} from Firestore: ` +
+      `${response.status} ${body}`
+    );
+  }
+
+  const document = await response.json();
+
+  return firestoreFieldsToJs(document.fields || {});
+}
 async function writeNotificationInboxRecord(
   uid,
   notification,
@@ -1132,7 +1161,140 @@ async function writeNotificationInboxRecord(
     );
   }
 }
+const HOUSEHOLD_INVITE_PREFIX = "household-invite:";
+const HOUSEHOLD_INVITE_TTL_SECONDS = 60 * 60 * 24 * 7;
 
+function inviteKey(tokenHash) {
+  return `${HOUSEHOLD_INVITE_PREFIX}${tokenHash}`;
+}
+
+function createInviteToken() {
+  const bytes = new Uint8Array(32);
+
+  crypto.getRandomValues(bytes);
+
+  return Array.from(bytes)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function sha256Hex(value) {
+  const bytes = new TextEncoder().encode(value);
+
+  const hashBuffer = await crypto.subtle.digest(
+    "SHA-256",
+    bytes
+  );
+
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function getFirestoreDocument(path, accessToken) {
+  const response = await fetch(
+    `${FIRESTORE_DOCUMENT_BASE}/${path}`,
+    {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    }
+  );
+
+  if (response.status === 404) {
+    return null;
+  }
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+
+    throw new Error(
+      `Could not load Firestore document ${path}: ` +
+      `${response.status} ${body}`
+    );
+  }
+
+  const document = await response.json();
+
+  return firestoreFieldsToJs(document.fields || {});
+}
+
+async function writeFirestoreDocument(
+  path,
+  data,
+  accessToken
+) {
+  const response = await fetch(
+    `${FIRESTORE_DOCUMENT_BASE}/${path}`,
+    {
+      method: "PATCH",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        fields: jsObjectToFirestoreFields(data)
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+
+    throw new Error(
+      `Could not write Firestore document ${path}: ` +
+      `${response.status} ${body}`
+    );
+  }
+}
+async function getHouseholdMember(
+  householdId,
+  uid,
+  accessToken
+) {
+  return getFirestoreDocument(
+    `households/${encodeURIComponent(
+      householdId
+    )}/members/${encodeURIComponent(uid)}`,
+    accessToken
+  );
+}
+
+async function requireHouseholdOwner(
+  uid,
+  accessToken
+) {
+  const profile = await getUserProfile(uid, accessToken);
+
+  const householdId =
+    typeof profile?.householdId === "string"
+      ? profile.householdId.trim()
+      : "";
+
+  if (!householdId) {
+    throw new Error(
+      "Your account is not connected to a household."
+    );
+  }
+
+  const member = await getHouseholdMember(
+    householdId,
+    uid,
+    accessToken
+  );
+
+  if (member?.role !== "owner") {
+    throw new Error(
+      "Only the household owner can create an invite."
+    );
+  }
+
+  return {
+    householdId,
+    profile,
+    member
+  };
+}
 async function sendReminderToUserSubscriptions(
   env,
   uid,
@@ -1209,18 +1371,35 @@ async function sendReminderToUserSubscriptions(
     failures
   };
 }
+async function processUserReminders(env, uid, accessToken, now) {
+  const profile = await getUserProfile(uid, accessToken);
 
-async function processUserReminders(
-  env,
-  uid,
-  accessToken,
-  now
-) {
-  const snapshot = await getHouseholdSnapshot(uid, accessToken);
+  const householdId =
+    typeof profile?.householdId === "string"
+      ? profile.householdId.trim()
+      : "";
+
+  if (!householdId) {
+    return {
+      uid,
+      status: "no-household",
+      eligible: 0,
+      sent: 0,
+      skipped: 0,
+      removed: 0,
+      failures: 0
+    };
+  }
+
+  const snapshot = await getHouseholdSnapshot(
+    householdId,
+    accessToken
+  );
 
   if (!snapshot) {
     return {
       uid,
+      householdId,
       status: "no-household",
       eligible: 0,
       sent: 0,
@@ -1475,7 +1654,297 @@ export default {
     }
 
     const url = new URL(request.url);
+        if (
+      request.method === "POST" &&
+      url.pathname === "/household-invites"
+    ) {
+      const authentication = await verifyFirebaseToken(request);
 
+      if (!authentication.ok) {
+        return json(
+          {
+            ok: false,
+            error: authentication.error
+          },
+          authentication.status,
+          origin
+        );
+      }
+
+      try {
+        const accessToken = await getFirestoreAccessToken(env);
+
+        const owner = await requireHouseholdOwner(
+          authentication.user.uid,
+          accessToken
+        );
+
+        const token = createInviteToken();
+        const tokenHash = await sha256Hex(token);
+        const now = new Date().toISOString();
+        const expiresAt = new Date(
+          Date.now() + HOUSEHOLD_INVITE_TTL_SECONDS * 1000
+        ).toISOString();
+
+        await env.NOTIFICATIONSKV.put(
+          inviteKey(tokenHash),
+          JSON.stringify({
+            householdId: owner.householdId,
+            createdByUid: authentication.user.uid,
+            createdByEmail: authentication.user.email || "",
+            createdAt: now,
+            expiresAt,
+            usedAt: null,
+            usedByUid: null
+          }),
+          {
+            expirationTtl: HOUSEHOLD_INVITE_TTL_SECONDS
+          }
+        );
+
+        const inviteUrl = new URL("/", APP_ORIGIN);
+
+        inviteUrl.searchParams.set("invite", token);
+
+        return json(
+          {
+            ok: true,
+            inviteUrl: inviteUrl.toString(),
+            expiresAt
+          },
+          201,
+          origin
+        );
+      } catch (error) {
+        console.error("Household invite creation failed:", error);
+
+        return json(
+          {
+            ok: false,
+            error:
+              error?.message ||
+              "Could not create a household invite."
+          },
+          400,
+          origin
+        );
+      }
+    }
+
+    if (
+      request.method === "POST" &&
+      url.pathname === "/household-invites/accept"
+    ) {
+      const authentication = await verifyFirebaseToken(request);
+
+      if (!authentication.ok) {
+        return json(
+          {
+            ok: false,
+            error: authentication.error
+          },
+          authentication.status,
+          origin
+        );
+      }
+
+      let body;
+
+      try {
+        body = await request.json();
+      } catch {
+        return json(
+          {
+            ok: false,
+            error: "Request body must be valid JSON."
+          },
+          400,
+          origin
+        );
+      }
+
+      const token =
+        typeof body?.token === "string"
+          ? body.token.trim()
+          : "";
+
+      if (!/^[a-f0-9]{64}$/i.test(token)) {
+        return json(
+          {
+            ok: false,
+            error: "This household invite link is invalid."
+          },
+          400,
+          origin
+        );
+      }
+
+      try {
+        const tokenHash = await sha256Hex(token);
+
+        const storedInvite = await env.NOTIFICATIONSKV.get(
+          inviteKey(tokenHash),
+          "json"
+        );
+
+        if (!storedInvite) {
+          return json(
+            {
+              ok: false,
+              error:
+                "This household invite has expired, was revoked, or has already been used."
+            },
+            404,
+            origin
+          );
+        }
+
+        const expiresAt = new Date(storedInvite.expiresAt);
+
+        if (
+          Number.isNaN(expiresAt.getTime()) ||
+          expiresAt.getTime() <= Date.now()
+        ) {
+          await env.NOTIFICATIONSKV.delete(
+            inviteKey(tokenHash)
+          );
+
+          return json(
+            {
+              ok: false,
+              error:
+                "This household invite has expired. Ask the owner for a new link."
+            },
+            410,
+            origin
+          );
+        }
+
+        if (
+          storedInvite.usedAt ||
+          storedInvite.usedByUid
+        ) {
+          return json(
+            {
+              ok: false,
+              error:
+                "This household invite has already been used."
+            },
+            409,
+            origin
+          );
+        }
+
+        if (
+          storedInvite.createdByUid ===
+          authentication.user.uid
+        ) {
+          return json(
+            {
+              ok: false,
+              error:
+                "You cannot use your own household invite."
+            },
+            400,
+            origin
+          );
+        }
+
+        const accessToken = await getFirestoreAccessToken(env);
+
+        const existingProfile = await getUserProfile(
+          authentication.user.uid,
+          accessToken
+        );
+
+        /*
+         * A person may join only if they do not already belong
+         * to another household.
+         */
+        if (
+          existingProfile &&
+          typeof existingProfile.householdId === "string" &&
+          existingProfile.householdId.trim() &&
+          existingProfile.householdId !==
+            storedInvite.householdId
+        ) {
+          return json(
+            {
+              ok: false,
+              error:
+                "This account already belongs to another household."
+            },
+            409,
+            origin
+          );
+        }
+
+        const now = new Date().toISOString();
+        const householdId = storedInvite.householdId;
+
+        await writeFirestoreDocument(
+          `users/${encodeURIComponent(
+            authentication.user.uid
+          )}`,
+          {
+            householdId,
+            role: "member",
+            email: authentication.user.email || "",
+            createdAt: existingProfile?.createdAt || now,
+            updatedAt: now
+          },
+          accessToken
+        );
+
+        await writeFirestoreDocument(
+          `households/${encodeURIComponent(
+            householdId
+          )}/members/${encodeURIComponent(
+            authentication.user.uid
+          )}`,
+          {
+            uid: authentication.user.uid,
+            email: authentication.user.email || "",
+            role: "member",
+            joinedAt: now,
+            updatedAt: now
+          },
+          accessToken
+        );
+
+        /*
+         * Delete first so this invite is one-time use.
+         * KV deletion makes it unavailable for later attempts.
+         */
+        await env.NOTIFICATIONSKV.delete(
+          inviteKey(tokenHash)
+        );
+
+        return json(
+          {
+            ok: true,
+            householdId,
+            role: "member"
+          },
+          200,
+          origin
+        );
+      } catch (error) {
+        console.error("Household invite acceptance failed:", error);
+
+        return json(
+          {
+            ok: false,
+            error:
+              error?.message ||
+              "Could not join the household."
+          },
+          500,
+          origin
+        );
+      }
+    }
+        
     if (
       request.method === "POST" &&
       url.pathname === "/subscriptions"

@@ -17,7 +17,7 @@ const CATEGORIES = [
   { id: 'transportation', label: 'Transportation', icon: 'car', color: 'cat-transportation' },
   { id: 'loans', label: 'Loans', icon: 'percent', color: 'cat-loans' },
   { id: 'creditcards', label: 'Credit Cards', icon: 'creditcard', color: 'cat-creditcards' },
-  { id: 'paymentplans', label: 'Payment Plans', icon: 'Subscription', color: 'cat-paymentplans' },
+  { id: 'paymentplans', label: 'Installments', icon: 'Subscription', color: 'cat-paymentplans' },
   { id: 'health', label: 'Health', icon: 'cross', color: 'cat-health' },
   { id: 'education', label: 'Education', icon: 'graduationcap', color: 'cat-education' },
   { id: 'other', label: 'Other', icon: 'doc', color: 'cat-other' },
@@ -1775,6 +1775,48 @@ function markBillPaid(billId) {
   render();
   showPaymentUndoToast(payment, bill.name);
 }
+function markSelectedPlanInstallmentPaid(planId) {
+  const select = document.getElementById(
+    "paymentPlanInstallmentSelect"
+  );
+
+  const installmentId = select?.value;
+
+  if (!installmentId) {
+    alert("Choose a payment first.");
+    return;
+  }
+
+  const installment = Store.getBill(installmentId);
+
+  if (!installment || installment.installmentPlanId !== planId) {
+    alert("That payment could not be found.");
+    return;
+  }
+
+  const dueDate = new Date(installment.dueDate);
+
+  if (isOccurrencePaid(installment, dueDate)) {
+    alert("This payment is already marked as paid.");
+    return;
+  }
+
+  const paymentNumber = installment.installmentNumber || "";
+  const paymentTotal = installment.installmentTotal || "";
+
+  const confirmed = confirm(
+    `Mark Payment ${paymentNumber} of ${paymentTotal} as paid?\n\n` +
+    `${formatCurrency(installment.amount)} due ` +
+    `${formatDate(installment.dueDate, "full")}`
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  closePaymentPlanDetails();
+  markBillPaid(installment.id);
+}
 function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
 
@@ -1822,7 +1864,7 @@ function markBillUnpaid(billId) {
   const voidedAt = new Date().toISOString();
 
   Store.updatePayment(payment.id, {
-    status: "Voided",
+    status: "voided",
     voidedAt,
   });
 
@@ -2044,10 +2086,15 @@ function initTheme() {
 let currentRoute = 'today';
 let routeParams = { billSort: 'dueDate' };
 
-window.addEventListener('billbeacon:authenticated', () => {
+window.addEventListener("billbeacon-authenticated", () => {
   startNotificationInboxListener();
 
-  if (!consumeNotificationDeepLink() && currentRoute === 'today') {
+  if (handleHouseholdInviteFromUrl()) {
+    return;
+  }
+
+  if (!consumeNotificationDeepLink()) {
+    currentRoute = "today";
     render();
   }
 });
@@ -2377,6 +2424,7 @@ function renderToday() {
           class="nav-button dashboard-icon-button"
           onclick="navigate('settings')"
           aria-label="Open settings"
+          style="color:var(--text-muted);"
         >
           ${svgIcon("gear", 22)}
         </button>
@@ -2387,7 +2435,7 @@ function renderToday() {
           class="nav-button dashboard-icon-button"
           onclick="openNotificationCenter()"
           aria-label="Open notifications"
-          style="position:relative"
+          style="position:relative; color:var(--text-muted);"
         >
           ${svgIcon("bell", 22)}
 
@@ -2395,25 +2443,30 @@ function renderToday() {
             notificationCount > 0
               ? `
                 <span
-                  style="
-                    position:absolute;
-                    top:2px;
-                    right:2px;
-                    min-width:16px;
-                    height:16px;
-                    padding:0 4px;
-                    border-radius:999px;
-                    background:var(--overdue);
-                    color:white;
-                    font-size:10px;
-                    font-weight:700;
-                    line-height:16px;
-                    text-align:center;
-                    border:2px solid var(--bg);
-                  "
-                >
-                  ${notificationCount > 9 ? "9+" : notificationCount}
-                </span>
+  style="
+    position:absolute;
+    top:-3;
+    right:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-width:17px;
+    height:17px;
+    padding:0 4px;
+    box-sizing:border-box;
+    border:2px solid var(--bg);
+    border-radius:999px;
+    background:var(--overdue);
+    color:#fff;
+    font-size:10px;
+    font-weight:800;
+    line-height:1;
+    text-align:center;
+    font-variant-numeric:tabular-nums;
+  "
+>
+  ${notificationCount > 9 ? "9+" : notificationCount}
+</span>
               `
               : ""
           }
@@ -2530,7 +2583,7 @@ function renderToday() {
           <button
             class="dashboard-status-card status-upcoming-card"
             onclick="openDashboardStatusSheet('due')"
-            aria-label="View bills due"
+            aria-label="View Bills Due"
           >
             <div class="dashboard-status-number text-upcoming">
               ${upcomingCount}
@@ -2566,14 +2619,28 @@ function renderToday() {
                 })"
                 aria-label="View next due bill"
               >
-                <div class="next-due-icon">
-                  ${svgIcon(
-                    getBillStatusForDashboard(nextDueBill) === "overdue"
-                      ? "warning"
-                      : "clock",
-                    18
-                  )}
-                </div>
+                <div
+  class="next-due-icon"
+  style="
+    background:${
+      nextDueBill.installmentPlanId
+        ? "transparent"
+        : getBillBrand(nextDueBill.name)
+          ? "#fff"
+          : `var(--${getCategory(nextDueBill.category).color})`
+    };
+    color:${
+      nextDueBill.installmentPlanId
+        ? "var(--accent)"
+        : getBillBrand(nextDueBill.name)
+          ? "#1e1e2e"
+          : "#fff"
+    };
+    overflow:hidden;
+  "
+>
+  ${billOrPaymentPlanVisual(nextDueBill, 30)}
+</div>
 
                 <div class="next-due-copy">
                   <div class="next-due-label">
@@ -2780,6 +2847,16 @@ function getCycleForBill(bill) {
   return new Date(bill.dueDate).getDate() <= 15 ? 'early' : 'late';
 }
 
+function getStartOfLocalDay(date = new Date()) {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    12,
+    0,
+    0
+  );
+}
 function renderCompactRecurringCalendar() {
   const viewDate = routeParams.month
     ? new Date(`${routeParams.month.slice(0, 10)}T12:00:00`)
@@ -2792,40 +2869,50 @@ function renderCompactRecurringCalendar() {
   const today = new Date();
 
   const currentMonthStart = new Date(
-  today.getFullYear(),
-  today.getMonth(),
-  1
-);
+    today.getFullYear(),
+    today.getMonth(),
+    1
+  );
 
-const viewedMonthStart = new Date(year, month, 1);
+  const viewedMonthStart = new Date(year, month, 1);
 
-const monthBills =
-  viewedMonthStart < currentMonthStart
-    ? []
-    : getCalendarBillsForMonth(viewDate);
+  const monthBills =
+    viewedMonthStart < currentMonthStart
+      ? []
+      : getCalendarBillsForMonth(viewDate);
+
+  const selectedDateKey = routeParams.recurringSelectedDate
+    ? getLocalDateKey(routeParams.recurringSelectedDate)
+    : null;
 
   const cells = [];
 
   for (let i = 0; i < firstDay.getDay(); i += 1) {
-    cells.push('<div class="recurring-calendar-day is-empty"></div>');
+    cells.push(`
+      <div class="recurring-calendar-day is-empty"></div>
+    `);
   }
 
   for (let day = 1; day <= daysInMonth; day += 1) {
-    const date = new Date(year, month, day);
+    const date = new Date(year, month, day, 12, 0, 0);
+    const dateString = date.toISOString();
 
     const dayBills = monthBills.filter((bill) => {
-      return new Date(bill.dueDate).getDate() === day;
+      return getLocalDateKey(bill.dueDate) === getLocalDateKey(dateString);
     });
 
     const isToday = date.toDateString() === today.toDateString();
 
-    const hasOverdue = dayBills.some(
-      (bill) => getCalendarBillStatus(bill) === "overdue"
-    );
+    const isSelected =
+      selectedDateKey === getLocalDateKey(dateString);
 
-    const hasUpcoming = dayBills.some(
-      (bill) => getCalendarBillStatus(bill) === "upcoming"
-    );
+    const hasOverdue = dayBills.some((bill) => {
+      return getCalendarBillStatus(bill) === "overdue";
+    });
+
+    const hasUpcoming = dayBills.some((bill) => {
+      return getCalendarBillStatus(bill) === "upcoming";
+    });
 
     const hasPaid = dayBills.some(isCalendarBillPaid);
 
@@ -2836,18 +2923,25 @@ const monthBills =
         ? "overdue"
         : hasUpcoming
           ? "upcoming"
-          : "paid";
+          : hasPaid
+            ? "paid"
+            : "upcoming";
 
-      marker = `<i class="recurring-calendar-marker ${markerClass}"></i>`;
+      marker = `
+        <i class="recurring-calendar-marker ${markerClass}"></i>
+      `;
     }
 
     cells.push(`
       <button
-        class="recurring-calendar-day ${
-          isToday ? "is-today" : ""
-        } ${hasOverdue ? "has-overdue" : ""}"
-        onclick="openCalendarDay('${date.toISOString()}')"
-        aria-label="View bills for ${formatDate(date.toISOString(), "full")}"
+        type="button"
+        class="recurring-calendar-day
+          ${isToday ? "is-today" : ""}
+          ${isSelected ? "is-selected" : ""}
+          ${hasOverdue ? "has-overdue" : ""}"
+        onclick="toggleRecurringCalendarDay('${dateString}')"
+        aria-label="View Bills For ${formatDate(dateString, "full")}"
+        aria-pressed="${isSelected ? "true" : "false"}"
       >
         <span>${day}</span>
         ${marker}
@@ -2855,16 +2949,100 @@ const monthBills =
     `);
   }
 
+  const selectedDate = routeParams.recurringSelectedDate
+    ? new Date(
+        `${routeParams.recurringSelectedDate.slice(0, 10)}T12:00:00`
+      )
+    : null;
+
+  const selectedDayBills = selectedDate
+    ? monthBills.filter((bill) => {
+        return (
+          getLocalDateKey(bill.dueDate) ===
+          getLocalDateKey(selectedDate.toISOString())
+        );
+      })
+    : [];
+
+  const selectedDayHtml = selectedDate
+    ? `
+      <div class="recurring-calendar-selected-header">
+  <div class="recurring-calendar-selected-title-group">
+    <div class="recurring-calendar-selected-date">
+      <span class="recurring-calendar-selected-date-icon">
+        ${svgIcon("calendar", 18)}
+      </span>
+
+      <span>
+        ${formatDate(selectedDate.toISOString(), "full")}
+      </span>
+    </div>
+
+    <div class="recurring-calendar-selected-count">
+      ${
+        selectedDayBills.length
+          ? `${selectedDayBills.length} ${
+              selectedDayBills.length === 1
+                ? "bill"
+                : "bills"
+            } scheduled`
+          : "No bills scheduled"
+      }
+    </div>
+  </div>
+
+  <button
+            type="button"
+            class="nav-button"
+            onclick="toggleRecurringCalendarDay('${
+              selectedDate.toISOString()
+            }')"
+            aria-label="Close selected day"
+            style="color:var(--text-muted);"
+          >
+            ${svgIcon("close", 20)}
+          </button>
+        </div>
+
+        ${
+          selectedDayBills.length
+            ? `
+              <div
+                class="card recurring-calendar-selected-list"
+                style="margin-bottom:0;"
+              >
+                ${selectedDayBills
+                  .map((bill) => renderRecurringOccurrenceRow(bill))
+                  .join("")}
+              </div>
+            `
+            : `
+              <div class="recurring-calendar-empty-day">
+                ${svgIcon("calendar", 20)}
+                <span>
+                  Nothing Scheduled For This Day.
+                </span>
+              </div>
+            `
+        }
+      </div>
+    `
+    : "";
+
   const prevMonth = new Date(year, month - 1, 1).toISOString();
   const nextMonth = new Date(year, month + 1, 1).toISOString();
 
   return `
-    <section class="recurring-calendar-card" aria-label="Recurring bills calendar">
+    <section
+      class="recurring-calendar-card"
+      aria-label="Recurring Bills Calendar"
+    >
       <div class="recurring-calendar-heading">
         <button
+          type="button"
           class="month-nav-btn"
           onclick="navigate('recurring', { month: '${prevMonth}' })"
-          aria-label="Previous month"
+          aria-label="Previous Month"
         >
           ${svgIcon("chevronLeft", 18)}
         </button>
@@ -2872,9 +3050,10 @@ const monthBills =
         <strong>${formatDate(viewDate.toISOString(), "monthYear")}</strong>
 
         <button
+          type="button"
           class="month-nav-btn"
           onclick="navigate('recurring', { month: '${nextMonth}' })"
-          aria-label="Next month"
+          aria-label="Next Month"
         >
           ${svgIcon("chevronRight", 18)}
         </button>
@@ -2889,22 +3068,31 @@ const monthBills =
       <div class="recurring-calendar-grid">
         ${cells.join("")}
       </div>
+
+      ${selectedDayHtml}
     </section>
   `;
 }
-const RECURRING_SECTION_LIMIT = 3;
+function toggleRecurringCalendarDay(dateString) {
+  const clickedDateKey = getLocalDateKey(dateString);
 
-function getStartOfLocalDay(date = new Date()) {
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
-    date.getDate(),
-    12,
-    0,
-    0
-  );
+  const selectedDateKey = routeParams.recurringSelectedDate
+    ? getLocalDateKey(routeParams.recurringSelectedDate)
+    : null;
+
+  if (selectedDateKey === clickedDateKey) {
+    const { recurringSelectedDate, ...remainingParams } = routeParams;
+
+    navigate("recurring", remainingParams);
+    return;
+  }
+
+  navigate("recurring", {
+    ...routeParams,
+    recurringSelectedDate: dateString
+  });
 }
-
+const RECURRING_SECTION_LIMIT = 3;
 function getRecurringRelativeLabel(dateString, now = new Date()) {
   const startOfToday = getStartOfLocalDay(now);
   const dueDate = getStartOfLocalDay(new Date(dateString));
@@ -3065,6 +3253,23 @@ function toggleRecurringSection(sectionId) {
     : `<span>Show More</span>${svgIcon('chevronRight', 18)}`;
 
   button.setAttribute('aria-expanded', String(isOpen));
+}
+function toggleRecurringCalendarDay(dateString) {
+  const clickedDate = getLocalDateKey(dateString);
+  const selectedDate = routeParams.recurringSelectedDate
+    ? getLocalDateKey(routeParams.recurringSelectedDate)
+    : null;
+
+  if (selectedDate === clickedDate) {
+    const { recurringSelectedDate, ...remainingParams } = routeParams;
+    navigate("recurring", remainingParams);
+    return;
+  }
+
+  navigate("recurring", {
+    ...routeParams,
+    recurringSelectedDate: dateString
+  });
 }
 function renderRecurring() {
   const now = new Date();
@@ -3228,7 +3433,7 @@ function renderRecurring() {
                         onclick="toggleRecurringSection('${id}')"
                         aria-expanded="false"
                       >
-                        <span>Show More</span>
+                        <span class="gradient-action-text">Show More</span>
                         ${svgIcon('chevronRight', 18)}
                       </button>
                     `
@@ -3434,12 +3639,12 @@ function renderBills() {
         <div class="nav-title">Bills</div>
 
         <button
-          class="nav-button"
-          onclick="openAddMenu()"
-          aria-label="Add a bill or payment plan"
-        >
-          ${svgIcon('plus', 18)}
-        </button>
+  class="nav-button"
+  onclick="openBillForm()"
+  aria-label="Add a bill"
+>
+  ${svgIcon("plus", 18)}
+</button>
       </div>
     </div>
 
@@ -3459,13 +3664,13 @@ function renderBills() {
               </div>
 
               <button
-                class="btn-primary"
-                style="margin-top:var(--space-4)"
-                onclick="openAddMenu()"
-              >
-                ${svgIcon('plus', 18)}
-                Add Recurring Bill
-              </button>
+  class="btn-primary"
+  style="margin-top:var(--space-4)"
+  onclick="openBillForm()"
+>
+  ${svgIcon("plus", 18)}
+  Add Bill
+</button>
             </div>
           `
           : `
@@ -3711,7 +3916,7 @@ function renderCalendar() {
         } ${hasOverdue ? "calendar-day-overdue" : ""}"
         onclick="openCalendarDay('${date.toISOString()}')"
         aria-label="View ${
-          dayBills.length ? `${dayBills.length} bills due on ` : ""
+          dayBills.length ? `${dayBills.length} Bills Due On ` : ""
         }${formatDate(date.toISOString(), "full")}"
       >
         <span>${day}</span>
@@ -4114,7 +4319,7 @@ overflow:hidden;
                   ${svgIcon("calendar", 44)}
                 </div>
 
-                <div class="empty-state-title">No bills due</div>
+                <div class="empty-state-title">No Bills Due</div>
 
                 <div class="empty-state-text">
                   There are no bills scheduled for this date.
@@ -4402,11 +4607,14 @@ function openDashboardStatusSheet(status) {
 
       <div class="sheet-nav">
         <button
-          class="nav-button"
-          onclick="closeDashboardStatusSheet()"
-        >
-          Close
-        </button>
+  type="button"
+  class="nav-button"
+  onclick="closeDashboardStatusSheet()"
+  aria-label="Back to dashboard"
+  style="color:var(--text);"
+>
+  ${svgIcon("chevronLeft", 22)}
+</button>
 
         <div class="sheet-title">${title}</div>
         <div style="width:54px"></div>
@@ -4744,8 +4952,6 @@ function renderPaymentPlans() {
       const representative = sortedInstallments[0];
       const provider = representative.installmentProvider || "Payment Plan";
 
-      // New plans use the saved merchant/store name.
-      // Existing plans fall back to their bill name.
       const storeName =
         representative.installmentStore?.trim() ||
         String(representative.name || "")
@@ -4764,7 +4970,6 @@ function renderPaymentPlans() {
       );
 
       const paidAmount = Math.max(totalAmount - remainingBalance, 0);
-
       const installmentCount = sortedInstallments.length;
       const paidCount = paidInstallments.length;
       const remainingCount = Math.max(installmentCount - paidCount, 0);
@@ -4804,126 +5009,315 @@ function renderPaymentPlans() {
   const activePlans = plans.filter((plan) => plan.nextInstallment);
   const completedPlans = plans.filter((plan) => !plan.nextInstallment);
 
- const renderPlanCard = (plan, isCompleted = false) => {
-  const planTitle = plan.storeName || plan.provider;
+  const totalRemainingBalance = activePlans.reduce(
+    (sum, plan) => sum + plan.remainingBalance,
+    0
+  );
 
-  const planSubtitle = isCompleted
-    ? `${plan.provider} · Paid in full`
-    : plan.storeName
-      ? `${plan.provider} · Payment ${Math.min(
-          plan.paidCount + 1,
-          plan.installmentCount
-        )} of ${plan.installmentCount}`
-      : `Payment ${Math.min(
-          plan.paidCount + 1,
-          plan.installmentCount
-        )} of ${plan.installmentCount}`;
+  // The four nearest active payment plans.
+  const dueNextPlans = activePlans.slice(0, 4);
 
-  const nextPaymentLabel = plan.nextInstallment
-    ? `Next ${formatDate(plan.nextInstallment.dueDate, "short")}`
-    : plan.paidInFullAt
-      ? `Paid ${formatDate(plan.paidInFullAt, "short")}`
-      : "Complete";
+  // Every active payment plan after the first four.
+  const upcomingPlans = activePlans.slice(4);
 
-  return `
-    <button
-      type="button"
-      class="card card-pad"
-      style="
-        width:100%;
-        text-align:left;
-        cursor:pointer;
-        opacity:${isCompleted ? 0.72 : 1};
-        color:inherit;
-        background:var(--surface);
-        border:1px solid var(--border);
-      "
-      onclick="openPaymentPlanDetails('${plan.id}')"
-      aria-label="View payment plan details for ${escapeHtml(planTitle)}"
-    >
-      <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
+  // Keep the Upcoming preview compact.
+  const visibleUpcomingPlans = upcomingPlans.slice(0, 4);
+
+  // Active-plan cards: first 3 are visible; the rest expand below.
+  const visibleActivePlans = activePlans.slice(0, 3);
+  const moreActivePlans = activePlans.slice(3);
+
+  const dueNextTotal = dueNextPlans.reduce(
+    (sum, plan) => sum + parseFloat(plan.nextInstallment?.amount || 0),
+    0
+  );
+
+  const upcomingTotal = upcomingPlans.reduce(
+    (sum, plan) => sum + parseFloat(plan.nextInstallment?.amount || 0),
+    0
+  );
+
+  const renderPlanCard = (plan, isCompleted = false) => {
+    const planTitle = plan.storeName || plan.provider;
+
+    const planSubtitle = isCompleted
+      ? `${plan.provider} · Paid in full`
+      : plan.storeName
+        ? `${plan.provider} · Payment ${Math.min(
+            plan.paidCount + 1,
+            plan.installmentCount
+          )} of ${plan.installmentCount}`
+        : `Payment ${Math.min(
+            plan.paidCount + 1,
+            plan.installmentCount
+          )} of ${plan.installmentCount}`;
+
+    const nextPaymentLabel = plan.nextInstallment
+      ? `Next ${formatDate(plan.nextInstallment.dueDate, "short")}`
+      : plan.paidInFullAt
+        ? `Paid ${formatDate(plan.paidInFullAt, "short")}`
+        : "Complete";
+
+    const progressPercent = plan.installmentCount
+      ? Math.round((plan.paidCount / plan.installmentCount) * 100)
+      : 0;
+
+    const nextPaymentAmount = plan.nextInstallment
+      ? formatCurrency(plan.nextInstallment.amount)
+      : null;
+
+    return `
+      <button
+        type="button"
+        class="card card-pad"
+        style="
+          width:100%;
+          text-align:left;
+          cursor:pointer;
+          opacity:${isCompleted ? 0.72 : 1};
+          color:inherit;
+          background:var(--surface);
+          border:1px solid rgba(192, 151, 255, 0.18);
+        "
+        onclick="openPaymentPlanDetails('${plan.id}')"
+        aria-label="View payment plan details for ${escapeHtml(planTitle)}"
+      >
+        <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
+          ${paymentPlanVisual(plan.provider, 42)}
+
+          <div style="min-width:0; flex:1;">
+            <div
+              style="
+                overflow:hidden;
+                font-size:var(--text-base);
+                font-weight:800;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+              "
+            >
+              ${escapeHtml(planTitle)}
+            </div>
+
+            <div
+              style="
+                margin-top:4px;
+                overflow:hidden;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+                text-overflow:ellipsis;
+                white-space:nowrap;
+              "
+            >
+              ${escapeHtml(planSubtitle)}
+            </div>
+          </div>
+
+          <div style="min-width:92px; text-align:right;">
+            <div
+              style="
+                font-size:var(--text-base);
+                font-weight:800;
+                color:${isCompleted ? "var(--text-muted)" : "var(--text)"};
+                white-space:nowrap;
+              "
+            >
+              ${
+                isCompleted
+                  ? "Paid in full"
+                  : `${formatCurrency(plan.remainingBalance)} left`
+              }
+            </div>
+
+            <div
+              style="
+                margin-top:4px;
+                font-size:var(--text-xs);
+                color:var(--text-muted);
+                white-space:nowrap;
+              "
+            >
+              ${escapeHtml(nextPaymentLabel)}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style="
+            height:6px;
+            margin-top:14px;
+            overflow:hidden;
+            border-radius:999px;
+            background:rgba(174, 96, 255, 0.14);
+          "
+          aria-label="${progressPercent}% of payments completed"
+        >
+          <div
+            style="
+              width:${progressPercent}%;
+              height:100%;
+              border-radius:inherit;
+              background:${
+                isCompleted
+                  ? "var(--text-subtle, #6f6b7c)"
+                  : "linear-gradient(105deg, #8f36ff 0%, #c44cff 34%, #f64cae 65%, #ff7138 100%)"
+              };
+              transition:width 180ms ease;
+            "
+          ></div>
+        </div>
+
+        <div
+          style="
+            display:flex;
+            justify-content:space-between;
+            gap:var(--space-3);
+            margin-top:8px;
+            font-size:var(--text-xs);
+            color:var(--text-muted);
+          "
+        >
+          <span>
+            ${plan.paidCount} of ${plan.installmentCount} payments complete
+          </span>
+
+          <span>
+            ${
+              nextPaymentAmount
+                ? `Next payment ${nextPaymentAmount}`
+                : "Plan complete"
+            }
+          </span>
+        </div>
+      </button>
+    `;
+  };
+
+  const renderOverviewRow = (plan, showPill = false) => {
+    const title = plan.storeName || plan.provider;
+    const dueDate = formatDate(plan.nextInstallment.dueDate, "short");
+    const paymentAmount = formatCurrency(plan.nextInstallment.amount);
+    const paymentNumber = Math.min(
+      plan.paidCount + 1,
+      plan.installmentCount
+    );
+
+    return `
+      <button
+        type="button"
+        onclick="openPaymentPlanDetails('${plan.id}')"
+        style="
+          display:flex;
+          width:100%;
+          align-items:center;
+          gap:var(--space-3);
+          padding:var(--space-3) var(--space-4);
+          color:inherit;
+          text-align:left;
+          cursor:pointer;
+          background:transparent;
+          border:0;
+        "
+        aria-label="View ${escapeHtml(title)} payment plan"
+      >
         ${paymentPlanVisual(plan.provider, 42)}
 
         <div style="min-width:0; flex:1;">
           <div
             style="
+              overflow:hidden;
               font-size:var(--text-base);
               font-weight:800;
-              overflow:hidden;
               text-overflow:ellipsis;
               white-space:nowrap;
             "
           >
-            ${escapeHtml(planTitle)}
+            ${escapeHtml(title)}
           </div>
 
           <div
             style="
-              margin-top:4px;
+              margin-top:3px;
+              overflow:hidden;
               font-size:var(--text-sm);
               color:var(--text-muted);
-              overflow:hidden;
               text-overflow:ellipsis;
               white-space:nowrap;
             "
           >
-            ${escapeHtml(planSubtitle)}
+            Payment ${paymentNumber} of ${plan.installmentCount} · Due ${dueDate}
           </div>
         </div>
 
-        <div style="min-width:92px; text-align:right;">
-          <div
-            style="
-              font-size:var(--text-base);
-              font-weight:800;
-              color:${isCompleted ? "var(--text-muted)" : "var(--text)"};
-              white-space:nowrap;
-            "
-          >
-            ${
-              isCompleted
-                ? "Paid in full"
-                : `${formatCurrency(plan.remainingBalance)} left`
-            }
-          </div>
+        ${
+          showPill
+            ? `
+              <div
+                style="
+                  padding:7px 12px;
+                  border:1px solid rgba(226, 185, 255, 0.68);
+                  border-radius:999px;
+                  color:var(--text);
+                  font-size:var(--text-base);
+                  font-weight:800;
+                  white-space:nowrap;
+                "
+              >
+                ${paymentAmount}
+              </div>
+            `
+            : `
+              <div
+                style="
+                  color:var(--text);
+                  font-size:var(--text-base);
+                  font-weight:800;
+                  white-space:nowrap;
+                "
+              >
+                ${paymentAmount}
+              </div>
+            `
+        }
+      </button>
+    `;
+  };
 
-          <div
-            style="
-              margin-top:4px;
-              font-size:var(--text-xs);
-              color:var(--text-muted);
-              white-space:nowrap;
-            "
-          >
-            ${escapeHtml(nextPaymentLabel)}
-          </div>
-        </div>
-      </div>
+  const renderJumpButton = (targetId, label = "See More") => `
+    <button
+      type="button"
+      onclick="document.getElementById('${targetId}').scrollIntoView({ behavior: 'smooth' })"
+      style="
+        width:100%;
+        padding:var(--space-3) var(--space-4);
+        border:0;
+        border-top:1px solid rgba(192, 151, 255, 0.14);
+        color:#c76aff;
+        background:transparent;
+        font-size:var(--text-base);
+        font-weight:850;
+        cursor:pointer;
+      "
+    >
+      ${label}
     </button>
   `;
-};
 
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <button
-          type="button"
-          class="nav-button"
-          onclick="navigate('insights')"
-          aria-label="Back to Insights"
-        >
-          ${svgIcon("chevronLeft", 22)}
-        </button>
+        <div class="nav-button" aria-hidden="true"></div>
 
-        <div class="nav-title">Payment Plans</div>
+        <div class="nav-title">Installments</div>
 
         <button
           type="button"
           class="nav-button"
-          onclick="navigate('insights')"
-          aria-label="Close Payment Plans"
+          onclick="closeAddMenu(); openInstallmentPlanForm()"
+          aria-label="Add a payment plan"
+          title="Add payment plan"
+          style="color:#b45cff;"
         >
-          ${svgIcon("close", 22)}
+          ${svgIcon("plus", 22)}
         </button>
       </div>
     </div>
@@ -4934,43 +5328,965 @@ function renderPaymentPlans() {
           !plans.length
             ? `
               <div class="empty-state">
-                <div class="empty-state-icon">${svgIcon("creditcard", 44)}</div>
-                <div class="empty-state-title">No payment plans</div>
-                <div class="empty-state-text">
-                  Payment plans you add will appear here.
+                <div class="empty-state-icon">
+                  ${svgIcon("creditcard", 44)}
                 </div>
+
+                <div class="empty-state-title">No payment plans</div>
+
+                <div class="empty-state-text">
+                  Add a bill with installments to track it here.
+                </div>
+
+                <button
+                  type="button"
+                  class="button button-primary"
+                  style="
+                    width:min(100%, 290px);
+                    justify-content:center;
+                    margin-top:var(--space-4);
+                    color:#fff;
+                    border:0;
+                    background:linear-gradient(
+                      105deg,
+                      #8f36ff 0%,
+                      #c44cff 34%,
+                      #f64cae 65%,
+                      #ff7138 100%
+                    );
+                    box-shadow:0 12px 32px rgba(231, 68, 182, 0.24);
+                  "
+                  onclick="closeAddMenu(); openInstallmentPlanForm()"
+                >
+                  ${svgIcon("plus", 18)}
+                  Add payment plan
+                </button>
               </div>
             `
             : `
+              <section
+                style="
+                  padding:var(--space-4) 0 var(--space-4);
+                  text-align:center;
+                "
+              >
+                <div
+                  style="
+                    font-size:var(--text-base);
+                    color:var(--text-muted);
+                  "
+                >
+                  Remaining Balance
+                </div>
+
+                <div
+                  style="
+                    margin-top:7px;
+                    font-size:clamp(40px, 11vw, 56px);
+                    line-height:1;
+                    font-weight:900;
+                    letter-spacing:-0.05em;
+                    color:var(--text);
+                  "
+                >
+                  ${formatCurrency(totalRemainingBalance)}
+                </div>
+
+                <div
+                  style="
+                    margin-top:11px;
+                    font-size:var(--text-base);
+                    color:var(--text-muted);
+                  "
+                >
+                  ${activePlans.length} Active ${
+                    activePlans.length === 1 ? "Installment" : "Installments"
+                  } Remaining
+                </div>
+              </section>
+
               ${
-                activePlans.length
+                dueNextPlans.length
                   ? `
-                    <div class="section-header">Active Plans</div>
-                    <div class="content-gap">
-                      ${activePlans.map((plan) => renderPlanCard(plan)).join("")}
-                    </div>
+                    <section
+                      class="card"
+                      style="
+                        overflow:hidden;
+                        background:var(--surface);
+                        border:1px solid rgba(192, 151, 255, 0.18);
+                      "
+                    >
+                      <div
+                        style="
+                          display:flex;
+                          align-items:center;
+                          justify-content:space-between;
+                          gap:var(--space-3);
+                          padding:var(--space-4) var(--space-4) var(--space-3);
+                        "
+                      >
+                        <div
+                          style="
+                            display:flex;
+                            align-items:center;
+                            gap:10px;
+                            font-size:var(--text-xl);
+                            font-weight:850;
+                          "
+                        >
+                          Due Next
+
+                          <span
+                            style="
+                              display:inline-flex;
+                              align-items:center;
+                              justify-content:center;
+                              min-width:28px;
+                              height:28px;
+                              padding:0 8px;
+                              border-radius:999px;
+                              color:#efcaff;
+                              background:linear-gradient(
+                                105deg,
+                                rgba(143, 54, 255, 0.35),
+                                rgba(246, 76, 174, 0.28)
+                              );
+                              font-size:var(--text-sm);
+                              font-weight:850;
+                            "
+                          >
+                            ${dueNextPlans.length}
+                          </span>
+                        </div>
+
+                        <div
+                          style="
+                            font-size:var(--text-xl);
+                            font-weight:850;
+                            white-space:nowrap;
+                          "
+                        >
+                          ${formatCurrency(dueNextTotal)}
+                        </div>
+                      </div>
+
+                      <div>
+                        ${dueNextPlans
+                          .map((plan) => renderOverviewRow(plan, true))
+                          .join("")}
+                      </div>
+
+                      ${
+  activePlans.length > 4
+    ? `
+      <button
+        type="button"
+        onclick="openPaymentPlanSchedule('month')"
+        style="
+          width:100%;
+          padding:var(--space-3) var(--space-4);
+          border:0;
+          border-top:1px solid rgba(192, 151, 255, 0.14);
+          color:#c76aff;
+          background:transparent;
+          font-size:var(--text-base);
+          font-weight:850;
+          cursor:pointer;
+        "
+      >
+        <span class="gradient-action-text">See More</span>
+      </button>
+    `
+    : ""
+}
+                    </section>
                   `
                   : ""
               }
 
               ${
+                visibleUpcomingPlans.length
+                  ? `
+                    <section
+                      class="card"
+                      style="
+                        overflow:hidden;
+                        background:var(--surface);
+                        border:1px solid rgba(192, 151, 255, 0.18);
+                      "
+                    >
+                      <div
+                        style="
+                          display:flex;
+                          align-items:center;
+                          justify-content:space-between;
+                          gap:var(--space-3);
+                          padding:var(--space-4) var(--space-4) var(--space-3);
+                        "
+                      >
+                        <div
+                          style="
+                            display:flex;
+                            align-items:center;
+                            gap:10px;
+                            font-size:var(--text-xl);
+                            font-weight:850;
+                          "
+                        >
+                          Upcoming
+
+                          <span
+                            style="
+                              display:inline-flex;
+                              align-items:center;
+                              justify-content:center;
+                              min-width:28px;
+                              height:28px;
+                              padding:0 8px;
+                              border-radius:999px;
+                              color:#efcaff;
+                              background:linear-gradient(
+                                105deg,
+                                rgba(143, 54, 255, 0.35),
+                                rgba(246, 76, 174, 0.28)
+                              );
+                              font-size:var(--text-sm);
+                              font-weight:850;
+                            "
+                          >
+                            ${upcomingPlans.length}
+                          </span>
+                        </div>
+
+                        <div
+                          style="
+                            font-size:var(--text-xl);
+                            font-weight:850;
+                            white-space:nowrap;
+                          "
+                        >
+                          ${formatCurrency(upcomingTotal)}
+                        </div>
+                      </div>
+
+                      <div>
+                        ${visibleUpcomingPlans
+                          .map((plan) => renderOverviewRow(plan))
+                          .join("")}
+                      </div>
+
+                      ${
+  upcomingPlans.length > 0
+    ? `
+      <button
+        type="button"
+        onclick="openPaymentPlanSchedule('upcoming')"
+        style="
+          width:100%;
+          padding:var(--space-3) var(--space-4);
+          border:0;
+          border-top:1px solid rgba(192, 151, 255, 0.14);
+          color:#c76aff;
+          background:transparent;
+          font-size:var(--text-base);
+          font-weight:850;
+          cursor:pointer;
+        "
+      >
+        <span class="gradient-action-text">See More</span>
+      </button>
+    `
+    : ""
+}
+                       </section>
+                  `
+                  : ""
+              }
+             ${
+  visibleActivePlans.length
+    ? `
+      <section id="active-payment-plans">
+        <div class="section-header">Active Installments</div>
+
+        <div class="content-gap">
+          ${visibleActivePlans
+            .map((plan) => renderPlanCard(plan))
+            .join("")}
+        </div>
+
+        ${
+          moreActivePlans.length
+            ? `
+                <div
+                id="extra-active-payment-plans"
+                class="content-gap"
+                style="display:none; margin-top:var(--space-3);"
+              >
+                ${moreActivePlans
+                  .map((plan) => renderPlanCard(plan))
+                  .join("")}
+              </div>
+              <button
+                type="button"
+                id="toggle-active-payment-plans"
+                onclick="showMoreActivePaymentPlans()"
+                style="
+                  width:100%;
+                  margin-top:var(--space-2);
+                  padding:var(--space-3) var(--space-4);
+                  border:1px solid rgba(192, 151, 255, 0.28);
+                  border-radius:14px;
+                  color:#c76aff;
+                  background:transparent;
+                  font-size:var(--text-base);
+                  font-weight:850;
+                  cursor:pointer;
+                "
+              >
+                <span class="gradient-action-text">Show More</span>
+              </button>
+            `
+            : ""
+        }
+      </section>
+    `
+    : ""
+}
+
+              ${
                 completedPlans.length
                   ? `
-                    <div class="section-header">Completed</div>
-                    <div class="content-gap">
-                      ${completedPlans
-                        .map((plan) => renderPlanCard(plan, true))
-                        .join("")}
-                    </div>
+                    <button
+                      type="button"
+                      onclick="openCompletedPlansHistory()"
+                      style="
+  display:flex;
+  width:100%;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  margin-top:var(--space-3);
+  padding:15px var(--space-4);
+  border:0;
+  border-radius:14px;
+  color:#fff;
+  background:linear-gradient(
+    105deg,
+    #8f36ff 0%,
+    #c44cff 34%,
+    #f64cae 65%,
+    #ff7138 100%
+  );
+  box-shadow:0 12px 32px rgba(231, 68, 182, 0.22);
+  font-family:inherit;
+  font-size:var(--text-base);
+  font-weight:850;
+  cursor:pointer;
+"
+                    >
+                      ${svgIcon("clock", 18)}
+                      History
+                    </button>
                   `
                   : ""
               }
             `
         }
-      </div>
+            </div>
     </div>
   `;
 }
+
+function showMoreActivePaymentPlans() {
+  const extraPlans = document.getElementById("extra-active-payment-plans");
+  const toggleButton = document.getElementById("toggle-active-payment-plans");
+
+  if (!extraPlans || !toggleButton) return;
+
+  const isExpanded = extraPlans.style.display !== "none";
+
+  extraPlans.style.display = isExpanded ? "none" : "grid";
+  toggleButton.innerHTML = `
+  <span class="gradient-action-text">
+    ${isExpanded ? "Show More" : "Show Less"}
+  </span>
+`;
+
+  if (isExpanded) {
+    toggleButton.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }
+}
+window.showMoreActivePaymentPlans = showMoreActivePaymentPlans;
+function getUnpaidPaymentPlanInstallments() {
+  return Store.getBills()
+    .filter((bill) => Boolean(bill.installmentPlanId))
+    .filter((bill) => !isOccurrencePaid(bill, new Date(bill.dueDate)))
+    .map((bill) => {
+      const provider = bill.installmentProvider || "Payment Plan";
+
+      const storeName =
+        bill.installmentStore?.trim() ||
+        String(bill.name || "")
+          .replace(/\s+Payment Plan$/i, "")
+          .trim() ||
+        provider;
+
+      return {
+        id: bill.id,
+        planId: bill.installmentPlanId,
+        provider,
+        storeName,
+        amount: parseFloat(bill.amount || 0),
+        dueDate: bill.dueDate,
+        installmentNumber: bill.installmentNumber || null,
+        installmentTotal: bill.installmentTotal || null,
+      };
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+function getPaymentPlanScheduleGroups(type) {
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+    12,
+    0,
+    0,
+    0
+  );
+
+  const currentMonthStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+    12,
+    0,
+    0,
+    0
+  );
+
+  const nextMonthStart = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    1,
+    12,
+    0,
+    0,
+    0
+  );
+
+  const installments = getUnpaidPaymentPlanInstallments().filter((item) => {
+    const dueDate = new Date(item.dueDate);
+
+    if (type === "month") {
+      return (
+        dueDate >= startOfToday &&
+        dueDate >= currentMonthStart &&
+        dueDate < nextMonthStart
+      );
+    }
+
+    return dueDate >= nextMonthStart;
+  });
+
+  const groups = installments.reduce((result, installment) => {
+    const dueDate = new Date(installment.dueDate);
+    const key = `${dueDate.getFullYear()}-${String(
+      dueDate.getMonth() + 1
+    ).padStart(2, "0")}`;
+
+    if (!result[key]) {
+      result[key] = {
+        date: new Date(dueDate.getFullYear(), dueDate.getMonth(), 1),
+        items: [],
+      };
+    }
+
+    result[key].items.push(installment);
+    return result;
+  }, {});
+
+  return Object.values(groups).sort((a, b) => a.date - b.date);
+}
+
+function closePaymentPlanSchedule() {
+  document
+    .getElementById("paymentPlanScheduleOverlay")
+    ?.classList.remove("show");
+
+  document
+    .getElementById("paymentPlanScheduleSheet")
+    ?.classList.remove("show");
+
+  setTimeout(() => {
+    document.getElementById("paymentPlanScheduleContainer")?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
+
+function openPaymentPlanSchedule(type = "month") {
+  document.getElementById("paymentPlanScheduleContainer")?.remove();
+
+  const isCurrentMonth = type === "month";
+  const title = isCurrentMonth
+    ? "This Month's Payments"
+    : "Upcoming Payment Schedule";
+
+  const groups = getPaymentPlanScheduleGroups(type);
+
+  const renderInstallment = (item) => {
+    const dueDate = new Date(item.dueDate);
+    const day = dueDate.getDate();
+    const month = formatDate(item.dueDate, "monthShort");
+
+    const installmentText =
+      item.installmentNumber && item.installmentTotal
+        ? `Payment ${item.installmentNumber} of ${item.installmentTotal}`
+        : item.provider;
+
+    return `
+      <button
+        type="button"
+        class="bill-row"
+        style="
+          width:100%;
+          text-align:left;
+          background:transparent;
+          border:0;
+          color:inherit;
+          cursor:pointer;
+        "
+        onclick="closePaymentPlanSchedule(); openPaymentPlanDetails('${item.planId}')"
+        aria-label="View ${escapeHtml(item.storeName)} payment plan"
+      >
+        <div
+          style="
+            width:46px;
+            min-width:46px;
+            padding:6px 0;
+            border-radius:12px;
+            text-align:center;
+            color:var(--text);
+            background:rgba(143, 54, 255, 0.12);
+          "
+        >
+          <div style="font-size:var(--text-xs); color:var(--text-muted);">
+            ${month}
+          </div>
+
+          <div style="margin-top:2px; font-size:var(--text-lg); font-weight:900;">
+            ${day}
+          </div>
+        </div>
+
+        <div
+          style="
+            width:42px;
+            height:42px;
+            min-width:42px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            overflow:hidden;
+          "
+        >
+          ${paymentPlanVisual(item.provider, 38)}
+        </div>
+
+        <div class="bill-info">
+          <div class="bill-name">${escapeHtml(item.storeName)}</div>
+
+          <div class="bill-meta">
+            ${escapeHtml(item.provider)} · ${escapeHtml(installmentText)}
+          </div>
+        </div>
+
+        <div
+          style="
+            margin-left:auto;
+            padding:7px 11px;
+            border:1px solid rgba(226, 185, 255, 0.68);
+            border-radius:999px;
+            font-size:var(--text-sm);
+            font-weight:800;
+            white-space:nowrap;
+          "
+        >
+          ${formatCurrency(item.amount)}
+        </div>
+      </button>
+    `;
+  };
+
+  const renderGroup = (group) => {
+    const groupTotal = group.items.reduce(
+      (sum, item) => sum + item.amount,
+      0
+    );
+
+    return `
+      <section>
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:var(--space-3);
+            margin:var(--space-3) 0 var(--space-2);
+          "
+        >
+          <div
+            style="
+              font-size:var(--text-xl);
+              font-weight:900;
+              letter-spacing:-0.02em;
+            "
+          >
+            ${formatDate(group.date.toISOString(), "monthYear")}
+          </div>
+
+          <div
+            style="
+              font-size:var(--text-base);
+              font-weight:800;
+              color:var(--text-muted);
+            "
+          >
+            ${formatCurrency(groupTotal)}
+          </div>
+        </div>
+
+        <div class="card">
+          ${group.items.map(renderInstallment).join("")}
+        </div>
+      </section>
+    `;
+  };
+
+  const container = document.createElement("div");
+  container.id = "paymentPlanScheduleContainer";
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="paymentPlanScheduleOverlay"
+      onclick="closePaymentPlanSchedule()"
+    ></div>
+
+    <div
+      class="sheet"
+      id="paymentPlanScheduleSheet"
+      style="max-height:94vh;"
+      role="dialog"
+      aria-modal="true"
+      aria-label="${title}"
+    >
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+  <button
+    type="button"
+    class="nav-button"
+    onclick="closePaymentPlanSchedule()"
+    aria-label="Back to payment plans"
+    style="color:#b45cff;"
+  >
+    ${svgIcon("chevronLeft", 22)}
+  </button>
+
+  <div class="sheet-title">${title}</div>
+
+  <div style="width:54px"></div>
+</div>
+
+      <div class="sheet-body content-gap">
+        ${
+          groups.length
+            ? groups.map(renderGroup).join("")
+            : `
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon("checkCircle", 44)}
+                </div>
+
+                <div class="empty-state-title">Nothing scheduled</div>
+
+                <div class="empty-state-text">
+                  ${
+                    isCurrentMonth
+                      ? "You have no remaining payment-plan installments due this month."
+                      : "You have no remaining payment-plan installments after this month."
+                  }
+                </div>
+              </div>
+            `
+        }
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document
+      .getElementById("paymentPlanScheduleOverlay")
+      ?.classList.add("show");
+
+    document
+      .getElementById("paymentPlanScheduleSheet")
+      ?.classList.add("show");
+  });
+}
+
+window.openPaymentPlanSchedule = openPaymentPlanSchedule;
+window.closePaymentPlanSchedule = closePaymentPlanSchedule;
+function getCompletedPaymentPlans() {
+  const installmentBills = Store.getBills().filter((bill) =>
+    Boolean(bill.installmentPlanId)
+  );
+
+  const plansById = installmentBills.reduce((plans, bill) => {
+    if (!plans[bill.installmentPlanId]) {
+      plans[bill.installmentPlanId] = [];
+    }
+
+    plans[bill.installmentPlanId].push(bill);
+    return plans;
+  }, {});
+
+  return Object.entries(plansById)
+    .map(([planId, installments]) => {
+      const sortedInstallments = [...installments].sort(
+        (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+      );
+
+      const paidInstallments = sortedInstallments.filter((bill) =>
+        isOccurrencePaid(bill, new Date(bill.dueDate))
+      );
+
+      const unpaidInstallments = sortedInstallments.filter(
+        (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
+      );
+
+      if (unpaidInstallments.length) {
+        return null;
+      }
+
+      const representative = sortedInstallments[0];
+      const provider = representative.installmentProvider || "Payment Plan";
+
+      const storeName =
+        representative.installmentStore?.trim() ||
+        String(representative.name || "")
+          .replace(/\s+Payment Plan$/i, "")
+          .trim() ||
+        "";
+
+      const totalAmount = sortedInstallments.reduce(
+        (sum, bill) => sum + parseFloat(bill.amount || 0),
+        0
+      );
+
+      const paidInFullAt =
+        sortedInstallments.find((bill) => bill.paidInFullAt)?.paidInFullAt ||
+        null;
+
+      return {
+        id: planId,
+        provider,
+        storeName,
+        installmentCount: sortedInstallments.length,
+        paidCount: paidInstallments.length,
+        totalAmount,
+        paidInFullAt,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const dateA = a.paidInFullAt
+        ? new Date(a.paidInFullAt).getTime()
+        : 0;
+
+      const dateB = b.paidInFullAt
+        ? new Date(b.paidInFullAt).getTime()
+        : 0;
+
+      return dateB - dateA;
+    });
+}
+
+function openCompletedPlansHistory() {
+  document.getElementById("completed-plans-history")?.remove();
+
+  const completedPlans = getCompletedPaymentPlans();
+
+  const renderHistoryCard = (plan) => {
+  const title = plan.storeName || plan.provider;
+
+  return `
+    <button
+      type="button"
+      onclick="closeCompletedPlansHistory(); openPaymentPlanDetails('${plan.id}')"
+      style="
+        display:flex;
+        width:100%;
+        align-items:center;
+        gap:var(--space-3);
+        padding:var(--space-4);
+        text-align:left;
+        color:inherit;
+        cursor:pointer;
+        background:var(--surface);
+        border:1px solid rgba(192, 151, 255, 0.18);
+        border-radius:16px;
+      "
+      aria-label="View completed payment plan for ${escapeHtml(title)}"
+    >
+      ${paymentPlanVisual(plan.provider, 42)}
+
+      <div style="min-width:0; flex:1;">
+        <div
+          style="
+            overflow:hidden;
+            font-size:var(--text-base);
+            font-weight:800;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+          "
+        >
+          ${escapeHtml(title)}
+        </div>
+
+        <div
+          style="
+            margin-top:4px;
+            font-size:var(--text-sm);
+            color:var(--text-muted);
+          "
+        >
+          Paid in full
+        </div>
+      </div>
+
+      <div
+        style="
+          font-size:var(--text-base);
+          font-weight:800;
+          white-space:nowrap;
+        "
+      >
+        ${formatCurrency(plan.totalAmount)} paid
+      </div>
+    </button>
+  `;
+};
+  const container = document.createElement("div");
+  container.id = "completed-plans-history";
+
+  container.innerHTML = `
+    <div
+      style="
+        position:fixed;
+        inset:0;
+        z-index:1000;
+        overflow-y:auto;
+        background:var(--bg, #09090c);
+        color:var(--text, #f7f5fa);
+      "
+      role="dialog"
+      aria-modal="true"
+      aria-label="Completed Installments"
+    >
+      <div class="nav-bar">
+        <div class="nav-bar-content">
+          <div class="nav-button" aria-hidden="true"></div>
+
+          <div class="nav-title">Completed plans</div>
+
+          <button
+            type="button"
+            class="nav-button"
+            onclick="closeCompletedPlansHistory()"
+            aria-label="Close completed plans history"
+            style="color:#b45cff;"
+          >
+            ${svgIcon("close", 22)}
+          </button>
+        </div>
+      </div>
+
+      <div class="main-content fade-in">
+        <div class="content-pad content-gap">
+          <div
+            style="
+              padding:var(--space-2) 0 var(--space-1);
+              color:var(--text-muted);
+              font-size:var(--text-sm);
+            "
+          >
+            ${completedPlans.length} Completed ${
+              completedPlans.length === 1 ? "Plan" : "Plans"
+            }
+          </div>
+
+          <div
+            style="
+              font-size:var(--text-2xl);
+              font-weight:900;
+              letter-spacing:-0.03em;
+            "
+          >
+            Payment History
+          </div>
+
+          <div
+            style="
+              margin-top:6px;
+              color:var(--text-muted);
+              font-size:var(--text-sm);
+              line-height:1.5;
+            "
+          >
+            Review installment plans you have paid in full.
+          </div>
+
+          <div class="content-gap" style="margin-top:var(--space-4);">
+            ${
+              completedPlans.length
+                ? completedPlans.map(renderHistoryCard).join("")
+                : `
+                  <div class="empty-state">
+                    <div class="empty-state-icon">
+                      ${svgIcon("creditcard", 44)}
+                    </div>
+                    <div class="empty-state-title">No Completed Plans</div>
+                    <div class="empty-state-text">
+                      Completed payment plans will appear here.
+                    </div>
+                  </div>
+                `
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+}
+
+function closeCompletedPlansHistory() {
+  document.getElementById("completed-plans-history")?.remove();
+}
+
+window.openCompletedPlansHistory = openCompletedPlansHistory;
+window.closeCompletedPlansHistory = closeCompletedPlansHistory;
 function closePaymentPlanDetails() {
   document.getElementById("paymentPlanDetailsOverlay")?.classList.remove("show");
   document.getElementById("paymentPlanDetailsSheet")?.classList.remove("show");
@@ -4980,7 +6296,6 @@ function closePaymentPlanDetails() {
     unlockBackgroundScroll();
   }, 300);
 }
-
 function openPaymentPlanDetails(planId) {
   const installments = Store.getBills()
     .filter((bill) => bill.installmentPlanId === planId)
@@ -4992,7 +6307,10 @@ function openPaymentPlanDetails(planId) {
   }
 
   const representative = installments[0];
-  const provider = representative.installmentProvider || "Payment Plan";
+
+  const provider =
+    representative.installmentProvider || "Payment Plan";
+
   const storeName =
     representative.installmentStore?.trim() ||
     String(representative.name || "")
@@ -5000,23 +6318,21 @@ function openPaymentPlanDetails(planId) {
       .trim() ||
     provider;
 
-  const paidInstallments = installments.filter((bill) =>
-    isOccurrencePaid(bill, new Date(bill.dueDate))
-  );
+  const paidInstallments = installments.filter((bill) => {
+    return isOccurrencePaid(bill, new Date(bill.dueDate));
+  });
 
-  const unpaidInstallments = installments.filter(
-    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
-  );
+  const unpaidInstallments = installments.filter((bill) => {
+    return !isOccurrencePaid(bill, new Date(bill.dueDate));
+  });
 
-  const totalAmount = installments.reduce(
-    (sum, bill) => sum + parseFloat(bill.amount || 0),
-    0
-  );
+  const totalAmount = installments.reduce((sum, bill) => {
+    return sum + parseFloat(bill.amount || 0);
+  }, 0);
 
-  const remainingBalance = unpaidInstallments.reduce(
-    (sum, bill) => sum + parseFloat(bill.amount || 0),
-    0
-  );
+  const remainingBalance = unpaidInstallments.reduce((sum, bill) => {
+    return sum + parseFloat(bill.amount || 0);
+  }, 0);
 
   const paidAmount = Math.max(totalAmount - remainingBalance, 0);
   const installmentCount = installments.length;
@@ -5060,15 +6376,21 @@ function openPaymentPlanDetails(planId) {
 
           <div class="bill-info">
             <div class="bill-name">
-              Payment ${bill.installmentNumber || "—"} of ${bill.installmentTotal || installmentCount}
+              Payment ${bill.installmentNumber || "—"} of ${
+                bill.installmentTotal || installmentCount
+              }
             </div>
+
             <div class="bill-meta" style="color:${statusColor};">
               ${escapeHtml(statusLabel)}
             </div>
           </div>
 
           <div style="margin-left:auto; text-align:right;">
-            <div class="bill-amount">${formatCurrency(bill.amount)}</div>
+            <div class="bill-amount">
+              ${formatCurrency(bill.amount)}
+            </div>
+
             <div
               style="
                 margin-top:3px;
@@ -5077,7 +6399,13 @@ function openPaymentPlanDetails(planId) {
                 color:${statusColor};
               "
             >
-              ${isPaid ? "PAID" : status === "overdue" ? "OVERDUE" : "UNPAID"}
+              ${
+                isPaid
+                  ? "PAID"
+                  : status === "overdue"
+                    ? "OVERDUE"
+                    : "UNPAID"
+              }
             </div>
           </div>
         </div>
@@ -5085,8 +6413,80 @@ function openPaymentPlanDetails(planId) {
     })
     .join("");
 
+ const paymentSelectorHtml = unpaidInstallments.length
+  ? `
+    <div class="section-header">Make a Payment</div>
+
+    <div class="card card-pad" style="margin-bottom:0;">
+      <select
+        id="paymentPlanInstallmentSelect"
+        class="form-input"
+        aria-label="Choose a scheduled payment"
+        style="
+          width:100%;
+          height:52px;
+          padding:0 14px;
+          border:1px solid var(--border);
+          border-radius:12px;
+          background:var(--surface-2);
+          color:var(--text);
+          font-size:var(--text-sm);
+          font-weight:800;
+        "
+      >
+        ${unpaidInstallments
+          .map((bill) => {
+            const number = bill.installmentNumber || "—";
+            const total = bill.installmentTotal || installmentCount;
+
+            return `
+              <option value="${bill.id}">
+                Installment ${number} of ${total} ·
+                ${formatDate(bill.dueDate, "short")} ·
+                ${formatCurrency(bill.amount)}
+              </option>
+            `;
+          })
+          .join("")}
+      </select>
+
+      <button
+  id="markSelectedPlanPaymentButton"
+  type="button"
+  class="btn-primary"
+  style="
+    width:100%;
+    margin:var(--space-3) 0 0;
+  "
+  onclick="markSelectedPlanInstallmentPaid('${planId}')"
+>
+  ${svgIcon("checkCircle", 18)}
+  Mark as Paid
+</button>
+    </div>
+  `
+  : `
+    <div class="section-header">Make a Payment</div>
+
+    <div class="card card-pad" style="margin-bottom:0;">
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:var(--space-2);
+          color:var(--paid);
+          font-weight:800;
+        "
+      >
+        ${svgIcon("checkCircle", 20)}
+        This payment plan is paid in full.
+      </div>
+    </div>
+  `;
+
   const container = document.createElement("div");
   container.id = "paymentPlanDetailsContainer";
+
   container.innerHTML = `
     <div
       class="sheet-overlay"
@@ -5103,6 +6503,7 @@ function openPaymentPlanDetails(planId) {
           class="nav-button"
           onclick="closePaymentPlanDetails()"
           aria-label="Close payment plan details"
+          style="color:var(--text);"
         >
           ${svgIcon("close", 22)}
         </button>
@@ -5112,8 +6513,12 @@ function openPaymentPlanDetails(planId) {
         <button
           type="button"
           class="nav-button"
-          onclick="closePaymentPlanDetails(); openPaymentPlanActions('${planId}')"
+          onclick="
+            closePaymentPlanDetails();
+            openPaymentPlanActions('${planId}');
+          "
           aria-label="Payment plan actions"
+          style="color:var(--text);"
         >
           ${svgIcon("moreVertical", 22)}
         </button>
@@ -5121,7 +6526,13 @@ function openPaymentPlanDetails(planId) {
 
       <div class="sheet-body content-gap">
         <div class="card card-pad">
-          <div style="display:flex; align-items:center; gap:var(--space-3);">
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              gap:var(--space-3);
+            "
+          >
             ${paymentPlanVisual(provider, 46)}
 
             <div style="min-width:0; flex:1;">
@@ -5157,6 +6568,7 @@ function openPaymentPlanDetails(planId) {
               >
                 Remaining
               </div>
+
               <div
                 style="
                   margin-top:3px;
@@ -5170,36 +6582,50 @@ function openPaymentPlanDetails(planId) {
           </div>
         </div>
 
+        ${paymentSelectorHtml}
+
         <div class="section-header">Summary</div>
 
-<div class="card" style="margin-bottom:0;">
-  ${detailRow("Total Purchase", formatCurrency(totalAmount))}
-  ${detailRow(
-    "Each Payment",
-    formatCurrency(
-      installmentCount
-        ? totalAmount / installmentCount
-        : 0
-    )
-  )}
-  ${detailRow("Paid So Far", formatCurrency(paidAmount))}
-  ${detailRow("Remaining Balance", formatCurrency(remainingBalance))}
-  ${detailRow("Payments Left", `${remainingCount} of ${installmentCount}`)}
-</div>
+        <div class="card" style="margin-bottom:0;">
+          ${detailRow("Total Purchase", formatCurrency(totalAmount))}
+          ${detailRow(
+            "Each Payment",
+            formatCurrency(
+              installmentCount
+                ? totalAmount / installmentCount
+                : 0
+            )
+          )}
+          ${detailRow("Paid So Far", formatCurrency(paidAmount))}
+          ${detailRow(
+            "Remaining Balance",
+            formatCurrency(remainingBalance)
+          )}
+          ${detailRow(
+            "Payments Left",
+            `${remainingCount} of ${installmentCount}`
+          )}
+        </div>
 
         <div class="section-header">Next Payment</div>
+
         <div class="card" style="margin-bottom:0;">
           ${detailRow(
             "Next Payment",
-            nextInstallment ? formatDate(nextInstallment.dueDate, "full") : "Paid in full"
+            nextInstallment
+              ? formatDate(nextInstallment.dueDate, "full")
+              : "Paid in full"
           )}
           ${detailRow(
             "Next Amount",
-            nextInstallment ? formatCurrency(nextInstallment.amount) : "—"
+            nextInstallment
+              ? formatCurrency(nextInstallment.amount)
+              : "—"
           )}
         </div>
 
         <div class="section-header">Installments</div>
+
         <div class="card" style="margin-bottom:0;">
           ${installmentRows}
         </div>
@@ -5208,11 +6634,17 @@ function openPaymentPlanDetails(planId) {
   `;
 
   document.body.appendChild(container);
+
   lockBackgroundScroll();
 
   requestAnimationFrame(() => {
-    document.getElementById("paymentPlanDetailsOverlay")?.classList.add("show");
-    document.getElementById("paymentPlanDetailsSheet")?.classList.add("show");
+    document
+      .getElementById("paymentPlanDetailsOverlay")
+      ?.classList.add("show");
+
+    document
+      .getElementById("paymentPlanDetailsSheet")
+      ?.classList.add("show");
   });
 }
 function openPaymentPlanActions(planId) {
@@ -5608,11 +7040,57 @@ function getCategorySpendingItems(categoryId) {
 
 function openCategorySpendingSheet(categoryId) {
   const category = getCategory(categoryId);
-  const items = getCategorySpendingItems(categoryId);
+const now = new Date();
 
-  const total = items.reduce((sum, item) => {
-    return sum + item.amount;
-  }, 0);
+const activeBillsById = new Map(
+  Store.getBills()
+    .filter((bill) => !bill.archivedAt)
+    .map((bill) => [bill.id, bill])
+);
+
+const items = Store.getPayments()
+  .filter((payment) => {
+    if (payment.status === "voided") {
+      return false;
+    }
+
+    const paidDate = new Date(
+      payment.paidDate || payment.createdAt
+    );
+
+    if (Number.isNaN(paidDate.getTime())) {
+      return false;
+    }
+
+    const bill = activeBillsById.get(payment.billId);
+
+    return (
+      bill &&
+      bill.category === categoryId &&
+      paidDate.getFullYear() === now.getFullYear() &&
+      paidDate.getMonth() === now.getMonth()
+    );
+  })
+  .map((payment) => {
+    const bill = activeBillsById.get(payment.billId);
+
+    return {
+      bill,
+      payment,
+      status: "paid",
+      amount: parseFloat(payment.amount) || 0
+    };
+  })
+  .sort((first, second) => {
+    return (
+      new Date(second.payment.paidDate || second.payment.createdAt) -
+      new Date(first.payment.paidDate || first.payment.createdAt)
+    );
+  });
+
+const total = items.reduce((sum, item) => {
+  return sum + item.amount;
+}, 0);
 
   document.getElementById("categorySpendingContainer")?.remove();
 
@@ -5677,7 +7155,7 @@ function openCategorySpendingSheet(categoryId) {
                   color:var(--text-muted);
                 "
               >
-                This month
+                This Month
               </div>
 
               <div
@@ -5751,23 +7229,29 @@ function openCategorySpendingSheet(categoryId) {
                         aria-label="View ${escapeHtml(bill.name)} details"
                       >
                         <div
-                          class="bill-icon"
-                          style="
-                            background:${
-                              getBillBrand(bill.name)
-                                ? "#fff"
-                                : `var(--${category.color})`
-                            };
-                            color:${
-                              getBillBrand(bill.name)
-                                ? "#1e1e2e"
-                                : "white"
-                            };
-                            overflow:hidden;
-                          "
-                        >
-                          ${billVisual(bill, 32)}
-                        </div>
+  class="bill-icon"
+  style="
+    background:${
+      bill.installmentPlanId
+        ? "transparent"
+        : getBillBrand(bill.name)
+          ? "#fff"
+          : `var(--${category.color})`
+    };
+    color:${
+      bill.installmentPlanId || getBillBrand(bill.name)
+        ? "#1e1e2e"
+        : "white"
+    };
+    overflow:hidden;
+  "
+>
+  ${
+    bill.installmentPlanId
+      ? billOrPaymentPlanVisual(bill, 32)
+      : billVisual(bill, 32)
+  }
+</div>
 
                         <div class="bill-info">
                           <div class="bill-name">
@@ -5775,11 +7259,11 @@ function openCategorySpendingSheet(categoryId) {
                           </div>
 
                           <div
-                            class="bill-meta"
-                            style="color:${statusColor}"
-                          >
-                            ${statusLabel}
-                          </div>
+  class="bill-meta"
+  style="color:${statusColor}"
+>
+  ${statusLabel}
+</div>
                         </div>
 
                         <div
@@ -5789,7 +7273,7 @@ function openCategorySpendingSheet(categoryId) {
                             font-weight:800;
                           "
                         >
-                          ${formatCurrency(bill.amount)}
+                          ${formatCurrency(payment.amount)}
                         </div>
                       </button>
                     `;
@@ -5958,50 +7442,103 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
   const isOverLimit =
     monthlyLimit > 0 && paidThisMonth > monthlyLimit;
 
-  const catTotals = {};
+  const activeBillsById = new Map(
+  Store.getBills()
+    .filter((bill) => !bill.archivedAt)
+    .map((bill) => [bill.id, bill])
+);
 
-  paidBillsThisMonth.forEach((bill) => {
-    const categoryId = bill.category || "other";
+const catTotals = {};
 
-    catTotals[categoryId] =
-      (catTotals[categoryId] || 0) +
-      (parseFloat(bill.amount) || 0);
-  });
+payments.forEach((payment) => {
+  if (payment.status === "voided") {
+    return;
+  }
+
+  const paidDate = new Date(
+    payment.paidDate || payment.createdAt
+  );
+
+  if (Number.isNaN(paidDate.getTime())) {
+    return;
+  }
+
+  const wasPaidThisMonth =
+    paidDate.getFullYear() === now.getFullYear() &&
+    paidDate.getMonth() === now.getMonth();
+
+  if (!wasPaidThisMonth) {
+    return;
+  }
+
+  const bill = activeBillsById.get(payment.billId);
+
+  if (!bill) {
+    return;
+  }
+
+  const categoryId = bill.category || "other";
+
+  catTotals[categoryId] =
+    (catTotals[categoryId] || 0) +
+    (parseFloat(payment.amount) || 0);
+});
 
   const catEntries = Object.entries(catTotals).sort(
     (a, b) => b[1] - a[1]
   );
 
   const maxCat = catEntries.length ? catEntries[0][1] : 1;
+  const activeBillIds = new Set(
+  Store.getBills()
+    .filter((bill) => !bill.archivedAt)
+    .map((bill) => bill.id)
+);
 
-  const monthlyData = [];
+const monthlyData = [];
 
-  for (let i = 5; i >= 0; i -= 1) {
-    const date = new Date(
-      now.getFullYear(),
-      now.getMonth() - i,
-      1
+for (let i = 5; i >= 0; i -= 1) {
+  const date = new Date(
+    now.getFullYear(),
+    now.getMonth() - i,
+    1,
+    12,
+    0,
+    0
+  );
+
+  const paymentsForMonth = payments.filter((payment) => {
+    if (payment.status === "voided") {
+      return false;
+    }
+
+    if (!activeBillIds.has(payment.billId)) {
+      return false;
+    }
+
+    const paidDate = new Date(
+      payment.paidDate || payment.createdAt
     );
 
-    const paymentsForMonth = payments.filter((payment) => {
-      const paidDate = new Date(payment.paidDate);
+    if (Number.isNaN(paidDate.getTime())) {
+      return false;
+    }
 
-      return (
-        payment.status !== "voided" &&
-        paidDate.getMonth() === date.getMonth() &&
-        paidDate.getFullYear() === date.getFullYear()
-      );
-    });
+    return (
+      paidDate.getFullYear() === date.getFullYear() &&
+      paidDate.getMonth() === date.getMonth()
+    );
+  });
 
-    monthlyData.push({
-      label: formatDate(date.toISOString(), "monthShort"),
-      amount: paymentsForMonth.reduce(
-        (sum, payment) => sum + (parseFloat(payment.amount) || 0),
-        0
-      ),
-    });
-  }
-
+  monthlyData.push({
+    label: formatDate(date.toISOString(), "monthShort"),
+    amount: paymentsForMonth.reduce(
+      (sum, payment) =>
+        sum + (parseFloat(payment.amount) || 0),
+      0
+    )
+  });
+}
   const maxMonthly = Math.max(
     ...monthlyData.map((month) => month.amount),
     1
@@ -6165,7 +7702,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
           >
             <span>
               ${unpaidBillsThisMonth.length}
-              bill${unpaidBillsThisMonth.length === 1 ? "" : "s"} remaining
+              Bill${unpaidBillsThisMonth.length === 1 ? "" : "s"} Remaining
             </span>
 
             <span>
@@ -6191,7 +7728,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
                   cursor:pointer;
                   border:1px solid var(--border);
                 "
-                aria-label="View payment plans"
+                aria-label="View Installments"
               >
                 <div
                   style="
@@ -6221,7 +7758,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
 
                   <div style="min-width:0;flex:1">
                     <div style="font-size:var(--text-base);font-weight:800">
-                      Payment Plans
+                      Installments
                     </div>
 
                     <div
@@ -6234,7 +7771,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
                       ${
                         activePlans.length === 1
                           ? nextPlanPayment.provider
-                          : `${activePlans.length} active plans`
+                          : `${activePlans.length} Installments`
                       }
                     </div>
                   </div>
@@ -6986,6 +8523,325 @@ function renderActivity() {
     </div>
   `;
 }
+const HOUSEHOLD_INVITE_WORKER_URL =
+  "https://bill-beacon-notifications.rodz-m-1990.workers.dev";
+
+async function getHouseholdInviteFirebaseToken() {
+  if (typeof window.getBillBeaconFirebaseToken === "function") {
+    const token = await window.getBillBeaconFirebaseToken();
+
+    if (token) {
+      return token;
+    }
+  }
+
+  if (
+    window.BillBeaconAuth &&
+    typeof window.BillBeaconAuth.getIdToken === "function"
+  ) {
+    const token = await window.BillBeaconAuth.getIdToken();
+
+    if (token) {
+      return token;
+    }
+  }
+
+  return "";
+}
+
+async function copyHouseholdInviteLink(inviteUrl) {
+  if (
+    navigator.clipboard &&
+    typeof navigator.clipboard.writeText === "function"
+  ) {
+    await navigator.clipboard.writeText(inviteUrl);
+    return true;
+  }
+
+  const textarea = document.createElement("textarea");
+
+  textarea.value = inviteUrl;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  const copied = document.execCommand("copy");
+
+  textarea.remove();
+
+  return copied;
+}
+
+async function createHouseholdInvite() {
+  const button = document.getElementById(
+    "createHouseholdInviteButton"
+  );
+
+  const status = document.getElementById(
+    "householdInviteStatus"
+  );
+
+  if (!button || !status) {
+    return;
+  }
+
+  const token = await getHouseholdInviteFirebaseToken();
+
+  if (!token) {
+    status.textContent =
+      "Your sign-in session is not ready. Refresh the app and try again.";
+    return;
+  }
+
+  const originalButtonHtml = button.innerHTML;
+
+  try {
+    button.disabled = true;
+    button.textContent = "Creating invite…";
+    status.textContent = "Creating your private invite link…";
+
+    const response = await fetch(
+      `${HOUSEHOLD_INVITE_WORKER_URL}/household-invites`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.ok || !result.inviteUrl) {
+      throw new Error(
+        result.error ||
+          `The invite service returned status ${response.status}.`
+      );
+    }
+
+    const copied = await copyHouseholdInviteLink(
+      result.inviteUrl
+    );
+
+    const expiration = result.expiresAt
+      ? new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short"
+        }).format(new Date(result.expiresAt))
+      : "7 days";
+
+    status.textContent = copied
+      ? `Invite link copied. It expires ${expiration}.`
+      : `Invite link created. Copy this link: ${result.inviteUrl}`;
+  } catch (error) {
+    console.error("Could not create household invite:", error);
+
+    status.textContent =
+      error?.message ||
+      "Could not create an invite link. Try again.";
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalButtonHtml;
+  }
+}
+
+window.createHouseholdInvite = createHouseholdInvite;
+function getHouseholdInviteTokenFromUrl() {
+  const url = new URL(window.location.href);
+  const token = (url.searchParams.get("invite") || "").trim();
+
+  return /^[a-f0-9]{64}$/i.test(token) ? token : "";
+}
+
+function removeHouseholdInviteTokenFromUrl() {
+  const url = new URL(window.location.href);
+
+  url.searchParams.delete("invite");
+
+  window.history.replaceState(
+    {},
+    document.title,
+    `${url.pathname}${url.search}${url.hash}`
+  );
+}
+
+function showHouseholdInviteJoinScreen(token) {
+  const app = document.getElementById("app");
+
+  if (!app) {
+    return;
+  }
+
+  app.innerHTML = `
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <div class="nav-title">Join Household</div>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad">
+        <div class="settings-section">
+          <div class="section-header">Shared Household Invite</div>
+
+          <div class="card card-pad">
+            <div style="font-size:var(--text-lg);font-weight:800">
+              Join this shared household?
+            </div>
+
+            <div
+              style="
+                margin-top:8px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+                line-height:1.5;
+              "
+            >
+              You will be able to view and manage the same bills, payments,
+              reminders, and settings as the household owner.
+            </div>
+
+            <button
+              id="acceptHouseholdInviteButton"
+              class="btn-primary"
+              type="button"
+              style="width:100%;margin-top:var(--space-4)"
+            >
+              Join Household
+            </button>
+
+            <button
+              id="cancelHouseholdInviteButton"
+              class="bb-outline-pill"
+              type="button"
+              style="
+                width:100%;
+                min-height:46px;
+                margin-top:var(--space-3);
+              "
+            >
+              Not Now
+            </button>
+
+            <div
+              id="acceptHouseholdInviteStatus"
+              role="status"
+              aria-live="polite"
+              style="
+                min-height:20px;
+                margin-top:12px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+              "
+            ></div>
+          </div>
+
+          <div class="settings-footer">
+            This invite can be used only once. Make sure you are signed in
+            with the account that should join the household.
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const joinButton = document.getElementById(
+    "acceptHouseholdInviteButton"
+  );
+
+  const cancelButton = document.getElementById(
+    "cancelHouseholdInviteButton"
+  );
+
+  const status = document.getElementById(
+    "acceptHouseholdInviteStatus"
+  );
+
+  cancelButton?.addEventListener("click", () => {
+    removeHouseholdInviteTokenFromUrl();
+
+    window.location.reload();
+  });
+
+  joinButton?.addEventListener("click", async () => {
+    const firebaseToken =
+      await getHouseholdInviteFirebaseToken();
+
+    if (!firebaseToken) {
+      status.textContent =
+        "Your sign-in session is not ready. Refresh the app and try again.";
+      return;
+    }
+
+    const originalButtonText = joinButton.textContent;
+
+    try {
+      joinButton.disabled = true;
+      cancelButton.disabled = true;
+      joinButton.textContent = "Joining…";
+      status.textContent = "Joining the shared household…";
+
+      const response = await fetch(
+        `${HOUSEHOLD_INVITE_WORKER_URL}/household-invites/accept`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${firebaseToken}`
+          },
+          body: JSON.stringify({
+            token
+          })
+        }
+      );
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.error ||
+            `The invite service returned status ${response.status}.`
+        );
+      }
+
+      status.textContent =
+        "You joined the household. Loading shared bills…";
+
+      removeHouseholdInviteTokenFromUrl();
+
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch (error) {
+      console.error("Could not accept household invite:", error);
+
+      status.textContent =
+        error?.message ||
+        "Could not join the household. Try again.";
+
+      joinButton.disabled = false;
+      cancelButton.disabled = false;
+      joinButton.textContent = originalButtonText;
+    }
+  });
+}
+
+function handleHouseholdInviteFromUrl() {
+  const token = getHouseholdInviteTokenFromUrl();
+
+  if (!token) {
+    return false;
+  }
+
+  showHouseholdInviteJoinScreen(token);
+
+  return true;
+}
 function renderSettings() {
   const settings = Store.getSettings();
   const activeBills = Store.getBills();
@@ -6996,7 +8852,17 @@ const regularBillCount = activeBills.filter(
 
 const paymentPlanCount = new Set(
   activeBills
-    .filter((bill) => bill.installmentPlanId)
+    .filter((bill) => {
+      return (
+        bill.installmentPlanId &&
+        !bill.archivedAt &&
+        !bill.cancelledAt &&
+        !bill.paidInFullAt &&
+        bill.status !== "cancelled" &&
+        bill.status !== "paid-in-full" &&
+        bill.status !== "paidInFull"
+      );
+    })
     .map((bill) => bill.installmentPlanId)
 ).size;
 
@@ -7148,7 +9014,58 @@ const dataSummary =
             <span>Add Income Source</span>
           </button>
         </div>
+        <div class="settings-section">
+          <div class="section-header">Shared Household</div>
 
+          <div class="card card-pad">
+            <div style="font-weight:800">
+              Share Bill Beacon
+            </div>
+
+            <div
+              style="
+                margin-top:6px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+                line-height:1.45;
+              "
+            >
+              Create a private link so another signed-in person can join
+              this household and see the same bills, payments, and settings.
+            </div>
+
+            <button
+              id="createHouseholdInviteButton"
+              class="btn-primary"
+              type="button"
+              style="
+                width:100%;
+                margin-top:var(--space-4);
+              "
+              onclick="window.createHouseholdInvite()"
+            >
+              ${svgIcon("plus", 18)}
+              Create 7-Day Invite Link
+            </button>
+
+            <div
+              id="householdInviteStatus"
+              role="status"
+              aria-live="polite"
+              style="
+                min-height:20px;
+                margin-top:12px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+              "
+            ></div>
+          </div>
+
+          <div class="settings-footer">
+            Invite links work once and expire after 7 days. The other person
+            must sign in with their own Bill Beacon account before joining.
+          </div>
+        </div>
         <div class="settings-section">
           <div class="section-header">Data</div>
 
@@ -7196,9 +9113,9 @@ const dataSummary =
             >
               <div class="form-label">${svgIcon("export", 18)}</div>
 
-              <div style="flex:1;color:var(--accent)">
-                Export Bills CSV
-              </div>
+              <div style="flex:1;color:var(--text)">
+  Export Bills CSV
+</div>
             </div>
 
             <div
@@ -7208,9 +9125,9 @@ const dataSummary =
             >
               <div class="form-label">${svgIcon("tray", 18)}</div>
 
-              <div style="flex:1;color:var(--accent)">
-                Import Bills CSV
-              </div>
+              <div style="flex:1;color:var(--text)">
+  Import Bills CSV
+</div>
 
               <input
                 id="billImportFile"
@@ -7229,7 +9146,7 @@ const dataSummary =
               <div class="form-label">${svgIcon("trash", 18)}</div>
 
               <div style="flex:1;color:var(--overdue)">
-                Clear all app data
+                Clear All App Data
               </div>
             </div>
           </div>
@@ -7581,33 +9498,47 @@ function renderBillDetail() {
 
   const occurrenceDueDate = routeParams.occurrenceDueDate || null;
 const returnRoute = routeParams.returnRoute || null;
-  const detailBill = occurrenceDueDate
-    ? {
-        ...bill,
-        id: getOccurrenceKey(bill.id, occurrenceDueDate),
-        sourceBillId: bill.id,
-        dueDate: occurrenceDueDate,
-        isOccurrence: true
-      }
-    : {
-        ...bill,
-        dueDate: getBillOccurrenceDueDate(bill, new Date()),
-        isOccurrence: isRecurringBill(bill)
-      };
 
-  const referenceDate = new Date(detailBill.dueDate);
-  const payment = getActivePaymentForOccurrence(
+const isRecurring = isRecurringBill(bill);
+
+// Use the exact occurrence selected by the caller.
+// If no occurrence was provided, preserve the bill's stored due date;
+// do not silently replace it with the current month's recurring date.
+const selectedDueDate = occurrenceDueDate || bill.dueDate;
+
+const detailBill = isRecurring
+  ? {
+      ...bill,
+      id: getOccurrenceKey(bill.id, selectedDueDate),
+      sourceBillId: bill.id,
+      dueDate: selectedDueDate,
+      originalDueDate: selectedDueDate,
+      isOccurrence: true
+    }
+  : {
+      ...bill,
+      dueDate: selectedDueDate,
+      isOccurrence: false
+    };
+
+const referenceDate = new Date(selectedDueDate);
+
+const payment = getActivePaymentForOccurrence(
   detailBill,
   referenceDate
 );
 
 const status = payment
-  ? 'paid'
+  ? "paid"
   : getOccurrenceStatus(detailBill, referenceDate);
-  const cat = getCategory(bill.category);
-  const sourceBillId = bill.id;
-  const isCalendarOccurrence = Boolean(occurrenceDueDate);
 
+const cat = getCategory(bill.category);
+const sourceBillId = bill.id;
+
+// This means the user reached a specific recurring occurrence,
+// including an implicit occurrence for a recurring bill opened
+// from the normal Bills list.
+const isCalendarOccurrence = isRecurring && Boolean(occurrenceDueDate);
   const backRoute = returnRoute || (
   isCalendarOccurrence ? 'recurring' : 'bills'
 );
@@ -7623,87 +9554,88 @@ const backLabel = backRoute === 'today'
   : backRoute === 'recurring'
     ? 'Recurring'
     : 'Bills';
+const markPaidAction = isRecurring
+  ? `confirmMarkPaidOccurrence(
+      '${sourceBillId}',
+      '${detailBill.dueDate}'
+    )`
+  : `markBillPaid('${sourceBillId}')`;
 
+const markUnpaidAction = isRecurring
+  ? `markBillOccurrenceUnpaid(
+      '${sourceBillId}',
+      '${detailBill.dueDate}'
+    )`
+  : `markBillUnpaid('${sourceBillId}')`;
+
+const postponeAction = isRecurring
+  ? `openPostponeRecurringOccurrenceSheet(
+      '${sourceBillId}',
+      '${detailBill.originalDueDate || detailBill.dueDate}'
+    )`
+  : `openPostponeBillSheet('${sourceBillId}')`;
   const paymentAction = !payment
-    ? `
-      <div
-        style="
-          display:grid;
-          grid-template-columns:1fr 1fr;
-          gap:var(--space-2);
-          margin-top:var(--space-4);
-        "
+  ? `
+    <div
+      style="
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:var(--space-2);
+        margin-top:var(--space-4);
+      "
+    >
+      <button
+        class="btn-primary"
+        style="margin:0;min-width:0;padding-left:12px;padding-right:12px"
+        onclick="${markPaidAction}"
       >
-        <button
-          class="btn-primary"
-          style="margin:0;min-width:0;padding-left:12px;padding-right:12px"
-          onclick="confirmMarkPaidOccurrence(
-            '${sourceBillId}',
-            '${detailBill.dueDate}'
-          )"
-        >
-          ${svgIcon("checkCircle", 18)}
-          Mark as Paid
-        </button>
+        ${svgIcon("checkCircle", 18)}
+        Mark as Paid
+      </button>
 
-        ${
-          isCalendarOccurrence
-            ? `
-              <button
-  class="bb-outline-pill"
-  style="
-    width:100%;
-    min-width:0;
-    margin:0;
-    padding:0 12px;
-  "
-  onclick="openPostponeRecurringOccurrenceSheet(
-    '${sourceBillId}',
-    '${detailBill.originalDueDate || detailBill.dueDate}'
-  )"
->
-  ${svgIcon('calendar', 18)}
-  <span>Postpone</span>
-</button>
-            `
-            : `
-              <button
-                class="bb-outline-pill"
-                style="width:100%;min-width:0;margin:0;padding:0 12px"
-                onclick="openPostponeBillSheet('${sourceBillId}')"
-              >
-                ${svgIcon("calendar", 18)}
-                <span>Postpone</span>
-              </button>
-            `
-        }
-      </div>
-    `
-    : `
       <button
         class="bb-outline-pill"
-        style="width:100%;min-height:46px;margin-top:var(--space-4);"
-        onclick="markBillOccurrenceUnpaid(
-          '${sourceBillId}',
-          '${detailBill.dueDate}'
-        )"
+        style="width:100%;min-width:0;margin:0;padding:0 12px"
+        onclick="${postponeAction}"
       >
-        ${svgIcon("close", 18)}
-        <span>Mark as Unpaid</span>
+        ${svgIcon("calendar", 18)}
+        <span>Postpone</span>
       </button>
-    `;
+    </div>
+  `
+  : `
+    <button
+      class="bb-outline-pill"
+      style="width:100%;min-height:46px;margin-top:var(--space-4);"
+      onclick="${markUnpaidAction}"
+    >
+      ${svgIcon("close", 18)}
+      <span>Mark as Unpaid</span>
+    </button>
+  `;
 
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <button class="nav-button" onclick="${backAction}">
-          ${svgIcon("chevronLeft", 22)}
-          ${backLabel}
-        </button>
+        <button
+  type="button"
+  class="nav-button"
+  onclick="${backAction}"
+  aria-label="Back to ${backLabel}"
+  style="color:var(--text);"
+>
+  ${svgIcon("chevronLeft", 22)}
+  ${backLabel}
+</button>
 
-        <button class="nav-button" onclick="openBillForm('${sourceBillId}')">
-          Edit
-        </button>
+        <button
+  type="button"
+  class="nav-button"
+  onclick="openBillForm('${sourceBillId}')"
+  style="color:var(--text);"
+>
+  Edit
+</button>
       </div>
     </div>
 
@@ -7899,16 +9831,16 @@ function getBillScheduleLabel(bill) {
 
   switch (bill.recurrence) {
     case 'Weekly':
-      return `Repeats weekly`;
+      return `Repeats Weekly`;
 
     case 'Monthly':
-      return `Due on the ${ordinal(day)} of each month`;
+      return `Due on The ${ordinal(day)} of Each Month`;
 
     case 'Quarterly':
-      return `Repeats every 3 months`;
+      return `Repeats Every 3 Months`;
 
     case 'Yearly':
-      return `Repeats yearly`;
+      return `Repeats Yearly`;
 
     default:
       return `Due ${formatDate(bill.dueDate, 'full')}`;
@@ -7919,54 +9851,83 @@ function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const payCycleLabel = getPayCycleLabel(bill);
   const dueDate = new Date(bill.dueDate);
-  const dueDay = bill.recurrence === 'Monthly'
+
+  const dueDay = bill.recurrence === "Monthly"
     ? getMonthlyDueDay(bill)
     : dueDate.getDate();
 
   const ordinal = (day) => {
     const mod100 = day % 100;
-    if (mod100 >= 11 && mod100 <= 13) return `${day}th`;
+
+    if (mod100 >= 11 && mod100 <= 13) {
+      return `${day}th`;
+    }
+
     switch (day % 10) {
-      case 1: return `${day}st`;
-      case 2: return `${day}nd`;
-      case 3: return `${day}rd`;
-      default: return `${day}th`;
+      case 1:
+        return `${day}st`;
+      case 2:
+        return `${day}nd`;
+      case 3:
+        return `${day}rd`;
+      default:
+        return `${day}th`;
     }
   };
 
   const scheduleText =
-    bill.recurrence && bill.recurrence !== 'None'
-      ? bill.recurrence === 'Monthly'
+    bill.recurrence && bill.recurrence !== "None"
+      ? bill.recurrence === "Monthly"
         ? `Due on the ${ordinal(dueDay)} of each month`
         : getBillScheduleLabel(bill)
-      : `Due on ${formatDate(bill.dueDate, 'full')}`;
-  const payCycleClass =
-    bill.payCycle === 'first' ||
-    (!bill.payCycle && dueDay <= 15)
-      ? 'pay-cycle-first'
-      : 'pay-cycle-second';
+      : `Due on ${formatDate(bill.dueDate, "full")}`;
 
-  // Occurrences have their own due date but use the source template ID.
+  const payCycleClass =
+    bill.payCycle === "first" ||
+    (!bill.payCycle && dueDay <= 15)
+      ? "pay-cycle-first"
+      : "pay-cycle-second";
+
+  // Recurring occurrences keep their own date but use the original bill ID.
   const detailBillId = bill.isOccurrence
     ? bill.sourceBillId
     : bill.id;
 
   const detailDueDate = bill.isOccurrence
     ? bill.dueDate
-    : '';
-  const quickActionArgs = bill.isOccurrence
-    ? `'${detailBillId}', '${detailDueDate}'`
-    : `'${detailBillId}'`;
-  const rowClick = '';
+    : "";
+
+  const rowClick = `
+  onclick="openBillDetailsSheet('${detailBillId}')"
+  role="button"
+  tabindex="0"
+  onkeydown="
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      openBillDetailsSheet('${detailBillId}');
+    }
+  "
+`;
+  const moreButtonAction = bill.isOccurrence
+    ? `navigate('detail', {
+        id: '${detailBillId}',
+        occurrenceDueDate: '${detailDueDate}',
+        returnRoute: 'recurring'
+      })`
+    : `openBillQuickActions('${detailBillId}')`;
 
   return `
-    <div class="bill-row">
+    <div class="bill-row clickable" ${rowClick}>
       <div
         class="bill-icon"
         style="
-          background:${getBillBrand(bill.name) ? '#fff' : `var(--${cat.color})`};
-          color:${getBillBrand(bill.name) ? '#1e1e2e' : 'white'};
-          padding:${getBillBrand(bill.name) ? '3px' : '0'};
+          background:${
+            getBillBrand(bill.name)
+              ? "#fff"
+              : `var(--${cat.color})`
+          };
+          color:${getBillBrand(bill.name) ? "#1e1e2e" : "white"};
+          padding:${getBillBrand(bill.name) ? "3px" : "0"};
           overflow:hidden;
         "
       >
@@ -7989,8 +9950,15 @@ function billRow(bill, clickable = false) {
         </div>
       </div>
 
-      <div style="display:flex;align-items:center;gap:6px">
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+      <div style="display:flex; align-items:center; gap:6px">
+        <div
+          style="
+            display:flex;
+            flex-direction:column;
+            align-items:flex-end;
+            gap:4px;
+          "
+        >
           <div class="bill-amount">
             ${formatCurrency(bill.amount)}
           </div>
@@ -8002,19 +9970,11 @@ function billRow(bill, clickable = false) {
           aria-label="More options for ${escapeHtml(bill.name)}"
           title="More options"
           onclick="
-  event.stopPropagation();
-  ${
-    bill.isOccurrence
-      ? `navigate('detail', {
-          id: '${detailBillId}',
-          occurrenceDueDate: '${detailDueDate}',
-          returnRoute: 'recurring'
-        })`
-      : `openBillQuickActions('${detailBillId}')`
-  }
-"
+            event.stopPropagation();
+            ${moreButtonAction}
+          "
         >
-          ${svgIcon('moreVertical', 22)}
+          ${svgIcon("moreVertical", 22)}
         </button>
       </div>
     </div>
@@ -8030,12 +9990,12 @@ function fab() {
 
 function tabBar() {
   const tabs = [
-    { id: 'today', label: 'Dashboard', icon: 'home' },
-    { id: 'recurring', label: 'Recurring', icon: 'calendar' },
-    { id: 'bills', label: 'Bills', icon: 'tray' },
-    { id: 'insights', label: 'Insights', icon: 'chart' },
-    { id: 'settings', label: 'Settings', icon: 'gear' },
-  ];
+  { id: 'today', label: 'Dashboard', icon: 'home' },
+  { id: 'recurring', label: 'Recurring', icon: 'calendar' },
+  { id: 'bills', label: 'Bills', icon: 'tray' },
+  { id: 'payment-plans', label: 'Installments', icon: 'creditcard' },
+  { id: 'insights', label: 'Insights', icon: 'chart' },
+];
 
   return `
     <div class="tab-bar">
@@ -8380,9 +10340,71 @@ function openBillQuickActions(billId) {
 
   if (!bill) return;
 
-  const dueDate = new Date(bill.dueDate);
+  const sourceBillId = bill.isOccurrence
+    ? bill.sourceBillId
+    : bill.id;
 
-  const isPaid = isOccurrencePaid(bill, dueDate);
+  const occurrenceDueDate = bill.isOccurrence
+    ? bill.dueDate
+    : getBillOccurrenceDueDate(bill, new Date());
+
+  const detailBill = bill.isOccurrence
+    ? bill
+    : {
+        ...bill,
+        sourceBillId: bill.id,
+        dueDate: occurrenceDueDate,
+        isOccurrence: isRecurringBill(bill)
+      };
+
+  const isPaid = isOccurrencePaid(
+    detailBill,
+    new Date(occurrenceDueDate)
+  );
+
+  const paymentActionHtml = isPaid
+    ? `
+      <button
+        type="button"
+        class="bill-sheet-action"
+        onclick="
+          closeBillQuickActions();
+          ${
+            isRecurringBill(bill)
+              ? `markBillOccurrenceUnpaid(
+                  '${sourceBillId}',
+                  '${occurrenceDueDate}'
+                )`
+              : `markBillUnpaid('${sourceBillId}')`
+          };
+        "
+      >
+        <span>${svgIcon("close", 20)}</span>
+        <span>Mark as Unpaid</span>
+        <span>${svgIcon("chevronRight", 18)}</span>
+      </button>
+    `
+    : `
+      <button
+        type="button"
+        class="bill-sheet-action"
+        onclick="
+          closeBillQuickActions();
+          ${
+            isRecurringBill(bill)
+              ? `confirmMarkPaidOccurrence(
+                  '${sourceBillId}',
+                  '${occurrenceDueDate}'
+                )`
+              : `markBillPaid('${sourceBillId}')`
+          };
+        "
+      >
+        <span>${svgIcon("checkCircle", 20)}</span>
+        <span>Mark as Paid</span>
+        <span>${svgIcon("chevronRight", 18)}</span>
+      </button>
+    `;
 
   const sheetHtml = `
     <div
@@ -8396,10 +10418,13 @@ function openBillQuickActions(billId) {
 
       <div class="sheet-nav">
         <button
+          type="button"
           class="nav-button"
           onclick="closeBillQuickActions()"
+          aria-label="Close bill actions"
+          style="color:var(--text);"
         >
-          Cancel
+          ${svgIcon("chevronLeft", 22)}
         </button>
 
         <div class="sheet-title">Bill Actions</div>
@@ -8408,92 +10433,43 @@ function openBillQuickActions(billId) {
       </div>
 
       <div class="sheet-body">
-        <div class="bill-sheet-header">
-          <div class="bill-sheet-heading">
-            <div class="bill-sheet-title">
-              ${escapeHtml(bill.name)}
-            </div>
-
-            <div class="bill-sheet-subtitle">
-              ${formatCurrency(bill.amount)}
-              · Due ${formatDate(bill.dueDate, "short")}
-            </div>
-          </div>
-        </div>
-
         <div class="bill-sheet-actions">
           <button
+            type="button"
             class="bill-sheet-action"
             onclick="
               closeBillQuickActions();
-              navigate('detail', { id: '${bill.id}' });
+              openBillForm('${sourceBillId}');
             "
           >
-            <span>${svgIcon('doc', 20)}</span>
-            <span>Bill Details</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
-          </button>
-
-          <button
-            class="bill-sheet-action"
-            onclick="
-              closeBillQuickActions();
-              openBillForm('${bill.id}');
-            "
-          >
-            <span>${svgIcon('gear', 20)}</span>
+            <span>${svgIcon("gear", 20)}</span>
             <span>Edit Details</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
+            <span>${svgIcon("chevronRight", 18)}</span>
           </button>
 
-          ${
-  !isPaid
-    ? `
-      <button
-        class="bill-sheet-action"
-        onclick="
-          closeBillQuickActions();
-          ${
-            isRecurringBill(bill)
-              ? `openPostponeRecurringOccurrenceSheet(
-                  '${bill.id}',
-                  '${getOccurrenceDueDate(
-                    bill,
-                    new Date().getFullYear(),
-                    new Date().getMonth()
-                  )}'
-                );`
-              : `openPostponeBillSheet('${bill.id}');`
-          }
-        "
-      >
-        <span>${svgIcon('calendar', 20)}</span>
-        <span>Postpone</span>
-        <span>${svgIcon('chevronRight', 18)}</span>
-      </button>
-    `
-    : ''
-}
+          ${paymentActionHtml}
+
           <button
+            type="button"
             class="bill-sheet-action bill-sheet-action-danger"
             onclick="
               closeBillQuickActions();
-              openBillActionRemove('${bill.id}');
+              openBillActionRemove('${sourceBillId}');
             "
           >
-            <span>${svgIcon('trash', 20)}</span>
+            <span>${svgIcon("trash", 20)}</span>
             <span>Delete Bill</span>
-            <span>${svgIcon('chevronRight', 18)}</span>
+            <span>${svgIcon("chevronRight", 18)}</span>
           </button>
         </div>
       </div>
     </div>
   `;
 
-  document.getElementById('billQuickActionsContainer')?.remove();
+  document.getElementById("billQuickActionsContainer")?.remove();
 
-  const container = document.createElement('div');
-  container.id = 'billQuickActionsContainer';
+  const container = document.createElement("div");
+  container.id = "billQuickActionsContainer";
   container.innerHTML = sheetHtml;
 
   document.body.appendChild(container);
@@ -8502,12 +10478,12 @@ function openBillQuickActions(billId) {
 
   requestAnimationFrame(() => {
     document
-      .getElementById('billQuickActionsOverlay')
-      ?.classList.add('show');
+      .getElementById("billQuickActionsOverlay")
+      ?.classList.add("show");
 
     document
-      .getElementById('billQuickActionsSheet')
-      ?.classList.add('show');
+      .getElementById("billQuickActionsSheet")
+      ?.classList.add("show");
   });
 }
 function closeBillQuickActions(callback) {
@@ -8880,18 +10856,26 @@ function openBillForm(billId = null, selectedDate = null) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button class="nav-button" onclick="closeBillForm()">Cancel</button>
+  <button
+    type="button"
+    class="nav-button"
+    onclick="closeBillForm()"
+    style="color:var(--text);"
+  >
+    Cancel
+  </button>
 
-        <div class="sheet-title">${bill ? 'Edit Bill' : 'New Bill'}</div>
+  <div class="sheet-title">${bill ? 'Edit Bill' : 'New Bill'}</div>
 
-        <button
-          class="nav-button"
-          onclick="saveBill()"
-          style="font-weight:700"
-        >
-          Save
-        </button>
-      </div>
+  <button
+    type="button"
+    class="nav-button"
+    onclick="saveBill()"
+    style="color:var(--text); font-weight:700;"
+  >
+    Save
+  </button>
+</div>
 
       <div class="sheet-body">
         <div class="content-gap">
@@ -9619,7 +11603,7 @@ window.toggleMonthBills = function() {
   const isOpen = extraBills.classList.toggle('is-open');
 
   button.innerHTML = isOpen
-    ? `Show less ${svgIcon('chevronRight', 18)}`
+    ? `Show Less ${svgIcon('chevronRight', 18)}`
     : `Show all ${document.querySelectorAll('#moreMonthBills .bill-row').length + 5} bills ${svgIcon('chevronRight', 18)}`;
 
   button.classList.toggle('is-open', isOpen);
@@ -9839,8 +11823,14 @@ function render() {
       content = renderToday();
   }
 
-  const showTabBar = ["today", "recurring", "bills", "insights", "settings"]
-    .includes(currentRoute);
+  const showTabBar = [
+  "today",
+  "recurring",
+  "bills",
+  "payment-plans",
+  "insights",
+  "settings"
+].includes(currentRoute);
 
   if (showTabBar) {
     content += tabBar();
@@ -9963,10 +11953,7 @@ async function activateBillNotifications() {
       );
     }
 
-    alert(
-      "Notifications are on for this device. You’ll receive bill reminders on this device."
-    );
-  } catch (error) {
+    await refreshNotificationSettingsCard();  } catch (error) {
     console.error("Notification setup failed:", error);
 
     alert(
@@ -9975,6 +11962,124 @@ async function activateBillNotifications() {
       }`
     );
   }
+}
+async function getNotificationDeviceState() {
+  const isSupported =
+    "Notification" in window &&
+    "serviceWorker" in navigator &&
+    "PushManager" in window;
+
+  if (!isSupported) {
+    return {
+      supported: false,
+      permission: "unsupported",
+      subscribed: false
+    };
+  }
+
+  const permission = Notification.permission;
+
+  if (permission !== "granted") {
+    return {
+      supported: true,
+      permission,
+      subscribed: false
+    };
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.getSubscription();
+
+    return {
+      supported: true,
+      permission,
+      subscribed: Boolean(subscription)
+    };
+  } catch (error) {
+    console.warn("Could not read notification subscription state.", error);
+
+    return {
+      supported: true,
+      permission,
+      subscribed: false
+    };
+  }
+}
+async function refreshNotificationSettingsCard() {
+  const button = document.getElementById(
+    "notificationPermissionButton"
+  );
+
+  const status = document.getElementById(
+    "notificationPermissionStatus"
+  );
+
+  if (!button || !status) {
+    return;
+  }
+
+  const state = await getNotificationDeviceState();
+
+  if (!state.supported) {
+    button.disabled = true;
+    button.style.opacity = "0.55";
+    button.style.cursor = "not-allowed";
+
+    button.innerHTML = `
+      ${svgIcon("bell", 20)}
+      Notifications Unavailable
+    `;
+
+    status.textContent =
+      "Notifications are not supported in this browser.";
+
+    return;
+  }
+
+  if (state.permission === "denied") {
+    button.disabled = true;
+    button.style.opacity = "0.55";
+    button.style.cursor = "not-allowed";
+
+    button.innerHTML = `
+      ${svgIcon("bell", 20)}
+      Notifications Blocked
+    `;
+
+    status.textContent =
+      "Notifications are blocked. Enable them in your iPhone or browser settings.";
+
+    return;
+  }
+
+  if (state.subscribed) {
+    button.disabled = true;
+    button.style.opacity = "0.72";
+    button.style.cursor = "default";
+
+    button.innerHTML = `
+      ${svgIcon("checkCircle", 20)}
+      Notifications On
+    `;
+
+    status.textContent =
+      "Bill reminders are enabled on this device.";
+
+    return;
+  }
+
+  button.disabled = false;
+  button.style.opacity = "1";
+  button.style.cursor = "pointer";
+
+  button.innerHTML = `
+    ${svgIcon("bell", 20)}
+    Turn On Notifications
+  `;
+
+  status.textContent =
+    "Receive bill reminders on this iPhone.";
 }
 async function sendBillNotificationTest() {
   const status = document.getElementById(
@@ -10234,36 +12339,63 @@ function addNotificationSettings() {
     return;
   }
 
-  const container = document.querySelector(".main-content .content-pad");
+  const container = document.querySelector(
+    ".main-content .content-pad"
+  );
 
   if (!container) {
     return;
   }
 
   const section = document.createElement("div");
+
   section.id = "notificationSettingsCard";
   section.className = "settings-section";
 
   section.innerHTML = `
     <div class="section-header">Notifications</div>
-    <div class="card card-pad">
-      <p style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin-bottom: var(--space-3);">
-        Receive bill reminders on this iPhone.
-      </p>
-      <button class="btn-primary" onclick="activateBillNotifications()">
-  ${svgIcon("bell", 20)} Turn On Notifications
-</button>
 
-<p
-  id="notificationTestStatus"
-  style="font-size: var(--text-sm); color: var(--text-muted); line-height: 1.5; margin: var(--space-2) 0 0;"
-  role="status"
-  aria-live="polite"
-></p>
+    <div class="card card-pad">
+      <p
+        id="notificationPermissionStatus"
+        style="
+          font-size:var(--text-sm);
+          color:var(--text-muted);
+          line-height:1.5;
+          margin-bottom:var(--space-3);
+        "
+      >
+        Checking notification status…
+      </p>
+
+      <button
+        id="notificationPermissionButton"
+        type="button"
+        class="btn-primary"
+        style="width:100%;"
+        onclick="activateBillNotifications()"
+      >
+        ${svgIcon("bell", 20)}
+        Turn On Notifications
+      </button>
+
+      <p
+        id="notificationTestStatus"
+        style="
+          font-size:var(--text-sm);
+          color:var(--text-muted);
+          line-height:1.5;
+          margin:var(--space-2) 0 0;
+        "
+        role="status"
+        aria-live="polite"
+      ></p>
     </div>
   `;
 
   container.appendChild(section);
+
+  refreshNotificationSettingsCard();
 }
 
 const originalBillTrackerRender = render;
@@ -11086,6 +13218,7 @@ function saveInstallmentPlan() {
         postponementHistory: [],
         occurrenceOverrides: [],
         installmentPlanId: planId,
+        isPaymentPlanInstallment: true,
         installmentProvider: provider,
         installmentStore: storeName,
         installmentNumber: index + 1,
