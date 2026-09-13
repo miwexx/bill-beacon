@@ -9014,7 +9014,7 @@ const dataSummary =
             <span>Add Income Source</span>
           </button>
         </div>
-
+       
         <div class="settings-section">
           <div class="section-header">Data</div>
 
@@ -12456,41 +12456,7 @@ function addBackupSettings() {
   const section = document.createElement("div");
   section.id = "backupSettingsCard";
   section.className = "settings-section";
-  
 
-        <div class="settings-section">
-          <div class="section-header">Shared Household</div>
-          <div class="card card-pad">
-            <div style="font-weight:800">
-              Share Bill Beacon
-            </div>
-            <button
-              id="createHouseholdInviteButton"
-              class="btn-primary"
-              type="button"
-              style="
-                width:100%;
-                margin-top:var(--space-4);
-              "
-              onclick="window.createHouseholdInvite()"
-            >
-              ${svgIcon("plus", 18)}
-              Share Account
-            </button>
-
-            <div
-              id="householdInviteStatus"
-              role="status"
-              aria-live="polite"
-              style="
-                min-height:20px;
-                margin-top:12px;
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-              "
-            ></div>
-          </div>
-        </div>
   section.innerHTML = `
     <div class="section-header">Backup & Restore</div>
     <div class="card card-pad">
@@ -12519,9 +12485,50 @@ function addBackupSettings() {
       >
     </div>
   `;
+const householdSection = document.createElement("div");
 
-  container.appendChild(section);
+householdSection.className = "settings-section";
+
+householdSection.innerHTML = `
+  <div class="section-header">Shared Household</div>
+
+  <div class="card card-pad">
+    <div style="font-weight: 800">
+      Share Bill Beacon
+    </div>
+
+    <button
+      id="createHouseholdInviteButton"
+      class="btn-primary"
+      type="button"
+      style="
+        width: 100%;
+        margin-top: var(--space-4);
+      "
+      onclick="window.createHouseholdInvite()"
+    >
+      ${svgIcon("plus", 18)}
+      Share Account
+    </button>
+
+    <div
+      id="householdInviteStatus"
+      role="status"
+      aria-live="polite"
+      style="
+        min-height: 20px;
+        margin-top: 12px;
+        font-size: var(--text-sm);
+        color: var(--text-muted);
+      "
+    ></div>
+  </div>
+`;
+
+container.appendChild(householdSection);
+container.appendChild(section);
 }
+ 
 
 const renderWithBackupSettings = render;
 
