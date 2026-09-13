@@ -7385,15 +7385,47 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
   const isOverLimit =
     monthlyLimit > 0 && paidThisMonth > monthlyLimit;
 
-  const catTotals = {};
+  const activeBillsById = new Map(
+  Store.getBills()
+    .filter((bill) => !bill.archivedAt)
+    .map((bill) => [bill.id, bill])
+);
 
-  paidBillsThisMonth.forEach((bill) => {
-    const categoryId = bill.category || "other";
+const catTotals = {};
 
-    catTotals[categoryId] =
-      (catTotals[categoryId] || 0) +
-      (parseFloat(bill.amount) || 0);
-  });
+payments.forEach((payment) => {
+  if (payment.status === "voided") {
+    return;
+  }
+
+  const paidDate = new Date(
+    payment.paidDate || payment.createdAt
+  );
+
+  if (Number.isNaN(paidDate.getTime())) {
+    return;
+  }
+
+  const wasPaidThisMonth =
+    paidDate.getFullYear() === now.getFullYear() &&
+    paidDate.getMonth() === now.getMonth();
+
+  if (!wasPaidThisMonth) {
+    return;
+  }
+
+  const bill = activeBillsById.get(payment.billId);
+
+  if (!bill) {
+    return;
+  }
+
+  const categoryId = bill.category || "other";
+
+  catTotals[categoryId] =
+    (catTotals[categoryId] || 0) +
+    (parseFloat(payment.amount) || 0);
+});
 
   const catEntries = Object.entries(catTotals).sort(
     (a, b) => b[1] - a[1]
