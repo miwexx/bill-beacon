@@ -12498,14 +12498,15 @@ householdSection.innerHTML = `
     "
   >
     <div
-      style="
-        font-weight: 800;
-        font-size: var(--text-sm);
-        margin-bottom: 8px;
-      "
-    >
-      Share Bill Beacon
-    </div>
+  style="
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    line-height: 1.5;
+    margin-bottom: 8px;
+  "
+>
+  Invite someone to share bills and payment updates.
+</div>
 
     <button
       id="createHouseholdInviteButton"
