@@ -7224,23 +7224,29 @@ const total = items.reduce((sum, item) => {
                         aria-label="View ${escapeHtml(bill.name)} details"
                       >
                         <div
-                          class="bill-icon"
-                          style="
-                            background:${
-                              getBillBrand(bill.name)
-                                ? "#fff"
-                                : `var(--${category.color})`
-                            };
-                            color:${
-                              getBillBrand(bill.name)
-                                ? "#1e1e2e"
-                                : "white"
-                            };
-                            overflow:hidden;
-                          "
-                        >
-                          ${billVisual(bill, 32)}
-                        </div>
+  class="bill-icon"
+  style="
+    background:${
+      bill.installmentPlanId
+        ? "transparent"
+        : getBillBrand(bill.name)
+          ? "#fff"
+          : `var(--${category.color})`
+    };
+    color:${
+      bill.installmentPlanId || getBillBrand(bill.name)
+        ? "#1e1e2e"
+        : "white"
+    };
+    overflow:hidden;
+  "
+>
+  ${
+    bill.installmentPlanId
+      ? billOrPaymentPlanVisual(bill, 32)
+      : billVisual(bill, 32)
+  }
+</div>
 
                         <div class="bill-info">
                           <div class="bill-name">
