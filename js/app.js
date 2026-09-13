@@ -2086,10 +2086,15 @@ function initTheme() {
 let currentRoute = 'today';
 let routeParams = { billSort: 'dueDate' };
 
-window.addEventListener('billbeacon:authenticated', () => {
+window.addEventListener("billbeacon-authenticated", () => {
   startNotificationInboxListener();
 
-  if (!consumeNotificationDeepLink() && currentRoute === 'today') {
+  if (handleHouseholdInviteFromUrl()) {
+    return;
+  }
+
+  if (!consumeNotificationDeepLink()) {
+    currentRoute = "today";
     render();
   }
 });
@@ -7254,11 +7259,11 @@ const total = items.reduce((sum, item) => {
                           </div>
 
                           <div
-                            class="bill-meta"
-                            style="color:${statusColor}"
-                          >
-                            ${statusLabel}
-                          </div>
+  class="bill-meta"
+  style="color:${statusColor}"
+>
+  ${statusLabel}
+</div>
                         </div>
 
                         <div
@@ -8518,6 +8523,325 @@ function renderActivity() {
     </div>
   `;
 }
+const HOUSEHOLD_INVITE_WORKER_URL =
+  "https://bill-beacon-notifications.rodz-m-1990.workers.dev";
+
+async function getHouseholdInviteFirebaseToken() {
+  if (typeof window.getBillBeaconFirebaseToken === "function") {
+    const token = await window.getBillBeaconFirebaseToken();
+
+    if (token) {
+      return token;
+    }
+  }
+
+  if (
+    window.BillBeaconAuth &&
+    typeof window.BillBeaconAuth.getIdToken === "function"
+  ) {
+    const token = await window.BillBeaconAuth.getIdToken();
+
+    if (token) {
+      return token;
+    }
+  }
+
+  return "";
+}
+
+async function copyHouseholdInviteLink(inviteUrl) {
+  if (
+    navigator.clipboard &&
+    typeof navigator.clipboard.writeText === "function"
+  ) {
+    await navigator.clipboard.writeText(inviteUrl);
+    return true;
+  }
+
+  const textarea = document.createElement("textarea");
+
+  textarea.value = inviteUrl;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  textarea.style.pointerEvents = "none";
+
+  document.body.appendChild(textarea);
+  textarea.select();
+
+  const copied = document.execCommand("copy");
+
+  textarea.remove();
+
+  return copied;
+}
+
+async function createHouseholdInvite() {
+  const button = document.getElementById(
+    "createHouseholdInviteButton"
+  );
+
+  const status = document.getElementById(
+    "householdInviteStatus"
+  );
+
+  if (!button || !status) {
+    return;
+  }
+
+  const token = await getHouseholdInviteFirebaseToken();
+
+  if (!token) {
+    status.textContent =
+      "Your sign-in session is not ready. Refresh the app and try again.";
+    return;
+  }
+
+  const originalButtonHtml = button.innerHTML;
+
+  try {
+    button.disabled = true;
+    button.textContent = "Creating invite…";
+    status.textContent = "Creating your private invite link…";
+
+    const response = await fetch(
+      `${HOUSEHOLD_INVITE_WORKER_URL}/household-invites`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    const result = await response.json().catch(() => ({}));
+
+    if (!response.ok || !result.ok || !result.inviteUrl) {
+      throw new Error(
+        result.error ||
+          `The invite service returned status ${response.status}.`
+      );
+    }
+
+    const copied = await copyHouseholdInviteLink(
+      result.inviteUrl
+    );
+
+    const expiration = result.expiresAt
+      ? new Intl.DateTimeFormat(undefined, {
+          dateStyle: "medium",
+          timeStyle: "short"
+        }).format(new Date(result.expiresAt))
+      : "7 days";
+
+    status.textContent = copied
+      ? `Invite link copied. It expires ${expiration}.`
+      : `Invite link created. Copy this link: ${result.inviteUrl}`;
+  } catch (error) {
+    console.error("Could not create household invite:", error);
+
+    status.textContent =
+      error?.message ||
+      "Could not create an invite link. Try again.";
+  } finally {
+    button.disabled = false;
+    button.innerHTML = originalButtonHtml;
+  }
+}
+
+window.createHouseholdInvite = createHouseholdInvite;
+function getHouseholdInviteTokenFromUrl() {
+  const url = new URL(window.location.href);
+  const token = (url.searchParams.get("invite") || "").trim();
+
+  return /^[a-f0-9]{64}$/i.test(token) ? token : "";
+}
+
+function removeHouseholdInviteTokenFromUrl() {
+  const url = new URL(window.location.href);
+
+  url.searchParams.delete("invite");
+
+  window.history.replaceState(
+    {},
+    document.title,
+    `${url.pathname}${url.search}${url.hash}`
+  );
+}
+
+function showHouseholdInviteJoinScreen(token) {
+  const app = document.getElementById("app");
+
+  if (!app) {
+    return;
+  }
+
+  app.innerHTML = `
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <div class="nav-title">Join Household</div>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad">
+        <div class="settings-section">
+          <div class="section-header">Shared Household Invite</div>
+
+          <div class="card card-pad">
+            <div style="font-size:var(--text-lg);font-weight:800">
+              Join this shared household?
+            </div>
+
+            <div
+              style="
+                margin-top:8px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+                line-height:1.5;
+              "
+            >
+              You will be able to view and manage the same bills, payments,
+              reminders, and settings as the household owner.
+            </div>
+
+            <button
+              id="acceptHouseholdInviteButton"
+              class="btn-primary"
+              type="button"
+              style="width:100%;margin-top:var(--space-4)"
+            >
+              Join Household
+            </button>
+
+            <button
+              id="cancelHouseholdInviteButton"
+              class="bb-outline-pill"
+              type="button"
+              style="
+                width:100%;
+                min-height:46px;
+                margin-top:var(--space-3);
+              "
+            >
+              Not Now
+            </button>
+
+            <div
+              id="acceptHouseholdInviteStatus"
+              role="status"
+              aria-live="polite"
+              style="
+                min-height:20px;
+                margin-top:12px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+              "
+            ></div>
+          </div>
+
+          <div class="settings-footer">
+            This invite can be used only once. Make sure you are signed in
+            with the account that should join the household.
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  const joinButton = document.getElementById(
+    "acceptHouseholdInviteButton"
+  );
+
+  const cancelButton = document.getElementById(
+    "cancelHouseholdInviteButton"
+  );
+
+  const status = document.getElementById(
+    "acceptHouseholdInviteStatus"
+  );
+
+  cancelButton?.addEventListener("click", () => {
+    removeHouseholdInviteTokenFromUrl();
+
+    window.location.reload();
+  });
+
+  joinButton?.addEventListener("click", async () => {
+    const firebaseToken =
+      await getHouseholdInviteFirebaseToken();
+
+    if (!firebaseToken) {
+      status.textContent =
+        "Your sign-in session is not ready. Refresh the app and try again.";
+      return;
+    }
+
+    const originalButtonText = joinButton.textContent;
+
+    try {
+      joinButton.disabled = true;
+      cancelButton.disabled = true;
+      joinButton.textContent = "Joining…";
+      status.textContent = "Joining the shared household…";
+
+      const response = await fetch(
+        `${HOUSEHOLD_INVITE_WORKER_URL}/household-invites/accept`,
+        {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${firebaseToken}`
+          },
+          body: JSON.stringify({
+            token
+          })
+        }
+      );
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result.ok) {
+        throw new Error(
+          result.error ||
+            `The invite service returned status ${response.status}.`
+        );
+      }
+
+      status.textContent =
+        "You joined the household. Loading shared bills…";
+
+      removeHouseholdInviteTokenFromUrl();
+
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch (error) {
+      console.error("Could not accept household invite:", error);
+
+      status.textContent =
+        error?.message ||
+        "Could not join the household. Try again.";
+
+      joinButton.disabled = false;
+      cancelButton.disabled = false;
+      joinButton.textContent = originalButtonText;
+    }
+  });
+}
+
+function handleHouseholdInviteFromUrl() {
+  const token = getHouseholdInviteTokenFromUrl();
+
+  if (!token) {
+    return false;
+  }
+
+  showHouseholdInviteJoinScreen(token);
+
+  return true;
+}
 function renderSettings() {
   const settings = Store.getSettings();
   const activeBills = Store.getBills();
@@ -8690,7 +9014,58 @@ const dataSummary =
             <span>Add Income Source</span>
           </button>
         </div>
+        <div class="settings-section">
+          <div class="section-header">Shared Household</div>
 
+          <div class="card card-pad">
+            <div style="font-weight:800">
+              Share Bill Beacon
+            </div>
+
+            <div
+              style="
+                margin-top:6px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+                line-height:1.45;
+              "
+            >
+              Create a private link so another signed-in person can join
+              this household and see the same bills, payments, and settings.
+            </div>
+
+            <button
+              id="createHouseholdInviteButton"
+              class="btn-primary"
+              type="button"
+              style="
+                width:100%;
+                margin-top:var(--space-4);
+              "
+              onclick="window.createHouseholdInvite()"
+            >
+              ${svgIcon("plus", 18)}
+              Create 7-Day Invite Link
+            </button>
+
+            <div
+              id="householdInviteStatus"
+              role="status"
+              aria-live="polite"
+              style="
+                min-height:20px;
+                margin-top:12px;
+                font-size:var(--text-sm);
+                color:var(--text-muted);
+              "
+            ></div>
+          </div>
+
+          <div class="settings-footer">
+            Invite links work once and expire after 7 days. The other person
+            must sign in with their own Bill Beacon account before joining.
+          </div>
+        </div>
         <div class="settings-section">
           <div class="section-header">Data</div>
 
