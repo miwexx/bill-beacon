@@ -7035,11 +7035,57 @@ function getCategorySpendingItems(categoryId) {
 
 function openCategorySpendingSheet(categoryId) {
   const category = getCategory(categoryId);
-  const items = getCategorySpendingItems(categoryId);
+const now = new Date();
 
-  const total = items.reduce((sum, item) => {
-    return sum + item.amount;
-  }, 0);
+const activeBillsById = new Map(
+  Store.getBills()
+    .filter((bill) => !bill.archivedAt)
+    .map((bill) => [bill.id, bill])
+);
+
+const items = Store.getPayments()
+  .filter((payment) => {
+    if (payment.status === "voided") {
+      return false;
+    }
+
+    const paidDate = new Date(
+      payment.paidDate || payment.createdAt
+    );
+
+    if (Number.isNaN(paidDate.getTime())) {
+      return false;
+    }
+
+    const bill = activeBillsById.get(payment.billId);
+
+    return (
+      bill &&
+      bill.category === categoryId &&
+      paidDate.getFullYear() === now.getFullYear() &&
+      paidDate.getMonth() === now.getMonth()
+    );
+  })
+  .map((payment) => {
+    const bill = activeBillsById.get(payment.billId);
+
+    return {
+      bill,
+      payment,
+      status: "paid",
+      amount: parseFloat(payment.amount) || 0
+    };
+  })
+  .sort((first, second) => {
+    return (
+      new Date(second.payment.paidDate || second.payment.createdAt) -
+      new Date(first.payment.paidDate || first.payment.createdAt)
+    );
+  });
+
+const total = items.reduce((sum, item) => {
+  return sum + item.amount;
+}, 0);
 
   document.getElementById("categorySpendingContainer")?.remove();
 
@@ -7216,7 +7262,7 @@ function openCategorySpendingSheet(categoryId) {
                             font-weight:800;
                           "
                         >
-                          ${formatCurrency(bill.amount)}
+                          ${formatCurrency(payment.amount)}
                         </div>
                       </button>
                     `;
