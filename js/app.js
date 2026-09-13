@@ -5830,7 +5830,7 @@ function openPaymentPlanSchedule(type = "month") {
   const isCurrentMonth = type === "month";
   const title = isCurrentMonth
     ? "This Month's Payments"
-    : "Upcoming payment schedule";
+    : "Upcoming Payment Schedule";
 
   const groups = getPaymentPlanScheduleGroups(type);
 
@@ -7400,35 +7400,56 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
   );
 
   const maxCat = catEntries.length ? catEntries[0][1] : 1;
+  const activeBillIds = new Set(
+  Store.getBills()
+    .filter((bill) => !bill.archivedAt)
+    .map((bill) => bill.id)
+);
 
-  const monthlyData = [];
+const monthlyData = [];
 
-  for (let i = 5; i >= 0; i -= 1) {
-    const date = new Date(
-      now.getFullYear(),
-      now.getMonth() - i,
-      1
+for (let i = 5; i >= 0; i -= 1) {
+  const date = new Date(
+    now.getFullYear(),
+    now.getMonth() - i,
+    1,
+    12,
+    0,
+    0
+  );
+
+  const paymentsForMonth = payments.filter((payment) => {
+    if (payment.status === "voided") {
+      return false;
+    }
+
+    if (!activeBillIds.has(payment.billId)) {
+      return false;
+    }
+
+    const paidDate = new Date(
+      payment.paidDate || payment.createdAt
     );
 
-    const paymentsForMonth = payments.filter((payment) => {
-      const paidDate = new Date(payment.paidDate);
+    if (Number.isNaN(paidDate.getTime())) {
+      return false;
+    }
 
-      return (
-        payment.status !== "voided" &&
-        paidDate.getMonth() === date.getMonth() &&
-        paidDate.getFullYear() === date.getFullYear()
-      );
-    });
+    return (
+      paidDate.getFullYear() === date.getFullYear() &&
+      paidDate.getMonth() === date.getMonth()
+    );
+  });
 
-    monthlyData.push({
-      label: formatDate(date.toISOString(), "monthShort"),
-      amount: paymentsForMonth.reduce(
-        (sum, payment) => sum + (parseFloat(payment.amount) || 0),
-        0
-      ),
-    });
-  }
-
+  monthlyData.push({
+    label: formatDate(date.toISOString(), "monthShort"),
+    amount: paymentsForMonth.reduce(
+      (sum, payment) =>
+        sum + (parseFloat(payment.amount) || 0),
+      0
+    )
+  });
+}
   const maxMonthly = Math.max(
     ...monthlyData.map((month) => month.amount),
     1
