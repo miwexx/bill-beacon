@@ -1247,14 +1247,6 @@ async function writeFirestoreDocument(
     );
   }
 }
-
-async function getUserProfile(uid, accessToken) {
-  return getFirestoreDocument(
-    `users/${encodeURIComponent(uid)}`,
-    accessToken
-  );
-}
-
 async function getHouseholdMember(
   householdId,
   uid,
