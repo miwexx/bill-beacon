@@ -2340,6 +2340,734 @@ function renderDashboardUpcomingBill(bill) {
     </button>
   `;
 }
+let selectedDashboardPaycheck = null;
+
+function getPaycheckAssignmentLabel(assignment) {
+  switch (assignment) {
+    case "first":
+      return "First paycheck";
+    case "second":
+      return "Second paycheck";
+    case "previous":
+      return "Previous paycheck";
+    case "auto":
+    default:
+      return "Automatic by due date";
+  }
+}
+
+function getPaycheckPlan(referenceDate = new Date()) {
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+
+  const firstPayday = new Date(year, month, 1, 12, 0, 0, 0);
+  const secondPayday = new Date(year, month, 15, 12, 0, 0, 0);
+  const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+
+  const firstWindowEnd = new Date(year, month, 14, 12, 0, 0, 0);
+  const secondWindowEnd = new Date(
+    year,
+    month,
+    lastDayOfMonth,
+    12,
+    0,
+    0,
+    0
+  );
+
+  const bills = getCalendarBillsForMonth(
+    new Date(year, month, 1, 12, 0, 0, 0)
+  );
+
+  const firstBills = [];
+  const secondBills = [];
+  const previousBills = [];
+
+  bills.forEach((bill) => {
+    const assignment = bill.paycheckAssignment || "auto";
+    const dueDate = new Date(bill.dueDate);
+    const dueDay = dueDate.getDate();
+
+    if (assignment === "previous") {
+      previousBills.push(bill);
+      return;
+    }
+
+    if (assignment === "first") {
+      firstBills.push(bill);
+      return;
+    }
+
+    if (assignment === "second") {
+      secondBills.push(bill);
+      return;
+    }
+
+    if (dueDay <= 14) {
+      firstBills.push(bill);
+    } else {
+      secondBills.push(bill);
+    }
+  });
+
+  const sortBills = (items) =>
+    [...items].sort(
+      (first, second) =>
+        new Date(first.dueDate) - new Date(second.dueDate)
+    );
+
+  const summarize = (id, payday, startDate, endDate, items) => {
+    const sortedBills = sortBills(items);
+
+    const paidBills = sortedBills.filter((bill) =>
+      isOccurrencePaid(bill, new Date(bill.dueDate))
+    );
+
+    const unpaidBills = sortedBills.filter(
+      (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
+    );
+
+    const scheduled = sortedBills.reduce(
+      (sum, bill) => sum + Number(bill.amount || 0),
+      0
+    );
+
+    const paid = paidBills.reduce(
+      (sum, bill) => sum + Number(bill.amount || 0),
+      0
+    );
+
+    const remaining = unpaidBills.reduce(
+      (sum, bill) => sum + Number(bill.amount || 0),
+      0
+    );
+
+    const progress =
+      scheduled > 0
+        ? Math.min((paid / scheduled) * 100, 100)
+        : 0;
+
+    return {
+      id,
+      payday,
+      startDate,
+      endDate,
+      bills: sortedBills,
+      paidBills,
+      unpaidBills,
+      scheduled,
+      paid,
+      remaining,
+      progress,
+    };
+  };
+
+  return {
+    first: summarize(
+      "first",
+      firstPayday,
+      firstPayday,
+      firstWindowEnd,
+      firstBills
+    ),
+    second: summarize(
+      "second",
+      secondPayday,
+      secondPayday,
+      secondWindowEnd,
+      secondBills
+    ),
+    previous: summarize(
+      "previous",
+      new Date(year, month - 1, 15, 12, 0, 0, 0),
+      new Date(year, month - 1, 15, 12, 0, 0, 0),
+      new Date(year, month, 0, 12, 0, 0, 0),
+      previousBills
+    ),
+  };
+}
+
+function getDefaultDashboardPaycheck(referenceDate = new Date()) {
+  return referenceDate.getDate() <= 14 ? "first" : "second";
+}
+
+function getPaycheckBillStatusLabel(bill) {
+  const status = getOccurrenceStatus(bill, new Date(bill.dueDate));
+
+  if (status === "paid") {
+    const payment = getActivePaymentForOccurrence(
+      bill,
+      new Date(bill.dueDate)
+    );
+
+    return {
+      label: payment?.paidDate
+        ? `Paid ${formatDate(payment.paidDate, "short")}`
+        : "Paid",
+      color: "var(--paid)",
+      icon: "checkCircle",
+    };
+  }
+
+  if (status === "overdue") {
+    return {
+      label: `Overdue · ${relativeDue(bill.dueDate)}`,
+      color: "var(--overdue)",
+      icon: "warning",
+    };
+  }
+
+  return {
+    label: `Due ${formatDate(bill.dueDate, "short")}`,
+    color: "var(--text-muted)",
+    icon: "calendar",
+  };
+}
+
+function renderDashboardPaycheckPlan(referenceDate = new Date()) {
+  const plan = getPaycheckPlan(referenceDate);
+
+  if (!selectedDashboardPaycheck) {
+    selectedDashboardPaycheck = getDefaultDashboardPaycheck(referenceDate);
+  }
+
+  const selectedKey =
+    selectedDashboardPaycheck === "second" ? "second" : "first";
+
+  const selected = plan[selectedKey];
+
+  const firstLabel = formatDate(plan.first.payday, "short");
+  const secondLabel = formatDate(plan.second.payday, "short");
+
+  const previewBills = selected.bills.slice(0, 3);
+
+  return `
+    <div class="section-header">Paycheck Plan</div>
+
+    <div class="card card-pad">
+      <div
+        style="
+          display:grid;
+          grid-template-columns:1fr 1fr;
+          gap:8px;
+          margin-bottom:var(--space-3);
+        "
+      >
+        <button
+          type="button"
+          onclick="setDashboardPaycheck('first')"
+          style="
+            min-height:42px;
+            border:1px solid ${
+              selectedKey === "first"
+                ? "var(--accent)"
+                : "var(--border)"
+            };
+            border-radius:12px;
+            background:${
+              selectedKey === "first"
+                ? "var(--accent-soft, rgba(124,92,255,.14))"
+                : "transparent"
+            };
+            color:var(--text);
+            font:inherit;
+            font-size:var(--text-sm);
+            font-weight:800;
+            cursor:pointer;
+          "
+        >
+          Paycheck · ${firstLabel}
+        </button>
+
+        <button
+          type="button"
+          onclick="setDashboardPaycheck('second')"
+          style="
+            min-height:42px;
+            border:1px solid ${
+              selectedKey === "second"
+                ? "var(--accent)"
+                : "var(--border)"
+            };
+            border-radius:12px;
+            background:${
+              selectedKey === "second"
+                ? "var(--accent-soft, rgba(124,92,255,.14))"
+                : "transparent"
+            };
+            color:var(--text);
+            font:inherit;
+            font-size:var(--text-sm);
+            font-weight:800;
+            cursor:pointer;
+          "
+        >
+          Paycheck · ${secondLabel}
+        </button>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          align-items:flex-start;
+          gap:var(--space-3);
+        "
+      >
+        <div>
+          <div
+            style="
+              font-size:var(--text-sm);
+              color:var(--text-muted);
+            "
+          >
+            Covers bills due
+            ${formatDate(selected.startDate, "short")}–${formatDate(
+              selected.endDate,
+              "short"
+            )}
+          </div>
+
+          <div
+            style="
+              margin-top:4px;
+              font-size:var(--text-xs);
+              color:var(--text-muted);
+            "
+          >
+            ${selected.paidBills.length} of ${selected.bills.length} bill${
+              selected.bills.length === 1 ? "" : "s"
+            } paid
+          </div>
+        </div>
+
+        <div style="text-align:right;">
+          <div
+            style="
+              font-size:var(--text-xs);
+              color:var(--text-muted);
+            "
+          >
+            Remaining
+          </div>
+
+          <div
+            class="text-upcoming"
+            style="
+              margin-top:3px;
+              font-size:var(--text-xl);
+              font-weight:800;
+            "
+          >
+            ${formatCurrency(selected.remaining)}
+          </div>
+        </div>
+      </div>
+
+      <div
+        class="dashboard-progress-track"
+        style="margin-top:var(--space-3);"
+      >
+        <div
+          class="dashboard-progress-fill"
+          style="width:${selected.progress}%;"
+        ></div>
+      </div>
+
+      <div
+        style="
+          display:flex;
+          justify-content:space-between;
+          margin-top:8px;
+          font-size:var(--text-xs);
+          color:var(--text-muted);
+        "
+      >
+        <span>${formatCurrency(selected.paid)} paid</span>
+        <span>${formatCurrency(selected.scheduled)} scheduled</span>
+      </div>
+
+      ${
+        previewBills.length
+          ? `
+            <div
+              style="
+                margin-top:var(--space-3);
+                border-top:1px solid var(--border);
+              "
+            >
+              ${previewBills
+                .map((bill) => {
+                  const status = getPaycheckBillStatusLabel(bill);
+                  const sourceBillId = bill.isOccurrence
+                    ? bill.sourceBillId
+                    : bill.id;
+
+                  return `
+                    <button
+                      type="button"
+                      onclick="navigate('detail', {
+                        id: '${sourceBillId}',
+                        occurrenceDueDate: '${bill.dueDate}',
+                        returnRoute: 'today'
+                      })"
+                      style="
+                        width:100%;
+                        display:flex;
+                        align-items:center;
+                        gap:10px;
+                        padding:12px 0;
+                        border:0;
+                        border-bottom:1px solid var(--border);
+                        background:transparent;
+                        color:inherit;
+                        font:inherit;
+                        text-align:left;
+                        cursor:pointer;
+                      "
+                    >
+                      <div
+                        style="
+                          width:32px;
+                          height:32px;
+                          min-width:32px;
+                          display:flex;
+                          align-items:center;
+                          justify-content:center;
+                          border-radius:10px;
+                          overflow:hidden;
+                          background:${
+                            getBillBrand(bill.name)
+                              ? "#fff"
+                              : `var(--${getCategory(bill.category).color})`
+                          };
+                          color:${
+                            getBillBrand(bill.name)
+                              ? "#1e1e2e"
+                              : "#fff"
+                          };
+                        "
+                      >
+                        ${billOrPaymentPlanVisual(bill, 28)}
+                      </div>
+
+                      <div style="min-width:0;flex:1;">
+                        <div
+                          style="
+                            overflow:hidden;
+                            text-overflow:ellipsis;
+                            white-space:nowrap;
+                            font-size:var(--text-sm);
+                            font-weight:800;
+                          "
+                        >
+                          ${escapeHtml(bill.name)}
+                        </div>
+
+                        <div
+                          style="
+                            margin-top:3px;
+                            display:flex;
+                            align-items:center;
+                            gap:4px;
+                            color:${status.color};
+                            font-size:var(--text-xs);
+                          "
+                        >
+                          ${svgIcon(status.icon, 14)}
+                          <span>${status.label}</span>
+                        </div>
+                      </div>
+
+                      <div
+                        style="
+                          text-align:right;
+                          font-size:var(--text-sm);
+                          font-weight:800;
+                        "
+                      >
+                        ${formatCurrency(bill.amount)}
+                      </div>
+                    </button>
+                  `;
+                })
+                .join("")}
+            </div>
+          `
+          : `
+            <div
+              style="
+                margin-top:var(--space-3);
+                padding-top:var(--space-3);
+                border-top:1px solid var(--border);
+                color:var(--text-muted);
+                font-size:var(--text-sm);
+              "
+            >
+              No bills assigned to this paycheck yet.
+            </div>
+          `
+      }
+
+      <button
+        type="button"
+        class="bb-outline-pill"
+        style="
+          width:100%;
+          min-height:42px;
+          margin-top:var(--space-3);
+        "
+        onclick="openPaycheckPlanSheet('${selectedKey}')"
+      >
+        <span>View all ${
+          selected.bills.length
+        } bill${selected.bills.length === 1 ? "" : "s"}</span>
+        <span class="pill-chevron">
+          ${svgIcon("chevronRight", 18)}
+        </span>
+      </button>
+    </div>
+  `;
+}
+
+function setDashboardPaycheck(paycheckKey) {
+  selectedDashboardPaycheck =
+    paycheckKey === "second" ? "second" : "first";
+
+  render();
+}
+
+function openPaycheckPlanSheet(paycheckKey) {
+  const plan = getPaycheckPlan(new Date());
+  const selected =
+    paycheckKey === "second" ? plan.second : plan.first;
+
+  const paycheckTitle = `Paycheck · ${formatDate(
+    selected.payday,
+    "short"
+  )}`;
+
+  const billsHtml = selected.bills.length
+    ? selected.bills
+        .map((bill) => {
+          const status = getPaycheckBillStatusLabel(bill);
+          const sourceBillId = bill.isOccurrence
+            ? bill.sourceBillId
+            : bill.id;
+
+          return `
+            <button
+              type="button"
+              class="bill-row"
+              style="width:100%;text-align:left;"
+              onclick="closePaycheckPlanSheet();navigate('detail', {
+                id: '${sourceBillId}',
+                occurrenceDueDate: '${bill.dueDate}',
+                returnRoute: 'today'
+              })"
+            >
+              <div
+                class="bill-icon"
+                style="
+                  background:${
+                    getBillBrand(bill.name)
+                      ? "#fff"
+                      : `var(--${getCategory(bill.category).color})`
+                  };
+                  color:${
+                    getBillBrand(bill.name)
+                      ? "#1e1e2e"
+                      : "#fff"
+                  };
+                  overflow:hidden;
+                "
+              >
+                ${billOrPaymentPlanVisual(bill, 32)}
+              </div>
+
+              <div class="bill-info">
+                <div class="bill-name">${escapeHtml(bill.name)}</div>
+
+                <div
+                  class="bill-meta"
+                  style="color:${status.color};"
+                >
+                  ${status.label}
+                </div>
+              </div>
+
+              <div class="bill-amount">
+                ${formatCurrency(bill.amount)}
+              </div>
+            </button>
+          `;
+        })
+        .join("")
+    : `
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          ${svgIcon("calendar", 40)}
+        </div>
+        <div class="empty-state-title">No bills in this paycheck</div>
+        <div class="empty-state-text">
+          Bills assigned here will appear automatically based on their due
+          date, unless you choose a different Fund With option.
+        </div>
+      </div>
+    `;
+
+  document.getElementById("paycheckPlanContainer")?.remove();
+
+  const container = document.createElement("div");
+
+  container.id = "paycheckPlanContainer";
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay"
+      id="paycheckPlanOverlay"
+      onclick="closePaycheckPlanSheet()"
+    ></div>
+
+    <div class="sheet" id="paycheckPlanSheet">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button
+          type="button"
+          class="nav-button"
+          onclick="closePaycheckPlanSheet()"
+        >
+          Close
+        </button>
+
+        <div class="sheet-title">${paycheckTitle}</div>
+
+        <div style="width:54px;"></div>
+      </div>
+
+      <div class="sheet-body content-gap">
+        <div class="card card-pad">
+          <div
+            style="
+              display:grid;
+              grid-template-columns:1fr 1fr;
+              gap:var(--space-3);
+            "
+          >
+            <div>
+              <div
+                style="
+                  font-size:var(--text-xs);
+                  color:var(--text-muted);
+                "
+              >
+                Remaining
+              </div>
+
+              <div
+                class="text-upcoming"
+                style="
+                  margin-top:4px;
+                  font-size:var(--text-xl);
+                  font-weight:800;
+                "
+              >
+                ${formatCurrency(selected.remaining)}
+              </div>
+            </div>
+
+            <div style="text-align:right;">
+              <div
+                style="
+                  font-size:var(--text-xs);
+                  color:var(--text-muted);
+                "
+              >
+                Paid
+              </div>
+
+              <div
+                class="text-paid"
+                style="
+                  margin-top:4px;
+                  font-size:var(--text-xl);
+                  font-weight:800;
+                "
+              >
+                ${formatCurrency(selected.paid)}
+              </div>
+            </div>
+          </div>
+
+          <div
+            class="dashboard-progress-track"
+            style="margin-top:var(--space-3);"
+          >
+            <div
+              class="dashboard-progress-fill"
+              style="width:${selected.progress}%;"
+            ></div>
+          </div>
+
+          <div
+            style="
+              margin-top:8px;
+              font-size:var(--text-xs);
+              color:var(--text-muted);
+            "
+          >
+            Covers bills due ${formatDate(
+              selected.startDate,
+              "short"
+            )}–${formatDate(selected.endDate, "short")}
+          </div>
+        </div>
+
+        <div>
+          <div class="section-header">
+            ${selected.bills.length} bill${
+              selected.bills.length === 1 ? "" : "s"
+            }
+          </div>
+
+          <div class="card">
+            ${billsHtml}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+
+  lockBackgroundScroll();
+
+  requestAnimationFrame(() => {
+    document
+      .getElementById("paycheckPlanOverlay")
+      ?.classList.add("show");
+
+    document
+      .getElementById("paycheckPlanSheet")
+      ?.classList.add("show");
+  });
+}
+
+function closePaycheckPlanSheet() {
+  document
+    .getElementById("paycheckPlanOverlay")
+    ?.classList.remove("show");
+
+  document
+    .getElementById("paycheckPlanSheet")
+    ?.classList.remove("show");
+
+  setTimeout(() => {
+    document.getElementById("paycheckPlanContainer")?.remove();
+    unlockBackgroundScroll();
+  }, 300);
+}
 function renderToday() {
   const now = new Date();
 
@@ -2565,7 +3293,7 @@ function renderToday() {
             </span>
           </div>
         </button>
-
+              ${renderDashboardPaycheckPlan(now)}
         <div class="section-header">Bill Status This Month</div>
 
         <div class="dashboard-status-row">
@@ -10778,20 +11506,23 @@ function openBillForm(billId = null, selectedDate = null) {
   editingBillId = billId;
 
   const bill = billId ? Store.getBill(billId) : null;
-  const today = new Date().toISOString().split('T')[0];
+  const today = new Date().toISOString().split("T")[0];
 
   const dueDate = bill
-    ? bill.dueDate.split('T')[0]
-    : (selectedDate || today);
+    ? bill.dueDate.split("T")[0]
+    : selectedDate || today;
 
-  const defaultPayCycle = bill?.payCycle || (
-    new Date(`${dueDate}T12:00:00`).getDate() <= 15
-      ? 'first'
-      : 'second'
-  );
+  const defaultPayCycle =
+    bill?.payCycle ||
+    (new Date(`${dueDate}T12:00:00`).getDate() <= 15
+      ? "first"
+      : "second");
+
+  const defaultPaycheckAssignment =
+    bill?.paycheckAssignment || "auto";
 
   const selectedReminders = bill
-    ? (bill.reminderOffsets || [7, 1])
+    ? bill.reminderOffsets || [7, 1]
     : [7, 1];
 
   const currentDueDay = bill?.dueDay
@@ -10805,26 +11536,26 @@ function openBillForm(billId = null, selectedDate = null) {
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-  <button
-    type="button"
-    class="nav-button"
-    onclick="closeBillForm()"
-    style="color:var(--text);"
-  >
-    Cancel
-  </button>
+        <button
+          type="button"
+          class="nav-button"
+          onclick="closeBillForm()"
+          style="color:var(--text);"
+        >
+          Cancel
+        </button>
 
-  <div class="sheet-title">${bill ? 'Edit Bill' : 'New Bill'}</div>
+        <div class="sheet-title">${bill ? "Edit Bill" : "New Bill"}</div>
 
-  <button
-    type="button"
-    class="nav-button"
-    onclick="saveBill()"
-    style="color:var(--text); font-weight:700;"
-  >
-    Save
-  </button>
-</div>
+        <button
+          type="button"
+          class="nav-button"
+          onclick="saveBill()"
+          style="color:var(--text); font-weight:700;"
+        >
+          Save
+        </button>
+      </div>
 
       <div class="sheet-body">
         <div class="content-gap">
@@ -10841,7 +11572,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   id="billName"
                   type="text"
                   placeholder="Electricity"
-                  value="${bill ? escapeHtml(bill.name) : ''}"
+                  value="${bill ? escapeHtml(bill.name) : ""}"
                   style="text-align:left"
                 >
               </div>
@@ -10855,7 +11586,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  value="${bill ? bill.amount : ''}"
+                  value="${bill ? bill.amount : ""}"
                 >
               </div>
             </div>
@@ -10870,14 +11601,20 @@ function openBillForm(billId = null, selectedDate = null) {
                 id="billCategory"
                 style="width:100%;height:48px;padding:0 var(--space-4);border:none;background:transparent;font-size:var(--text-base);-webkit-appearance:none"
               >
-                ${CATEGORIES.map(category => `
-                  <option
-                    value="${category.id}"
-                    ${bill && bill.category === category.id ? 'selected' : ''}
-                  >
-                    ${category.label}
-                  </option>
-                `).join('')}
+                ${CATEGORIES.map(
+                  (category) => `
+                    <option
+                      value="${category.id}"
+                      ${
+                        bill && bill.category === category.id
+                          ? "selected"
+                          : ""
+                      }
+                    >
+                      ${category.label}
+                    </option>
+                  `
+                ).join("")}
               </select>
             </div>
           </div>
@@ -10886,8 +11623,7 @@ function openBillForm(billId = null, selectedDate = null) {
             <div class="section-header">Due Date & Recurrence</div>
 
             <div class="card">
-
-            <div class="form-row">
+              <div class="form-row">
                 <div class="form-label">Repeats</div>
 
                 <select
@@ -10895,16 +11631,23 @@ function openBillForm(billId = null, selectedDate = null) {
                   id="billRecurrence"
                   onchange="updateBillDueDateField()"
                 >
-                  ${RECURRENCE.map(recurrence => `
-                    <option
-                      value="${recurrence}"
-                      ${bill && bill.recurrence === recurrence ? 'selected' : ''}
-                    >
-                      ${recurrence}
-                    </option>
-                  `).join('')}
+                  ${RECURRENCE.map(
+                    (recurrence) => `
+                      <option
+                        value="${recurrence}"
+                        ${
+                          bill && bill.recurrence === recurrence
+                            ? "selected"
+                            : ""
+                        }
+                      >
+                        ${recurrence}
+                      </option>
+                    `
+                  ).join("")}
                 </select>
               </div>
+
               <div class="form-row">
                 <div class="form-label" id="billDueDateLabel">Due Date</div>
 
@@ -10926,34 +11669,100 @@ function openBillForm(billId = null, selectedDate = null) {
                     return `
                       <option
                         value="${day}"
-                        ${currentDueDay === day ? 'selected' : ''}
+                        ${currentDueDay === day ? "selected" : ""}
                       >
                         ${day}
                       </option>
                     `;
-                  }).join('')}
+                  }).join("")}
                 </select>
               </div>
-              
+
               <div class="form-row">
                 <div class="form-label">Pay Cycle</div>
 
                 <select class="form-select" id="billPayCycle">
                   <option
                     value="first"
-                    ${defaultPayCycle === 'first' ? 'selected' : ''}
+                    ${defaultPayCycle === "first" ? "selected" : ""}
                   >
                     Early Cycle
                   </option>
 
                   <option
                     value="second"
-                    ${defaultPayCycle === 'second' ? 'selected' : ''}
+                    ${defaultPayCycle === "second" ? "selected" : ""}
                   >
                     Late Cycle
                   </option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="section-header">Paycheck Plan</div>
+
+            <div class="card">
+              <div class="form-row">
+                <div class="form-label">Fund with</div>
+
+                <select
+                  class="form-select"
+                  id="billPaycheckAssignment"
+                >
+                  <option
+                    value="auto"
+                    ${
+                      defaultPaycheckAssignment === "auto"
+                        ? "selected"
+                        : ""
+                    }
+                  >
+                    Automatic by due date
+                  </option>
+
+                  <option
+                    value="first"
+                    ${
+                      defaultPaycheckAssignment === "first"
+                        ? "selected"
+                        : ""
+                    }
+                  >
+                    First paycheck · 1st
+                  </option>
+
+                  <option
+                    value="second"
+                    ${
+                      defaultPaycheckAssignment === "second"
+                        ? "selected"
+                        : ""
+                    }
+                  >
+                    Second paycheck · 15th
+                  </option>
+
+                  <option
+                    value="previous"
+                    ${
+                      defaultPaycheckAssignment === "previous"
+                        ? "selected"
+                        : ""
+                    }
+                  >
+                    Previous paycheck · 15th
+                  </option>
+                </select>
+              </div>
+            </div>
+
+            <div class="settings-footer">
+              Automatic assigns bills due on the 1st–14th to the first
+              paycheck and bills due on the 15th–end of month to the second.
+              Use Previous paycheck for bills you reserve before the month
+              begins, such as early-month rent.
             </div>
           </div>
 
@@ -10966,14 +11775,20 @@ function openBillForm(billId = null, selectedDate = null) {
                 id="billPaymentMethod"
                 style="width:100%;height:48px;padding:0 var(--space-4);border:none;background:transparent;font-size:var(--text-base);-webkit-appearance:none"
               >
-                ${PAYMENT_METHODS.map(method => `
-                  <option
-                    value="${method}"
-                    ${bill && bill.paymentMethod === method ? 'selected' : ''}
-                  >
-                    ${method || 'None'}
-                  </option>
-                `).join('')}
+                ${PAYMENT_METHODS.map(
+                  (method) => `
+                    <option
+                      value="${method}"
+                      ${
+                        bill && bill.paymentMethod === method
+                          ? "selected"
+                          : ""
+                      }
+                    >
+                      ${method || "None"}
+                    </option>
+                  `
+                ).join("")}
               </select>
             </div>
           </div>
@@ -10987,11 +11802,11 @@ function openBillForm(billId = null, selectedDate = null) {
 
                 <input
                   class="form-input"
-                  id="paymentUrl"
+                  id="billPaymentUrl"
                   type="text"
                   inputmode="url"
                   placeholder="provider.com/pay"
-                  value="${bill ? escapeHtml(bill.paymentUrl || '') : ''}"
+                  value="${bill ? escapeHtml(bill.paymentUrl || "") : ""}"
                   style="text-align:left"
                 >
               </div>
@@ -11010,7 +11825,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   <input
                     type="checkbox"
                     id="billAutopay"
-                    ${bill && bill.autopay ? 'checked' : ''}
+                    ${bill && bill.autopay ? "checked" : ""}
                   >
 
                   <div class="toggle-track">
@@ -11030,27 +11845,33 @@ function openBillForm(billId = null, selectedDate = null) {
             <div class="section-header">Reminders</div>
 
             <div class="card">
-              ${REMINDER_OFFSETS.map(reminder => `
-                <div class="form-row">
-                  <div class="form-label">${reminder.label}</div>
-                  <div style="flex:1"></div>
+              ${REMINDER_OFFSETS.map(
+                (reminder) => `
+                  <div class="form-row">
+                    <div class="form-label">${reminder.label}</div>
+                    <div style="flex:1"></div>
 
-                  <label class="toggle">
-                    <input
-  type="checkbox"
-  class="reminder-toggle"
-  name="billReminderOffsets"
-  value="${reminder.days}"
-  data-days="${reminder.days}"
-  ${selectedReminders.includes(reminder.days) ? 'checked' : ''}
->
+                    <label class="toggle">
+                      <input
+                        type="checkbox"
+                        class="reminder-toggle"
+                        name="billReminderOffsets"
+                        value="${reminder.days}"
+                        data-days="${reminder.days}"
+                        ${
+                          selectedReminders.includes(reminder.days)
+                            ? "checked"
+                            : ""
+                        }
+                      >
 
-                    <div class="toggle-track">
-                      <div class="toggle-thumb"></div>
-                    </div>
-                  </label>
-                </div>
-              `).join('')}
+                      <div class="toggle-track">
+                        <div class="toggle-thumb"></div>
+                      </div>
+                    </label>
+                  </div>
+                `
+              ).join("")}
             </div>
 
             <div class="settings-footer">
@@ -11067,40 +11888,43 @@ function openBillForm(billId = null, selectedDate = null) {
                 class="form-textarea"
                 id="billNotes"
                 placeholder="Optional notes"
-              >${bill ? escapeHtml(bill.notes || '') : ''}</textarea>
+              >${bill ? escapeHtml(bill.notes || "") : ""}</textarea>
             </div>
           </div>
 
-          ${bill ? `
-            <button
-              class="btn-danger"
-              onclick="confirmDeleteBill('${bill.id}', true)"
-            >
-              ${svgIcon('trash', 16)}
-              Delete Bill
-            </button>
-          ` : ''}
-
+          ${
+            bill
+              ? `
+                <button
+                  class="btn-danger"
+                  onclick="confirmDeleteBill('${bill.id}', true)"
+                >
+                  ${svgIcon("trash", 16)}
+                  Delete Bill
+                </button>
+              `
+              : ""
+          }
         </div>
       </div>
     </div>
   `;
 
-  const sheetContainer = document.createElement('div');
-  sheetContainer.id = 'sheetContainer';
+  const sheetContainer = document.createElement("div");
+
+  sheetContainer.id = "sheetContainer";
   sheetContainer.innerHTML = sheetHtml;
+
   document.body.appendChild(sheetContainer);
 
   updateBillDueDateField();
-
   lockBackgroundScroll();
 
   requestAnimationFrame(() => {
-    document.getElementById('sheetOverlay')?.classList.add('show');
-    document.getElementById('billSheet')?.classList.add('show');
+    document.getElementById("sheetOverlay")?.classList.add("show");
+    document.getElementById("billSheet")?.classList.add("show");
   });
 }
-
 
 function updateBillDueDateField() {
   const recurrenceSelect = document.getElementById('billRecurrence');
@@ -11233,21 +12057,35 @@ function savePaymentLinkPopup(billId) {
 }
 function saveBill() {
   const name = document.getElementById("billName")?.value.trim();
-  const amount = parseFloat(document.getElementById("billAmount")?.value || 0);
-  const category = document.getElementById("billCategory")?.value || "other";
-  const dueDateInput = document.getElementById("billDueDate")?.value;
-  const recurrence = document.getElementById("billRecurrence")?.value || "None";
-  const dueDayValue = document.getElementById("billDueDay")?.value;
-  const payCycle = document.getElementById("billPayCycle")?.value || "first";
+  const amount = parseFloat(
+    document.getElementById("billAmount")?.value || 0
+  );
+  const category =
+    document.getElementById("billCategory")?.value || "other";
+  const dueDateInput =
+    document.getElementById("billDueDate")?.value;
+  const recurrence =
+    document.getElementById("billRecurrence")?.value || "None";
+  const dueDayValue =
+    document.getElementById("billDueDay")?.value;
+  const payCycle =
+    document.getElementById("billPayCycle")?.value || "first";
+  const paycheckAssignment =
+    document.getElementById("billPaycheckAssignment")?.value || "auto";
   const paymentMethod =
     document.getElementById("billPaymentMethod")?.value || "";
   const paymentUrl =
     document.getElementById("billPaymentUrl")?.value.trim() || "";
-  const autopay = Boolean(document.getElementById("billAutopay")?.checked);
-  const notes = document.getElementById("billNotes")?.value.trim() || "";
+  const autopay = Boolean(
+    document.getElementById("billAutopay")?.checked
+  );
+  const notes =
+    document.getElementById("billNotes")?.value.trim() || "";
 
   const reminderOffsets = Array.from(
-    document.querySelectorAll('input[name="billReminderOffsets"]:checked')
+    document.querySelectorAll(
+      'input[name="billReminderOffsets"]:checked'
+    )
   )
     .map((input) => Number(input.value))
     .filter((value) => !Number.isNaN(value))
@@ -11286,6 +12124,19 @@ function saveBill() {
         )
       : null;
 
+  const validAssignments = [
+    "auto",
+    "first",
+    "second",
+    "previous",
+  ];
+
+  const safePaycheckAssignment = validAssignments.includes(
+    paycheckAssignment
+  )
+    ? paycheckAssignment
+    : "auto";
+
   const now = new Date().toISOString();
 
   const data = {
@@ -11296,6 +12147,7 @@ function saveBill() {
     dueDay,
     recurrence,
     payCycle,
+    paycheckAssignment: safePaycheckAssignment,
     paymentMethod,
     paymentUrl,
     autopay,
@@ -11312,6 +12164,7 @@ function saveBill() {
     dueDay: bill.dueDay ?? null,
     recurrence: bill.recurrence || "None",
     payCycle: bill.payCycle || null,
+    paycheckAssignment: bill.paycheckAssignment || "auto",
     paymentMethod: bill.paymentMethod || "",
     paymentUrl: bill.paymentUrl || "",
     autopay: Boolean(bill.autopay),
@@ -11324,7 +12177,9 @@ function saveBill() {
   const getOrdinalSuffix = (day) => {
     const value = Number(day);
 
-    if (value >= 11 && value <= 13) return "th";
+    if (value >= 11 && value <= 13) {
+      return "th";
+    }
 
     switch (value % 10) {
       case 1:
@@ -11340,7 +12195,9 @@ function saveBill() {
 
   const formatSchedule = (bill) => {
     if (bill.recurrence === "Monthly") {
-      const day = Number(bill.dueDay || new Date(bill.dueDate).getDate());
+      const day = Number(
+        bill.dueDay || new Date(bill.dueDate).getDate()
+      );
 
       return `due on the ${day}${getOrdinalSuffix(day)} of each month`;
     }
@@ -11350,12 +12207,34 @@ function saveBill() {
       : "no due date";
   };
 
+  const paycheckAssignmentLabel = (assignment) => {
+    switch (assignment) {
+      case "first":
+        return "First paycheck";
+      case "second":
+        return "Second paycheck";
+      case "previous":
+        return "Previous paycheck";
+      case "auto":
+      default:
+        return "Automatic by due date";
+    }
+  };
+
   const getChangedFields = (before, after) => {
     const changes = [];
 
-    if (before.name !== after.name) changes.push("name");
-    if (Number(before.amount) !== Number(after.amount)) changes.push("amount");
-    if (before.category !== after.category) changes.push("category");
+    if (before.name !== after.name) {
+      changes.push("name");
+    }
+
+    if (Number(before.amount) !== Number(after.amount)) {
+      changes.push("amount");
+    }
+
+    if (before.category !== after.category) {
+      changes.push("category");
+    }
 
     if (
       before.dueDate !== after.dueDate ||
@@ -11366,6 +12245,10 @@ function saveBill() {
 
     if (before.recurrence !== after.recurrence) {
       changes.push("schedule");
+    }
+
+    if (before.paycheckAssignment !== after.paycheckAssignment) {
+      changes.push("paycheck assignment");
     }
 
     if (before.paymentMethod !== after.paymentMethod) {
@@ -11402,7 +12285,9 @@ function saveBill() {
         return {
           action: "bill_amount_changed",
           title: `${billName} amount changed`,
-          detail: `${formatCurrency(before.amount)} → ${formatCurrency(after.amount)}`,
+          detail: `${formatCurrency(before.amount)} → ${formatCurrency(
+            after.amount
+          )}`,
         };
 
       case "due date":
@@ -11411,6 +12296,15 @@ function saveBill() {
           action: "bill_schedule_changed",
           title: `${billName} schedule changed`,
           detail: `${formatSchedule(before)} → ${formatSchedule(after)}`,
+        };
+
+      case "paycheck assignment":
+        return {
+          action: "bill_updated",
+          title: `${billName} paycheck plan changed`,
+          detail: `${paycheckAssignmentLabel(
+            before.paycheckAssignment
+          )} → ${paycheckAssignmentLabel(after.paycheckAssignment)}`,
         };
 
       case "Autopay":
@@ -11430,13 +12324,15 @@ function saveBill() {
           title: `${billName} reminders changed`,
           detail:
             after.reminderOffsets.length > 0
-              ? `${after.reminderOffsets
+              ? after.reminderOffsets
                   .map((offset) =>
                     offset === 0
                       ? "on due date"
-                      : `${offset} day${offset === 1 ? "" : "s"} before`
+                      : `${offset} day${
+                          offset === 1 ? "" : "s"
+                        } before`
                   )
-                  .join(", ")}`
+                  .join(", ")
               : "No reminders",
         };
 
@@ -11471,7 +12367,9 @@ function saveBill() {
       entityType: "bill",
       entityId: newBill.id,
       title: `${newBill.name} added`,
-      detail: `${formatCurrency(newBill.amount)} · ${formatSchedule(newBill)}`,
+      detail: `${formatCurrency(newBill.amount)} · ${formatSchedule(
+        newBill
+      )}`,
       before: null,
       after: buildBillSnapshot(newBill),
     });
