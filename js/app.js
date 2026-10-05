@@ -6142,7 +6142,16 @@ function renderPaymentPlans() {
       <div class="nav-bar-content">
         <div class="nav-button" aria-hidden="true"></div>
 
-        <div class="nav-title">Installments</div>
+        <button
+  type="button"
+  class="nav-button"
+  onclick="navigate('more')"
+  aria-label="Back to More"
+  title="Back to More"
+  style="color:var(--text)"
+>
+  ${svgIcon("chevronLeft", 22)}
+</button>
 
         <button
           type="button"
