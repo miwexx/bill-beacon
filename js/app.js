@@ -13389,47 +13389,13 @@ function renderTransactions() {
     (first, second) => second.date - first.date
   );
 
-  const getStatusAppearance = (transaction) => {
-    if (transaction.matchStatus === "matched") {
-      return {
-        color: "var(--paid)",
-        icon: "checkCircle",
-        label:
-          transaction.matchNote ||
-          "Matched to a Bill Beacon bill",
-      };
-    }
-
-    if (transaction.matchStatus === "possible") {
-      return {
-        color: "var(--accent)",
-        icon: "warning",
-        label:
-          transaction.matchNote ||
-          "Possible payment match",
-      };
-    }
-
-    if (transaction.pending) {
-      return {
-        color: "var(--text-muted)",
-        icon: "clock",
-        label: "Pending bank transaction",
-      };
-    }
-
-    return {
-      color: "var(--text-muted)",
-      icon: "doc",
-      label:
-        transaction.matchNote ||
-        "Not a tracked bill",
-    };
-  };
+ const getTransactionSubtitle = (transaction) => {
+  return transaction.pending ? "Pending" : "";
+};
 
   const renderTransactionRow = (transaction) => {
     const transactionDate = new Date(transaction.date);
-    const appearance = getStatusAppearance(transaction);
+    const subtitle = getTransactionSubtitle(transaction);
 
     return `
       <button
@@ -13482,26 +13448,20 @@ function renderTransactions() {
           </div>
 
           <div
-            style="
-              display:flex;
-              align-items:center;
-              gap:5px;
-              margin-top:5px;
-              overflow:hidden;
-              color:${appearance.color};
-              font-size:12px;
-              font-weight:700;
-              text-overflow:ellipsis;
-              white-space:nowrap;
-            "
-          >
-            ${svgIcon(appearance.icon, 14)}
-            <span>
-              ${formatDate(transaction.date, "short")}
-              ·
-              ${escapeHtml(appearance.label)}
-            </span>
-          </div>
+  style="
+    margin-top:5px;
+    overflow:hidden;
+    color:${transaction.pending ? "var(--text-muted)" : "var(--text-muted)"};
+    font-size:13px;
+    font-weight:${transaction.pending ? "750" : "500"};
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  "
+>
+  ${formatDate(transaction.date, "short")}${
+    subtitle ? ` · ${subtitle}` : ""
+  }
+</div>
         </div>
 
         <div
