@@ -3205,7 +3205,7 @@ function renderMore() {
                   letter-spacing:-.02em;
                 "
               >
-                Your money tools
+                Your Money Tools
               </div>
 
               <div
@@ -3221,26 +3221,27 @@ function renderMore() {
             </div>
 
             <div
-              style="
-                width:48px;
-                height:48px;
-                min-width:48px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                border-radius:16px;
-                color:#f4dcff;
-                background:
-                  linear-gradient(
-                    135deg,
-                    rgba(143,54,255,.72),
-                    rgba(246,76,174,.68)
-                  );
-                box-shadow:0 10px 22px rgba(143,54,255,.23);
-              "
-            >
-              ${svgIcon("moreVertical", 24)}
-            </div>
+  aria-hidden="true"
+  style="
+    width:48px;
+    height:48px;
+    min-width:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:16px;
+    color:#f4dcff;
+    background:
+      linear-gradient(
+        135deg,
+        rgba(143,54,255,.72),
+        rgba(246,76,174,.68)
+      );
+    box-shadow:0 10px 22px rgba(143,54,255,.23);
+  "
+>
+  ${svgIcon("creditcard", 23)}
+</div>
           </div>
         </section>
 
