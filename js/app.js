@@ -3428,123 +3428,113 @@ function renderMore() {
           </button>
         </section>
 
-        <section class="settings-section">
-          <div
-            class="section-header"
-            style="margin-bottom:10px"
-          >
-            Manage
-          </div>
+        <section
+  style="
+    display:grid;
+    gap:12px;
+    margin-top:2px;
+  "
+>
+  <button
+    type="button"
+    onclick="navigate('activity')"
+    style="${wideCardStyle}"
+  >
+    <div
+      style="
+        width:46px;
+        height:46px;
+        min-width:46px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:15px;
+        color:#ffe2b5;
+        background:rgba(255,174,74,.14);
+      "
+    >
+      ${svgIcon("doc", 23)}
+    </div>
 
-          <button
-            type="button"
-            onclick="navigate('activity')"
-            style="${wideCardStyle}"
-          >
-            <div
-              style="
-                width:46px;
-                height:46px;
-                min-width:46px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                border-radius:15px;
-                color:#ffe2b5;
-                background:rgba(255,174,74,.14);
-              "
-            >
-              ${svgIcon("doc", 23)}
-            </div>
+    <div style="min-width:0;flex:1">
+      <div
+        style="
+          font-size:16px;
+          font-weight:850;
+        "
+      >
+        Activity & Changes
+      </div>
 
-            <div style="min-width:0;flex:1">
-              <div
-                style="
-                  font-size:16px;
-                  font-weight:850;
-                "
-              >
-                Activity & Changes
-              </div>
+      <div
+        style="
+          margin-top:4px;
+          color:var(--text-muted);
+          font-size:13px;
+          line-height:1.35;
+        "
+      >
+        ${
+          activityCount
+            ? `${activityCount} recorded updates to review.`
+            : "Payments and bill updates will appear here."
+        }
+      </div>
+    </div>
 
-              <div
-                style="
-                  margin-top:4px;
-                  color:var(--text-muted);
-                  font-size:13px;
-                  line-height:1.35;
-                "
-              >
-                ${
-                  activityCount
-                    ? `${activityCount} recorded updates to review.`
-                    : "Payments and bill updates will appear here."
-                }
-              </div>
-            </div>
+    <div style="color:var(--text-muted)">
+      ${svgIcon("chevronRight", 20)}
+    </div>
+  </button>
 
-            <div style="color:var(--text-muted)">
-              ${svgIcon("chevronRight", 20)}
-            </div>
-          </button>
-        </section>
+  <button
+    type="button"
+    onclick="navigate('settings')"
+    style="${wideCardStyle}"
+  >
+    <div
+      style="
+        width:46px;
+        height:46px;
+        min-width:46px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        border-radius:15px;
+        color:#d8d0ff;
+        background:rgba(143,54,255,.16);
+      "
+    >
+      ${svgIcon("gear", 23)}
+    </div>
 
-        <section class="settings-section">
-          <div
-            class="section-header"
-            style="margin-bottom:10px"
-          >
-            App
-          </div>
+    <div style="min-width:0;flex:1">
+      <div
+        style="
+          font-size:16px;
+          font-weight:850;
+        "
+      >
+        Settings
+      </div>
 
-          <button
-            type="button"
-            onclick="navigate('settings')"
-            style="${wideCardStyle}"
-          >
-            <div
-              style="
-                width:46px;
-                height:46px;
-                min-width:46px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                border-radius:15px;
-                color:#d8d0ff;
-                background:rgba(143,54,255,.16);
-              "
-            >
-              ${svgIcon("gear", 23)}
-            </div>
+      <div
+        style="
+          margin-top:4px;
+          color:var(--text-muted);
+          font-size:13px;
+          line-height:1.35;
+        "
+      >
+        Income sources, notifications, backup, and household.
+      </div>
+    </div>
 
-            <div style="min-width:0;flex:1">
-              <div
-                style="
-                  font-size:16px;
-                  font-weight:850;
-                "
-              >
-                Settings
-              </div>
-
-              <div
-                style="
-                  margin-top:4px;
-                  color:var(--text-muted);
-                  font-size:13px;
-                  line-height:1.35;
-                "
-              >
-                Income sources, notifications, backup, and household.
-              </div>
-            </div>
-
-            <div style="color:var(--text-muted)">
-              ${svgIcon("chevronRight", 20)}
-            </div>
-          </button>
-        </section>
+    <div style="color:var(--text-muted)">
+      ${svgIcon("chevronRight", 20)}
+    </div>
+  </button>
+</section>
 
       </div>
     </div>
