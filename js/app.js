@@ -2411,10 +2411,23 @@ function getPaycheckPlan(referenceDate = new Date()) {
   });
 
   const sortBills = (items) =>
-    [...items].sort(
-      (first, second) =>
-        new Date(first.dueDate) - new Date(second.dueDate)
+  [...items].sort((first, second) => {
+    const firstPaid = isOccurrencePaid(
+      first,
+      new Date(first.dueDate)
     );
+
+    const secondPaid = isOccurrencePaid(
+      second,
+      new Date(second.dueDate)
+    );
+
+    if (firstPaid !== secondPaid) {
+      return firstPaid ? 1 : -1;
+    }
+
+    return new Date(first.dueDate) - new Date(second.dueDate);
+  });
 
   const summarize = (id, payday, startDate, endDate, items) => {
     const sortedBills = sortBills(items);
