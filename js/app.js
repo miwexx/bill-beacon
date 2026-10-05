@@ -9734,10 +9734,25 @@ const dataSummary =
 
   return `
     <div class="nav-bar">
-      <div class="nav-bar-content">
-        <div class="nav-title">Settings</div>
-      </div>
-    </div>
+  <div class="nav-bar-content">
+
+    <button
+      type="button"
+      class="nav-button"
+      onclick="navigate('more')"
+      aria-label="Back to More"
+      title="Back to More"
+      style="color:var(--text)"
+    >
+      ${svgIcon("chevronLeft", 22)}
+    </button>
+
+    <div class="nav-title">Settings</div>
+
+    <div style="width:44px"></div>
+
+  </div>
+</div>
 
     <div class="main-content fade-in">
       <div class="content-pad">
