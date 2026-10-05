@@ -11755,12 +11755,6 @@ function openBillForm(billId = null, selectedDate = null) {
               </div>
             </div>
 
-            <div class="settings-footer">
-              Automatic assigns bills due on the 1st–14th to the first
-              paycheck and bills due on the 15th–end of month to the second.
-              Use Previous paycheck for bills you reserve before the month
-              begins, such as early-month rent.
-            </div>
           </div>
 
           <div>
