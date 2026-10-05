@@ -1906,15 +1906,6 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
     return;
   }
 
-  const confirmed = confirm(
-    `Mark ${bill.name} as paid for ${formatDate(
-      dueDate,
-      "full"
-    )}? ${formatCurrency(bill.amount)} Bill Be Recorded For This Occurrence.`
-  );
-
-  if (!confirmed) return;
-
   const occurrenceBill = {
     ...bill,
     id: getOccurrenceKey(bill.id, dueDate),
@@ -1944,10 +1935,10 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
 
   recordActivity({
     action: "bill_paid",
-    entityType: bill.installmentPlanId ? "paymentplan" : "bill",
+    entityType: bill.installmentPlanId ? "payment_plan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
-    title: `${bill.name} Marked as Paid`,
-    detail: `${formatCurrency(payment.amount)} · due ${formatDate(
+    title: `${bill.name} marked as paid`,
+    detail: `${formatCurrency(payment.amount)} due ${formatDate(
       dueDate,
       "short"
     )}`,
@@ -1971,7 +1962,6 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
   render();
   showPaymentUndoToast(payment, bill.name);
 }
-
 function markBillOccurrenceUnpaid(billId, dueDate) {
   const bill = Store.getBill(billId);
 
