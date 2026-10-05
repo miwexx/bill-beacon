@@ -11509,12 +11509,6 @@ function openBillForm(billId = null, selectedDate = null) {
     ? bill.dueDate.split("T")[0]
     : selectedDate || today;
 
-  const defaultPayCycle =
-    bill?.payCycle ||
-    (new Date(`${dueDate}T12:00:00`).getDate() <= 15
-      ? "first"
-      : "second");
-
   const defaultPaycheckAssignment =
     bill?.paycheckAssignment || "auto";
 
@@ -11674,26 +11668,6 @@ function openBillForm(billId = null, selectedDate = null) {
                   }).join("")}
                 </select>
               </div>
-
-              <div class="form-row">
-                <div class="form-label">Pay Cycle</div>
-
-                <select class="form-select" id="billPayCycle">
-                  <option
-                    value="first"
-                    ${defaultPayCycle === "first" ? "selected" : ""}
-                  >
-                    Early Cycle
-                  </option>
-
-                  <option
-                    value="second"
-                    ${defaultPayCycle === "second" ? "selected" : ""}
-                  >
-                    Late Cycle
-                  </option>
-                </select>
-              </div>
             </div>
           </div>
 
@@ -11755,6 +11729,12 @@ function openBillForm(billId = null, selectedDate = null) {
               </div>
             </div>
 
+            <div class="settings-footer">
+              Automatic assigns bills due on the 1st–14th to the first
+              paycheck and bills due on the 15th–end of month to the second.
+              Use Previous paycheck for bills you reserve before the month
+              begins, such as early-month rent.
+            </div>
           </div>
 
           <div>
@@ -11916,7 +11896,6 @@ function openBillForm(billId = null, selectedDate = null) {
     document.getElementById("billSheet")?.classList.add("show");
   });
 }
-
 function updateBillDueDateField() {
   const recurrenceSelect = document.getElementById('billRecurrence');
   const dueDateInput = document.getElementById('billDueDate');
@@ -12060,7 +12039,10 @@ function saveBill() {
   const dueDayValue =
     document.getElementById("billDueDay")?.value;
   const payCycle =
-    document.getElementById("billPayCycle")?.value || "first";
+  Store.getBill(editingBillId)?.payCycle ||
+  (new Date(`${dueDateInput}T12:00:00`).getDate() <= 15
+    ? "first"
+    : "second");
   const paycheckAssignment =
     document.getElementById("billPaycheckAssignment")?.value || "auto";
   const paymentMethod =
