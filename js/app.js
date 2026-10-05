@@ -3220,28 +3220,7 @@ function renderMore() {
               </div>
             </div>
 
-            <div
-  aria-hidden="true"
-  style="
-    width:48px;
-    height:48px;
-    min-width:48px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    border-radius:16px;
-    color:#f4dcff;
-    background:
-      linear-gradient(
-        135deg,
-        rgba(143,54,255,.72),
-        rgba(246,76,174,.68)
-      );
-    box-shadow:0 10px 22px rgba(143,54,255,.23);
-  "
->
-  ${svgIcon("creditcard", 23)}
-</div>
+            
           </div>
         </section>
 
@@ -3262,7 +3241,7 @@ function renderMore() {
           >
             <button
               type="button"
-              onclick="navigate('transactions')"
+              onclick="openBankingComingSoon()"
               style="${moneyTileStyle}"
             >
               <div
@@ -13157,9 +13136,6 @@ function render() {
   break;
     case "calendar":
       content = renderCalendar();
-      break;
-      case "transactions":
-      content = renderTransactions();
       break;
     case "insights":
       content = renderInsights();
