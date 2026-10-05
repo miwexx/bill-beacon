@@ -3262,7 +3262,7 @@ function renderMore() {
           >
             <button
               type="button"
-              onclick="openBankingComingSoon()"
+              onclick="navigate('transactions')"
               style="${moneyTileStyle}"
             >
               <div
@@ -13157,6 +13157,9 @@ function render() {
   break;
     case "calendar":
       content = renderCalendar();
+      break;
+      case "transactions":
+      content = renderTransactions();
       break;
     case "insights":
       content = renderInsights();
