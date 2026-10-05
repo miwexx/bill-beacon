@@ -3070,6 +3070,111 @@ function closePaycheckPlanSheet() {
     unlockBackgroundScroll();
   }, 300);
 }
+function renderMore() {
+  return `
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <div class="nav-title">More</div>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad content-gap">
+
+        <div class="settings-section">
+          <div class="section-header">Money</div>
+
+          <div class="card">
+            <div
+              class="form-row"
+              onclick="navigate('payment-plans')"
+              style="cursor:pointer"
+            >
+              <div class="form-label">
+                ${svgIcon("creditcard", 18)}
+                <span>Installments & Payment Plans</span>
+              </div>
+              ${svgIcon("chevronRight", 18)}
+            </div>
+
+            <div
+              class="form-row"
+              onclick="openBankingComingSoon()"
+              style="cursor:pointer"
+            >
+              <div class="form-label">
+                ${svgIcon("internaldrive", 18)}
+                <span>Banking & Transactions</span>
+              </div>
+              ${svgIcon("chevronRight", 18)}
+            </div>
+
+            <div
+              class="form-row"
+              onclick="openCreditCardsComingSoon()"
+              style="cursor:pointer"
+            >
+              <div class="form-label">
+                ${svgIcon("creditcard", 18)}
+                <span>Credit Cards</span>
+              </div>
+              ${svgIcon("chevronRight", 18)}
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">Manage</div>
+
+          <div class="card">
+            <div
+              class="form-row"
+              onclick="openIncomeSourceForm()"
+              style="cursor:pointer"
+            >
+              <div class="form-label">
+                ${svgIcon("plus", 18)}
+                <span>Income Sources</span>
+              </div>
+              ${svgIcon("chevronRight", 18)}
+            </div>
+
+            <div
+              class="form-row"
+              onclick="navigate('activity')"
+              style="cursor:pointer"
+            >
+              <div class="form-label">
+                ${svgIcon("doc", 18)}
+                <span>Activity & Changes</span>
+              </div>
+              ${svgIcon("chevronRight", 18)}
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-header">App</div>
+
+          <div class="card">
+            <div
+              class="form-row"
+              onclick="navigate('settings')"
+              style="cursor:pointer"
+            >
+              <div class="form-label">
+                ${svgIcon("gear", 18)}
+                <span>Settings</span>
+              </div>
+              ${svgIcon("chevronRight", 18)}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  `;
+}
 function renderToday() {
   const now = new Date();
 
@@ -10667,10 +10772,11 @@ function fab() {
 function tabBar() {
   const tabs = [
   { id: 'today', label: 'Dashboard', icon: 'home' },
-  { id: 'recurring', label: 'Recurring', icon: 'calendar' },
+  { id: 'recurring', label: 'Calendar', icon: 'calendar' },
   { id: 'bills', label: 'Bills', icon: 'tray' },
-  { id: 'payment-plans', label: 'Installments', icon: 'creditcard' },
   { id: 'insights', label: 'Insights', icon: 'chart' },
+  { id: "more", label: "More", icon: "moreVertical" }
+  
 ];
 
   return `
@@ -12466,6 +12572,13 @@ function setTheme(theme) {
   initTheme();
   render();
 }
+function openBankingComingSoon() {
+  alert("Banking & Transactions is coming soon.");
+}
+
+function openCreditCardsComingSoon() {
+  alert("Credit Cards is coming soon.");
+}
 
 function openBillPaymentLink(billId) {
   const bill = Store.getBill(billId);
@@ -12617,6 +12730,9 @@ function render() {
     case "bills":
       content = renderBills();
       break;
+      case "more":
+  content = renderMore();
+  break;
     case "calendar":
       content = renderCalendar();
       break;
@@ -12643,9 +12759,9 @@ function render() {
   "today",
   "recurring",
   "bills",
-  "payment-plans",
+  "more",
   "insights",
-  "settings"
+  "settings",
 ].includes(currentRoute);
 
   if (showTabBar) {
