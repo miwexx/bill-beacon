@@ -3073,8 +3073,24 @@ function closePaycheckPlanSheet() {
 function renderMore() {
   return `
     <div class="nav-bar">
-      <div class="nav-bar-content">
-        <div class="nav-title">More</div>
+      <div
+        class="nav-bar-content"
+        style="
+          display:grid;
+          grid-template-columns:44px 1fr 44px;
+          align-items:center;
+        "
+      >
+        <div style="width:44px;height:44px"></div>
+
+        <div
+          class="nav-title"
+          style="text-align:center"
+        >
+          More
+        </div>
+
+        <div style="width:44px;height:44px"></div>
       </div>
     </div>
 
@@ -3085,41 +3101,67 @@ function renderMore() {
           <div class="section-header">Money</div>
 
           <div class="card">
-            <div
-              class="form-row"
-              onclick="navigate('payment-plans')"
-              style="cursor:pointer"
-            >
-              <div class="form-label">
-                ${svgIcon("creditcard", 18)}
-                <span>Installments & Payment Plans</span>
-              </div>
-              ${svgIcon("chevronRight", 18)}
-            </div>
 
-            <div
+            <button
+              type="button"
               class="form-row"
               onclick="openBankingComingSoon()"
-              style="cursor:pointer"
+              style="
+                width:100%;
+                cursor:pointer;
+                color:inherit;
+                background:transparent;
+                border:0;
+                text-align:left;
+              "
             >
               <div class="form-label">
                 ${svgIcon("internaldrive", 18)}
                 <span>Banking & Transactions</span>
               </div>
               ${svgIcon("chevronRight", 18)}
-            </div>
+            </button>
 
-            <div
+            <button
+              type="button"
               class="form-row"
               onclick="openCreditCardsComingSoon()"
-              style="cursor:pointer"
+              style="
+                width:100%;
+                cursor:pointer;
+                color:inherit;
+                background:transparent;
+                border:0;
+                text-align:left;
+              "
             >
               <div class="form-label">
                 ${svgIcon("creditcard", 18)}
                 <span>Credit Cards</span>
               </div>
               ${svgIcon("chevronRight", 18)}
-            </div>
+            </button>
+
+            <button
+              type="button"
+              class="form-row"
+              onclick="navigate('payment-plans')"
+              style="
+                width:100%;
+                cursor:pointer;
+                color:inherit;
+                background:transparent;
+                border:0;
+                text-align:left;
+              "
+            >
+              <div class="form-label">
+                ${svgIcon("creditcard", 18)}
+                <span>Installments & Payment Plans</span>
+              </div>
+              ${svgIcon("chevronRight", 18)}
+            </button>
+
           </div>
         </div>
 
@@ -3127,29 +3169,27 @@ function renderMore() {
           <div class="section-header">Manage</div>
 
           <div class="card">
-            <div
-              class="form-row"
-              onclick="openIncomeSourceForm()"
-              style="cursor:pointer"
-            >
-              <div class="form-label">
-                ${svgIcon("plus", 18)}
-                <span>Income Sources</span>
-              </div>
-              ${svgIcon("chevronRight", 18)}
-            </div>
 
-            <div
+            <button
+              type="button"
               class="form-row"
               onclick="navigate('activity')"
-              style="cursor:pointer"
+              style="
+                width:100%;
+                cursor:pointer;
+                color:inherit;
+                background:transparent;
+                border:0;
+                text-align:left;
+              "
             >
               <div class="form-label">
                 ${svgIcon("doc", 18)}
                 <span>Activity & Changes</span>
               </div>
               ${svgIcon("chevronRight", 18)}
-            </div>
+            </button>
+
           </div>
         </div>
 
@@ -3157,17 +3197,27 @@ function renderMore() {
           <div class="section-header">App</div>
 
           <div class="card">
-            <div
+
+            <button
+              type="button"
               class="form-row"
               onclick="navigate('settings')"
-              style="cursor:pointer"
+              style="
+                width:100%;
+                cursor:pointer;
+                color:inherit;
+                background:transparent;
+                border:0;
+                text-align:left;
+              "
             >
               <div class="form-label">
                 ${svgIcon("gear", 18)}
                 <span>Settings</span>
               </div>
               ${svgIcon("chevronRight", 18)}
-            </div>
+            </button>
+
           </div>
         </div>
 
@@ -6139,33 +6189,63 @@ function renderPaymentPlans() {
 
   return `
     <div class="nav-bar">
-      <div class="nav-bar-content">
-        <div class="nav-button" aria-hidden="true"></div>
+  <div
+    class="nav-bar-content"
+    style="
+      display:grid;
+      grid-template-columns:44px 1fr 44px;
+      align-items:center;
+    "
+  >
+    <button
+      type="button"
+      class="nav-button"
+      onclick="navigate('more')"
+      aria-label="Back to More"
+      title="Back to More"
+      style="
+        width:44px;
+        height:44px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:0;
+        color:var(--text);
+      "
+    >
+      ${svgIcon("chevronLeft", 22)}
+    </button>
 
-        <button
-  type="button"
-  class="nav-button"
-  onclick="navigate('more')"
-  aria-label="Back to More"
-  title="Back to More"
-  style="color:var(--text)"
->
-  ${svgIcon("chevronLeft", 22)}
-</button>
-
-        <button
-          type="button"
-          class="nav-button"
-          onclick="closeAddMenu(); openInstallmentPlanForm()"
-          aria-label="Add a payment plan"
-          title="Add payment plan"
-          style="color:#b45cff;"
-        >
-          ${svgIcon("plus", 22)}
-        </button>
-      </div>
+    <div
+      class="nav-title"
+      style="
+        min-width:0;
+        text-align:center;
+      "
+    >
+      Installments
     </div>
 
+    <button
+      type="button"
+      class="nav-button"
+      onclick="closeAddMenu(); openInstallmentPlanForm()"
+      aria-label="Add a payment plan"
+      title="Add payment plan"
+      style="
+        width:44px;
+        height:44px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        padding:0;
+        color:#b45cff;
+      "
+    >
+      ${svgIcon("plus", 22)}
+    </button>
+  </div>
+</div>
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
         ${
@@ -9226,13 +9306,15 @@ function renderActivity() {
     <div class="nav-bar">
       <div class="nav-bar-content">
         <button
-          type="button"
-          class="nav-button"
-          onclick="navigate('settings')"
-          aria-label="Back to Settings"
-        >
-          ${svgIcon("chevronLeft", 22)}
-        </button>
+  type="button"
+  class="nav-button"
+  onclick="navigate('more')"
+  aria-label="Back to More"
+  title="Back to More"
+  style="color:var(--text)"
+>
+  ${svgIcon("chevronLeft", 22)}
+</button>
         <div class="nav-title">Activity & Changes</div>
 
         <div style="width:44px"></div>
