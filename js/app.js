@@ -3071,6 +3071,74 @@ function closePaycheckPlanSheet() {
   }, 300);
 }
 function renderMore() {
+  const activePlans = new Set(
+    Store.getBills()
+      .filter((bill) => bill.installmentPlanId)
+      .filter((bill) => !isOccurrencePaid(bill, new Date(bill.dueDate)))
+      .map((bill) => bill.installmentPlanId)
+  ).size;
+
+  const upcomingInstallmentTotal = Store.getBills()
+    .filter((bill) => bill.installmentPlanId)
+    .filter((bill) => !isOccurrencePaid(bill, new Date(bill.dueDate)))
+    .filter((bill) => {
+      const dueDate = new Date(bill.dueDate);
+      const today = new Date();
+
+      today.setHours(0, 0, 0, 0);
+      dueDate.setHours(0, 0, 0, 0);
+
+      const daysAway = Math.round(
+        (dueDate - today) / 86400000
+      );
+
+      return daysAway >= 0 && daysAway <= 14;
+    })
+    .reduce((total, bill) => {
+      return total + Number(bill.amount || 0);
+    }, 0);
+
+  const activityCount = Store.getActivityLog()
+    .filter((entry) => entry && entry.action)
+    .length;
+
+  const moneyTileStyle = `
+    min-height:154px;
+    padding:18px;
+    display:flex;
+    flex-direction:column;
+    justify-content:space-between;
+    border:1px solid rgba(192,151,255,.20);
+    border-radius:20px;
+    background:
+      radial-gradient(
+        circle at top right,
+        rgba(196,76,255,.15),
+        transparent 52%
+      ),
+      var(--surface);
+    color:var(--text);
+    text-align:left;
+    cursor:pointer;
+    font-family:inherit;
+  `;
+
+  const wideCardStyle = `
+    width:100%;
+    min-height:84px;
+    padding:16px 18px;
+    display:flex;
+    align-items:center;
+    gap:14px;
+    border:1px solid rgba(192,151,255,.18);
+    border-radius:18px;
+    background:var(--surface);
+    color:var(--text);
+    text-align:left;
+    cursor:pointer;
+    font-family:inherit;
+  `;
+
   return `
     <div class="nav-bar">
       <div
@@ -3095,131 +3163,388 @@ function renderMore() {
     </div>
 
     <div class="main-content fade-in">
-      <div class="content-pad content-gap">
+      <div
+        class="content-pad content-gap"
+        style="padding-bottom:calc(104px + env(safe-area-inset-bottom))"
+      >
 
-        <div class="settings-section">
-          <div class="section-header">Money</div>
+        <section
+          style="
+            margin-top:4px;
+            padding:20px;
+            border:1px solid rgba(192,151,255,.20);
+            border-radius:22px;
+            background:
+              radial-gradient(
+                circle at 92% 10%,
+                rgba(246,76,174,.22),
+                transparent 37%
+              ),
+              radial-gradient(
+                circle at 8% 100%,
+                rgba(143,54,255,.20),
+                transparent 42%
+              ),
+              var(--surface);
+            overflow:hidden;
+          "
+        >
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              justify-content:space-between;
+              gap:16px;
+            "
+          >
+            <div style="min-width:0">
+              <div
+                style="
+                  font-size:20px;
+                  font-weight:900;
+                  letter-spacing:-.02em;
+                "
+              >
+                Your money tools
+              </div>
 
-          <div class="card">
+              <div
+                style="
+                  margin-top:6px;
+                  color:var(--text-muted);
+                  font-size:14px;
+                  line-height:1.45;
+                "
+              >
+                Manage plans, bank activity, and Bill Beacon settings.
+              </div>
+            </div>
 
+            <div
+              style="
+                width:48px;
+                height:48px;
+                min-width:48px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                border-radius:16px;
+                color:#f4dcff;
+                background:
+                  linear-gradient(
+                    135deg,
+                    rgba(143,54,255,.72),
+                    rgba(246,76,174,.68)
+                  );
+                box-shadow:0 10px 22px rgba(143,54,255,.23);
+              "
+            >
+              ${svgIcon("moreVertical", 24)}
+            </div>
+          </div>
+        </section>
+
+        <section class="settings-section">
+          <div
+            class="section-header"
+            style="margin-bottom:10px"
+          >
+            Money tools
+          </div>
+
+          <div
+            style="
+              display:grid;
+              grid-template-columns:1fr 1fr;
+              gap:12px;
+            "
+          >
             <button
               type="button"
-              class="form-row"
               onclick="openBankingComingSoon()"
-              style="
-                width:100%;
-                cursor:pointer;
-                color:inherit;
-                background:transparent;
-                border:0;
-                text-align:left;
-              "
+              style="${moneyTileStyle}"
             >
-              <div class="form-label">
-                ${svgIcon("internaldrive", 18)}
-                <span>Banking & Transactions</span>
+              <div
+                style="
+                  width:42px;
+                  height:42px;
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  border-radius:14px;
+                  color:#d9ccff;
+                  background:rgba(143,54,255,.20);
+                "
+              >
+                ${svgIcon("internaldrive", 22)}
               </div>
-              ${svgIcon("chevronRight", 18)}
+
+              <div>
+                <div
+                  style="
+                    font-size:16px;
+                    font-weight:850;
+                    line-height:1.2;
+                  "
+                >
+                  Banking
+                </div>
+
+                <div
+                  style="
+                    margin-top:4px;
+                    color:var(--text-muted);
+                    font-size:12px;
+                    line-height:1.35;
+                  "
+                >
+                  Transactions and bill matches
+                </div>
+              </div>
+
+              <div
+                style="
+                  color:#c47cff;
+                  font-size:12px;
+                  font-weight:800;
+                "
+              >
+                Coming soon
+              </div>
             </button>
 
             <button
               type="button"
-              class="form-row"
-              onclick="openCreditCardsComingSoon()"
-              style="
-                width:100%;
-                cursor:pointer;
-                color:inherit;
-                background:transparent;
-                border:0;
-                text-align:left;
-              "
-            >
-              <div class="form-label">
-                ${svgIcon("creditcard", 18)}
-                <span>Credit Cards</span>
-              </div>
-              ${svgIcon("chevronRight", 18)}
-            </button>
-
-            <button
-              type="button"
-              class="form-row"
               onclick="navigate('payment-plans')"
+              style="${moneyTileStyle}"
+            >
+              <div
+                style="
+                  width:42px;
+                  height:42px;
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  border-radius:14px;
+                  color:#ffdce9;
+                  background:rgba(246,76,174,.18);
+                "
+              >
+                ${svgIcon("creditcard", 22)}
+              </div>
+
+              <div>
+                <div
+                  style="
+                    font-size:16px;
+                    font-weight:850;
+                    line-height:1.2;
+                  "
+                >
+                  Installments
+                </div>
+
+                <div
+                  style="
+                    margin-top:4px;
+                    color:var(--text-muted);
+                    font-size:12px;
+                    line-height:1.35;
+                  "
+                >
+                  Payment plans and due dates
+                </div>
+              </div>
+
+              <div
+                style="
+                  color:var(--text-muted);
+                  font-size:12px;
+                  font-weight:800;
+                "
+              >
+                ${
+                  activePlans
+                    ? `${activePlans} active · ${formatCurrency(upcomingInstallmentTotal)} due soon`
+                    : "No active plans"
+                }
+              </div>
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onclick="openCreditCardsComingSoon()"
+            style="${wideCardStyle}; margin-top:12px"
+          >
+            <div
               style="
-                width:100%;
-                cursor:pointer;
-                color:inherit;
-                background:transparent;
-                border:0;
-                text-align:left;
+                width:46px;
+                height:46px;
+                min-width:46px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                border-radius:15px;
+                color:#b8efff;
+                background:rgba(63,196,235,.16);
               "
             >
-              <div class="form-label">
-                ${svgIcon("creditcard", 18)}
-                <span>Installments & Payment Plans</span>
+              ${svgIcon("creditcard", 23)}
+            </div>
+
+            <div style="min-width:0;flex:1">
+              <div
+                style="
+                  font-size:16px;
+                  font-weight:850;
+                "
+              >
+                Credit Cards
               </div>
-              ${svgIcon("chevronRight", 18)}
-            </button>
 
-          </div>
-        </div>
+              <div
+                style="
+                  margin-top:4px;
+                  color:var(--text-muted);
+                  font-size:13px;
+                  line-height:1.35;
+                "
+              >
+                Track card payments, minimums, and due dates.
+              </div>
+            </div>
 
-        <div class="settings-section">
-          <div class="section-header">Manage</div>
-
-          <div class="card">
-
-            <button
-              type="button"
-              class="form-row"
-              onclick="navigate('activity')"
+            <div
               style="
-                width:100%;
-                cursor:pointer;
-                color:inherit;
-                background:transparent;
-                border:0;
-                text-align:left;
+                color:#69d4f3;
+                font-size:12px;
+                font-weight:800;
+                white-space:nowrap;
               "
             >
-              <div class="form-label">
-                ${svgIcon("doc", 18)}
-                <span>Activity & Changes</span>
-              </div>
-              ${svgIcon("chevronRight", 18)}
-            </button>
+              Soon
+            </div>
+          </button>
+        </section>
 
+        <section class="settings-section">
+          <div
+            class="section-header"
+            style="margin-bottom:10px"
+          >
+            Manage
           </div>
-        </div>
 
-        <div class="settings-section">
-          <div class="section-header">App</div>
-
-          <div class="card">
-
-            <button
-              type="button"
-              class="form-row"
-              onclick="navigate('settings')"
+          <button
+            type="button"
+            onclick="navigate('activity')"
+            style="${wideCardStyle}"
+          >
+            <div
               style="
-                width:100%;
-                cursor:pointer;
-                color:inherit;
-                background:transparent;
-                border:0;
-                text-align:left;
+                width:46px;
+                height:46px;
+                min-width:46px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                border-radius:15px;
+                color:#ffe2b5;
+                background:rgba(255,174,74,.14);
               "
             >
-              <div class="form-label">
-                ${svgIcon("gear", 18)}
-                <span>Settings</span>
-              </div>
-              ${svgIcon("chevronRight", 18)}
-            </button>
+              ${svgIcon("doc", 23)}
+            </div>
 
+            <div style="min-width:0;flex:1">
+              <div
+                style="
+                  font-size:16px;
+                  font-weight:850;
+                "
+              >
+                Activity & Changes
+              </div>
+
+              <div
+                style="
+                  margin-top:4px;
+                  color:var(--text-muted);
+                  font-size:13px;
+                  line-height:1.35;
+                "
+              >
+                ${
+                  activityCount
+                    ? `${activityCount} recorded updates to review.`
+                    : "Payments and bill updates will appear here."
+                }
+              </div>
+            </div>
+
+            <div style="color:var(--text-muted)">
+              ${svgIcon("chevronRight", 20)}
+            </div>
+          </button>
+        </section>
+
+        <section class="settings-section">
+          <div
+            class="section-header"
+            style="margin-bottom:10px"
+          >
+            App
           </div>
-        </div>
+
+          <button
+            type="button"
+            onclick="navigate('settings')"
+            style="${wideCardStyle}"
+          >
+            <div
+              style="
+                width:46px;
+                height:46px;
+                min-width:46px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                border-radius:15px;
+                color:#d8d0ff;
+                background:rgba(143,54,255,.16);
+              "
+            >
+              ${svgIcon("gear", 23)}
+            </div>
+
+            <div style="min-width:0;flex:1">
+              <div
+                style="
+                  font-size:16px;
+                  font-weight:850;
+                "
+              >
+                Settings
+              </div>
+
+              <div
+                style="
+                  margin-top:4px;
+                  color:var(--text-muted);
+                  font-size:13px;
+                  line-height:1.35;
+                "
+              >
+                Income sources, notifications, backup, and household.
+              </div>
+            </div>
+
+            <div style="color:var(--text-muted)">
+              ${svgIcon("chevronRight", 20)}
+            </div>
+          </button>
+        </section>
 
       </div>
     </div>
