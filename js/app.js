@@ -122,6 +122,7 @@ const ICONS = {
   pieChart: '<path d="M11 2v20c5.52 0 10-4.48 10-10S16.52 2 11 2zm-1 7L4.6 7.3C3.6 8.8 3 10.6 3 12.5 3 17.2 6.8 21 11.5 21c1.9 0 3.7-.6 5.2-1.6L10 9z" fill="currentColor"/>',
   trendUp: '<path d="M16 6l2.29 2.29-4.88 4.88-4-4L2 16.59 3.41 18l6-6 4 4 6.3-6.29L22 12V6z" fill="currentColor"/>',
   sort: '<path d="M7 3h10v2H7V3zm-3 6h16v2H4V9zm3 6h10v2H7v-2zm3 6h4v2h-4v-2z" fill="currentColor"/>',
+  search: `<path d="M10.8 4a6.8 6.8 0 1 0 0 13.6 6.8 6.8 0 0 0 0-13.6Zm0 2a4.8 4.8 0 1 1 0 9.6 4.8 4.8 0 0 1 0-9.6Zm6.7 10.1 3.3 3.3-1.4 1.4-3.3-3.3 1.4-1.4Z" fill="currentColor" />`,
 };
 
 // ====================================
@@ -290,6 +291,26 @@ const Store = {
     localStorage.setItem('payments', JSON.stringify(payments));
     window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
      },
+     getBankTransactions() {
+  try {
+    return JSON.parse(
+      localStorage.getItem("bankTransactions")
+    ) || [];
+  } catch {
+    return [];
+  }
+},
+
+saveBankTransactions(transactions) {
+  localStorage.setItem(
+    "bankTransactions",
+    JSON.stringify(transactions)
+  );
+
+  window.dispatchEvent(
+    new CustomEvent("billbeacondata-changed")
+  );
+},
   getActivityLog() {
   try {
     return JSON.parse(localStorage.getItem("activityLog")) || [];
@@ -444,6 +465,122 @@ updatePayment(paymentId, updates) {
 // ====================================
 // UTILITIES
 // ====================================
+function getDemoBankTransactions() {
+  const existingTransactions = Store.getBankTransactions();
+
+  if (existingTransactions.length) {
+    return existingTransactions;
+  }
+
+  const demoTransactions = [
+    {
+      id: "demo-zip-oct-05",
+      accountName: "Primary Bill-Pay Account",
+      accountMask: "1234",
+      merchantName: "Zip",
+      merchantInitials: "Z",
+      amount: 23.50,
+      date: "2026-10-05T12:00:00.000Z",
+      pending: false,
+      type: "debit",
+      category: "Installments",
+      matchStatus: "matched",
+      matchedBillName: "Zip installment",
+      matchedBillId: null,
+      matchNote: "Matched to Zip installment · Paid",
+      iconColor: "#7c5cff",
+    },
+    {
+      id: "demo-apple-oct-05",
+      accountName: "Primary Bill-Pay Account",
+      accountMask: "1234",
+      merchantName: "Apple – App Store",
+      merchantInitials: "A",
+      amount: 2.99,
+      date: "2026-10-05T12:00:00.000Z",
+      pending: true,
+      type: "debit",
+      category: "Subscriptions",
+      matchStatus: "pending",
+      matchedBillName: null,
+      matchedBillId: null,
+      matchNote: "Pending bank transaction",
+      iconColor: "#8d8a9b",
+    },
+    {
+      id: "demo-klarna-oct-02",
+      accountName: "Primary Bill-Pay Account",
+      accountMask: "1234",
+      merchantName: "Klarna",
+      merchantInitials: "K",
+      amount: 35.94,
+      date: "2026-10-02T12:00:00.000Z",
+      pending: false,
+      type: "debit",
+      category: "Installments",
+      matchStatus: "possible",
+      matchedBillName: "Klarna installment",
+      matchedBillId: null,
+      matchNote: "Possible payment match",
+      iconColor: "#f4a5bd",
+    },
+    {
+      id: "demo-trader-joes-oct-02",
+      accountName: "Primary Bill-Pay Account",
+      accountMask: "1234",
+      merchantName: "Trader Joe's",
+      merchantInitials: "TJ",
+      amount: 62.09,
+      date: "2026-10-02T12:00:00.000Z",
+      pending: false,
+      type: "debit",
+      category: "Groceries",
+      matchStatus: "unmatched",
+      matchedBillName: null,
+      matchedBillId: null,
+      matchNote: "Not a tracked bill",
+      iconColor: "#f0a7bd",
+    },
+    {
+      id: "demo-dollar-tree-oct-05",
+      accountName: "Primary Bill-Pay Account",
+      accountMask: "1234",
+      merchantName: "Dollar Tree",
+      merchantInitials: "DT",
+      amount: 13.97,
+      date: "2026-10-05T12:00:00.000Z",
+      pending: true,
+      type: "debit",
+      category: "Shopping",
+      matchStatus: "pending",
+      matchedBillName: null,
+      matchedBillId: null,
+      matchNote: "Pending bank transaction",
+      iconColor: "#e6c56d",
+    },
+    {
+      id: "demo-exchange-oct-05",
+      accountName: "Primary Bill-Pay Account",
+      accountMask: "1234",
+      merchantName: "Exchange Express",
+      merchantInitials: "EX",
+      amount: 1.29,
+      date: "2026-10-05T12:00:00.000Z",
+      pending: true,
+      type: "debit",
+      category: "Shopping",
+      matchStatus: "pending",
+      matchedBillName: null,
+      matchedBillId: null,
+      matchNote: "Pending bank transaction",
+      iconColor: "#8cd9de",
+    },
+  ];
+
+  Store.saveBankTransactions(demoTransactions);
+
+  return demoTransactions;
+}
 async function refreshBillBeaconApp() {
   try {
     if (!("serviceWorker" in navigator)) {
@@ -2110,6 +2247,67 @@ function navigate(route, params = {}) {
     main.scrollTop = 0;
   }
 }
+let transactionSearchTimer = null;
+
+function searchTransactions(value) {
+  clearTimeout(transactionSearchTimer);
+
+  transactionSearchTimer = setTimeout(() => {
+    routeParams.transactionSearch = value;
+    render();
+
+    setTimeout(() => {
+      const input = document.querySelector(
+        'input[placeholder="Search transactions"]'
+      );
+
+      if (!input) {
+        return;
+      }
+
+      input.focus();
+      input.setSelectionRange(
+        input.value.length,
+        input.value.length
+      );
+    }, 0);
+  }, 180);
+}
+function openTransactionDetails(transactionId) {
+  const transaction = Store.getBankTransactions().find(
+    (item) => item.id === transactionId
+  );
+
+  if (!transaction) {
+    alert("Transaction not found.");
+    return;
+  }
+
+  const statusText =
+    transaction.matchStatus === "matched"
+      ? transaction.matchNote || "Matched to a Bill Beacon bill"
+      : transaction.matchStatus === "possible"
+      ? transaction.matchNote || "Possible payment match"
+      : transaction.pending
+      ? "Pending bank transaction"
+      : transaction.matchNote || "Not a tracked bill";
+
+  alert(
+    [
+      transaction.merchantName,
+      "",
+      `${formatCurrency(transaction.amount)} · ${formatDate(
+        transaction.date,
+        "full"
+      )}`,
+      "",
+      `Status: ${statusText}`,
+      `Category: ${transaction.category || "Uncategorized"}`,
+      "",
+      "This is demo transaction data. A later Plaid connection will replace it with your posted and pending bank transactions.",
+    ].join("\n")
+  );
+}
 function getNotificationDeepLink() {
   const params = new URLSearchParams(window.location.search);
 
@@ -3241,7 +3439,7 @@ function renderMore() {
           >
             <button
               type="button"
-              onclick="openBankingComingSoon()"
+              onclick="navigate('transactions')"
               style="${moneyTileStyle}"
             >
               <div
@@ -3289,7 +3487,7 @@ function renderMore() {
                   font-weight:800;
                 "
               >
-                Coming soon
+                View Transactions
               </div>
             </button>
 
@@ -13115,6 +13313,491 @@ function closeNotificationCenter() {
 }
 
 window.closeNotificationCenter = closeNotificationCenter;
+
+function renderTransactions() {
+  const transactions = getDemoBankTransactions()
+    .slice()
+    .sort((first, second) => {
+      return new Date(second.date) - new Date(first.date);
+    });
+
+  const searchQuery = String(
+    routeParams.transactionSearch || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const filteredTransactions = transactions.filter(
+    (transaction) => {
+      if (!searchQuery) {
+        return true;
+      }
+
+      const searchableText = [
+        transaction.merchantName,
+        transaction.category,
+        transaction.matchStatus,
+        transaction.matchedBillName,
+        transaction.matchNote,
+        transaction.amount,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return searchableText.includes(searchQuery);
+    }
+  );
+
+  const totalSpent = filteredTransactions
+    .filter((transaction) => transaction.type === "debit")
+    .reduce((total, transaction) => {
+      return total + Number(transaction.amount || 0);
+    }, 0);
+
+  const groups = filteredTransactions.reduce(
+    (result, transaction) => {
+      const transactionDate = new Date(transaction.date);
+
+      const groupKey = [
+        transactionDate.getFullYear(),
+        String(transactionDate.getMonth() + 1).padStart(2, "0"),
+      ].join("-");
+
+      if (!result[groupKey]) {
+        result[groupKey] = {
+          date: new Date(
+            transactionDate.getFullYear(),
+            transactionDate.getMonth(),
+            1,
+            12,
+            0,
+            0
+          ),
+          transactions: [],
+        };
+      }
+
+      result[groupKey].transactions.push(transaction);
+
+      return result;
+    },
+    {}
+  );
+
+  const monthGroups = Object.values(groups).sort(
+    (first, second) => second.date - first.date
+  );
+
+  const getStatusAppearance = (transaction) => {
+    if (transaction.matchStatus === "matched") {
+      return {
+        color: "var(--paid)",
+        icon: "checkCircle",
+        label:
+          transaction.matchNote ||
+          "Matched to a Bill Beacon bill",
+      };
+    }
+
+    if (transaction.matchStatus === "possible") {
+      return {
+        color: "var(--accent)",
+        icon: "warning",
+        label:
+          transaction.matchNote ||
+          "Possible payment match",
+      };
+    }
+
+    if (transaction.pending) {
+      return {
+        color: "var(--text-muted)",
+        icon: "clock",
+        label: "Pending bank transaction",
+      };
+    }
+
+    return {
+      color: "var(--text-muted)",
+      icon: "doc",
+      label:
+        transaction.matchNote ||
+        "Not a tracked bill",
+    };
+  };
+
+  const renderTransactionRow = (transaction) => {
+    const transactionDate = new Date(transaction.date);
+    const appearance = getStatusAppearance(transaction);
+
+    return `
+      <button
+        type="button"
+        onclick="openTransactionDetails('${transaction.id}')"
+        style="
+          width:100%;
+          display:flex;
+          align-items:center;
+          gap:12px;
+          padding:16px;
+          border:0;
+          border-bottom:1px solid rgba(255,255,255,.07);
+          background:transparent;
+          color:var(--text);
+          text-align:left;
+          cursor:pointer;
+          font-family:inherit;
+        "
+      >
+        <div
+          style="
+            width:44px;
+            height:44px;
+            min-width:44px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            border-radius:14px;
+            color:#fff;
+            background:${transaction.iconColor || "var(--accent)"};
+            font-size:12px;
+            font-weight:900;
+          "
+        >
+          ${escapeHtml(transaction.merchantInitials || "?")}
+        </div>
+
+        <div style="min-width:0;flex:1">
+          <div
+            style="
+              overflow:hidden;
+              font-size:16px;
+              font-weight:850;
+              text-overflow:ellipsis;
+              white-space:nowrap;
+            "
+          >
+            ${escapeHtml(transaction.merchantName)}
+          </div>
+
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              gap:5px;
+              margin-top:5px;
+              overflow:hidden;
+              color:${appearance.color};
+              font-size:12px;
+              font-weight:700;
+              text-overflow:ellipsis;
+              white-space:nowrap;
+            "
+          >
+            ${svgIcon(appearance.icon, 14)}
+            <span>
+              ${formatDate(transaction.date, "short")}
+              ·
+              ${escapeHtml(appearance.label)}
+            </span>
+          </div>
+        </div>
+
+        <div
+          style="
+            margin-left:auto;
+            font-size:17px;
+            font-weight:900;
+            white-space:nowrap;
+          "
+        >
+          ${transaction.type === "credit" ? "+" : "−"}${formatCurrency(
+            transaction.amount
+          )}
+        </div>
+      </button>
+    `;
+  };
+
+  const transactionContent = monthGroups.length
+    ? monthGroups
+        .map((group) => {
+          const groupTotal = group.transactions
+            .filter((transaction) => {
+              return transaction.type === "debit";
+            })
+            .reduce((total, transaction) => {
+              return total + Number(transaction.amount || 0);
+            }, 0);
+
+          return `
+            <section style="margin-top:20px">
+              <div
+                style="
+                  display:flex;
+                  align-items:center;
+                  justify-content:space-between;
+                  gap:12px;
+                  margin:0 4px 9px;
+                "
+              >
+                <div
+                  style="
+                    font-size:18px;
+                    font-weight:900;
+                  "
+                >
+                  ${formatDate(
+                    group.date.toISOString(),
+                    "monthYear"
+                  )}
+                </div>
+
+                <div
+                  style="
+                    color:var(--text-muted);
+                    font-size:14px;
+                    font-weight:700;
+                    white-space:nowrap;
+                  "
+                >
+                  ${formatCurrency(groupTotal)} spent
+                </div>
+              </div>
+
+              <div
+                class="card"
+                style="
+                  overflow:hidden;
+                  border:1px solid rgba(192,151,255,.18);
+                "
+              >
+                ${group.transactions
+                  .map(renderTransactionRow)
+                  .join("")}
+              </div>
+            </section>
+          `;
+        })
+        .join("")
+    : `
+      <div class="empty-state">
+        <div class="empty-state-icon">
+          ${svgIcon("internaldrive", 44)}
+        </div>
+
+        <div class="empty-state-title">
+          No matching transactions
+        </div>
+
+        <div class="empty-state-text">
+          Try a different merchant name, amount, or status.
+        </div>
+      </div>
+    `;
+
+  return `
+    <div class="nav-bar">
+      <div
+        class="nav-bar-content"
+        style="
+          display:grid;
+          grid-template-columns:44px 1fr 44px;
+          align-items:center;
+        "
+      >
+        <button
+          type="button"
+          class="nav-button"
+          onclick="navigate('more')"
+          aria-label="Back to More"
+          title="Back to More"
+          style="
+            width:44px;
+            height:44px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            padding:0;
+            color:var(--text);
+          "
+        >
+          ${svgIcon("chevronLeft", 22)}
+        </button>
+
+        <div
+          class="nav-title"
+          style="text-align:center"
+        >
+          Transactions
+        </div>
+
+        <div style="width:44px;height:44px"></div>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div
+        class="content-pad"
+        style="
+          padding-bottom:calc(36px + env(safe-area-inset-bottom));
+        "
+      >
+        <section
+          style="
+            margin-top:8px;
+            padding:16px;
+            border:1px solid rgba(192,151,255,.18);
+            border-radius:18px;
+            background:var(--surface);
+          "
+        >
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              gap:12px;
+            "
+          >
+            <div
+              style="
+                width:42px;
+                height:42px;
+                min-width:42px;
+                display:flex;
+                align-items:center;
+                justify-content:center;
+                border-radius:14px;
+                color:#d9ccff;
+                background:rgba(143,54,255,.18);
+              "
+            >
+              ${svgIcon("internaldrive", 21)}
+            </div>
+
+            <div style="min-width:0;flex:1">
+              <div
+                style="
+                  overflow:hidden;
+                  font-size:15px;
+                  font-weight:850;
+                  text-overflow:ellipsis;
+                  white-space:nowrap;
+                "
+              >
+                Primary bill-pay account
+              </div>
+
+              <div
+                style="
+                  margin-top:4px;
+                  color:var(--text-muted);
+                  font-size:12px;
+                "
+              >
+                Demo transactions · No bank connected yet
+              </div>
+            </div>
+
+            <div
+              style="
+                padding:6px 9px;
+                border-radius:999px;
+                color:#d9ccff;
+                background:rgba(143,54,255,.14);
+                font-size:11px;
+                font-weight:850;
+                white-space:nowrap;
+              "
+            >
+              Demo
+            </div>
+          </div>
+        </section>
+
+        <section
+          style="
+            display:flex;
+            align-items:center;
+            gap:10px;
+            margin-top:16px;
+            padding:0 14px;
+            min-height:54px;
+            border:1px solid rgba(192,151,255,.20);
+            border-radius:16px;
+            background:var(--surface);
+          "
+        >
+          <div style="color:var(--text-muted)">
+            ${svgIcon("search", 22)}
+          </div>
+
+          <input
+            type="search"
+            value="${escapeHtml(
+              routeParams.transactionSearch || ""
+            )}"
+            placeholder="Search transactions"
+            oninput="searchTransactions(this.value)"
+            style="
+              min-width:0;
+              flex:1;
+              border:0;
+              outline:0;
+              background:transparent;
+              color:var(--text);
+              font-family:inherit;
+              font-size:16px;
+            "
+          />
+
+          <div
+            style="
+              width:1px;
+              height:26px;
+              background:rgba(255,255,255,.10);
+            "
+          ></div>
+
+          <div
+            style="
+              color:var(--text-muted);
+              display:flex;
+            "
+            aria-hidden="true"
+          >
+            ${svgIcon("sort", 20)}
+          </div>
+        </section>
+
+        <div
+          style="
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
+            margin-top:13px;
+            color:var(--text-muted);
+            font-size:12px;
+          "
+        >
+          <span>
+            ${filteredTransactions.length} transaction${
+              filteredTransactions.length === 1 ? "" : "s"
+            }
+          </span>
+
+          <span>
+            ${formatCurrency(totalSpent)} total shown
+          </span>
+        </div>
+
+        ${transactionContent}
+      </div>
+    </div>
+  `;
+}
 function render() {
   const app = document.getElementById("app");
   if (!app) return;
@@ -13149,6 +13832,9 @@ function render() {
     case "settings":
       content = renderSettings();
       break;
+      case "transactions":
+  content = renderTransactions();
+  break;
     case "detail":
       content = renderBillDetail();
       break;
