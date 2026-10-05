@@ -2576,7 +2576,7 @@ function renderDashboardPaycheckPlan(referenceDate = new Date()) {
             cursor:pointer;
           "
         >
-          Paycheck · ${firstLabel}
+          PAYCHECK · ${firstLabel}
         </button>
 
         <button
@@ -2602,7 +2602,7 @@ function renderDashboardPaycheckPlan(referenceDate = new Date()) {
             cursor:pointer;
           "
         >
-          Paycheck · ${secondLabel}
+          PAYCHECK · ${secondLabel}
         </button>
       </div>
 
