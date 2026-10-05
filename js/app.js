@@ -10526,46 +10526,40 @@ function getBillScheduleLabel(bill) {
 
 function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
-  const payCycleLabel = getPayCycleLabel(bill);
   const dueDate = new Date(bill.dueDate);
 
-  const dueDay = bill.recurrence === "Monthly"
-    ? getMonthlyDueDay(bill)
-    : dueDate.getDate();
+  const dueDay =
+    bill.recurrence === "Monthly"
+      ? getMonthlyDueDay(bill)
+      : dueDate.getDate();
 
-  const ordinal = (day) => {
-    const mod100 = day % 100;
+  const ordinal = (() => {
+    const value = Number(dueDay);
+    const mod100 = value % 100;
 
     if (mod100 >= 11 && mod100 <= 13) {
-      return `${day}th`;
+      return `${value}th`;
     }
 
-    switch (day % 10) {
+    switch (value % 10) {
       case 1:
-        return `${day}st`;
+        return `${value}st`;
       case 2:
-        return `${day}nd`;
+        return `${value}nd`;
       case 3:
-        return `${day}rd`;
+        return `${value}rd`;
       default:
-        return `${day}th`;
+        return `${value}th`;
     }
-  };
+  })();
 
   const scheduleText =
     bill.recurrence && bill.recurrence !== "None"
       ? bill.recurrence === "Monthly"
-        ? `Due on the ${ordinal(dueDay)} of each month`
+        ? `Due on the ${ordinal} of each month`
         : getBillScheduleLabel(bill)
       : `Due on ${formatDate(bill.dueDate, "full")}`;
 
-  const payCycleClass =
-    bill.payCycle === "first" ||
-    (!bill.payCycle && dueDay <= 15)
-      ? "pay-cycle-first"
-      : "pay-cycle-second";
-
-  // Recurring occurrences keep their own date but use the original bill ID.
   const detailBillId = bill.isOccurrence
     ? bill.sourceBillId
     : bill.id;
@@ -10574,27 +10568,32 @@ function billRow(bill, clickable = false) {
     ? bill.dueDate
     : "";
 
-  const rowClick = `
-  onclick="openBillDetailsSheet('${detailBillId}')"
-  role="button"
-  tabindex="0"
-  onkeydown="
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      openBillDetailsSheet('${detailBillId}');
-    }
-  "
-`;
+  const rowClick = clickable
+    ? `
+      onclick="openBillDetailsSheet('${detailBillId}')"
+      role="button"
+      tabindex="0"
+      onkeydown="
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openBillDetailsSheet('${detailBillId}');
+        }
+      "
+    `
+    : "";
+
   const moreButtonAction = bill.isOccurrence
-    ? `navigate('detail', {
+    ? `
+      navigate('detail', {
         id: '${detailBillId}',
         occurrenceDueDate: '${detailDueDate}',
         returnRoute: 'recurring'
-      })`
+      })
+    `
     : `openBillQuickActions('${detailBillId}')`;
 
   return `
-    <div class="bill-row clickable" ${rowClick}>
+    <div class="bill-row ${clickable ? "clickable" : ""}" ${rowClick}>
       <div
         class="bill-icon"
         style="
@@ -10612,22 +10611,20 @@ function billRow(bill, clickable = false) {
       </div>
 
       <div class="bill-info">
-        <div class="bill-name">
-          ${escapeHtml(bill.name)}
-        </div>
+        <div class="bill-name">${escapeHtml(bill.name)}</div>
 
         <div class="bill-meta-row">
-          <div class="bill-meta">
-            ${scheduleText}
-          </div>
-
-          <span class="pay-cycle-pill ${payCycleClass}">
-            ${payCycleLabel}
-          </span>
+          <div class="bill-meta">${scheduleText}</div>
         </div>
       </div>
 
-      <div style="display:flex; align-items:center; gap:6px">
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:6px;
+        "
+      >
         <div
           style="
             display:flex;
