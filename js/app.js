@@ -3971,11 +3971,10 @@ function openDashboardPaidSheet() {
 </div>
 
         ${activePaid.length ? `
-          <div class="section-header">Paid Bills</div>
-          <div class="card">
-            ${activePaid.map(renderRow).join("")}
-          </div>
-        ` : ""}
+  <div class="card">
+    ${activePaid.map(renderRow).join("")}
+  </div>
+` : ""}
 
         ${removedPaid.length ? `
           <div class="section-header" style="color:var(--overdue);">
@@ -4163,12 +4162,7 @@ function renderToday() {
                 font-weight:800;line-height:1.1;">
                 ${formatCurrency(summary.remainingTotal)}
               </div>
-              <div style="
-                margin-top:8px;font-size:var(--text-xs);
-                color:var(--text-muted);">
-                Due & overdue ${svgIcon("chevronRight", 12)}
-              </div>
-            </button>
+             </button>
 
             <button type="button"
               style="${moneyButtonStyle}text-align:right;"
@@ -4184,11 +4178,7 @@ function renderToday() {
                 font-weight:800;line-height:1.1;">
                 ${formatCurrency(summary.paidTotal)}
               </div>
-              <div style="
-                margin-top:8px;font-size:var(--text-xs);
-                color:var(--text-muted);">
-                View paid ${svgIcon("chevronRight", 12)}
-              </div>
+             
             </button>
           </div>
 
@@ -4198,13 +4188,6 @@ function renderToday() {
               style="width:${summary.progress}%;"></div>
           </div>
 
-          <div class="dashboard-month-footer">
-            <span>
-              ${summary.unpaid.length}
-              bill${summary.unpaid.length === 1 ? "" : "s"} left
-            </span>
-            <span>Tap Remaining or Paid</span>
-          </div>
         </section>
 
         <div class="section-header">Bill Status This Month</div>
