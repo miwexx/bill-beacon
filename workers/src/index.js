@@ -1654,6 +1654,101 @@ export default {
     }
 
     const url = new URL(request.url);
+    if (
+  request.method === "POST" &&
+  url.pathname === "/plaid/link-token"
+) {
+  const authentication = await verifyFirebaseToken(request);
+
+  if (!authentication.ok) {
+    return json(
+      { ok: false, error: authentication.error },
+      authentication.status,
+      origin
+    );
+  }
+
+  // This first connection test must remain Sandbox-only.
+  if (env.PLAID_ENV !== "sandbox") {
+    return json(
+      {
+        ok: false,
+        error: "This connection test requires PLAID_ENV=sandbox."
+      },
+      503,
+      origin
+    );
+  }
+
+  if (!env.PLAID_CLIENT_ID || !env.PLAID_SECRET) {
+    return json(
+      {
+        ok: false,
+        error: "Plaid credentials are missing in Cloudflare."
+      },
+      503,
+      origin
+    );
+  }
+
+  try {
+    const response = await fetch(
+      "https://sandbox.plaid.com/link/token/create",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          client_id: env.PLAID_CLIENT_ID,
+          secret: env.PLAID_SECRET,
+          client_name: "Bill Beacon",
+          user: {
+            client_user_id: authentication.user.uid
+          },
+          products: ["transactions"],
+          country_codes: ["US"],
+          language: "en"
+        })
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.link_token) {
+      return json(
+        {
+          ok: false,
+          error:
+            result.error_message ||
+            "Plaid could not create a connection token.",
+          code: result.error_code || null
+        },
+        502,
+        origin
+      );
+    }
+
+    return json(
+      {
+        ok: true,
+        environment: "sandbox",
+        link_token: result.link_token
+      },
+      200,
+      origin
+    );
+  } catch {
+    return json(
+      {
+        ok: false,
+        error: "Could not reach Plaid. Please try again."
+      },
+      502,
+      origin
+    );
+  }
+}
         if (
       request.method === "POST" &&
       url.pathname === "/household-invites"
