@@ -2238,13 +2238,13 @@ function navigate(route, params = {}) {
   routeParams = params;
 
   render();
-
   window.scrollTo(0, 0);
 
-  const main = document.querySelector('.main-content');
+  const main = document.querySelector(".main-content");
+  if (main) main.scrollTop = 0;
 
-  if (main) {
-    main.scrollTop = 0;
+  if (route === "transactions") {
+    refreshPlaidSandboxAutomatically();
   }
 }
 let transactionSearchTimer = null;
@@ -13449,21 +13449,48 @@ async function refreshPlaidSandboxAutomatically() {
   const sessionVersion = plaidSandboxSessionVersion;
 
   const task = (async () => {
-    const saved = await loadPlaidSandboxBank();
+    try {
+      const saved = await loadPlaidSandboxBank();
 
-    if (sessionVersion !== plaidSandboxSessionVersion) return;
-    if (!saved?.connected) return;
+      if (sessionVersion !== plaidSandboxSessionVersion) return;
 
-    const lastSync = new Date(saved.lastSyncedAt || 0).getTime();
-    const stale =
-      !Number.isFinite(lastSync) ||
-      lastSync <= 0 ||
-      Date.now() - lastSync >= 30 * 60 * 1000;
+      if (!saved) {
+        setPlaidBankMessage(
+          "Could not load saved banking data. Try Load Saved Connection."
+        );
+        return;
+      }
 
-    if (stale) {
-      await syncPlaidSandboxBank();
-    } else {
-      setPlaidBankMessage("Saved transactions loaded. Sync is up to date.");
+      if (!saved.connected) {
+        setPlaidBankMessage(
+          "No saved test bank connection. Tap Connect Test Bank."
+        );
+        return;
+      }
+
+      const lastSync = new Date(saved.lastSyncedAt || 0).getTime();
+
+      const stale =
+        !Number.isFinite(lastSync) ||
+        lastSync <= 0 ||
+        Date.now() - lastSync >= 30 * 60 * 1000;
+
+      const noTransactions =
+        !Array.isArray(saved.transactions) ||
+        saved.transactions.length === 0;
+
+      if (stale || noTransactions) {
+        await syncPlaidSandboxBank();
+      } else {
+        setPlaidBankMessage(
+          `${plaidSandboxBankState.transactions.length} saved transactions loaded.`
+        );
+      }
+    } catch (error) {
+      console.error("Automatic banking refresh failed:", error);
+      setPlaidBankMessage(
+        error.message || "Could not refresh banking data."
+      );
     }
   })();
 
