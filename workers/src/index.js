@@ -1635,7 +1635,156 @@ async function runScheduledBillReminders(env) {
     );
   }
 }
+// Plaid Sandbox: private connection and transaction storage.
+function plaidSandboxKey(uid) {
+  return `plaid:sandbox:user:${uid}`;
+}
 
+async function plaidSandboxRequest(env, endpoint, payload = {}) {
+  if (env.PLAID_ENV !== "sandbox") {
+    throw new Error("This integration is currently Sandbox-only.");
+  }
+
+  if (!env.PLAID_CLIENT_ID || !env.PLAID_SECRET) {
+    throw new Error("Plaid credentials are missing.");
+  }
+
+  const response = await fetch(
+    `https://sandbox.plaid.com${endpoint}`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        ...payload,
+        client_id: env.PLAID_CLIENT_ID,
+        secret: env.PLAID_SECRET
+      })
+    }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok) {
+    const error = new Error(
+      result.error_message || "Plaid request failed."
+    );
+    error.code = result.error_code;
+    throw error;
+  }
+
+  return result;
+}
+
+function safePlaidSandboxConnection(record) {
+  return {
+    environment: "sandbox",
+    connected: Boolean(record),
+    accounts: record?.accounts || [],
+    selectedAccountId: record?.selectedAccountId || null,
+    lastSyncedAt: record?.lastSyncedAt || null,
+    transactions: (record?.transactions || []).filter(
+      (transaction) =>
+        transaction.accountId === record?.selectedAccountId
+    )
+  };
+}
+
+function normalizePlaidSandboxTransaction(transaction) {
+  const merchantName =
+    transaction.merchant_name || transaction.name || "Transaction";
+
+  const signedAmount = Number(transaction.amount || 0);
+
+  return {
+    id: transaction.transaction_id,
+    accountId: transaction.account_id,
+    merchantName,
+    merchantInitials: merchantName
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((word) => word.charAt(0).toUpperCase())
+      .join(""),
+    amount: Math.abs(signedAmount),
+    date: `${transaction.date}T12:00:00`,
+    pending: Boolean(transaction.pending),
+    pendingTransactionId:
+      transaction.pending_transaction_id || null,
+    type: signedAmount < 0 ? "credit" : "debit",
+    category:
+      transaction.personal_finance_category?.primary ||
+      "Uncategorized",
+    iconColor: "#7c5cff",
+    source: "plaid-sandbox"
+  };
+}
+
+async function syncPlaidSandboxTransactions(env, record) {
+  const originalCursor = record.cursor || "";
+  let lastError;
+
+  // Retry the entire pagination sequence if data changes mid-sync.
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    let cursor = originalCursor;
+    let hasMore = true;
+
+    const transactions = new Map(
+      (record.transactions || []).map((transaction) => [
+        transaction.id,
+        transaction
+      ])
+    );
+
+    try {
+      while (hasMore) {
+        const result = await plaidSandboxRequest(
+          env,
+          "/transactions/sync",
+          {
+            access_token: record.accessToken,
+            cursor,
+            count: 100
+          }
+        );
+
+        for (const transaction of [
+          ...(result.added || []),
+          ...(result.modified || [])
+        ]) {
+          transactions.set(
+            transaction.transaction_id,
+            normalizePlaidSandboxTransaction(transaction)
+          );
+        }
+
+        for (const transaction of result.removed || []) {
+          transactions.delete(transaction.transaction_id);
+        }
+
+        cursor = result.next_cursor;
+        hasMore = Boolean(result.has_more);
+      }
+
+      return {
+        ...record,
+        cursor,
+        transactions: [...transactions.values()],
+        lastSyncedAt: new Date().toISOString()
+      };
+    } catch (error) {
+      lastError = error;
+
+      if (
+        error.code !==
+        "TRANSACTIONS_SYNC_MUTATION_DURING_PAGINATION"
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError;
+}
 export default {
   async fetch(request, env) {
     const origin = allowedOrigin(request);
@@ -1654,6 +1803,201 @@ export default {
     }
 
     const url = new URL(request.url);
+    const sandboxBankRoutes = new Set([
+  "/plaid/exchange-token",
+  "/plaid/account",
+  "/plaid/sync",
+  "/plaid/status"
+]);
+
+if (sandboxBankRoutes.has(url.pathname)) {
+  const expectedMethod =
+    url.pathname === "/plaid/status" ? "GET" : "POST";
+
+  if (request.method !== expectedMethod) {
+    return json(
+      { ok: false, error: "Method not allowed." },
+      405,
+      origin
+    );
+  }
+
+  const authentication = await verifyFirebaseToken(request);
+
+  if (!authentication.ok) {
+    return json(
+      { ok: false, error: authentication.error },
+      authentication.status,
+      origin
+    );
+  }
+
+  if (env.PLAID_ENV !== "sandbox") {
+    return json(
+      { ok: false, error: "Sandbox configuration required." },
+      503,
+      origin
+    );
+  }
+
+  const key = plaidSandboxKey(authentication.user.uid);
+
+  try {
+    let record = await env.NOTIFICATIONSKV.get(key, "json");
+
+    if (url.pathname === "/plaid/status") {
+      return json(
+        { ok: true, ...safePlaidSandboxConnection(record) },
+        200,
+        origin
+      );
+    }
+
+    if (url.pathname === "/plaid/exchange-token") {
+      // Avoid replacing an existing connection accidentally.
+      if (record) {
+        return json(
+          {
+            ok: false,
+            error:
+              "A Sandbox bank is already connected. Use Load or Sync instead."
+          },
+          409,
+          origin
+        );
+      }
+
+      const body = await request.json();
+
+      if (
+        typeof body.public_token !== "string" ||
+        !body.public_token.startsWith("public-sandbox-")
+      ) {
+        return json(
+          { ok: false, error: "A valid Sandbox token is required." },
+          400,
+          origin
+        );
+      }
+
+      const exchanged = await plaidSandboxRequest(
+        env,
+        "/item/public_token/exchange",
+        { public_token: body.public_token }
+      );
+
+      // Save immediately so a later account-fetch error does not
+      // discard a successfully exchanged connection.
+      record = {
+        accessToken: exchanged.access_token,
+        itemId: exchanged.item_id,
+        accounts: [],
+        selectedAccountId: null,
+        transactions: [],
+        cursor: "",
+        createdAt: new Date().toISOString(),
+        lastSyncedAt: null
+      };
+
+      await env.NOTIFICATIONSKV.put(
+        key,
+        JSON.stringify(record)
+      );
+
+      const accountResult = await plaidSandboxRequest(
+        env,
+        "/accounts/get",
+        { access_token: record.accessToken }
+      );
+
+      record.accounts = accountResult.accounts.map((account) => ({
+        id: account.account_id,
+        name: account.name,
+        mask: account.mask || "",
+        type: account.type,
+        subtype: account.subtype || ""
+      }));
+
+      record.selectedAccountId =
+        record.accounts.find(
+          (account) => account.subtype === "checking"
+        )?.id || record.accounts[0]?.id || null;
+    }
+
+    if (!record) {
+      return json(
+        { ok: false, error: "Connect a Sandbox bank first." },
+        400,
+        origin
+      );
+    }
+
+    if (url.pathname === "/plaid/account") {
+      const body = await request.json();
+
+      if (
+        !record.accounts.some(
+          (account) => account.id === body.accountId
+        )
+      ) {
+        return json(
+          { ok: false, error: "Choose an account from this connection." },
+          400,
+          origin
+        );
+      }
+
+      record.selectedAccountId = body.accountId;
+    }
+
+    if (url.pathname === "/plaid/sync") {
+      // Also repairs account loading after an interrupted enrollment.
+      if (!record.accounts.length) {
+        const accountResult = await plaidSandboxRequest(
+          env,
+          "/accounts/get",
+          { access_token: record.accessToken }
+        );
+
+        record.accounts = accountResult.accounts.map((account) => ({
+          id: account.account_id,
+          name: account.name,
+          mask: account.mask || "",
+          type: account.type,
+          subtype: account.subtype || ""
+        }));
+
+        record.selectedAccountId =
+          record.accounts.find(
+            (account) => account.subtype === "checking"
+          )?.id || record.accounts[0]?.id || null;
+      }
+
+      record = await syncPlaidSandboxTransactions(env, record);
+    }
+
+    await env.NOTIFICATIONSKV.put(
+      key,
+      JSON.stringify(record)
+    );
+
+    return json(
+      { ok: true, ...safePlaidSandboxConnection(record) },
+      200,
+      origin
+    );
+  } catch (error) {
+    // Do not log tokens or complete Plaid request/response objects.
+    return json(
+      {
+        ok: false,
+        error: error.message || "Sandbox banking request failed."
+      },
+      502,
+      origin
+    );
+  }
+}
     if (
   request.method === "POST" &&
   url.pathname === "/plaid/link-token"
