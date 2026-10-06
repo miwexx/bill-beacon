@@ -4542,72 +4542,65 @@ function renderCompactRecurringCalendar() {
         );
       })
     : [];
+const selectedDayHtml = selectedDate
+  ? `
+    <div class="recurring-calendar-selected-header">
+      <div class="recurring-calendar-selected-title-group">
+        <div class="recurring-calendar-selected-date">
+          <span class="recurring-calendar-selected-date-icon">
+            ${svgIcon("calendar", 18)}
+          </span>
 
-  const selectedDayHtml = selectedDate
-    ? `
-      <div class="recurring-calendar-selected-header">
-  <div class="recurring-calendar-selected-title-group">
-    <div class="recurring-calendar-selected-date">
-      <span class="recurring-calendar-selected-date-icon">
-        ${svgIcon("calendar", 18)}
-      </span>
-
-      <span>
-        ${formatDate(selectedDate.toISOString(), "full")}
-      </span>
-    </div>
-
-    <div class="recurring-calendar-selected-count">
-      ${
-        selectedDayBills.length
-          ? `${selectedDayBills.length} ${
-              selectedDayBills.length === 1
-                ? "bill"
-                : "bills"
-            } scheduled`
-          : "No Bills Scheduled"
-      }
-    </div>
-  </div>
-
-  <button
-            type="button"
-            class="nav-button"
-            onclick="toggleRecurringCalendarDay('${
-              selectedDate.toISOString()
-            }')"
-            aria-label="Close selected day"
-            style="color:var(--text-muted);"
-          >
-            ${svgIcon("close", 20)}
-          </button>
+          <span>
+            ${formatDate(selectedDate.toISOString(), "full")}
+          </span>
         </div>
 
-        ${
-          selectedDayBills.length
-            ? `
-              <div
-                class="card recurring-calendar-selected-list"
-                style="margin-bottom:0;"
-              >
-                ${selectedDayBills
-                  .map((bill) => renderRecurringOccurrenceRow(bill))
-                  .join("")}
-              </div>
-            `
-            : `
-              <div class="recurring-calendar-empty-day">
-                ${svgIcon("calendar", 20)}
-                <span>
-                  Nothing Scheduled For This Day.
-                </span>
-              </div>
-            `
-        }
+        <div class="recurring-calendar-selected-count">
+          ${
+            selectedDayBills.length
+              ? `${selectedDayBills.length} ${
+                  selectedDayBills.length === 1 ? "Bill" : "Bills"
+                } Scheduled`
+              : "No Bills Scheduled"
+          }
+        </div>
       </div>
-    `
-    : "";
 
+      <button
+        type="button"
+        class="nav-button"
+        onclick="toggleRecurringCalendarDay('${
+          selectedDate.toISOString()
+        }')"
+        aria-label="Close selected day"
+        style="color:var(--text-muted);"
+      >
+        ${svgIcon("close", 20)}
+      </button>
+    </div>
+
+    ${
+      selectedDayBills.length
+        ? `
+          <div
+            class="card recurring-calendar-selected-list"
+            style="margin-bottom:0;"
+          >
+            ${selectedDayBills
+              .map(bill => renderRecurringOccurrenceRow(bill))
+              .join("")}
+          </div>
+        `
+        : `
+          <div class="recurring-calendar-empty-day">
+            ${svgIcon("calendar", 20)}
+            <span>Nothing Scheduled For This Day.</span>
+          </div>
+        `
+    }
+  `
+  : "";
   const prevMonth = new Date(year, month - 1, 1).toISOString();
   const nextMonth = new Date(year, month + 1, 1).toISOString();
 
