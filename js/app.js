@@ -2274,7 +2274,7 @@ function searchTransactions(value) {
   }, 180);
 }
 function openTransactionDetails(transactionId) {
-  const transaction = Store.getBankTransactions().find(
+  const transaction = plaidSandboxBankState.transactions.find(
     (item) => item.id === transactionId
   );
 
@@ -2283,14 +2283,7 @@ function openTransactionDetails(transactionId) {
     return;
   }
 
-  const statusText =
-    transaction.matchStatus === "matched"
-      ? transaction.matchNote || "Matched to a Bill Beacon bill"
-      : transaction.matchStatus === "possible"
-      ? transaction.matchNote || "Possible payment match"
-      : transaction.pending
-      ? "Pending bank transaction"
-      : transaction.matchNote || "Not a tracked bill";
+  const statusText = transaction.pending ? "Pending" : "Posted";
 
   alert(
     [
@@ -2304,7 +2297,7 @@ function openTransactionDetails(transactionId) {
       `Status: ${statusText}`,
       `Category: ${transaction.category || "Uncategorized"}`,
       "",
-      "This is demo transaction data. A later Plaid connection will replace it with your posted and pending bank transactions.",
+      "Plaid Sandbox transaction. This does not affect household bills."
     ].join("\n")
   );
 }
@@ -13354,109 +13347,221 @@ function loadBillBeaconPlaidLink() {
   return billBeaconPlaidScriptPromise;
 }
 
-async function connectBillBeaconTestBank() {
-  const button = document.getElementById("connectPlaidTestBank");
-  const status = document.getElementById("plaidConnectionStatus");
+let plaidSandboxBankState = {
+  connected: false,
+  accounts: [],
+  selectedAccountId: null,
+  transactions: [],
+  lastSyncedAt: null
+};
 
-  const setStatus = (message) => {
-    if (status) {
-      status.textContent = message;
+function setPlaidBankMessage(message) {
+  const element = document.getElementById(
+    "plaidConnectionStatus"
+  );
+
+  if (element) {
+    element.textContent = message;
+  }
+}
+
+async function callPlaidSandboxWorker(path, body) {
+  const firebaseToken =
+    await window.getBillBeaconFirebaseToken?.();
+
+  if (!firebaseToken) {
+    throw new Error("Please sign in to Bill Beacon first.");
+  }
+
+  const response = await fetch(
+    `https://bill-beacon-notifications.rodz-m-1990.workers.dev${path}`,
+    {
+      method: body === undefined ? "GET" : "POST",
+      headers: {
+        authorization: `Bearer ${firebaseToken}`,
+        "content-type": "application/json"
+      },
+      ...(body === undefined
+        ? {}
+        : { body: JSON.stringify(body) })
     }
+  );
+
+  const result = await response.json();
+
+  if (!response.ok || !result.ok) {
+    throw new Error(result.error || "Banking request failed.");
+  }
+
+  return result;
+}
+
+function applyPlaidSandboxBankState(result) {
+  plaidSandboxBankState = {
+    connected: Boolean(result.connected),
+    accounts: result.accounts || [],
+    selectedAccountId: result.selectedAccountId || null,
+    transactions: result.transactions || [],
+    lastSyncedAt: result.lastSyncedAt || null
   };
 
-  let handler = null;
+  if (currentRoute === "transactions") {
+    render();
+  }
+}
+
+async function loadPlaidSandboxBank() {
+  try {
+    setPlaidBankMessage("Loading saved Sandbox connection…");
+
+    const result = await callPlaidSandboxWorker(
+      "/plaid/status"
+    );
+
+    applyPlaidSandboxBankState(result);
+
+    setPlaidBankMessage(
+      result.connected
+        ? "Saved Sandbox connection loaded."
+        : "No saved connection. Tap Connect test bank."
+    );
+  } catch (error) {
+    setPlaidBankMessage(error.message);
+  }
+}
+
+async function syncPlaidSandboxBank() {
+  try {
+    setPlaidBankMessage("Importing Sandbox transactions…");
+
+    const result = await callPlaidSandboxWorker(
+      "/plaid/sync",
+      {}
+    );
+
+    applyPlaidSandboxBankState(result);
+
+    setPlaidBankMessage(
+      result.transactions.length
+        ? `${result.transactions.length} Sandbox transactions loaded.`
+        : "No transactions available yet. Wait a few seconds, then sync again."
+    );
+  } catch (error) {
+    setPlaidBankMessage(error.message);
+  }
+}
+
+async function choosePlaidSandboxAccount(accountId) {
+  try {
+    const result = await callPlaidSandboxWorker(
+      "/plaid/account",
+      { accountId }
+    );
+
+    applyPlaidSandboxBankState(result);
+    setPlaidBankMessage("Selected account updated.");
+  } catch (error) {
+    setPlaidBankMessage(error.message);
+  }
+}
+
+async function connectBillBeaconTestBank() {
+  const button = document.getElementById(
+    "connectPlaidTestBank"
+  );
+
+  let handler;
 
   try {
-    if (button) {
-      button.disabled = true;
-    }
+    if (button) button.disabled = true;
 
-    setStatus("Preparing the Sandbox connection…");
+    setPlaidBankMessage("Checking for an existing connection…");
+
+    const existing = await callPlaidSandboxWorker(
+      "/plaid/status"
+    );
+
+    if (existing.connected) {
+      applyPlaidSandboxBankState(existing);
+      setPlaidBankMessage(
+        "A test bank is already connected. Tap Sync test transactions."
+      );
+      return;
+    }
 
     await loadBillBeaconPlaidLink();
 
-    if (
-      typeof window.getBillBeaconFirebaseToken !== "function"
-    ) {
-      throw new Error("Please sign in to Bill Beacon first.");
-    }
-
-    const firebaseToken =
-      await window.getBillBeaconFirebaseToken();
-
-    if (!firebaseToken) {
-      throw new Error("Please sign in to Bill Beacon first.");
-    }
-
-    const response = await fetch(
-      "https://bill-beacon-notifications.rodz-m-1990.workers.dev/plaid/link-token",
-      {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${firebaseToken}`,
-          "content-type": "application/json"
-        }
-      }
+    const result = await callPlaidSandboxWorker(
+      "/plaid/link-token",
+      {}
     );
-
-    const result = await response.json();
-
-    if (!response.ok || !result.ok || !result.link_token) {
-      throw new Error(
-        result.error || "Could not start the bank connection."
-      );
-    }
 
     handler = window.Plaid.create({
       token: result.link_token,
 
-      onSuccess: () => {
-        setStatus(
-          "Sandbox connection test passed. Transaction import is not enabled yet."
-        );
+      onSuccess: async (publicToken) => {
+        try {
+          setPlaidBankMessage("Saving the Sandbox connection…");
 
-        if (button) {
-          button.disabled = false;
+          const saved = await callPlaidSandboxWorker(
+            "/plaid/exchange-token",
+            { public_token: publicToken }
+          );
+
+          applyPlaidSandboxBankState(saved);
+          await syncPlaidSandboxBank();
+        } catch (error) {
+          setPlaidBankMessage(error.message);
+        } finally {
+          handler?.destroy();
+
+          const currentButton = document.getElementById(
+            "connectPlaidTestBank"
+          );
+          if (currentButton) currentButton.disabled = false;
         }
-
-        // This test intentionally does not store the public token
-        // or create payments.
-        window.setTimeout(() => handler?.destroy(), 0);
       },
 
       onExit: (error) => {
-        setStatus(
-          error
-            ? error.display_message ||
-              error.error_message ||
-              "The connection could not be completed."
-            : "Connection window closed."
+        setPlaidBankMessage(
+          error?.display_message ||
+          error?.error_message ||
+          "Connection window closed."
         );
 
-        if (button) {
-          button.disabled = false;
-        }
-
+        if (button) button.disabled = false;
         window.setTimeout(() => handler?.destroy(), 0);
       }
     });
 
-    setStatus("Opening Plaid Sandbox…");
+    setPlaidBankMessage("Opening Plaid Sandbox…");
     handler.open();
   } catch (error) {
-    setStatus(error.message || "Bank connection failed.");
-
-    if (button) {
-      button.disabled = false;
-    }
-
+    setPlaidBankMessage(error.message);
+    if (button) button.disabled = false;
     handler?.destroy();
+  } finally {
+    if (!handler && button) button.disabled = false;
   }
 }
 
 window.connectBillBeaconTestBank = connectBillBeaconTestBank;
+window.loadPlaidSandboxBank = loadPlaidSandboxBank;
+window.syncPlaidSandboxBank = syncPlaidSandboxBank;
+window.choosePlaidSandboxAccount = choosePlaidSandboxAccount;
+
+window.addEventListener("billbeacon:signed-out", () => {
+  plaidSandboxBankState = {
+    connected: false,
+    accounts: [],
+    selectedAccountId: null,
+    transactions: [],
+    lastSyncedAt: null
+  };
+});
+window.connectBillBeaconTestBank = connectBillBeaconTestBank;
 function renderTransactions() {
-  const transactions = getDemoBankTransactions()
+  const transactions = plaidSandboxBankState.transactions
     .slice()
     .sort((first, second) => {
       return new Date(second.date) - new Date(first.date);
@@ -13693,7 +13798,7 @@ function renderTransactions() {
         </div>
 
         <div class="empty-state-text">
-          Try a different merchant name, amount, or status.
+          Connect or load a test bank, then sync transactions.
         </div>
       </div>
     `;
@@ -13797,7 +13902,11 @@ function renderTransactions() {
                   font-size:12px;
                 "
               >
-                Demo transactions · No bank connected yet
+                ${
+  plaidSandboxBankState.connected
+    ? "Plaid Sandbox · Test bank connected"
+    : "Plaid Sandbox · No test bank loaded"
+}
               </div>
             </div>
 
@@ -13812,34 +13921,100 @@ function renderTransactions() {
                 white-space:nowrap;
               "
             >
-              Demo
+              Sandbox
             </div>
           </div>
         </section>
-          <section style="margin-top:12px">
-  <button
-    id="connectPlaidTestBank"
-    type="button"
-    class="btn-primary"
-    onclick="connectBillBeaconTestBank()"
-    style="width:100%"
-  >
-    ${svgIcon("plus", 18)}
-    Connect test bank
-  </button>
+        <section style="margin-top:12px">
+  <div style="display:grid;gap:10px">
+    <button
+      id="connectPlaidTestBank"
+      type="button"
+      class="btn-primary"
+      onclick="connectBillBeaconTestBank()"
+      style="width:100%"
+    >
+      Connect test bank
+    </button>
+
+    <button
+      type="button"
+      class="bb-outline-pill"
+      onclick="loadPlaidSandboxBank()"
+      style="width:100%;min-height:44px"
+    >
+      Load saved connection
+    </button>
+
+    <button
+      type="button"
+      class="bb-outline-pill"
+      onclick="syncPlaidSandboxBank()"
+      style="width:100%;min-height:44px"
+    >
+      Sync test transactions
+    </button>
+
+    ${
+      plaidSandboxBankState.accounts.length
+        ? `
+          <label
+            for="plaidSandboxAccount"
+            style="font-size:13px;color:var(--text-muted)"
+          >
+            Test bill-pay account
+          </label>
+
+          <select
+            id="plaidSandboxAccount"
+            class="form-input"
+            onchange="choosePlaidSandboxAccount(this.value)"
+            style="
+              width:100%;
+              min-height:48px;
+              text-align:left;
+              background:var(--surface);
+              color:var(--text);
+            "
+          >
+            ${plaidSandboxBankState.accounts
+              .map((account) => `
+                <option
+                  value="${escapeHtml(account.id)}"
+                  ${
+                    account.id ===
+                    plaidSandboxBankState.selectedAccountId
+                      ? "selected"
+                      : ""
+                  }
+                >
+                  ${escapeHtml(account.name)}
+                  ${
+                    account.mask
+                      ? ` · ${escapeHtml(account.mask)}`
+                      : ""
+                  }
+                </option>
+              `)
+              .join("")}
+          </select>
+        `
+        : ""
+    }
+  </div>
 
   <div
     id="plaidConnectionStatus"
     role="status"
     aria-live="polite"
     style="
-      margin-top:8px;
+      margin-top:10px;
       color:var(--text-muted);
       font-size:13px;
       line-height:1.45;
     "
   >
-    Sandbox only. No real bank connection or bill changes.
+    Sandbox only. Household bills will not be changed.
   </div>
 </section>
         <section
