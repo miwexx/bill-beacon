@@ -4247,10 +4247,7 @@ function renderCompactRecurringCalendar() {
 
   const viewedMonthStart = new Date(year, month, 1);
 
-  const monthBills =
-    viewedMonthStart < currentMonthStart
-      ? []
-      : getCalendarBillsForMonth(viewDate);
+  const monthBills = getCalendarBillsForMonth(viewDate);
 
   const selectedDateKey = routeParams.recurringSelectedDate
     ? getLocalDateKey(routeParams.recurringSelectedDate)
@@ -5513,10 +5510,7 @@ window.openCalendarDay = function (dateString) {
     1
   );
 
-  const billsForDay =
-    selectedMonthStart < currentMonthStart
-      ? []
-      : getCalendarBillsForDay(dateString);
+  const billsForDay = getCalendarBillsForDay(dateString);
 
   const dayTotal = billsForDay.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
