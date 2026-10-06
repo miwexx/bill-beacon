@@ -308,7 +308,7 @@ saveBankTransactions(transactions) {
   );
 
   window.dispatchEvent(
-    new CustomEvent("billbeacondata-changed")
+    new CustomEvent("billbeacon:data-changed")
   );
 },
   getActivityLog() {
@@ -13313,7 +13313,148 @@ function closeNotificationCenter() {
 }
 
 window.closeNotificationCenter = closeNotificationCenter;
+let billBeaconPlaidScriptPromise = null;
 
+function loadBillBeaconPlaidLink() {
+  if (window.Plaid) {
+    return Promise.resolve();
+  }
+
+  if (billBeaconPlaidScriptPromise) {
+    return billBeaconPlaidScriptPromise;
+  }
+
+  billBeaconPlaidScriptPromise = new Promise(
+    (resolve, reject) => {
+      const script = document.createElement("script");
+
+      script.src =
+        "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
+
+      script.onload = () => {
+        if (window.Plaid) {
+          resolve();
+        } else {
+          script.remove();
+          billBeaconPlaidScriptPromise = null;
+          reject(new Error("Plaid Link did not initialize."));
+        }
+      };
+
+      script.onerror = () => {
+        script.remove();
+        billBeaconPlaidScriptPromise = null;
+        reject(new Error("Could not load Plaid Link."));
+      };
+
+      document.head.appendChild(script);
+    }
+  );
+
+  return billBeaconPlaidScriptPromise;
+}
+
+async function connectBillBeaconTestBank() {
+  const button = document.getElementById("connectPlaidTestBank");
+  const status = document.getElementById("plaidConnectionStatus");
+
+  const setStatus = (message) => {
+    if (status) {
+      status.textContent = message;
+    }
+  };
+
+  let handler = null;
+
+  try {
+    if (button) {
+      button.disabled = true;
+    }
+
+    setStatus("Preparing the Sandbox connection…");
+
+    await loadBillBeaconPlaidLink();
+
+    if (
+      typeof window.getBillBeaconFirebaseToken !== "function"
+    ) {
+      throw new Error("Please sign in to Bill Beacon first.");
+    }
+
+    const firebaseToken =
+      await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error("Please sign in to Bill Beacon first.");
+    }
+
+    const response = await fetch(
+      "https://bill-beacon-notifications.rodz-m-1990.workers.dev/plaid/link-token",
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${firebaseToken}`,
+          "content-type": "application/json"
+        }
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.ok || !result.link_token) {
+      throw new Error(
+        result.error || "Could not start the bank connection."
+      );
+    }
+
+    handler = window.Plaid.create({
+      token: result.link_token,
+
+      onSuccess: () => {
+        setStatus(
+          "Sandbox connection test passed. Transaction import is not enabled yet."
+        );
+
+        if (button) {
+          button.disabled = false;
+        }
+
+        // This test intentionally does not store the public token
+        // or create payments.
+        window.setTimeout(() => handler?.destroy(), 0);
+      },
+
+      onExit: (error) => {
+        setStatus(
+          error
+            ? error.display_message ||
+              error.error_message ||
+              "The connection could not be completed."
+            : "Connection window closed."
+        );
+
+        if (button) {
+          button.disabled = false;
+        }
+
+        window.setTimeout(() => handler?.destroy(), 0);
+      }
+    });
+
+    setStatus("Opening Plaid Sandbox…");
+    handler.open();
+  } catch (error) {
+    setStatus(error.message || "Bank connection failed.");
+
+    if (button) {
+      button.disabled = false;
+    }
+
+    handler?.destroy();
+  }
+}
+
+window.connectBillBeaconTestBank = connectBillBeaconTestBank;
 function renderTransactions() {
   const transactions = getDemoBankTransactions()
     .slice()
@@ -13675,7 +13816,32 @@ function renderTransactions() {
             </div>
           </div>
         </section>
+          <section style="margin-top:12px">
+  <button
+    id="connectPlaidTestBank"
+    type="button"
+    class="btn-primary"
+    onclick="connectBillBeaconTestBank()"
+    style="width:100%"
+  >
+    ${svgIcon("plus", 18)}
+    Connect test bank
+  </button>
 
+  <div
+    id="plaidConnectionStatus"
+    role="status"
+    aria-live="polite"
+    style="
+      margin-top:8px;
+      color:var(--text-muted);
+      font-size:13px;
+      line-height:1.45;
+    "
+  >
+    Sandbox only. No real bank connection or bill changes.
+  </div>
+</section>
         <section
           style="
             display:flex;
