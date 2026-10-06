@@ -3942,20 +3942,33 @@ function openDashboardPaidSheet() {
       </div>
 
       <div class="sheet-body content-gap">
-        <div class="card card-pad">
-          <div style="color:var(--text-muted);">
-            ${formatDate(now.toISOString(), "monthYear")}
-          </div>
-          <div class="text-paid"
-            style="margin-top:6px;font-size:var(--text-2xl);font-weight:800;">
-            ${formatCurrency(summary.paidTotal)}
-          </div>
-          <div style="margin-top:6px;color:var(--text-muted);">
-            ${summary.paidCount} paid occurrence${
-              summary.paidCount === 1 ? "" : "s"
-            }
-          </div>
-        </div>
+       <div class="card" style="overflow:hidden;">
+  <div class="form-row">
+    <div style="
+      display:flex;
+      align-items:center;
+      gap:var(--space-2);
+      color:var(--paid);
+    ">
+      ${svgIcon("checkCircle", 18)}
+
+      <span style="font-weight:700;">
+        ${summary.paidCount}
+        ${summary.paidCount === 1 ? "bill paid" : "bills paid"}
+      </span>
+    </div>
+
+    <div style="
+      margin-left:auto;
+      font-size:var(--text-lg);
+      font-weight:800;
+      color:var(--paid);
+      white-space:nowrap;
+    ">
+      ${formatCurrency(summary.paidTotal)}
+    </div>
+  </div>
+</div>
 
         ${activePaid.length ? `
           <div class="section-header">Paid Bills</div>
