@@ -2205,6 +2205,62 @@ function initTheme() {
 // ====================================
 let currentRoute = 'today';
 let routeParams = { billSort: 'dueDate' };
+const DASHBOARD_RETURN_DELAY = 5 * 60 * 1000;
+
+let dashboardHiddenAt = null;
+let dashboardRouteWhenHidden = null;
+let dashboardParamsWhenHidden = null;
+
+function dashboardHasOpenFormOrPopup() {
+  return Boolean(
+    document.querySelector(`
+      #sheetContainer,
+      #installmentPlanContainer,
+      #incomeSourceContainer,
+      #postponeBillContainer,
+      #postponeRecurringOccurrenceContainer,
+      #paymentLinkPopupContainer,
+      .sheet-overlay,
+      [role="dialog"][aria-modal="true"]
+    `)
+  ) || document.body.classList.contains("popup-open");
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") {
+    dashboardHiddenAt = Date.now();
+    dashboardRouteWhenHidden = currentRoute;
+    dashboardParamsWhenHidden = routeParams;
+    return;
+  }
+
+  if (
+    document.visibilityState !== "visible" ||
+    dashboardHiddenAt === null
+  ) {
+    return;
+  }
+
+  const timeAway = Date.now() - dashboardHiddenAt;
+
+  const routeChanged =
+    currentRoute !== dashboardRouteWhenHidden ||
+    routeParams !== dashboardParamsWhenHidden;
+
+  dashboardHiddenAt = null;
+  dashboardRouteWhenHidden = null;
+  dashboardParamsWhenHidden = null;
+
+  if (timeAway < DASHBOARD_RETURN_DELAY) return;
+
+  // Avoid overriding navigation that happened while away.
+  if (routeChanged) return;
+
+  // Preserve forms and popups instead of discarding them.
+  if (dashboardHasOpenFormOrPopup()) return;
+
+  navigate("today");
+});
 
 window.addEventListener("billbeacon-authenticated", () => {
   startNotificationInboxListener();
