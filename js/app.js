@@ -3954,7 +3954,7 @@ function openDashboardPaidSheet() {
 
       <span style="font-weight:700;">
         ${summary.paidCount}
-        ${summary.paidCount === 1 ? "bill paid" : "Bills Paid"}
+        ${summary.paidCount === 1 ? "Bill Paid" : "Bills Paid"}
       </span>
     </div>
 
@@ -6168,7 +6168,7 @@ function openDashboardStatusSheet(status) {
               ${icon}
               <span style="font-weight:700">
                 ${selectedBills.length}
-                ${selectedBills.length === 1 ? "bill" : "bills"}
+                ${selectedBills.length === 1 ? "Bill" : "Bills"}
               </span>
             </div>
 
@@ -8563,83 +8563,79 @@ function getCategorySpendingItems(categoryId) {
         new Date(a.bill.dueDate) - new Date(b.bill.dueDate)
     );
 }
-
 function openCategorySpendingSheet(categoryId) {
-  const category = getCategory(categoryId);
-const now = new Date();
-
-const activeBillsById = new Map(
-  Store.getBills()
-    .filter((bill) => !bill.archivedAt)
-    .map((bill) => [bill.id, bill])
-);
-
-const items = Store.getPayments()
-  .filter((payment) => {
-    if (payment.status === "voided") {
-      return false;
-    }
-
-    const paidDate = new Date(
-      payment.paidDate || payment.createdAt
-    );
-
-    if (Number.isNaN(paidDate.getTime())) {
-      return false;
-    }
-
-    const bill = activeBillsById.get(payment.billId);
-
-    return (
-      bill &&
-      bill.category === categoryId &&
-      paidDate.getFullYear() === now.getFullYear() &&
-      paidDate.getMonth() === now.getMonth()
-    );
-  })
-  .map((payment) => {
-    const bill = activeBillsById.get(payment.billId);
-
-    return {
-      bill,
-      payment,
-      status: "paid",
-      amount: parseFloat(payment.amount) || 0
-    };
-  })
-  .sort((first, second) => {
-    return (
-      new Date(second.payment.paidDate || second.payment.createdAt) -
-      new Date(first.payment.paidDate || first.payment.createdAt)
-    );
-  });
-
-const total = items.reduce((sum, item) => {
-  return sum + item.amount;
-}, 0);
-
   document.getElementById("categorySpendingContainer")?.remove();
+
+  const category = getCategory(categoryId);
+
+  const items = getMonthlyCategoryPayments(new Date()).filter(
+    item => item.categoryId === categoryId
+  );
+
+  const total = dashboardMoneyTotal(
+    items.map(item => item.amount)
+  );
+
+  const rows = items.map(item => {
+    const paidDate = item.paidDate
+      ? formatDate(item.paidDate, "full")
+      : "Date unavailable";
+
+    return `
+      <div class="bill-row">
+        <div class="bill-icon" style="
+          background:var(--paid-bg);
+          color:var(--paid);
+        ">
+          ${svgIcon("checkCircle", 20)}
+        </div>
+
+        <div class="bill-info">
+          <div class="bill-name">
+            ${escapeHtml(item.name)}
+          </div>
+
+          <div class="bill-meta" style="color:var(--paid);">
+            Paid ${escapeHtml(paidDate)}
+          </div>
+
+          <div class="bill-meta">
+            Due ${formatDate(item.dueDate, "short")}
+          </div>
+
+          ${item.removed ? `
+            <div class="bill-meta" style="color:var(--overdue);">
+              Removed — payment retained
+            </div>
+          ` : ""}
+        </div>
+
+        <div class="bill-amount" style="color:var(--paid);">
+          ${formatCurrency(item.amount)}
+        </div>
+      </div>
+    `;
+  }).join("");
 
   const container = document.createElement("div");
   container.id = "categorySpendingContainer";
 
   container.innerHTML = `
-    <div
-      class="sheet-overlay"
+    <div class="sheet-overlay"
       id="categorySpendingOverlay"
-      onclick="closeCategorySpendingSheet()"
-    ></div>
+      onclick="closeCategorySpendingSheet()"></div>
 
-    <div class="sheet" id="categorySpendingSheet">
+    <div class="sheet"
+      id="categorySpendingSheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label="${escapeHtml(category.label)} payments">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-        <button
-          type="button"
-          class="nav-button"
+        <button type="button" class="nav-button"
           onclick="closeCategorySpendingSheet()"
-          aria-label="Close category spending"
-        >
+          aria-label="Close category spending">
           ${svgIcon("close", 22)}
         </button>
 
@@ -8647,182 +8643,50 @@ const total = items.reduce((sum, item) => {
           ${escapeHtml(category.label)}
         </div>
 
-        <div style="width:54px"></div>
+        <div style="width:54px;"></div>
       </div>
 
       <div class="sheet-body content-gap">
-        <div class="card card-pad">
-          <div
-            style="
+        <div class="card">
+          <div class="form-row">
+            <div style="
               display:flex;
               align-items:center;
-              gap:var(--space-3);
-            "
-          >
-            <div
-              style="
-                width:42px;
-                height:42px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                border-radius:12px;
-                color:white;
-                background:var(--${category.color});
-              "
-            >
-              ${svgIcon(category.icon, 22)}
+              gap:var(--space-2);
+              color:var(--paid);
+            ">
+              ${svgIcon("checkCircle", 18)}
+              <span style="font-weight:700;">
+                ${items.length}
+                ${items.length === 1 ? "Bill" : "Bills"}
+              </span>
             </div>
 
-            <div style="flex:1">
-              <div
-                style="
-                  font-size:var(--text-sm);
-                  color:var(--text-muted);
-                "
-              >
-                This Month
-              </div>
-
-              <div
-                style="
-                  margin-top:3px;
-                  font-size:var(--text-lg);
-                  font-weight:800;
-                "
-              >
-                ${formatCurrency(total)}
-              </div>
-            </div>
-
-            <div
-              style="
-                font-size:var(--text-sm);
-                color:var(--text-muted);
-              "
-            >
-              ${items.length} item${items.length === 1 ? "" : "s"}
+            <div style="
+              margin-left:auto;
+              font-size:var(--text-lg);
+              font-weight:800;
+              color:var(--paid);
+            ">
+              ${formatCurrency(total)}
             </div>
           </div>
         </div>
 
-        ${
-          items.length
-            ? `
-              <div class="card">
-                ${items
-                  .map(({ bill, payment, status }) => {
-                    const sourceBillId = bill.isOccurrence
-                      ? bill.sourceBillId
-                      : bill.id;
+        ${items.length ? `
+          <div class="card">${rows}</div>
+        ` : `
+          <div class="dashboard-empty-card">
+            ${svgIcon("tray", 22)}
+            <span>No paid bills in this category for this month.</span>
+          </div>
+        `}
 
-                    const statusColor =
-                      status === "paid"
-                        ? "var(--paid)"
-                        : status === "overdue"
-                          ? "var(--overdue)"
-                          : "var(--upcoming)";
-
-                    const statusLabel =
-                      status === "paid"
-                        ? `Paid ${formatDate(
-                            payment?.paidDate,
-                            "short"
-                          )}`
-                        : status === "overdue"
-                          ? `Overdue ${formatDate(
-                              bill.dueDate,
-                              "short"
-                            )}`
-                          : `Due ${formatDate(
-                              bill.dueDate,
-                              "short"
-                            )}`;
-
-                    return `
-                      <button
-                        type="button"
-                        class="bill-row"
-                        style="width:100%;text-align:left"
-                        onclick="
-                          closeCategorySpendingSheet();
-                          navigate('detail', {
-                            id: '${sourceBillId}',
-                            occurrenceDueDate: '${bill.dueDate}',
-                            returnRoute: 'insights'
-                          });
-                        "
-                        aria-label="View ${escapeHtml(bill.name)} details"
-                      >
-                        <div
-  class="bill-icon"
-  style="
-    background:${
-      bill.installmentPlanId
-        ? "transparent"
-        : getBillBrand(bill.name)
-          ? "#fff"
-          : `var(--${category.color})`
-    };
-    color:${
-      bill.installmentPlanId || getBillBrand(bill.name)
-        ? "#1e1e2e"
-        : "white"
-    };
-    overflow:hidden;
-  "
->
-  ${
-    bill.installmentPlanId
-      ? billOrPaymentPlanVisual(bill, 32)
-      : billVisual(bill, 32)
-  }
-</div>
-
-                        <div class="bill-info">
-                          <div class="bill-name">
-                            ${escapeHtml(bill.name)}
-                          </div>
-
-                          <div
-  class="bill-meta"
-  style="color:${statusColor}"
->
-  ${statusLabel}
-</div>
-                        </div>
-
-                        <div
-                          style="
-                            margin-left:auto;
-                            text-align:right;
-                            font-weight:800;
-                          "
-                        >
-                          ${formatCurrency(payment.amount)}
-                        </div>
-                      </button>
-                    `;
-                  })
-                  .join("")}
-              </div>
-            `
-            : `
-              <div class="empty-state">
-                <div class="empty-state-icon">
-                  ${svgIcon("tray", 44)}
-                </div>
-
-                <div class="empty-state-title">
-                  No items this month
-                </div>
-
-                <div class="empty-state-text">
-                  There are no bills in ${escapeHtml(category.label)} for this month.
-                </div>
-              </div>
-            `
-        }
+        <button type="button" class="bb-outline-pill"
+          style="width:100%;"
+          onclick="closeCategorySpendingSheet();navigate('history');">
+          View All Payment History
+        </button>
       </div>
     </div>
   `;
@@ -8831,13 +8695,36 @@ const total = items.reduce((sum, item) => {
   lockBackgroundScroll();
 
   requestAnimationFrame(() => {
-    document
-      .getElementById("categorySpendingOverlay")
+    document.getElementById("categorySpendingOverlay")
       ?.classList.add("show");
 
-    document
-      .getElementById("categorySpendingSheet")
+    document.getElementById("categorySpendingSheet")
       ?.classList.add("show");
+  });
+}
+function getMonthlyCategoryPayments(referenceDate = new Date()) {
+  const validCategoryIds = new Set(
+    CATEGORIES.map(category => category.id)
+  );
+
+  return getDashboardPaidOccurrences(referenceDate).map(item => {
+    const snapshotCategory = item.payments
+      .map(payment => payment.billSnapshot?.category)
+      .find(Boolean);
+
+    const storedCategory =
+      snapshotCategory ||
+      item.bill?.category ||
+      "other";
+
+    const categoryId = validCategoryIds.has(storedCategory)
+      ? storedCategory
+      : "other";
+
+    return {
+      ...item,
+      categoryId
+    };
   });
 }
 function renderInsights() {
@@ -8969,43 +8856,24 @@ const paidThisMonth = getDashboardMonthSummary(now).paidTotal;
     .filter((bill) => !bill.archivedAt)
     .map((bill) => [bill.id, bill])
 );
+const categoryPayments = getMonthlyCategoryPayments(now);
+const categoryCents = {};
 
-const catTotals = {};
+for (const item of categoryPayments) {
+  const amountCents = Math.round(Number(item.amount) * 100);
 
-payments.forEach((payment) => {
-  if (payment.status === "voided") {
-    return;
-  }
+  if (!Number.isFinite(amountCents)) continue;
 
-  const paidDate = new Date(
-    payment.paidDate || payment.createdAt
-  );
+  categoryCents[item.categoryId] =
+    (categoryCents[item.categoryId] || 0) + amountCents;
+}
 
-  if (Number.isNaN(paidDate.getTime())) {
-    return;
-  }
-
-  const wasPaidThisMonth =
-    paidDate.getFullYear() === now.getFullYear() &&
-    paidDate.getMonth() === now.getMonth();
-
-  if (!wasPaidThisMonth) {
-    return;
-  }
-
-  const bill = activeBillsById.get(payment.billId);
-
-  if (!bill) {
-    return;
-  }
-
-  const categoryId = bill.category || "other";
-
-  catTotals[categoryId] =
-    (catTotals[categoryId] || 0) +
-    (parseFloat(payment.amount) || 0);
-});
-
+const catTotals = Object.fromEntries(
+  Object.entries(categoryCents).map(([categoryId, cents]) => [
+    categoryId,
+    cents / 100
+  ])
+);
   const catEntries = Object.entries(catTotals).sort(
     (a, b) => b[1] - a[1]
   );
@@ -9225,7 +9093,7 @@ for (let i = 5; i >= 0; i -= 1) {
             <span>
               ${
                 estimatedMonthlyIncome > 0
-                  ? `Est. ${formatCurrency(estimatedRemaining)} after bills`
+                  ? `Est. ${formatCurrency(estimatedRemaining)} After Bills`
                   : "Add income to see your estimate"
               }
             </span>
@@ -16146,7 +16014,7 @@ function saveInstallmentPlan() {
         id: uid(),
         name: storeName,
         amount: installmentCents / 100,
-        category: "loans",
+        category: "paymentplans",
         dueDate: dueDate.toISOString(),
         dueDay: dueDate.getDate(),
         recurrence: "None",
