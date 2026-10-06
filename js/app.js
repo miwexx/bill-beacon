@@ -148,111 +148,101 @@ const Store = {
   },
   updateBill(id, updates) {
   const bills = this.getBills();
-  const idx = bills.findIndex((b) => b.id === id);
+  const idx = bills.findIndex(bill => bill.id === id);
 
   if (idx < 0) return null;
 
   const previousBill = { ...bills[idx] };
-    preserveBillPaymentSnapshots(previousBill);
-  bills[idx] = {
-    ...bills[idx],
+
+  preserveBillPaymentSnapshots(previousBill);
+
+  const now = new Date();
+  const updatedAt = now.toISOString();
+
+  const effectiveFrom = [
+    now.getFullYear(),
+    String(now.getMonth() + 1).padStart(2, "0"),
+    String(now.getDate()).padStart(2, "0")
+  ].join("-");
+
+  const updatedBill = {
+    ...previousBill,
     ...updates,
-    updatedAt: new Date().toISOString(),
+    updatedAt
   };
 
-  this.saveBills(bills);
+  const buildScheduleSnapshot = bill => ({
+    name: bill.name || "Bill",
+    amount: Number(bill.amount || 0),
+    category: bill.category || "other",
+    dueDate: bill.dueDate || null,
+    dueDay: bill.dueDay ?? null,
+    recurrence: bill.recurrence || "None",
+    payCycle: bill.payCycle || null,
+    paycheckAssignment: bill.paycheckAssignment || "auto",
+    paymentMethod: bill.paymentMethod || "",
+    paymentUrl: bill.paymentUrl || "",
+    autopay: Boolean(bill.autopay),
+    notes: bill.notes || "",
+    reminderOffsets: Array.isArray(bill.reminderOffsets)
+      ? [...bill.reminderOffsets]
+      : []
+  });
 
-  const updatedBill = bills[idx];
+  const previousSchedule = buildScheduleSnapshot(previousBill);
+  const updatedSchedule = buildScheduleSnapshot(updatedBill);
 
-  const trackedFields = [
-    "name",
-    "amount",
-    "dueDate",
-    "dueDay",
-    "category",
-    "paymentMethod",
-    "paymentUrl",
-    "autopay",
-    "notes",
-    "recurrence",
-    "payCycle",
-  ];
+  const scheduleChanged =
+    JSON.stringify(previousSchedule) !==
+    JSON.stringify(updatedSchedule);
 
-  const fieldLabels = {
-    name: "Name",
-    amount: "Amount",
-    dueDate: "Due date",
-    dueDay: "Due day",
-    category: "Category",
-    paymentMethod: "Payment method",
-    paymentUrl: "Payment link",
-    autopay: "Autopay",
-    notes: "Notes",
-    recurrence: "Repeats",
-    payCycle: "Pay cycle",
-  };
+  const hasRecurringHistory =
+    Array.isArray(previousBill.scheduleHistory) &&
+    previousBill.scheduleHistory.length > 0;
 
-  const formatActivityValue = (field, value) => {
-    if (value === null || value === undefined || value === "") return "None";
+  const shouldTrackSchedule =
+    isRecurringBill(previousBill) ||
+    isRecurringBill(updatedBill) ||
+    hasRecurringHistory;
 
-    switch (field) {
-      case "amount":
-        return formatCurrency(value);
-      case "dueDate":
-        return formatDate(value, "short");
-      case "dueDay":
-        return `Day ${value}`;
-      case "autopay":
-        return value ? "On" : "Off";
-      case "category":
-        return getCategory(value)?.label || String(value);
-      case "payCycle":
-        return value === "first"
-          ? "Early Cycle"
-          : value === "second"
-            ? "Late Cycle"
-            : String(value);
-      default:
-        return String(value);
-    }
-  };
+  if (scheduleChanged && shouldTrackSchedule) {
+    const history = hasRecurringHistory
+      ? previousBill.scheduleHistory.map(version => ({
+          ...version,
+          snapshot: {
+            ...version.snapshot,
+            reminderOffsets: Array.isArray(
+              version.snapshot?.reminderOffsets
+            )
+              ? [...version.snapshot.reminderOffsets]
+              : []
+          }
+        }))
+      : [{
+          version: 1,
+          effectiveFrom: null,
+          capturedAt: updatedAt,
+          captureSource: "legacy-available-schedule",
+          snapshot: previousSchedule
+        }];
 
-  const changes = trackedFields
-    .filter((field) => {
-      const before = previousBill[field] ?? null;
-      const after = updatedBill[field] ?? null;
+    history.push({
+      version: 1,
+      effectiveFrom,
+      capturedAt: updatedAt,
+      captureSource: "bill-edited",
+      snapshot: updatedSchedule
+    });
 
-      if (field === "amount") {
-        return (parseFloat(before) || 0) !== (parseFloat(after) || 0);
-      }
-
-      if (field === "dueDay") {
-        return Number(before) !== Number(after);
-      }
-
-      return before !== after;
-    })
-    .map((field) => ({
-      field,
-      before: previousBill[field] ?? null,
-      after: updatedBill[field] ?? null,
-      label: fieldLabels[field] || field,
-    }));
-
-  if (changes.length) {
-    const primaryChange =
-      changes.find((change) => change.field === "amount") ||
-      changes.find((change) => change.field === "dueDay") ||
-      changes.find((change) => change.field === "dueDate") ||
-      changes[0];
-
-    const detail =
-      `${primaryChange.label}: ` +
-      `${formatActivityValue(primaryChange.field, primaryChange.before)} → ` +
-      `${formatActivityValue(primaryChange.field, primaryChange.after)}`;
-
-   
+    updatedBill.scheduleHistory = history;
+  } else if (hasRecurringHistory) {
+    updatedBill.scheduleHistory = previousBill.scheduleHistory;
+  } else {
+    delete updatedBill.scheduleHistory;
   }
+
+  bills[idx] = updatedBill;
+  this.saveBills(bills);
 
   return updatedBill;
 },
@@ -1082,13 +1072,13 @@ function getRecurringTemplateId(bill) {
 
 function getOccurrenceDueDate(bill, year, month) {
   if (!bill) return null;
-
-  if (bill.recurrence === 'Monthly') {
-    return getMonthlyOccurrenceDate(bill, year, month);
-  }
-
+  const referenceDate = new Date(year, month, 1, 12);
+  const occurrence = getCurrentCalendarBillOccurrence(bill, referenceDate);
+  if (occurrence) return occurrence.dueDate;
+  if (Array.isArray(bill.scheduleHistory) && bill.scheduleHistory.length) return null;
   return getBillOccurrenceDate(bill, year, month);
 }
+
 
 function createBillOccurrence(bill, dueDate) {
   if (!bill || !dueDate) return null;
@@ -1239,23 +1229,233 @@ function getMonthOccurrenceDates(bill, referenceDate = new Date()) {
     .map(date => date.toISOString());
 }
 
+function getBillScheduleVersions(bill) {
+  const history = Array.isArray(bill.scheduleHistory)
+    ? bill.scheduleHistory.filter(v => v && v.snapshot)
+    : [];
+  if (!history.length) return [{effectiveFrom: null, snapshot: bill}];
+  return history.map((v, index) => ({...v, index})).sort((a, b) =>
+    String(a.effectiveFrom || "").localeCompare(String(b.effectiveFrom || "")) ||
+    a.index - b.index
+  );
+}
+
+function getBillScheduleAtDate(bill, dateValue) {
+  const key = getLocalDateKey(dateValue);
+  const versions = getBillScheduleVersions(bill);
+  let selected = versions[0];
+  for (const version of versions) {
+    if (!version.effectiveFrom || version.effectiveFrom <= key) selected = version;
+  }
+  return {...bill, ...selected.snapshot, id: bill.id};
+}
+
+function getCalendarScheduleSlot(recurrence, dateValue) {
+  const date = new Date(dateValue);
+  if (recurrence === "Weekly") {
+    date.setDate(date.getDate() - (date.getDay() + 6) % 7);
+    return `week:${getLocalDateKey(date)}`;
+  }
+  if (recurrence === "Yearly") return `year:${date.getFullYear()}`;
+  if (recurrence === "Quarterly") return `quarter:${date.getFullYear()}-${Math.floor(date.getMonth() / 3)}`;
+  return `month:${date.getFullYear()}-${date.getMonth()}`;
+}
+
+function getVersionedBillOccurrences(bill, referenceDate) {
+  const monthKey = value => {
+    const date = new Date(value);
+    return `${date.getFullYear()}-${date.getMonth()}`;
+  };
+  const targetMonth = monthKey(referenceDate);
+  const versions = getBillScheduleVersions(bill);
+  const candidates = new Map();
+  const payments = [...Store.getPaymentsForBill(bill.id)].sort((a, b) =>
+    Number(a.status !== "voided") - Number(b.status !== "voided") ||
+    new Date(a.paidDate) - new Date(b.paidDate)
+  );
+  const hasVersions = versions.length > 1;
+  const archiveKey = bill.archivedAt ? getLocalDateKey(bill.archivedAt) : null;
+
+  const addScheduled = (versionIndex, originalDueDate) => {
+    const version = versions[versionIndex];
+    const key = getLocalDateKey(originalDueDate);
+    const next = versions[versionIndex + 1];
+    if (!key) return;
+    const explicitOverride = (bill.occurrenceOverrides || []).find(item =>
+      getLocalDateKey(item.originalDueDate) === key && !item.cancelled && item.postponedTo
+    );
+    if (!explicitOverride) {
+      if (version.effectiveFrom && key < version.effectiveFrom) return;
+      if (next?.effectiveFrom && key >= next.effectiveFrom) return;
+    } else {
+      const recordedKey = explicitOverride.postponedAt
+        ? getLocalDateKey(explicitOverride.postponedAt) : key;
+      let owner = 0;
+      versions.forEach((item, index) => {
+        if (!item.effectiveFrom || item.effectiveFrom <= recordedKey) owner = index;
+      });
+      if (owner !== versionIndex) return;
+    }
+    if (archiveKey && key >= archiveKey) return;
+    const schedule = {...bill, ...version.snapshot, id: bill.id};
+    const occurrence = createBillOccurrence(schedule, originalDueDate);
+    if (!occurrence || monthKey(occurrence.dueDate) !== targetMonth) return;
+    const slot = getCalendarScheduleSlot(schedule.recurrence, originalDueDate);
+    if (hasVersions) {
+      const priorObligation = versions.slice(0, versionIndex).some((prior, priorIndex) => {
+        const priorSchedule = {...bill, ...prior.snapshot, id: bill.id};
+        if (!isRecurringBill(priorSchedule)) return false;
+        const priorEnd = versions[priorIndex + 1]?.effectiveFrom;
+        const date = new Date(originalDueDate);
+        const offsets = schedule.recurrence === "Yearly" ? Array.from({length: 12}, (_, i) => -i)
+          : schedule.recurrence === "Quarterly" ? [0, -1, -2] : [0, -1];
+        return offsets.some(offset => getMonthOccurrenceDates(priorSchedule,
+          new Date(date.getFullYear(), date.getMonth() + offset, 1, 12)
+        ).some(value => {
+          const key = getLocalDateKey(value);
+          return (!prior.effectiveFrom || key >= prior.effectiveFrom) &&
+            (!priorEnd || key < priorEnd) &&
+            getCalendarScheduleSlot(priorSchedule.recurrence, value) === slot;
+        }));
+      });
+      if (priorObligation) return;
+      const recordedElsewhere = payments.some(payment => {
+        if (!payment.paidForDueDate) return false;
+        const original = payment.originalDueDate || payment.paidForDueDate;
+        const recurrence = payment.billSnapshot?.recurrence || schedule.recurrence;
+        return getCalendarScheduleSlot(recurrence, original) === slot &&
+          getLocalDateKey(payment.paidForDueDate) !== getLocalDateKey(occurrence.dueDate);
+      });
+      if (recordedElsewhere) return;
+      const pinnedElsewhere = (bill.occurrenceOverrides || []).some(item => {
+        if (item.cancelled || !item.postponedTo || !item.originalDueDate) return false;
+        const recordedKey = item.postponedAt ? getLocalDateKey(item.postponedAt) : getLocalDateKey(item.originalDueDate);
+        let owner = 0;
+        versions.forEach((v, i) => {
+          if (!v.effectiveFrom || v.effectiveFrom <= recordedKey) owner = i;
+        });
+        return (owner < versionIndex || (item.scheduleSnapshot &&
+          getLocalDateKey(item.originalDueDate) !== getLocalDateKey(originalDueDate))) &&
+          getCalendarScheduleSlot(item.scheduleSnapshot?.recurrence || versions[owner].snapshot.recurrence, item.originalDueDate) === slot;
+      });
+      if (pinnedElsewhere) return;
+    }
+    const earlier = [...candidates.values()].find(item => item.scheduleSlot === slot);
+    // Preserve the old obligation when its date predates a mid-period edit.
+    if (hasVersions && earlier && earlier.scheduleVersionIndex < versionIndex) return;
+    candidates.set(occurrence.occurrenceKey, {
+      ...occurrence,
+      scheduleSlot: slot,
+      scheduleVersionIndex: versionIndex,
+      isArchivedHistory: Boolean(bill.archivedAt)
+    });
+  };
+
+  versions.forEach((version, index) => {
+    const schedule = {...bill, ...version.snapshot, id: bill.id};
+    if (!isRecurringBill(schedule)) {
+      if (schedule.dueDate) addScheduled(index, schedule.dueDate);
+      return;
+    }
+    getMonthOccurrenceDates(schedule, referenceDate).forEach(date => addScheduled(index, date));
+    // Include an occurrence moved here from another month, even years earlier.
+    for (const override of bill.occurrenceOverrides || []) {
+      if (!override.originalDueDate || !override.postponedTo || override.cancelled) continue;
+      if (monthKey(override.postponedTo) !== targetMonth) continue;
+      const sourceMonth = new Date(override.originalDueDate);
+      const scheduled = getMonthOccurrenceDates(schedule, sourceMonth).some(date =>
+        getLocalDateKey(date) === getLocalDateKey(override.originalDueDate)
+      );
+      if (scheduled) addScheduled(index, override.originalDueDate);
+    }
+  });
+
+  for (const override of bill.occurrenceOverrides || []) {
+    if (override.cancelled || !override.scheduleSnapshot || !override.postponedTo) continue;
+    if (monthKey(override.postponedTo) !== targetMonth) continue;
+    if (archiveKey && getLocalDateKey(override.postponedTo) >= archiveKey) continue;
+    const schedule = {...bill, ...override.scheduleSnapshot, id: bill.id};
+    const occurrence = createBillOccurrence(schedule, override.originalDueDate);
+    if (!occurrence) continue;
+    const slot = getCalendarScheduleSlot(schedule.recurrence, override.originalDueDate);
+    for (const [key, candidate] of candidates) {
+      if (candidate.scheduleSlot === slot && candidate.occurrenceKey !== occurrence.occurrenceKey) candidates.delete(key);
+    }
+    candidates.set(occurrence.occurrenceKey, {...occurrence, scheduleSlot: slot,
+      isArchivedHistory: Boolean(bill.archivedAt)});
+  }
+
+  // A recorded occurrence keeps its date even if a later edit moved the template.
+  // Voided records also anchor the obligation, so reversal restores the same bill.
+  for (const payment of payments) {
+    const dueDate = payment.paidForDueDate;
+    if (!dueDate || monthKey(dueDate) !== targetMonth) continue;
+    const matched = [...candidates.values()].find(item =>
+      getLocalDateKey(item.dueDate) === getLocalDateKey(dueDate)
+    );
+    const schedule = getBillScheduleAtDate(bill, dueDate);
+    const snapshot = payment.billSnapshot || {};
+    const recurrence = snapshot.recurrence || schedule.recurrence;
+    if (!isRecurringBill({recurrence}) && !hasVersions && !matched) continue;
+    const originalDueDate = payment.originalDueDate || matched?.originalDueDate || dueDate;
+    const slot = getCalendarScheduleSlot(recurrence, originalDueDate);
+    if (hasVersions) {
+      for (const [candidateKey, candidate] of candidates) {
+        if (candidate.scheduleSlot === slot &&
+            getLocalDateKey(candidate.dueDate) !== getLocalDateKey(dueDate)) {
+          candidates.delete(candidateKey);
+        }
+      }
+    }
+    const occurrenceKey = matched?.occurrenceKey || getOccurrenceKey(bill.id, originalDueDate);
+    const expected = snapshot.amount ?? payment.expectedAmountAtMatch ??
+      matched?.amount ?? payment.amount;
+    candidates.set(occurrenceKey, {
+      ...schedule,
+      ...(matched || {}),
+      ...snapshot,
+      id: occurrenceKey,
+      occurrenceKey,
+      templateId: getRecurringTemplateId(bill),
+      sourceBillId: bill.id,
+      dueDate,
+      originalDueDate,
+      amount: Number(expected),
+      recurrence,
+      isOccurrence: true,
+      scheduleSlot: slot,
+      isArchivedHistory: Boolean(bill.archivedAt)
+    });
+  }
+  return [...candidates.values()].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+function resolveCalendarBillOccurrence(billId, dueDate) {
+  const key = getLocalDateKey(dueDate);
+  if (!key) return null;
+  return getCalendarBillsForMonth(new Date(dueDate)).find(item =>
+    getBillPaymentId(item) === billId && getLocalDateKey(item.dueDate) === key
+  ) || null;
+}
+
+function getCurrentCalendarBillOccurrence(bill, referenceDate = new Date()) {
+  const items = getVersionedBillOccurrences(bill, referenceDate);
+  return items.find(item => !isOccurrencePaid(item, new Date(item.dueDate))) || items[0] || null;
+}
+
 function getRecurringOccurrencesForMonth(referenceDate = new Date()) {
   const seen = new Set();
-
   return Store.getBills()
-    .filter(isRecurringBill)
-    .flatMap(bill =>
-      getMonthOccurrenceDates(bill, referenceDate)
-        .map(dueDate => createBillOccurrence(bill, dueDate))
-        .filter(Boolean)
-    )
-    .filter(occurrence => {
-      if (seen.has(occurrence.occurrenceKey)) return false;
-      seen.add(occurrence.occurrenceKey);
+    .filter(bill => isRecurringBill(bill) || bill.scheduleHistory?.length)
+    .flatMap(bill => getVersionedBillOccurrences(bill, referenceDate))
+    .filter(item => {
+      if (seen.has(item.occurrenceKey)) return false;
+      seen.add(item.occurrenceKey);
       return true;
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
+
 
 function getRecurringOccurrencesForNextMonths(
   startDate = new Date(),
@@ -1287,31 +1487,39 @@ function getRecurringOccurrencesForNextMonths(
 }
 
 function getCalendarBillsForMonth(referenceDate = new Date()) {
-  const year = referenceDate.getFullYear();
-  const month = referenceDate.getMonth();
+  const matchesMonth = value => {
+    const date = new Date(value);
+    return Number.isFinite(date.getTime()) &&
+      date.getFullYear() === referenceDate.getFullYear() &&
+      date.getMonth() === referenceDate.getMonth();
+  };
+  const active = Store.getBills();
+  const activeIds = new Set(active.map(bill => bill.id));
+  const archived = getArchivedBills().filter(bill => !activeIds.has(bill.id));
+  const oneTime = [...active, ...archived].filter(bill => {
+    if (isRecurringBill(bill) || bill.scheduleHistory?.length) return false;
+    if (!matchesMonth(bill.dueDate)) return false;
+    if (!bill.archivedAt) return true;
+    return getLocalDateKey(bill.dueDate) < getLocalDateKey(bill.archivedAt) ||
+      Store.getPaymentsForBill(bill.id).some(payment =>
+        payment.paidForDueDate &&
+        getLocalDateKey(payment.paidForDueDate) === getLocalDateKey(bill.dueDate)
+      );
+  }).map(bill => ({...bill, isArchivedHistory: Boolean(bill.archivedAt)}));
+  const archivedOccurrences = archived.flatMap(bill =>
+    getVersionedBillOccurrences(bill, referenceDate)
+  );
   const seen = new Set();
-
-  const oneTimeBills = Store.getBills().filter(bill => {
-    if (isRecurringBill(bill)) return false;
-
-    const dueDate = new Date(bill.dueDate);
-
-    return (
-      !Number.isNaN(dueDate.getTime()) &&
-      dueDate.getFullYear() === year &&
-      dueDate.getMonth() === month
-    );
-  });
-
-  return [...oneTimeBills, ...getRecurringOccurrencesForMonth(referenceDate)]
-    .filter(bill => {
-      const key = bill.occurrenceKey || bill.id;
+  return [...oneTime, ...getRecurringOccurrencesForMonth(referenceDate), ...archivedOccurrences]
+    .filter(item => {
+      const key = `${getBillPaymentId(item)}:${getLocalDateKey(item.dueDate)}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
+
 
 function getCalendarBillsForDay(dateString) { 
   const selectedDate = new Date(dateString);
@@ -1681,9 +1889,19 @@ function confirmPostponeRecurringOccurrence(
     return;
   }
 
+  const existingOverride = (bill.occurrenceOverrides || []).find(item =>
+    getLocalDateKey(item.originalDueDate) === getLocalDateKey(originalDueDate)
+  );
+  const currentDueDate = existingOverride?.postponedTo || originalDueDate;
+  const occurrence = resolveCalendarBillOccurrence(billId, currentDueDate);
+  if (!occurrence) { alert("Reopen Calendar and choose the current occurrence."); return; }
+  if (isOccurrencePaid(occurrence, new Date(currentDueDate))) {
+    alert("A paid occurrence cannot be postponed. Reverse its payment first."); return;
+  }
+
   const postponedTo = dateFromInput(input.value);
 
-  if (new Date(postponedTo) <= new Date(originalDueDate)) {
+  if (new Date(postponedTo) <= new Date(currentDueDate)) {
     alert("Choose a date after the current occurrence date.");
     return;
   }
@@ -1704,6 +1922,21 @@ function confirmPostponeRecurringOccurrence(
         originalDueDate,
         postponedTo,
         postponedAt,
+        scheduleSnapshot: {
+          name: occurrence.name,
+          amount: occurrence.amount,
+          category: occurrence.category,
+          dueDate: originalDueDate,
+          dueDay: occurrence.dueDay ?? null,
+          recurrence: occurrence.recurrence,
+          payCycle: occurrence.payCycle || null,
+          paycheckAssignment: occurrence.paycheckAssignment || "auto",
+          paymentMethod: occurrence.paymentMethod || "",
+          paymentUrl: occurrence.paymentUrl || "",
+          autopay: Boolean(occurrence.autopay),
+          notes: occurrence.notes || "",
+          reminderOffsets: [...(occurrence.reminderOffsets || [])]
+        },
       },
     ],
   });
@@ -1960,6 +2193,13 @@ function markBillPaid(billId) {
     return;
   }
 
+  if (isRecurringBill(bill) || bill.scheduleHistory?.length) {
+    const occurrence = getCurrentCalendarBillOccurrence(bill);
+    if (!occurrence) { alert("No occurrence is scheduled this month. Choose a date in Calendar."); return; }
+    confirmMarkPaidOccurrence(billId, occurrence.dueDate);
+    return;
+  }
+
   const today = new Date();
 
   const dueDate = isRecurringBill(bill)
@@ -2075,6 +2315,14 @@ function markBillUnpaid(billId) {
     return;
   }
 
+  if (isRecurringBill(bill) || bill.scheduleHistory?.length) {
+    const items = getVersionedBillOccurrences(bill, new Date());
+    const paid = items.filter(item => isOccurrencePaid(item, new Date(item.dueDate)));
+    if (paid.length !== 1) { alert("Choose the exact paid occurrence in Calendar to reverse."); return; }
+    markBillOccurrenceUnpaid(billId, paid[0].dueDate);
+    return;
+  }
+
   const today = new Date();
 
   const dueDate = isRecurringBill(bill)
@@ -2150,68 +2398,46 @@ function markBillUnpaid(billId) {
 }
 function confirmMarkPaidOccurrence(billId, dueDate) {
   const bill = Store.getBill(billId);
-
   if (!bill) {
-    alert("Bill not found.");
+    alert("This bill is archived or no longer active.");
     return;
   }
-
-  const occurrenceBill = {
-    ...bill,
-    id: getOccurrenceKey(bill.id, dueDate),
-    sourceBillId: bill.id,
-    dueDate,
-    isOccurrence: true,
-  };
-
-  if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) {
+  const occurrence = resolveCalendarBillOccurrence(billId, dueDate);
+  if (!occurrence || occurrence.isArchivedHistory) {
+    alert("This occurrence is no longer scheduled. Reopen Calendar and select its date.");
+    return;
+  }
+  if (isOccurrencePaid(occurrence, new Date(occurrence.dueDate))) {
     alert("This occurrence is already marked as paid.");
     return;
   }
-
-  const paidAt = new Date().toISOString();
-
   const payment = {
     id: uid(),
-    billId: bill.id,
-    paidDate: paidAt,
-    amount: Number(bill.amount || 0),
-    paidForDueDate: dueDate,
+    billId,
+    paidDate: new Date().toISOString(),
+    amount: Number(occurrence.amount || 0),
+    paidForDueDate: occurrence.dueDate,
+    originalDueDate: occurrence.originalDueDate || occurrence.dueDate,
     status: "active",
-    voidedAt: null,
+    voidedAt: null
   };
-
+  payment.billSnapshot = createPaymentBillSnapshot(payment, occurrence);
   Store.addPayment(payment);
-
   recordActivity({
     action: "bill_paid",
-    entityType: bill.installmentPlanId ? "payment_plan" : "bill",
-    entityId: bill.installmentPlanId || bill.id,
-    title: `${bill.name} marked as paid`,
-    detail: `${formatCurrency(payment.amount)} due ${formatDate(
-      dueDate,
-      "short"
-    )}`,
-    before: {
-      billId: bill.id,
-      occurrenceDueDate: dueDate,
-      paymentStatus: "unpaid",
-      amount: Number(bill.amount || 0),
-    },
-    after: {
-      paymentId: payment.id,
-      billId: bill.id,
-      occurrenceDueDate: dueDate,
-      paidDate: payment.paidDate,
-      paymentStatus: "active",
-      amount: payment.amount,
-      paymentPlanId: bill.installmentPlanId || null,
-    },
+    entityType: bill.installmentPlanId ? "paymentplan" : "bill",
+    entityId: bill.installmentPlanId || billId,
+    title: `${occurrence.name} marked as paid`,
+    detail: `${formatCurrency(payment.amount)} due ${formatDate(occurrence.dueDate, "short")}`,
+    before: {billId, dueDate: occurrence.dueDate, paymentStatus: "unpaid", amount: payment.amount},
+    after: {paymentId: payment.id, billId, dueDate: occurrence.dueDate,
+      paidDate: payment.paidDate, paymentStatus: "active", amount: payment.amount}
   });
-
   render();
-  showPaymentUndoToast(payment, bill.name);
+  showPaymentUndoToast(payment, occurrence.name);
 }
+
+
 function markBillOccurrenceUnpaid(billId, dueDate) {
   const bill = Store.getBill(billId);
 
@@ -2745,7 +2971,7 @@ function getPaycheckPlan(referenceDate = new Date()) {
 
   const bills = getCalendarBillsForMonth(
     new Date(year, month, 1, 12, 0, 0, 0)
-  );
+  ).filter(bill => !bill.isArchivedHistory || isOccurrencePaid(bill, new Date(bill.dueDate)));
 
   const firstBills = [];
   const secondBills = [];
@@ -4009,7 +4235,9 @@ function getDashboardPaidOccurrences(referenceDate = new Date()) {
 }
 
 function getDashboardMonthSummary(referenceDate = new Date()) {
-  const bills = getCalendarBillsForMonth(referenceDate);
+  const bills = getCalendarBillsForMonth(referenceDate).filter(bill =>
+    !bill.isArchivedHistory || isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
   const paid = getDashboardPaidOccurrences(referenceDate);
 
   const unpaid = bills.filter(bill =>
@@ -10973,7 +11201,8 @@ function toggleBillDetails() {
     : svgIcon('chevronRight', 18);
 }
 function renderBillDetail() {
-  const bill = Store.getBill(routeParams.id);
+  let bill = Store.getBill(routeParams.id) ||
+    getArchivedBills().find(item => item.id === routeParams.id);
 
   if (!bill) {
     navigate("bills");
@@ -10983,27 +11212,17 @@ function renderBillDetail() {
   const occurrenceDueDate = routeParams.occurrenceDueDate || null;
 const returnRoute = routeParams.returnRoute || null;
 
-const isRecurring = isRecurringBill(bill);
-
-// Use the exact occurrence selected by the caller.
-// If no occurrence was provided, preserve the bill's stored due date;
-// do not silently replace it with the current month's recurring date.
-const selectedDueDate = occurrenceDueDate || bill.dueDate;
-
-const detailBill = isRecurring
-  ? {
-      ...bill,
-      id: getOccurrenceKey(bill.id, selectedDueDate),
-      sourceBillId: bill.id,
-      dueDate: selectedDueDate,
-      originalDueDate: selectedDueDate,
-      isOccurrence: true
-    }
-  : {
-      ...bill,
-      dueDate: selectedDueDate,
-      isOccurrence: false
-    };
+const sourceRecord = bill;
+const selectedDueDate = occurrenceDueDate || (
+  isRecurringBill(bill) || bill.scheduleHistory?.length
+    ? getCurrentCalendarBillOccurrence(bill)?.dueDate || bill.dueDate
+    : bill.dueDate
+);
+const resolved = resolveCalendarBillOccurrence(bill.id, selectedDueDate);
+const detailBill = resolved || {...bill, dueDate: selectedDueDate, isOccurrence: false};
+const isRecurring = Boolean(detailBill.isOccurrence);
+const isArchivedHistory = Boolean(sourceRecord.archivedAt);
+bill = {...bill, ...detailBill, id: sourceRecord.id};
 
 const referenceDate = new Date(selectedDueDate);
 
@@ -11058,7 +11277,7 @@ const postponeAction = isRecurring
       '${detailBill.originalDueDate || detailBill.dueDate}'
     )`
   : `openPostponeBillSheet('${sourceBillId}')`;
-  const paymentAction = !payment
+  const paymentAction = isArchivedHistory ? `<div class="settings-footer">Archived history — read only.</div>` : !payment
   ? `
     <div
       style="
@@ -11115,10 +11334,10 @@ const postponeAction = isRecurring
         <button
   type="button"
   class="nav-button"
-  onclick="openBillForm('${sourceBillId}')"
+  ${isArchivedHistory ? 'disabled' : `onclick="openBillForm('${sourceBillId}')"`}
   style="color:var(--text);"
 >
-  Edit
+  ${isArchivedHistory ? "Archived" : "Edit"}
 </button>
       </div>
     </div>
@@ -11233,7 +11452,7 @@ const postponeAction = isRecurring
 
         <div>
           ${
-            safePaymentUrl(bill.paymentUrl)
+            !isArchivedHistory && safePaymentUrl(bill.paymentUrl)
               ? `
                 <button
                   class="btn-primary"
@@ -11247,7 +11466,7 @@ const postponeAction = isRecurring
                 <button
                   class="btn-secondary"
                   style="width:100%;margin-top:var(--space-4);"
-                  onclick="openPaymentLinkPopup('${sourceBillId}')"
+                  ${isArchivedHistory ? 'disabled' : `onclick="openPaymentLinkPopup('${sourceBillId}')"`}
                 >
                   Add Payment Link
                 </button>
@@ -13783,6 +14002,7 @@ function runPlaidSandboxAutoMatch() {
     const seen = new Set();
 
     for (const bill of ordinaryOccurrences) {
+      if (bill.isArchivedHistory) continue;
       const occurrenceKey = bankMatchOccurrenceKey(bill);
       if (seen.has(occurrenceKey)) continue;
       seen.add(occurrenceKey);
@@ -13967,6 +14187,19 @@ function runPlaidSandboxAutoMatch() {
 
   if (summary.matched) {
     // Save all allocations together, rather than one write per installment.
+    for (const proposal of logs) {
+      for (const item of proposal.allocation) {
+        const payment = nextPayments.find(record =>
+          record.billId === getBillPaymentId(item.bill) &&
+          getLocalDateKey(record.paidForDueDate) === getLocalDateKey(item.bill.dueDate) &&
+          record.bankMatchKey === proposal.key
+        );
+        if (payment && !payment.billSnapshot) {
+          payment.originalDueDate = item.bill.originalDueDate || item.bill.dueDate;
+          payment.billSnapshot = createPaymentBillSnapshot(payment, item.bill, Boolean(item.existingPayment));
+        }
+      }
+    }
     Store.savePayments(nextPayments);
 
     for (const proposal of logs) {
