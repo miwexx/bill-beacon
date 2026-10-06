@@ -3733,505 +3733,547 @@ function getOccurrencePaidAmount(bill) {
   const amount = Number(payment.amount);
   return Number.isFinite(amount) ? amount : 0;
 }
+function dashboardDate(value) {
+  if (!value) return null;
+
+  const text = String(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? new Date(`${text}T12:00:00`)
+    : new Date(value);
+
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function dashboardMoneyTotal(values) {
+  return values.reduce((sum, value) => {
+    const amount = Number(value);
+    return sum + (
+      Number.isFinite(amount) ? Math.round(amount * 100) : 0
+    );
+  }, 0) / 100;
+}
+
+function getDashboardPaidOccurrences(referenceDate = new Date()) {
+  const activeBills = Store.getBills();
+  const activeById = new Map(activeBills.map(bill => [bill.id, bill]));
+
+  const archivedById = new Map(
+    getArchivedBills().map(bill => [bill.id, bill])
+  );
+
+  const seenPaymentIds = new Set();
+  const groups = new Map();
+
+  for (const payment of Store.getPayments()) {
+    if (payment.status === "voided") continue;
+
+    const dateValue = payment.paidForDueDate || payment.paidDate;
+    const occurrenceDate = dashboardDate(dateValue);
+    if (!occurrenceDate) continue;
+
+    if (
+      occurrenceDate.getFullYear() !== referenceDate.getFullYear() ||
+      occurrenceDate.getMonth() !== referenceDate.getMonth()
+    ) {
+      continue;
+    }
+
+    if (payment.id) {
+      if (seenPaymentIds.has(payment.id)) continue;
+      seenPaymentIds.add(payment.id);
+    }
+
+    const dateKey = getLocalDateKey(occurrenceDate);
+    const key = `${payment.billId}:${dateKey}`;
+
+    const activeBill = activeById.get(payment.billId);
+    const archivedBill = archivedById.get(payment.billId);
+    const bill = activeBill || archivedBill || null;
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        billId: payment.billId,
+        bill,
+        name:
+          payment.billSnapshot?.name ||
+          bill?.name ||
+          "Removed bill",
+        removed: !activeBill,
+        dueDate: occurrenceDate.toISOString(),
+        expectedAmount:
+          payment.expectedAmountAtMatch ??
+          payment.billSnapshot?.amount ??
+          bill?.amount ??
+          payment.amount,
+        payments: []
+      });
+    }
+
+    groups.get(key).payments.push(payment);
+  }
+
+  return [...groups.values()].map(item => {
+    const ordered = [...item.payments].sort((a, b) =>
+      (dashboardDate(b.paidDate)?.getTime() || 0) -
+      (dashboardDate(a.paidDate)?.getTime() || 0)
+    );
+
+    return {
+      ...item,
+      amount: dashboardMoneyTotal(
+        item.payments.map(payment => payment.amount)
+      ),
+      paidDate: ordered[0]?.paidDate || null
+    };
+  }).sort((a, b) =>
+    (dashboardDate(b.paidDate)?.getTime() || 0) -
+    (dashboardDate(a.paidDate)?.getTime() || 0)
+  );
+}
+
+function getDashboardMonthSummary(referenceDate = new Date()) {
+  const bills = getCalendarBillsForMonth(referenceDate);
+  const paid = getDashboardPaidOccurrences(referenceDate);
+
+  const unpaid = bills.filter(bill =>
+    !isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
+
+  const activeOccurrenceKeys = new Set(
+    bills.map(bill =>
+      `${getBillPaymentId(bill)}:${getLocalDateKey(bill.dueDate)}`
+    )
+  );
+
+  // Retain the scheduled estimate for paid occurrences
+  // that have disappeared from the active schedule.
+  const historicalPaid = paid.filter(
+    item => !activeOccurrenceKeys.has(item.key)
+  );
+
+  const scheduled = dashboardMoneyTotal([
+    ...bills.map(bill => bill.amount),
+    ...historicalPaid.map(item => item.expectedAmount)
+  ]);
+
+  const totalCount = paid.length + unpaid.length;
+
+  return {
+    bills,
+    paid,
+    unpaid,
+    paidTotal: dashboardMoneyTotal(paid.map(item => item.amount)),
+    remainingTotal: dashboardMoneyTotal(unpaid.map(bill => bill.amount)),
+    scheduled,
+    paidCount: paid.length,
+    totalCount,
+    progress: totalCount > 0
+      ? paid.length / totalCount * 100
+      : 0
+  };
+}
+
+function closeDashboardPaidSheet() {
+  document.getElementById("dashboardPaidContainer")?.remove();
+  unlockBackgroundScroll();
+}
+
+function openDashboardPaidSheet() {
+  closeDashboardPaidSheet();
+
+  const now = new Date();
+  const summary = getDashboardMonthSummary(now);
+  const activePaid = summary.paid.filter(item => !item.removed);
+  const removedPaid = summary.paid.filter(item => item.removed);
+
+  const renderRow = item => {
+    const paidDate = item.paidDate
+      ? formatDate(item.paidDate, "full")
+      : "Date unavailable";
+
+    return `
+      <div class="bill-row">
+        <div class="bill-icon"
+          style="background:var(--paid-bg);color:var(--paid);">
+          ${svgIcon("checkCircle", 20)}
+        </div>
+
+        <div class="bill-info">
+          <div class="bill-name">${escapeHtml(item.name)}</div>
+          <div class="bill-meta">
+            Paid ${escapeHtml(paidDate)}
+          </div>
+          <div class="bill-meta">
+            Due ${formatDate(item.dueDate, "short")}
+            ${item.removed
+              ? `<span style="color:var(--overdue);font-weight:800;">
+                  · Removed — payment retained
+                </span>`
+              : ""}
+          </div>
+        </div>
+
+        <div class="bill-amount" style="color:var(--paid);">
+          ${formatCurrency(item.amount)}
+        </div>
+      </div>
+    `;
+  };
+
+  const container = document.createElement("div");
+  container.id = "dashboardPaidContainer";
+
+  container.innerHTML = `
+    <div class="sheet-overlay show"
+      onclick="closeDashboardPaidSheet()"></div>
+
+    <div class="sheet show" role="dialog" aria-modal="true"
+      aria-label="Paid bills this month">
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button type="button" class="nav-button"
+          onclick="closeDashboardPaidSheet()" aria-label="Close">
+          ${svgIcon("close", 22)}
+        </button>
+        <div class="sheet-title">Paid Bills</div>
+        <div style="width:54px;"></div>
+      </div>
+
+      <div class="sheet-body content-gap">
+        <div class="card card-pad">
+          <div style="color:var(--text-muted);">
+            ${formatDate(now.toISOString(), "monthYear")}
+          </div>
+          <div class="text-paid"
+            style="margin-top:6px;font-size:var(--text-2xl);font-weight:800;">
+            ${formatCurrency(summary.paidTotal)}
+          </div>
+          <div style="margin-top:6px;color:var(--text-muted);">
+            ${summary.paidCount} paid occurrence${
+              summary.paidCount === 1 ? "" : "s"
+            }
+          </div>
+        </div>
+
+        ${activePaid.length ? `
+          <div class="section-header">Paid Bills</div>
+          <div class="card">
+            ${activePaid.map(renderRow).join("")}
+          </div>
+        ` : ""}
+
+        ${removedPaid.length ? `
+          <div class="section-header" style="color:var(--overdue);">
+            Removed Bills — Payment Retained
+          </div>
+          <div class="card">
+            ${removedPaid.map(renderRow).join("")}
+          </div>
+        ` : ""}
+
+        ${!summary.paidCount ? `
+          <div class="dashboard-empty-card">
+            ${svgIcon("tray", 22)}
+            <span>No paid bills for this month.</span>
+          </div>
+        ` : ""}
+
+        <button type="button" class="bb-outline-pill"
+          style="width:100%;"
+          onclick="closeDashboardPaidSheet();navigate('history');">
+          View All Payment History
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(container);
+  lockBackgroundScroll();
+}
 function renderToday() {
   const now = new Date();
+  const summary = getDashboardMonthSummary(now);
 
   const currentDateLabel = new Intl.DateTimeFormat(undefined, {
     weekday: "short",
     month: "short",
-    day: "numeric",
+    day: "numeric"
   }).format(now);
 
-  const monthBills = getCalendarBillsForMonth(now);
-
-  const paidThisMonthBills = monthBills.filter((bill) =>
-    isOccurrencePaid(bill, new Date(bill.dueDate))
+  const dueBills = summary.unpaid.filter(bill =>
+    getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming"
   );
 
-  const unpaidThisMonthBills = monthBills.filter(
-    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
+  const overdueBills = summary.unpaid.filter(bill =>
+    getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
   );
 
-  const upcomingMonthBills = unpaidThisMonthBills.filter(
-    (bill) => getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming"
-  );
-
-  const overdueBills = unpaidThisMonthBills.filter(
-    (bill) => getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
-  );
-
-  const totalDueThisMonth = unpaidThisMonthBills.reduce(
-    (sum, bill) => sum + parseFloat(bill.amount || 0),
-    0
-  );
-
-  const totalPaidThisMonth = paidThisMonthBills.reduce(
-  (sum, bill) => sum + getOccurrencePaidAmount(bill),
-  0
-);
-
-  const totalScheduledThisMonth = monthBills.reduce(
-  (sum, bill) => sum + Number(bill.amount || 0),
-  0
-);
-
-  const monthPaymentProgress =
-  monthBills.length > 0
-    ? (paidThisMonthBills.length / monthBills.length) * 100
-    : 0;
-  const nextDueBill = [...overdueBills, ...upcomingMonthBills].sort(
-    (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
-  )[0];
-
-  const dashboardUpcomingGroups = getDashboardUpcomingGroups(now);
-
-  const overdueUpcomingBills = dashboardUpcomingGroups.overdue || [];
-  const upcomingSevenDayBills = dashboardUpcomingGroups.upcoming || [];
-
-  const dashboardUpcomingBills = [
-    ...overdueUpcomingBills,
-    ...upcomingSevenDayBills,
+  const upcomingGroups = getDashboardUpcomingGroups(now);
+  const upcomingBills = [
+    ...(upcomingGroups.overdue || []),
+    ...(upcomingGroups.upcoming || [])
   ];
 
+  const allBillsById = new Map(
+    getArchivedBills().map(bill => [bill.id, bill])
+  );
+
+  for (const bill of Store.getBills()) {
+    allBillsById.set(bill.id, bill);
+  }
+
   const recentPayments = Store.getPayments()
-    .map((payment) => ({
+    .map(payment => ({
       ...payment,
-      bill: Store.getBill(payment.billId),
+      bill: allBillsById.get(payment.billId) || null
     }))
-    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
+    .sort((a, b) =>
+      (dashboardDate(b.voidedAt || b.paidDate)?.getTime() || 0) -
+      (dashboardDate(a.voidedAt || a.paidDate)?.getTime() || 0)
+    )
     .slice(0, 5);
 
-  const paidCount = paidThisMonthBills.length;
-  const upcomingCount = upcomingMonthBills.length;
-  const overdueCount = overdueBills.length;
   const notificationCount = getNotificationCount();
 
-  const getSourceBillId = (bill) =>
-    bill.isOccurrence ? bill.sourceBillId : bill.id;
+  const moneyButtonStyle = `
+    width:100%;min-height:82px;padding:8px 0;
+    border:0;background:transparent;color:inherit;
+    font:inherit;cursor:pointer;
+  `;
 
-  const getBillStatusForDashboard = (bill) =>
-    getOccurrenceStatus(bill, new Date(bill.dueDate));
+  const recentRows = recentPayments.map(payment => {
+    const voided = payment.status === "voided";
+    const removed = !Store.getBill(payment.billId);
+    const name =
+      payment.billSnapshot?.name ||
+      payment.bill?.name ||
+      "Removed bill";
+
+    const shownDate = payment.voidedAt || payment.paidDate;
+    const dateLabel = shownDate
+      ? formatDate(shownDate, "full")
+      : "Date unavailable";
+
+    return `
+      <div class="recent-payment-row"
+        style="${voided ? "opacity:.58;" : ""}">
+        <div class="recent-payment-icon"
+          style="color:${voided ? "var(--text-muted)" : "var(--paid)"};">
+          ${svgIcon(voided ? "close" : "checkCircle", 18)}
+        </div>
+
+        <div class="bill-info">
+          <div class="bill-name">
+            ${escapeHtml(name)}${voided ? " · Voided" : ""}
+          </div>
+          <div class="bill-meta">
+            ${voided ? "Payment voided" : "Paid"}
+            ${escapeHtml(dateLabel)}
+          </div>
+          ${removed ? `
+            <div class="bill-meta" style="color:var(--overdue);">
+              Removed — history retained
+            </div>
+          ` : ""}
+        </div>
+
+        <div class="recent-payment-amount"
+          style="${voided
+            ? "text-decoration:line-through;color:var(--text-muted);"
+            : ""}">
+          ${formatCurrency(payment.amount)}
+        </div>
+      </div>
+    `;
+  }).join("");
 
   return `
     <div class="nav-bar dashboard-nav">
       <div class="nav-bar-content">
-        <button
+        <button type="button"
           class="nav-button dashboard-icon-button"
-          onclick="navigate('settings')"
-          aria-label="Open settings"
-          style="color:var(--text-muted);"
-        >
+          onclick="navigate('settings')" aria-label="Open settings"
+          style="color:var(--text-muted);">
           ${svgIcon("gear", 22)}
         </button>
 
         <div class="dashboard-date">${currentDateLabel}</div>
 
-        <button
+        <button type="button"
           class="nav-button dashboard-icon-button"
           onclick="openNotificationCenter()"
           aria-label="Open notifications"
-          style="position:relative; color:var(--text-muted);"
-        >
+          style="position:relative;color:var(--text-muted);">
           ${svgIcon("bell", 22)}
-
-          ${
-            notificationCount > 0
-              ? `
-                <span
-  style="
-    position:absolute;
-    top:-3;
-    right:0;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    min-width:17px;
-    height:17px;
-    padding:0 4px;
-    box-sizing:border-box;
-    border:2px solid var(--bg);
-    border-radius:999px;
-    background:var(--overdue);
-    color:#fff;
-    font-size:10px;
-    font-weight:800;
-    line-height:1;
-    text-align:center;
-    font-variant-numeric:tabular-nums;
-  "
->
-  ${notificationCount > 9 ? "9+" : notificationCount}
-</span>
-              `
-              : ""
-          }
+          ${notificationCount > 0 ? `
+            <span style="
+              position:absolute;top:-3px;right:0;
+              min-width:17px;padding:1px 4px;border-radius:999px;
+              background:var(--overdue);color:#fff;
+              font-size:10px;font-weight:800;">
+              ${notificationCount > 9 ? "9+" : notificationCount}
+            </span>
+          ` : ""}
         </button>
       </div>
     </div>
 
     <div class="main-content fade-in">
       <div class="content-pad dashboard-content">
-        <button
-          class="dashboard-month-card"
-          onclick="openDashboardStatusSheet('unpaid')"
-          aria-label="View bills still due this month"
-        >
+
+        <section class="dashboard-month-card"
+          style="width:100%;box-sizing:border-box;text-align:left;"
+          aria-label="This month's bills">
           <div class="dashboard-card-topline">
             <span>This Month</span>
             <span>
-              ${paidThisMonthBills.length} of ${monthBills.length} bills paid
+              ${summary.paidCount} of ${summary.totalCount} bills paid
             </span>
           </div>
 
-          <div
-            style="
-              display:grid;
-              grid-template-columns:1fr 1fr;
-              gap:var(--space-3);
-              margin-top:var(--space-4);
-            "
-          >
-            <div>
-              <div
-                style="
-                  font-size:var(--text-xs);
-                  color:var(--text-muted);
-                  margin-bottom:4px;
-                "
-              >
+          <div style="
+            display:grid;grid-template-columns:1fr 1fr;
+            gap:var(--space-3);margin-top:var(--space-4);">
+            <button type="button"
+              style="${moneyButtonStyle}text-align:left;"
+              onclick="openDashboardStatusSheet('unpaid')"
+              aria-label="View this month's due and overdue bills">
+              <div style="
+                font-size:var(--text-xs);
+                color:var(--text-muted);margin-bottom:4px;">
                 Remaining
               </div>
-
-              <div
-                class="text-upcoming"
-                style="
-                  font-size:var(--text-2xl);
-                  font-weight:800;
-                  line-height:1.1;
-                "
-              >
-                ${formatCurrency(totalDueThisMonth)}
+              <div class="text-upcoming" style="
+                font-size:var(--text-2xl);
+                font-weight:800;line-height:1.1;">
+                ${formatCurrency(summary.remainingTotal)}
               </div>
-            </div>
+              <div style="
+                margin-top:8px;font-size:var(--text-xs);
+                color:var(--text-muted);">
+                Due & overdue ${svgIcon("chevronRight", 12)}
+              </div>
+            </button>
 
-            <div style="text-align:right;">
-              <div
-                style="
-                  font-size:var(--text-xs);
-                  color:var(--text-muted);
-                  margin-bottom:4px;
-                "
-              >
+            <button type="button"
+              style="${moneyButtonStyle}text-align:right;"
+              onclick="openDashboardPaidSheet()"
+              aria-label="View this month's paid bills">
+              <div style="
+                font-size:var(--text-xs);
+                color:var(--text-muted);margin-bottom:4px;">
                 Paid
               </div>
-
-              <div
-                class="text-paid"
-                style="
-                  font-size:var(--text-2xl);
-                  font-weight:800;
-                  line-height:1.1;
-                "
-              >
-                ${formatCurrency(totalPaidThisMonth)}
+              <div class="text-paid" style="
+                font-size:var(--text-2xl);
+                font-weight:800;line-height:1.1;">
+                ${formatCurrency(summary.paidTotal)}
               </div>
-            </div>
+              <div style="
+                margin-top:8px;font-size:var(--text-xs);
+                color:var(--text-muted);">
+                View paid ${svgIcon("chevronRight", 12)}
+              </div>
+            </button>
           </div>
 
-          <div
-            class="dashboard-progress-track"
-            style="margin-top:var(--space-4);"
-          >
-            <div
-              class="dashboard-progress-fill"
-              style="width:${monthPaymentProgress}%;"
-            ></div>
+          <div class="dashboard-progress-track"
+            style="margin-top:var(--space-4);">
+            <div class="dashboard-progress-fill"
+              style="width:${summary.progress}%;"></div>
           </div>
 
           <div class="dashboard-month-footer">
             <span>
-              ${unpaidThisMonthBills.length} bill${
-                unpaidThisMonthBills.length === 1 ? "" : "s"
-              } left
+              ${summary.unpaid.length}
+              bill${summary.unpaid.length === 1 ? "" : "s"} left
             </span>
-
-            <span>
-              View Unpaid Bills ${svgIcon("chevronRight", 14)}
-            </span>
+            <span>Tap Remaining or Paid</span>
           </div>
-        </button>
-              ${renderDashboardPaycheckPlan(now)}
-        <div class="section-header">Bill Status This Month</div>
+        </section>
 
+        <div class="section-header">Bill Status This Month</div>
         <div class="dashboard-status-row">
-          <button
+          <button type="button"
             class="dashboard-status-card status-paid-card"
-            onclick="openDashboardStatusSheet('paid')"
-            aria-label="View paid bills"
-          >
+            onclick="openDashboardPaidSheet()" aria-label="View paid bills">
             <div class="dashboard-status-number text-paid">
-              ${paidCount}
+              ${summary.paidCount}
             </div>
             <div class="dashboard-status-label">Paid</div>
           </button>
 
-          <button
+          <button type="button"
             class="dashboard-status-card status-upcoming-card"
             onclick="openDashboardStatusSheet('due')"
-            aria-label="View Bills Due"
-          >
+            aria-label="View bills due">
             <div class="dashboard-status-number text-upcoming">
-              ${upcomingCount}
+              ${dueBills.length}
             </div>
             <div class="dashboard-status-label">Due</div>
           </button>
 
-          <button
+          <button type="button"
             class="dashboard-status-card status-overdue-card"
             onclick="openDashboardStatusSheet('overdue')"
-            aria-label="View overdue bills"
-          >
+            aria-label="View overdue bills">
             <div class="dashboard-status-number text-overdue">
-              ${overdueCount}
+              ${overdueBills.length}
             </div>
             <div class="dashboard-status-label">Overdue</div>
           </button>
         </div>
 
-        ${
-          nextDueBill
-            ? `
-              <button
-                class="next-due-card ${
-                  getBillStatusForDashboard(nextDueBill) === "overdue"
-                    ? "next-due-card-overdue"
-                    : ""
-                }"
-                onclick="navigate('detail', {
-                  id: '${getSourceBillId(nextDueBill)}',
-                  occurrenceDueDate: '${nextDueBill.dueDate}',
-                  returnRoute: 'today'
-                })"
-                aria-label="View next due bill"
-              >
-                <div
-  class="next-due-icon"
-  style="
-    background:${
-      nextDueBill.installmentPlanId
-        ? "transparent"
-        : getBillBrand(nextDueBill.name)
-          ? "#fff"
-          : `var(--${getCategory(nextDueBill.category).color})`
-    };
-    color:${
-      nextDueBill.installmentPlanId
-        ? "var(--accent)"
-        : getBillBrand(nextDueBill.name)
-          ? "#1e1e2e"
-          : "#fff"
-    };
-    overflow:hidden;
-  "
->
-  ${billOrPaymentPlanVisual(nextDueBill, 30)}
-</div>
-
-                <div class="next-due-copy">
-                  <div class="next-due-label">
-                    ${
-                      getBillStatusForDashboard(nextDueBill) === "overdue"
-                        ? "Overdue"
-                        : "Next Due"
-                    }
-                  </div>
-
-                  <div class="next-due-name">
-                    ${escapeHtml(nextDueBill.name)}
-                  </div>
-
-                  <div class="next-due-meta">
-                    ${formatDate(nextDueBill.dueDate, "full")} ·
-                    ${relativeDue(nextDueBill.dueDate)}
-                  </div>
-                </div>
-
-                <div class="next-due-amount">
-                  ${formatCurrency(nextDueBill.amount)}
-                </div>
-
-                <div class="next-due-arrow">
-                  ${svgIcon("chevronRight", 20)}
-                </div>
-              </button>
-            `
-            : `
-              <div class="next-due-card next-due-card-empty">
-                <div class="next-due-icon">
-                  ${svgIcon("checkCircle", 18)}
-                </div>
-
-                <div class="next-due-copy">
-                  <div class="next-due-label">Next Due</div>
-                  <div class="next-due-name">You Are All Caught Up</div>
-                </div>
-              </div>
-            `
-        }
+        ${renderDashboardPaycheckPlan(now)}
 
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">
             Upcoming Bills
           </div>
-
-          <button
-            class="bb-outline-pill"
-            style="
-              min-height:34px;
-              padding:0 12px;
-              font-size:var(--text-xs);
-            "
-            onclick="openDashboardStatusSheet('upcoming')"
-          >
+          <button type="button" class="bb-outline-pill"
+            style="min-height:34px;padding:0 12px;font-size:var(--text-xs);"
+            onclick="openDashboardStatusSheet('upcoming')">
             <span>See All</span>
-            <span class="pill-chevron">
-              ${svgIcon("chevronRight", 14)}
-            </span>
+            <span class="pill-chevron">${svgIcon("chevronRight", 14)}</span>
           </button>
         </div>
 
-        ${
-          dashboardUpcomingBills.length
-            ? `
-              <div class="upcoming-carousel">
-                ${dashboardUpcomingBills
-                  .slice(0, 8)
-                  .map(renderDashboardUpcomingBill)
-                  .join("")}
-              </div>
-            `
-            : `
-              <div class="dashboard-empty-card">
-                ${svgIcon("checkCircle", 22)}
-                <span>No overdue or upcoming bills in the next 7 days</span>
-              </div>
-            `
-        }
+        ${upcomingBills.length ? `
+          <div class="upcoming-carousel">
+            ${upcomingBills.slice(0, 8)
+              .map(renderDashboardUpcomingBill).join("")}
+          </div>
+        ` : `
+          <div class="dashboard-empty-card">
+            ${svgIcon("checkCircle", 22)}
+            <span>No overdue or upcoming bills in the next 7 days</span>
+          </div>
+        `}
 
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">
             Recent Payments
           </div>
-
-          ${
-            recentPayments.length
-              ? `
-                <button
-                  class="bb-outline-pill"
-                  style="
-                    min-height:34px;
-                    padding:0 12px;
-                    font-size:var(--text-xs);
-                  "
-                  onclick="navigate('history')"
-                >
-                  <span>See All</span>
-                  <span class="pill-chevron">
-                    ${svgIcon("chevronRight", 14)}
-                  </span>
-                </button>
-              `
-              : ""
-          }
+          ${recentPayments.length ? `
+            <button type="button" class="bb-outline-pill"
+              style="min-height:34px;padding:0 12px;font-size:var(--text-xs);"
+              onclick="navigate('history')">
+              <span>See All</span>
+              <span class="pill-chevron">${svgIcon("chevronRight", 14)}</span>
+            </button>
+          ` : ""}
         </div>
 
-        ${
-          recentPayments.length
-            ? `
-              <div class="card">
-                ${recentPayments
-                  .map((payment) => {
-                    const billName = payment.bill
-                      ? escapeHtml(payment.bill.name)
-                      : "Archived bill";
-
-                    const isVoided = payment.status === "voided";
-                    const paymentDate = isVoided
-                      ? payment.voidedAt || payment.paidDate
-                      : payment.paidDate;
-
-                    return `
-                      <button
-                        type="button"
-                        class="recent-payment-row"
-                        ${
-                          payment.bill
-                            ? `
-                              onclick="navigate('detail', {
-                                id: '${payment.billId}',
-                                occurrenceDueDate: '${payment.paidForDueDate || ""}',
-                                returnRoute: 'today'
-                              })"
-                            `
-                            : `disabled aria-disabled="true"`
-                        }
-                        style="${
-                          isVoided
-                            ? "opacity:.58; text-decoration:line-through;"
-                            : ""
-                        } ${payment.bill ? "" : "cursor:default;"}"
-                        aria-label="${
-                          payment.bill
-                            ? `View ${billName} details`
-                            : `${billName} is no longer an active bill`
-                        }"
-                      >
-                        <div
-                          class="recent-payment-icon"
-                          style="color:${
-                            isVoided ? "var(--text-muted)" : "var(--paid)"
-                          }"
-                        >
-                          ${svgIcon(isVoided ? "close" : "checkCircle", 18)}
-                        </div>
-
-                        <div class="bill-info">
-                          <div class="bill-name">
-                            ${billName}${isVoided ? " · Voided" : ""}
-                          </div>
-
-                          <div class="bill-meta">
-                            ${
-                              isVoided
-                                ? `Payment voided ${formatDate(paymentDate, "full")}`
-                                : `Paid ${formatDate(paymentDate, "full")}`
-                            }
-                          </div>
-                        </div>
-
-                        <div
-                          class="recent-payment-amount"
-                          style="${
-                            isVoided
-                              ? "text-decoration:line-through; color:var(--text-muted);"
-                              : ""
-                          }"
-                        >
-                          ${formatCurrency(payment.amount)}
-                        </div>
-                      </button>
-                    `;
-                  })
-                  .join("")}
-              </div>
-            `
-            : `
-              <div class="dashboard-empty-card">
-                ${svgIcon("tray", 22)}
-                <span>Payments you mark as paid will appear here</span>
-              </div>
-            `
-        }
+        ${recentPayments.length ? `
+          <div class="card">${recentRows}</div>
+        ` : `
+          <div class="dashboard-empty-card">
+            ${svgIcon("tray", 22)}
+            <span>Payments you mark as paid will appear here</span>
+          </div>
+        `}
       </div>
     </div>
   `;
@@ -5928,16 +5970,23 @@ function openDashboardStatusSheet(status) {
   }
 
   if (status === "unpaid") {
-    title = "Unpaid Bills";
-    color = "var(--upcoming)";
-    icon = svgIcon("clock", 18);
+  title = "Due & Overdue Bills";
+  color = "var(--upcoming)";
+  icon = svgIcon("clock", 18);
 
-    selectedBills = monthBills
-      .filter((bill) => {
-        return getBillStatusForSheet(bill) !== "paid";
-      })
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  }
+  selectedBills = monthBills
+    .filter(bill => getBillStatusForSheet(bill) !== "paid")
+    .sort((a, b) => {
+      const aOverdue = getBillStatusForSheet(a) === "overdue";
+      const bOverdue = getBillStatusForSheet(b) === "overdue";
+
+      if (aOverdue !== bOverdue) {
+        return aOverdue ? -1 : 1;
+      }
+
+      return new Date(a.dueDate) - new Date(b.dueDate);
+    });
+}
 
   if (status === "upcoming") {
     title = "Upcoming Bills";
@@ -8800,11 +8849,7 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
     0
   );
-
-  const paidThisMonth = paidBillsThisMonth.reduce(
-  (sum, bill) => sum + getOccurrencePaidAmount(bill),
-  0
-);
+const paidThisMonth = getDashboardMonthSummary(now).paidTotal;
 
   const stillDueThisMonth = unpaidBillsThisMonth.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
@@ -9068,9 +9113,7 @@ for (let i = 5; i >= 0; i -= 1) {
               class="dashboard-progress-fill"
               style="
                 width:${
-                  monthBills.length > 0
-  ? (paidBillsThisMonth.length / monthBills.length) * 100
-  : 0
+                  getDashboardMonthSummary(now).progress
                 }%
               "
             ></div>
