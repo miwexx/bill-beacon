@@ -4135,60 +4135,153 @@ function renderToday() {
     <div class="main-content fade-in">
       <div class="content-pad dashboard-content">
 
-        <section class="dashboard-month-card"
-          style="width:100%;box-sizing:border-box;text-align:left;"
-          aria-label="This month's bills">
-          <div class="dashboard-card-topline">
-            <span>This Month</span>
-            <span>
-              ${summary.paidCount} of ${summary.totalCount} bills paid
-            </span>
-          </div>
+        <section
+  class="dashboard-month-card"
+  style="
+    display:block;
+    width:100%;
+    height:auto;
+    min-height:0;
+    box-sizing:border-box;
+    padding:18px 20px;
+    text-align:left;
+  "
+  aria-label="This month's bills"
+>
+  <div
+    class="dashboard-card-topline"
+    style="
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin:0;
+    "
+  >
+    <span style="font-size:14px;font-weight:800;">
+      This Month
+    </span>
 
-          <div style="
-            display:grid;grid-template-columns:1fr 1fr;
-            gap:var(--space-3);margin-top:var(--space-4);">
-            <button type="button"
-              style="${moneyButtonStyle}text-align:left;"
-              onclick="openDashboardStatusSheet('unpaid')"
-              aria-label="View this month's due and overdue bills">
-              <div style="
-                font-size:var(--text-xs);
-                color:var(--text-muted);margin-bottom:4px;">
-                Remaining
-              </div>
-              <div class="text-upcoming" style="
-                font-size:var(--text-2xl);
-                font-weight:800;line-height:1.1;">
-                ${formatCurrency(summary.remainingTotal)}
-              </div>
-             </button>
+    <span style="
+      font-size:12px;
+      font-weight:600;
+      color:var(--text-muted);
+    ">
+      ${summary.paidCount} of ${summary.totalCount} bills paid
+    </span>
+  </div>
 
-            <button type="button"
-              style="${moneyButtonStyle}text-align:right;"
-              onclick="openDashboardPaidSheet()"
-              aria-label="View this month's paid bills">
-              <div style="
-                font-size:var(--text-xs);
-                color:var(--text-muted);margin-bottom:4px;">
-                Paid
-              </div>
-              <div class="text-paid" style="
-                font-size:var(--text-2xl);
-                font-weight:800;line-height:1.1;">
-                ${formatCurrency(summary.paidTotal)}
-              </div>
-             
-            </button>
-          </div>
+  <div style="
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    align-items:start;
+    gap:16px;
+    margin-top:14px;
+  ">
+    <button
+      type="button"
+      onclick="openDashboardStatusSheet('unpaid')"
+      aria-label="View this month's due and overdue bills"
+      style="
+        display:flex;
+        flex-direction:column;
+        align-items:flex-start;
+        gap:4px;
+        width:100%;
+        height:auto;
+        min-height:0;
+        margin:0;
+        padding:6px 0;
+        border:0;
+        background:transparent;
+        color:inherit;
+        font:inherit;
+        text-align:left;
+        cursor:pointer;
+      "
+    >
+      <span style="
+        font-size:12px;
+        line-height:1.3;
+        color:var(--text-muted);
+      ">
+        Remaining
+      </span>
 
-          <div class="dashboard-progress-track"
-            style="margin-top:var(--space-4);">
-            <div class="dashboard-progress-fill"
-              style="width:${summary.progress}%;"></div>
-          </div>
+      <span class="text-upcoming" style="
+        font-size:clamp(22px,6.5vw,30px);
+        font-weight:800;
+        line-height:1.15;
+        letter-spacing:-0.6px;
+        font-variant-numeric:tabular-nums;
+        white-space:nowrap;
+      ">
+        ${formatCurrency(summary.remainingTotal)}
+      </span>
+    </button>
 
-        </section>
+    <button
+      type="button"
+      onclick="openDashboardPaidSheet()"
+      aria-label="View this month's paid bills"
+      style="
+        display:flex;
+        flex-direction:column;
+        align-items:flex-end;
+        gap:4px;
+        width:100%;
+        height:auto;
+        min-height:0;
+        margin:0;
+        padding:6px 0;
+        border:0;
+        background:transparent;
+        color:inherit;
+        font:inherit;
+        text-align:right;
+        cursor:pointer;
+      "
+    >
+      <span style="
+        font-size:12px;
+        line-height:1.3;
+        color:var(--text-muted);
+      ">
+        Paid
+      </span>
+
+      <span class="text-paid" style="
+        font-size:clamp(22px,6.5vw,30px);
+        font-weight:800;
+        line-height:1.15;
+        letter-spacing:-0.6px;
+        font-variant-numeric:tabular-nums;
+        white-space:nowrap;
+      ">
+        ${formatCurrency(summary.paidTotal)}
+      </span>
+    </button>
+  </div>
+
+  <div
+    class="dashboard-progress-track"
+    style="
+      height:8px;
+      margin:12px 0 0;
+      overflow:hidden;
+      border-radius:999px;
+    "
+  >
+    <div
+      class="dashboard-progress-fill"
+      style="
+        width:${summary.progress}%;
+        height:100%;
+        border-radius:inherit;
+      "
+    ></div>
+  </div>
+</section>
 
         <div class="section-header">Bill Status This Month</div>
         <div class="dashboard-status-row">
