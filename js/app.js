@@ -13934,7 +13934,7 @@ function renderTransactions() {
       onclick="connectBillBeaconTestBank()"
       style="width:100%"
     >
-      Connect test bank
+      Connect Test Bank
     </button>
 
     <button
@@ -13943,7 +13943,7 @@ function renderTransactions() {
       onclick="loadPlaidSandboxBank()"
       style="width:100%;min-height:44px"
     >
-      Load saved connection
+      Load Saved Connection
     </button>
 
     <button
@@ -13952,7 +13952,7 @@ function renderTransactions() {
       onclick="syncPlaidSandboxBank()"
       style="width:100%;min-height:44px"
     >
-      Sync test transactions
+      Sync Test Transactions
     </button>
 
     ${
