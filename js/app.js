@@ -2275,7 +2275,7 @@ function searchTransactions(value) {
 }
 function openTransactionDetails(transactionId) {
   const transaction = plaidSandboxBankState.transactions.find(
-    (item) => item.id === transactionId
+    item => item.id === transactionId
   );
 
   if (!transaction) {
@@ -2283,23 +2283,122 @@ function openTransactionDetails(transactionId) {
     return;
   }
 
-  const statusText = transaction.pending ? "Pending" : "Posted";
+  const testDate = "2026-09-24";
+  const cents = value => Math.round(Number(value) * 100);
+  const merchant = String(transaction.merchantName || "").trim();
 
-  alert(
-    [
-      transaction.merchantName,
+  const transactionDate = String(transaction.date || "").slice(0, 10);
+
+  const isUberTest =
+    /\buber\b/i.test(merchant) &&
+    cents(transaction.amount) === 633 &&
+    transactionDate === testDate;
+
+  if (!isUberTest) {
+    alert([
+      merchant,
+      `${formatCurrency(transaction.amount)} · ${
+        formatDate(transaction.date, "full")
+      }`,
+      `Status: ${transaction.pending ? "Pending" : "Posted"}`,
       "",
-      `${formatCurrency(transaction.amount)} · ${formatDate(
-        transaction.date,
-        "full"
-      )}`,
-      "",
-      `Status: ${statusText}`,
-      `Category: ${transaction.category || "Uncategorized"}`,
-      "",
-      "Plaid Sandbox transaction. This does not affect household bills."
-    ].join("\n")
+      "Matching is enabled only for the Uber $6.33 test on September 24."
+    ].join("\n"));
+    return;
+  }
+
+  if (transaction.pending !== false || transaction.type !== "debit") {
+    alert("This test requires a confirmed posted debit transaction.");
+    return;
+  }
+
+  const candidates = getCalendarBillsForMonth(
+    new Date(2026, 8, 24, 12)
+  ).filter(bill =>
+    String(bill.name || "").trim().toLowerCase() === "uber" &&
+    cents(bill.amount) === 633 &&
+    getLocalDateKey(bill.dueDate) === testDate
   );
+
+  if (candidates.length !== 1) {
+    alert(
+      `Found ${candidates.length} matching bills. ` +
+      "The test requires exactly one Uber bill for $6.33 " +
+      "due September 24, 2026. No payment was added."
+    );
+    return;
+  }
+
+  const bill = candidates[0];
+  const billId = getBillPaymentId(bill);
+  const payments = Store.getPayments();
+
+  const previousMatch = payments.find(payment =>
+    payment.source === "plaid-sandbox-test" &&
+    payment.bankTransactionId === transaction.id
+  );
+
+  if (previousMatch) {
+    alert(
+      previousMatch.status === "voided"
+        ? "This test match was reversed. It will not be applied again."
+        : "This transaction already has a test payment. No duplicate added."
+    );
+    return;
+  }
+
+  if (isOccurrencePaid(bill, new Date(bill.dueDate))) {
+    alert("September's Uber bill is already paid. No payment was added.");
+    return;
+  }
+
+  if (!confirm(
+    "Run the Sandbox matching test?\n\n" +
+    "Uber · $6.33\n" +
+    "Transaction: September 24, 2026\n" +
+    "Bill due: September 24, 2026\n\n" +
+    "This adds a payment to your existing test bill " +
+    "and affects September's totals."
+  )) {
+    return;
+  }
+
+  const payment = {
+    id: uid(),
+    billId,
+    amount: 6.33,
+    paidDate: dateFromInput(testDate),
+    paidForDueDate: bill.dueDate,
+    status: "active",
+    voidedAt: null,
+    source: "plaid-sandbox-test",
+    bankTransactionId: transaction.id,
+    createdAt: new Date().toISOString()
+  };
+
+  Store.addPayment(payment);
+
+  recordActivity({
+    action: "billpaid",
+    entityType: "bill",
+    entityId: billId,
+    title: "Uber marked paid — Sandbox matching test",
+    detail: "$6.33 · September 24, 2026",
+    before: {
+      paymentStatus: "unpaid",
+      dueDate: bill.dueDate
+    },
+    after: {
+      paymentId: payment.id,
+      paymentStatus: "active",
+      dueDate: bill.dueDate,
+      bankTransactionId: transaction.id,
+      source: payment.source
+    }
+  });
+
+  render();
+  showPaymentUndoToast(payment, "Uber — Sandbox test");
 }
 function getNotificationDeepLink() {
   const params = new URLSearchParams(window.location.search);
