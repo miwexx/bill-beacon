@@ -153,7 +153,7 @@ const Store = {
   if (idx < 0) return null;
 
   const previousBill = { ...bills[idx] };
-
+    preserveBillPaymentSnapshots(previousBill);
   bills[idx] = {
     ...bills[idx],
     ...updates,
@@ -259,7 +259,7 @@ const Store = {
   deleteBill(id) {
   const bill = this.getBill(id);
   if (!bill) return;
-
+    preserveBillPaymentSnapshots(bill);
   const archivedBills = getArchivedBills();
 
   if (!archivedBills.some(item => item.id === id)) {
@@ -281,9 +281,41 @@ const Store = {
     catch { return []; }
   },
   savePayments(payments) {
-    localStorage.setItem('payments', JSON.stringify(payments));
-    window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
-     },
+  const existingPayments = this.getPayments();
+
+  const existingById = new Map(
+    existingPayments
+      .filter(payment => payment.id)
+      .map(payment => [payment.id, payment])
+  );
+
+  const preservedPayments = payments.map(payment => {
+    const previous = payment.id
+      ? existingById.get(payment.id)
+      : null;
+
+    if (previous?.billSnapshot) {
+      return {
+        ...payment,
+        billSnapshot: previous.billSnapshot
+      };
+    }
+
+    return attachPaymentBillSnapshot(
+      payment,
+      Boolean(previous)
+    );
+  });
+
+  localStorage.setItem(
+    "payments",
+    JSON.stringify(preservedPayments)
+  );
+
+  window.dispatchEvent(
+    new CustomEvent("billbeacon:data-changed")
+  );
+},
      getBankTransactions() {
   try {
     return JSON.parse(
@@ -454,6 +486,94 @@ updatePayment(paymentId, updates) {
     window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
      },
 };
+function createPaymentBillSnapshot(payment, bill, isLegacy = false) {
+  if (!bill) return null;
+
+  const expectedAmount = isLegacy
+    ? (
+        payment.expectedAmountAtMatch != null
+          ? Number(payment.expectedAmountAtMatch)
+          : null
+      )
+    : Number(bill.amount);
+
+  return {
+    version: 1,
+    billId: payment.billId,
+    name: bill.name || "Bill",
+    category: bill.category || "other",
+
+    // For older records, do not pretend the current estimate
+    // was necessarily the estimate when payment was recorded.
+    amount: Number.isFinite(expectedAmount)
+      ? expectedAmount
+      : null,
+
+    dueDate: payment.paidForDueDate || null,
+    recurrence: bill.recurrence || "None",
+    dueDay: bill.dueDay ?? null,
+    paycheckAssignment: bill.paycheckAssignment || "auto",
+
+    installmentPlanId: bill.installmentPlanId || null,
+    installmentProvider: bill.installmentProvider || null,
+    installmentStore: bill.installmentStore || null,
+    installmentNumber: bill.installmentNumber || null,
+    installmentTotal: bill.installmentTotal || null,
+
+    capturedAt: new Date().toISOString(),
+    captureSource: isLegacy
+      ? "legacy-available-bill-details"
+      : "payment-recorded"
+  };
+}
+
+function attachPaymentBillSnapshot(payment, isLegacy = false) {
+  if (payment.billSnapshot) return payment;
+
+  const bill =
+    Store.getBill(payment.billId) ||
+    getArchivedBills().find(item => item.id === payment.billId);
+
+  const snapshot = createPaymentBillSnapshot(
+    payment,
+    bill,
+    isLegacy
+  );
+
+  return snapshot
+    ? { ...payment, billSnapshot: snapshot }
+    : payment;
+}
+
+function preserveBillPaymentSnapshots(bill) {
+  if (!bill) return;
+
+  let changed = false;
+
+  const payments = Store.getPayments().map(payment => {
+    if (
+      payment.billId !== bill.id ||
+      payment.billSnapshot
+    ) {
+      return payment;
+    }
+
+    const snapshot = createPaymentBillSnapshot(
+      payment,
+      bill,
+      true
+    );
+
+    if (!snapshot) return payment;
+
+    changed = true;
+    return { ...payment, billSnapshot: snapshot };
+  });
+
+  if (changed) {
+    Store.savePayments(payments);
+  }
+}
 
 // ====================================
 // UTILITIES
@@ -15448,6 +15568,10 @@ function archiveBill(billId) {
       )
     : [selectedBill];
 
+    billsToArchive.forEach(bill => {
+  preserveBillPaymentSnapshots(bill);
+});
+
   const billsToKeep = activeBills.filter(
     (bill) => !billsToArchive.some((item) => item.id === bill.id)
   );
@@ -15508,7 +15632,7 @@ function archiveBill(billId) {
   */
   if (isPaymentPlan) {
     const planId = selectedBill.installmentPlanId;
-    const provider = selectedBill.installmentProvider || "Payment plan";
+    const provider = selectedBill.installmentProvider || "Payment Plan";
     const storeName =
       selectedBill.installmentStore?.trim() ||
       selectedBill.name ||
@@ -15524,7 +15648,7 @@ function archiveBill(billId) {
       entityType: "paymentplan",
       entityId: planId,
       title: `${storeName} Payment Plan Deleted`,
-      detail: `${provider} · ${billsToArchive.length} payment${
+      detail: `${provider} · ${billsToArchive.length} Payment${
         billsToArchive.length === 1 ? "" : "s"
       } · ${formatCurrency(planTotal)}`,
       before: {
@@ -15615,9 +15739,11 @@ function renderPaymentHistory() {
                 ${payments.map(payment => {
                   const isVoided = payment.status === 'voided';
 
-                  const billName = payment.bill
-                    ? escapeHtml(payment.bill.name)
-                    : 'Archived bill';
+                  const billName = escapeHtml(
+  payment.billSnapshot?.name ||
+  payment.bill?.name ||
+  "Removed Bill"
+);
 
                   const shownDate = isVoided
                     ? payment.voidedAt || payment.paidDate
