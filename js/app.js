@@ -2645,9 +2645,9 @@ function getPaycheckPlan(referenceDate = new Date()) {
     );
 
     const paid = paidBills.reduce(
-      (sum, bill) => sum + Number(bill.amount || 0),
-      0
-    );
+  (sum, bill) => sum + getOccurrencePaidAmount(bill),
+  0
+);
 
     const remaining = unpaidBills.reduce(
       (sum, bill) => sum + Number(bill.amount || 0),
@@ -2655,9 +2655,9 @@ function getPaycheckPlan(referenceDate = new Date()) {
     );
 
     const progress =
-      scheduled > 0
-        ? Math.min((paid / scheduled) * 100, 100)
-        : 0;
+  sortedBills.length > 0
+    ? (paidBills.length / sortedBills.length) * 100
+    : 0;
 
     return {
       id,
@@ -3729,6 +3729,17 @@ function renderMore() {
     </div>
   `;
 }
+function getOccurrencePaidAmount(bill) {
+  const payment = getActivePaymentForOccurrence(
+    bill,
+    new Date(bill.dueDate)
+  );
+
+  if (!payment) return 0;
+
+  const amount = Number(payment.amount);
+  return Number.isFinite(amount) ? amount : 0;
+}
 function renderToday() {
   const now = new Date();
 
@@ -3762,17 +3773,19 @@ function renderToday() {
   );
 
   const totalPaidThisMonth = paidThisMonthBills.reduce(
-    (sum, bill) => sum + parseFloat(bill.amount || 0),
-    0
-  );
+  (sum, bill) => sum + getOccurrencePaidAmount(bill),
+  0
+);
 
-  const totalScheduledThisMonth = totalDueThisMonth + totalPaidThisMonth;
+  const totalScheduledThisMonth = monthBills.reduce(
+  (sum, bill) => sum + Number(bill.amount || 0),
+  0
+);
 
   const monthPaymentProgress =
-    totalScheduledThisMonth > 0
-      ? Math.min((totalPaidThisMonth / totalScheduledThisMonth) * 100, 100)
-      : 0;
-
+  monthBills.length > 0
+    ? (paidThisMonthBills.length / monthBills.length) * 100
+    : 0;
   const nextDueBill = [...overdueBills, ...upcomingMonthBills].sort(
     (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
   )[0];
@@ -5972,8 +5985,12 @@ function openDashboardStatusSheet(status) {
   }
 
   const total = selectedBills.reduce((sum, bill) => {
-    return sum + (parseFloat(bill.amount) || 0);
-  }, 0);
+  return sum + (
+    status === "paid"
+      ? getOccurrencePaidAmount(bill)
+      : Number(bill.amount || 0)
+  );
+}, 0);
 
   const container = document.createElement("div");
   container.id = "dashboardStatusContainer";
@@ -6123,7 +6140,11 @@ function openDashboardStatusSheet(status) {
                         </div>
 
                         <div class="bill-amount">
-                          ${formatCurrency(bill.amount)}
+                          ${formatCurrency(
+  status === "paid"
+    ? getOccurrencePaidAmount(bill)
+    : bill.amount
+)}
                         </div>
                       </button>
                     `;
@@ -8836,9 +8857,9 @@ const largestUpcomingBill = upcomingBillsForInsight[0] || null;
   );
 
   const paidThisMonth = paidBillsThisMonth.reduce(
-    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
-    0
-  );
+  (sum, bill) => sum + getOccurrencePaidAmount(bill),
+  0
+);
 
   const stillDueThisMonth = unpaidBillsThisMonth.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
@@ -9102,12 +9123,9 @@ for (let i = 5; i >= 0; i -= 1) {
               class="dashboard-progress-fill"
               style="
                 width:${
-                  scheduledThisMonth > 0
-                    ? Math.min(
-                        (paidThisMonth / scheduledThisMonth) * 100,
-                        100
-                      )
-                    : 0
+                  monthBills.length > 0
+  ? (paidBillsThisMonth.length / monthBills.length) * 100
+  : 0
                 }%
               "
             ></div>
