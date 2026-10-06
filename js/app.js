@@ -2283,122 +2283,41 @@ function openTransactionDetails(transactionId) {
     return;
   }
 
-  const testDate = "2026-09-24";
-  const cents = value => Math.round(Number(value) * 100);
-  const merchant = String(transaction.merchantName || "").trim();
+  const key = bankMatchTransactionKey(transaction);
 
-  const transactionDate = String(transaction.date || "").slice(0, 10);
-
-  const isUberTest =
-    /\buber\b/i.test(merchant) &&
-    cents(transaction.amount) === 633 &&
-    transactionDate === testDate;
-
-  if (!isUberTest) {
-    alert([
-      merchant,
-      `${formatCurrency(transaction.amount)} · ${
-        formatDate(transaction.date, "full")
-      }`,
-      `Status: ${transaction.pending ? "Pending" : "Posted"}`,
-      "",
-      "Matching is enabled only for the Uber $6.33 test on September 24."
-    ].join("\n"));
-    return;
-  }
-
-  if (transaction.pending !== false || transaction.type !== "debit") {
-    alert("This test requires a confirmed posted debit transaction.");
-    return;
-  }
-
-  const candidates = getCalendarBillsForMonth(
-    new Date(2026, 8, 24, 12)
-  ).filter(bill =>
-    String(bill.name || "").trim().toLowerCase() === "uber" &&
-    cents(bill.amount) === 633 &&
-    getLocalDateKey(bill.dueDate) === testDate
+  const linkedPayments = Store.getPayments().filter(payment =>
+    (key && payment.bankMatchKey === key) ||
+    (
+      payment.source === "plaid-sandbox-test" &&
+      payment.bankTransactionId === transaction.id
+    )
   );
 
-  if (candidates.length !== 1) {
-    alert(
-      `Found ${candidates.length} matching bills. ` +
-      "The test requires exactly one Uber bill for $6.33 " +
-      "due September 24, 2026. No payment was added."
-    );
-    return;
-  }
-
-  const bill = candidates[0];
-  const billId = getBillPaymentId(bill);
-  const payments = Store.getPayments();
-
-  const previousMatch = payments.find(payment =>
-    payment.source === "plaid-sandbox-test" &&
-    payment.bankTransactionId === transaction.id
-  );
-
-  if (previousMatch) {
-    alert(
-      previousMatch.status === "voided"
-        ? "This test match was reversed. It will not be applied again."
-        : "This transaction already has a test payment. No duplicate added."
-    );
-    return;
-  }
-
-  if (isOccurrencePaid(bill, new Date(bill.dueDate))) {
-    alert("September's Uber bill is already paid. No payment was added.");
-    return;
-  }
-
-  if (!confirm(
-    "Run the Sandbox matching test?\n\n" +
-    "Uber · $6.33\n" +
-    "Transaction: September 24, 2026\n" +
-    "Bill due: September 24, 2026\n\n" +
-    "This adds a payment to your existing test bill " +
-    "and affects September's totals."
-  )) {
-    return;
-  }
-
-  const payment = {
-    id: uid(),
-    billId,
-    amount: 6.33,
-    paidDate: dateFromInput(testDate),
-    paidForDueDate: bill.dueDate,
-    status: "active",
-    voidedAt: null,
-    source: "plaid-sandbox-test",
-    bankTransactionId: transaction.id,
-    createdAt: new Date().toISOString()
-  };
-
-  Store.addPayment(payment);
-
-  recordActivity({
-    action: "billpaid",
-    entityType: "bill",
-    entityId: billId,
-    title: "Uber marked paid — Sandbox matching test",
-    detail: "$6.33 · September 24, 2026",
-    before: {
-      paymentStatus: "unpaid",
-      dueDate: bill.dueDate
-    },
-    after: {
-      paymentId: payment.id,
-      paymentStatus: "active",
-      dueDate: bill.dueDate,
-      bankTransactionId: transaction.id,
-      source: payment.source
-    }
+  const allocations = linkedPayments.map(payment => {
+    const bill = Store.getBill(payment.billId);
+    return [
+      bill?.name || "Archived bill",
+      formatCurrency(payment.amount),
+      payment.status === "voided" ? "Reversed" : "Paid",
+      payment.paidForDueDate
+        ? `Due ${formatDate(payment.paidForDueDate, "short")}`
+        : ""
+    ].filter(Boolean).join(" · ");
   });
 
-  render();
-  showPaymentUndoToast(payment, "Uber — Sandbox test");
+  alert([
+    transaction.merchantName,
+    `${formatCurrency(transaction.amount)} · ${
+      formatDate(transaction.date, "full")
+    }`,
+    `Status: ${transaction.pending ? "Pending" : "Posted"}`,
+    "",
+    allocations.length
+      ? allocations.join("\n")
+      : "No payment linked. Sync runs matching for [bank-match] items.",
+    "",
+    "Sandbox data—not a real payment instruction."
+  ].join("\n"));
 }
 function getNotificationDeepLink() {
   const params = new URLSearchParams(window.location.search);
@@ -13502,15 +13421,67 @@ function applyPlaidSandboxBankState(result) {
     render();
   }
 }
+let plaidSandboxRefreshInFlight = null;
 
+async function refreshPlaidSandboxAutomatically() {
+  if (plaidSandboxRefreshInFlight) {
+    return plaidSandboxRefreshInFlight;
+  }
+
+  const sessionVersion = plaidSandboxSessionVersion;
+
+  const task = (async () => {
+    const saved = await loadPlaidSandboxBank();
+
+    if (sessionVersion !== plaidSandboxSessionVersion) return;
+    if (!saved?.connected) return;
+
+    const lastSync = new Date(saved.lastSyncedAt || 0).getTime();
+    const stale =
+      !Number.isFinite(lastSync) ||
+      lastSync <= 0 ||
+      Date.now() - lastSync >= 30 * 60 * 1000;
+
+    if (stale) {
+      await syncPlaidSandboxBank();
+    } else {
+      setPlaidBankMessage("Saved transactions loaded. Sync is up to date.");
+    }
+  })();
+
+  plaidSandboxRefreshInFlight = task;
+
+  try {
+    await task;
+  } finally {
+    if (plaidSandboxRefreshInFlight === task) {
+      plaidSandboxRefreshInFlight = null;
+    }
+  }
+}
+
+window.addEventListener("billbeacon-authenticated", () => {
+  refreshPlaidSandboxAutomatically();
+});
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    refreshPlaidSandboxAutomatically();
+  }
+});
+
+window.addEventListener("billbeacon-signed-out", () => {
+  plaidSandboxSessionVersion++;
+});
 async function loadPlaidSandboxBank() {
+  const sessionVersion = plaidSandboxSessionVersion;
+
   try {
     setPlaidBankMessage("Loading saved Sandbox connection…");
 
-    const result = await callPlaidSandboxWorker(
-      "/plaid/status"
-    );
+    const result = await callPlaidSandboxWorker("/plaid/status");
 
+    if (sessionVersion !== plaidSandboxSessionVersion) return;
     applyPlaidSandboxBankState(result);
 
     setPlaidBankMessage(
@@ -13518,32 +13489,430 @@ async function loadPlaidSandboxBank() {
         ? "Saved Sandbox connection loaded."
         : "No saved connection. Tap Connect test bank."
     );
+
+    return result;
   } catch (error) {
     setPlaidBankMessage(error.message);
+    return null;
   }
 }
+const BANK_MATCH_OPT_IN = "[bank-match]";
+
+function bankMatchText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function bankMatchCents(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? Math.round(amount * 100) : NaN;
+}
+
+function bankMatchDay(value) {
+  const text = String(value || "");
+  const key = /^\d{4}-\d{2}-\d{2}$/.test(text)
+    ? text
+    : getLocalDateKey(value);
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return NaN;
+
+  const [year, month, day] = key.split("-").map(Number);
+  return Date.UTC(year, month - 1, day) / 86400000;
+}
+
+function bankMatchEnabled(bill) {
+  return String(bill.notes || "")
+    .toLowerCase()
+    .includes(BANK_MATCH_OPT_IN);
+}
+
+function bankMatchIsInstallment(bill) {
+  return Boolean(bill.installmentPlanId);
+}
+
+function bankMatchProvider(value) {
+  const name = bankMatchText(value);
+
+  const aliases = {
+    "zip pay in 4": "zip",
+    "zip pay": "zip",
+    "zip co": "zip",
+    "paypal pay later": "paypal",
+    "paypal pay in 4": "paypal"
+  };
+
+  return aliases[name] || name;
+}
+
+function bankMatchMerchantMatches(description, merchant) {
+  const text = ` ${bankMatchText(description)} `;
+  const name = bankMatchText(merchant);
+  return Boolean(name && text.includes(` ${name} `));
+}
+
+function bankMatchOccurrenceKey(bill) {
+  return `${getBillPaymentId(bill)}:${getLocalDateKey(bill.dueDate)}`;
+}
+
+function bankMatchPaymentForOccurrence(payment, bill) {
+  if (payment.billId !== getBillPaymentId(bill)) return false;
+
+  if (payment.paidForDueDate) {
+    return getLocalDateKey(payment.paidForDueDate) ===
+      getLocalDateKey(bill.dueDate);
+  }
+
+  return isSameMonth(payment.paidDate, new Date(bill.dueDate));
+}
+
+function bankMatchTransactionKey(transaction) {
+  const accountId =
+    transaction.accountId ||
+    transaction.account_id ||
+    plaidSandboxBankState.selectedAccountId;
+
+  if (!accountId || !transaction.id) return null;
+  return `plaid-sandbox:${accountId}:${transaction.id}`;
+}
+
+function runPlaidSandboxAutoMatch() {
+  const summary = { matched: 0, review: 0 };
+  const payments = Store.getPayments();
+  const bills = Store.getBills();
+  const proposals = [];
+
+  const transactions = plaidSandboxBankState.transactions.filter(
+    transaction =>
+      transaction.pending === false &&
+      transaction.type === "debit" &&
+      bankMatchCents(transaction.amount) > 0
+  );
+
+  function alreadyUsed(transaction, key) {
+    return payments.some(payment =>
+      payment.bankMatchKey === key ||
+      (
+        payment.source === "plaid-sandbox-test" &&
+        payment.bankTransactionId === transaction.id
+      )
+    );
+  }
+
+  function occurrenceBlocked(bill) {
+    return payments.some(payment =>
+      bankMatchPaymentForOccurrence(payment, bill) &&
+      (
+        payment.status === "voided" ||
+        payment.bankMatchKey ||
+        payment.bankTransactionId
+      )
+    );
+  }
+
+  function compatibleExistingPayment(bill, transactionDay, amount) {
+    const active = payments.filter(payment =>
+      payment.status !== "voided" &&
+      bankMatchPaymentForOccurrence(payment, bill)
+    );
+
+    if (!active.length) return { allowed: true, payment: null };
+    if (active.length !== 1) return { allowed: false };
+
+    const payment = active[0];
+    const paidDay = bankMatchDay(payment.paidDate);
+
+    return {
+      allowed:
+        !payment.bankMatchKey &&
+        !payment.bankTransactionId &&
+        bankMatchCents(payment.amount) === amount &&
+        Number.isFinite(paidDay) &&
+        Math.abs(paidDay - transactionDay) <= 2,
+      payment
+    };
+  }
+
+  for (const transaction of transactions) {
+    const key = bankMatchTransactionKey(transaction);
+    const transactionDay = bankMatchDay(transaction.date);
+    const transactionAmount = bankMatchCents(transaction.amount);
+    const description = transaction.merchantName || "";
+
+    if (!key || !Number.isFinite(transactionDay)) continue;
+    if (alreadyUsed(transaction, key)) continue;
+
+    const candidates = [];
+
+    const date = new Date(transactionDay * 86400000);
+    const ordinaryOccurrences = [-1, 0, 1].flatMap(offset =>
+      getCalendarBillsForMonth(
+        new Date(
+          date.getUTCFullYear(),
+          date.getUTCMonth() + offset,
+          1,
+          12
+        )
+      )
+    );
+
+    const seen = new Set();
+
+    for (const bill of ordinaryOccurrences) {
+      const occurrenceKey = bankMatchOccurrenceKey(bill);
+      if (seen.has(occurrenceKey)) continue;
+      seen.add(occurrenceKey);
+
+      if (bankMatchIsInstallment(bill)) continue;
+      if (!bankMatchEnabled(bill)) continue;
+      if (!bankMatchMerchantMatches(description, bill.name)) continue;
+      if (occurrenceBlocked(bill)) continue;
+
+      const dueDay = bankMatchDay(bill.dueDate);
+      const expectedAmount = bankMatchCents(bill.amount);
+
+      if (!Number.isFinite(dueDay)) continue;
+      if (Math.abs(dueDay - transactionDay) > 2) continue;
+      if (Math.abs(expectedAmount - transactionAmount) > 200) continue;
+
+      const existing = compatibleExistingPayment(
+        bill, transactionDay, transactionAmount
+      );
+
+      if (!existing.allowed) continue;
+
+      candidates.push([{
+        bill,
+        amount: transactionAmount,
+        existingPayment: existing.payment
+      }]);
+    }
+
+    const providers = [...new Set(
+      bills
+        .filter(bankMatchIsInstallment)
+        .map(bill => bankMatchProvider(bill.installmentProvider))
+        .filter(Boolean)
+    )];
+
+    for (const provider of providers) {
+      if (!bankMatchMerchantMatches(description, provider)) continue;
+
+      const eligible = bills.filter(bill => {
+        if (!bankMatchIsInstallment(bill)) return false;
+        if (bankMatchProvider(bill.installmentProvider) !== provider) {
+          return false;
+        }
+
+        const dueDay = bankMatchDay(bill.dueDate);
+        if (!Number.isFinite(dueDay) || dueDay > transactionDay + 14) {
+          return false;
+        }
+
+        if (occurrenceBlocked(bill)) return false;
+
+        const active = getActivePaymentForOccurrence(
+          bill, new Date(bill.dueDate)
+        );
+
+        if (!active) return true;
+
+        return compatibleExistingPayment(
+          bill, transactionDay, bankMatchCents(bill.amount)
+        ).allowed;
+      }).sort((a, b) =>
+        bankMatchDay(a.dueDate) - bankMatchDay(b.dueDate)
+      );
+
+      let total = 0;
+      const allocation = [];
+
+      for (let index = 0; index < eligible.length; index++) {
+        const bill = eligible[index];
+
+        // Never silently skip an earlier, non-enabled installment.
+        if (!bankMatchEnabled(bill)) break;
+
+        const amount = bankMatchCents(bill.amount);
+        if (!(amount > 0)) break;
+
+        const existing = compatibleExistingPayment(
+          bill, transactionDay, amount
+        );
+
+        if (!existing.allowed) break;
+
+        total += amount;
+        allocation.push({
+          bill,
+          amount,
+          existingPayment: existing.payment
+        });
+
+        if (total > transactionAmount) break;
+
+        if (total === transactionAmount) {
+          const next = eligible[index + 1];
+
+          // A same-date boundary could choose the wrong installment.
+          if (
+            next &&
+            bankMatchDay(next.dueDate) === bankMatchDay(bill.dueDate)
+          ) {
+            summary.review++;
+          } else {
+            candidates.push(allocation);
+          }
+          break;
+        }
+      }
+    }
+
+    if (candidates.length === 1) {
+      proposals.push({
+        transaction,
+        key,
+        allocation: candidates[0]
+      });
+    } else if (candidates.length > 1) {
+      summary.review++;
+    }
+  }
+
+  // Reject competing transactions that claim the same occurrence.
+  const claims = new Map();
+
+  for (const proposal of proposals) {
+    for (const item of proposal.allocation) {
+      const key = bankMatchOccurrenceKey(item.bill);
+      claims.set(key, (claims.get(key) || 0) + 1);
+    }
+  }
+
+  const nextPayments = payments.map(payment => ({ ...payment }));
+  const logs = [];
+
+  for (const proposal of proposals) {
+    if (proposal.allocation.some(item =>
+      claims.get(bankMatchOccurrenceKey(item.bill)) !== 1
+    )) {
+      summary.review++;
+      continue;
+    }
+
+    const transactionDate = String(proposal.transaction.date).slice(0, 10);
+    const paidDate = dateFromInput(transactionDate);
+
+    if (!paidDate) continue;
+
+    for (const item of proposal.allocation) {
+      const bankFields = {
+        bankMatchKey: proposal.key,
+        bankTransactionId: proposal.transaction.id,
+        bankAccountId: plaidSandboxBankState.selectedAccountId,
+        bankPostedDate: paidDate,
+        bankMatchedAt: new Date().toISOString(),
+        bankMatchSource: "plaid-sandbox-auto",
+        bankAllocatedAmount: item.amount / 100,
+        expectedAmountAtMatch: Number(item.bill.amount)
+      };
+
+      if (item.existingPayment) {
+        const payment = nextPayments.find(
+          record => record.id === item.existingPayment.id
+        );
+        Object.assign(payment, bankFields);
+      } else {
+        nextPayments.push({
+          id: uid(),
+          billId: getBillPaymentId(item.bill),
+          amount: item.amount / 100,
+          paidDate,
+          paidForDueDate: item.bill.dueDate,
+          status: "active",
+          voidedAt: null,
+          source: "plaid-sandbox-auto",
+          ...bankFields
+        });
+      }
+    }
+
+    summary.matched++;
+    logs.push(proposal);
+  }
+
+  if (summary.matched) {
+    // Save all allocations together, rather than one write per installment.
+    Store.savePayments(nextPayments);
+
+    for (const proposal of logs) {
+      recordActivity({
+        action: "bankpaymentmatched",
+        entityType: "bill",
+        entityId: getBillPaymentId(proposal.allocation[0].bill),
+        title: "Sandbox bank payment matched",
+        detail:
+          `${proposal.transaction.merchantName} · ` +
+          `${formatCurrency(proposal.transaction.amount)} · ` +
+          `${proposal.allocation.length} payment allocation(s)`,
+        after: {
+          bankMatchKey: proposal.key,
+          allocations: proposal.allocation.map(item => ({
+            billId: getBillPaymentId(item.bill),
+            dueDate: item.bill.dueDate,
+            amount: item.amount / 100,
+            reconciledExistingPayment: Boolean(item.existingPayment)
+          }))
+        }
+      });
+    }
+  }
+
+  return summary;
+}
+let plaidSandboxSyncInFlight = null;
+let plaidSandboxSessionVersion = 0;
 
 async function syncPlaidSandboxBank() {
+  if (plaidSandboxSyncInFlight) return plaidSandboxSyncInFlight;
+
+  const sessionVersion = plaidSandboxSessionVersion;
+
+  const task = (async () => {
+    try {
+      setPlaidBankMessage("Syncing Sandbox transactions…");
+
+      const result = await callPlaidSandboxWorker("/plaid/sync", {});
+
+      if (sessionVersion !== plaidSandboxSessionVersion) return;
+      applyPlaidSandboxBankState(result);
+
+      const summary = runPlaidSandboxAutoMatch();
+
+      render();
+
+      setPlaidBankMessage(
+        `${plaidSandboxBankState.transactions.length} transactions loaded. ` +
+        `${summary.matched} bank payment(s) matched. ` +
+        `${summary.review} ambiguous match(es) left unchanged.`
+      );
+    } catch (error) {
+      console.error("Sandbox sync/matching failed:", error);
+      setPlaidBankMessage(error.message);
+    }
+  })();
+
+  plaidSandboxSyncInFlight = task;
+
   try {
-    setPlaidBankMessage("Importing Sandbox transactions…");
-
-    const result = await callPlaidSandboxWorker(
-      "/plaid/sync",
-      {}
-    );
-
-    applyPlaidSandboxBankState(result);
-
-    setPlaidBankMessage(
-      result.transactions.length
-        ? `${result.transactions.length} Sandbox transactions loaded.`
-        : "No transactions available yet. Wait a few seconds, then sync again."
-    );
-  } catch (error) {
-    setPlaidBankMessage(error.message);
+    await task;
+  } finally {
+    if (plaidSandboxSyncInFlight === task) {
+      plaidSandboxSyncInFlight = null;
+    }
   }
 }
-
 async function choosePlaidSandboxAccount(accountId) {
   try {
     const result = await callPlaidSandboxWorker(
@@ -13644,6 +14013,8 @@ window.syncPlaidSandboxBank = syncPlaidSandboxBank;
 window.choosePlaidSandboxAccount = choosePlaidSandboxAccount;
 
 window.addEventListener("billbeacon:signed-out", () => {
+  plaidSandboxSessionVersion++;
+
   plaidSandboxBankState = {
     connected: false,
     accounts: [],
