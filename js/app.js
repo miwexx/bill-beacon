@@ -8821,10 +8821,7 @@ const upcomingBillsForInsight = relevantMonths
   );
 
 const largestUpcomingBill = upcomingBillsForInsight[0] || null;
-  const scheduledThisMonth = monthBills.reduce(
-    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
-    0
-  );
+const scheduledThisMonth = getDashboardMonthSummary(now).scheduled;
 const paidThisMonth = getDashboardMonthSummary(now).paidTotal;
 
   const stillDueThisMonth = unpaidBillsThisMonth.reduce(
@@ -8879,12 +8876,6 @@ const catTotals = Object.fromEntries(
   );
 
   const maxCat = catEntries.length ? catEntries[0][1] : 1;
-  const activeBillIds = new Set(
-  Store.getBills()
-    .filter((bill) => !bill.archivedAt)
-    .map((bill) => bill.id)
-);
-
 const monthlyData = [];
 
 for (let i = 5; i >= 0; i -= 1) {
@@ -8897,36 +8888,9 @@ for (let i = 5; i >= 0; i -= 1) {
     0
   );
 
-  const paymentsForMonth = payments.filter((payment) => {
-    if (payment.status === "voided") {
-      return false;
-    }
-
-    if (!activeBillIds.has(payment.billId)) {
-      return false;
-    }
-
-    const paidDate = new Date(
-      payment.paidDate || payment.createdAt
-    );
-
-    if (Number.isNaN(paidDate.getTime())) {
-      return false;
-    }
-
-    return (
-      paidDate.getFullYear() === date.getFullYear() &&
-      paidDate.getMonth() === date.getMonth()
-    );
-  });
-
   monthlyData.push({
     label: formatDate(date.toISOString(), "monthShort"),
-    amount: paymentsForMonth.reduce(
-      (sum, payment) =>
-        sum + (parseFloat(payment.amount) || 0),
-      0
-    )
+    amount: getDashboardMonthSummary(date).paidTotal
   });
 }
   const maxMonthly = Math.max(
