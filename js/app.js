@@ -258,29 +258,22 @@ const Store = {
 },
   deleteBill(id) {
   const bill = this.getBill(id);
+  if (!bill) return;
 
-  if (!bill) {
-    return;
+  const archivedBills = getArchivedBills();
+
+  if (!archivedBills.some(item => item.id === id)) {
+    archivedBills.push({
+      ...bill,
+      archivedAt: new Date().toISOString()
+    });
+
+    saveArchivedBills(archivedBills);
   }
 
-  /*
-    deleteBill can run once for each payment-plan installment.
-    It should only remove the bill and related payments.
-    The user-facing delete/archive function records one activity item
-    for the complete action.
-  */
-  const bills = this.getBills().filter((item) => item.id !== id);
-
-  this.saveBills(bills);
-
-  const payments = this.getPayments().filter(
-    (payment) => payment.billId !== id
-  );
-
-  localStorage.setItem("payments", JSON.stringify(payments));
-
-  window.dispatchEvent(
-    new CustomEvent("billbeacon:data-changed")
+  // Remove only the active bill. Preserve all payment records.
+  this.saveBills(
+    this.getBills().filter(item => item.id !== id)
   );
 },
   getPayments() {
@@ -8309,66 +8302,18 @@ function closePaymentPlanActions() {
   }, 300);
 }
 function archivePaymentPlan(planId) {
-  const allBills = Store.getBills();
-  const deletedBills = allBills.filter(
-    (bill) => bill.installmentPlanId === planId
+  const installments = Store.getBills().filter(
+    bill => bill.installmentPlanId === planId
   );
 
-  if (!deletedBills.length) {
+  if (!installments.length) {
     alert("Payment plan not found.");
     return;
   }
 
-  const deletedAt = new Date().toISOString();
-
-  deletedBills.forEach((bill) => {
-    recordActivity({
-      action: "bill_deleted",
-      entityType: "paymentplan",
-      entityId: planId,
-      title: `${bill.name} Deleted`,
-      detail: `${formatCurrency(bill.amount)} · due ${formatDate(
-        bill.dueDate,
-        "short"
-      )}`,
-      before: {
-        id: bill.id,
-        name: bill.name,
-        amount: Number(bill.amount) || 0,
-        category: bill.category || null,
-        dueDate: bill.dueDate || null,
-        installmentPlanId: planId,
-        deletedAt
-      },
-      after: null
-    });
-  });
-
-  const archivedBills =
-    typeof Store.getArchivedBills === "function"
-      ? Store.getArchivedBills()
-      : [];
-
-  const archivedIds = new Set(archivedBills.map((bill) => bill.id));
-
-  const recordsToArchive = deletedBills
-    .filter((bill) => !archivedIds.has(bill.id))
-    .map((bill) => ({
-      ...bill,
-      deletedAt,
-      deletedReason: "payment_plan_deleted"
-    }));
-
-  if (typeof Store.saveArchivedBills === "function") {
-    Store.saveArchivedBills([
-      ...archivedBills,
-      ...recordsToArchive
-    ]);
-  }
-
-  Store.saveBills(
-    allBills.filter((bill) => bill.installmentPlanId !== planId)
-  );
+  // Use the shared archive path, which archives all installments
+  // in this plan and records one plan-level activity entry.
+  archiveBill(installments[0].id);
 
   render();
 }
@@ -15617,21 +15562,6 @@ function archiveBill(billId) {
     Remove all archived bills/installments from the active bill store.
   */
   Store.saveBills(billsToKeep);
-
-  /*
-    Preserve the app’s current behavior of removing associated active
-    payment records once a bill or plan has been archived.
-  */
-  const archivedBillIds = new Set(
-    billsToArchive.map((bill) => bill.id)
-  );
-
-  const remainingPayments = Store.getPayments().filter(
-    (payment) => !archivedBillIds.has(payment.billId)
-  );
-
-  localStorage.setItem("payments", JSON.stringify(remainingPayments));
-
   window.dispatchEvent(
     new CustomEvent("billbeacon:data-changed")
   );
