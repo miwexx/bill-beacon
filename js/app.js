@@ -2887,8 +2887,8 @@ function renderDashboardPaycheckPlan(referenceDate = new Date()) {
           color:var(--text-muted);
         "
       >
-        <span>${formatCurrency(selected.paid)} paid</span>
-        <span>${formatCurrency(selected.scheduled)} scheduled</span>
+        <span>${formatCurrency(selected.paid)} Paid</span>
+        <span>${formatCurrency(selected.scheduled)} Scheduled</span>
       </div>
 
       ${
@@ -3954,7 +3954,7 @@ function openDashboardPaidSheet() {
 
       <span style="font-weight:700;">
         ${summary.paidCount}
-        ${summary.paidCount === 1 ? "bill paid" : "bills paid"}
+        ${summary.paidCount === 1 ? "bill paid" : "Bills Paid"}
       </span>
     </div>
 
@@ -4167,7 +4167,7 @@ function renderToday() {
       font-weight:600;
       color:var(--text-muted);
     ">
-      ${summary.paidCount} of ${summary.totalCount} bills paid
+      ${summary.paidCount} of ${summary.totalCount} Bills Paid
     </span>
   </div>
 
@@ -4509,7 +4509,7 @@ function renderCompactRecurringCalendar() {
                 ? "bill"
                 : "bills"
             } scheduled`
-          : "No bills scheduled"
+          : "No Bills Scheduled"
       }
     </div>
   </div>
@@ -5709,7 +5709,7 @@ window.openCalendarDay = function (dateString) {
                 "
               >
                 ${billsForDay.length}
-                ${billsForDay.length === 1 ? "bill" : "bills"} scheduled
+                ${billsForDay.length === 1 ? "bill" : "bills"} Scheduled
               </div>
             </div>
 
@@ -5978,7 +5978,7 @@ function openCycleBillsSheet(cycle, cycleLabel) {
             <div>
               <div class="form-label">${cycleLabel}</div>
               <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:3px">
-                ${bills.length} ${bills.length === 1 ? 'bill' : 'bills'} scheduled
+                ${bills.length} ${bills.length === 1 ? 'bill' : 'bills'} Scheduled
               </div>
             </div>
 
@@ -7588,7 +7588,7 @@ function openPaymentPlanSchedule(type = "month") {
                   ${svgIcon("checkCircle", 44)}
                 </div>
 
-                <div class="empty-state-title">Nothing scheduled</div>
+                <div class="empty-state-title">Nothing Scheduled</div>
 
                 <div class="empty-state-text">
                   ${
@@ -7995,7 +7995,7 @@ function openPaymentPlanDetails(planId) {
       <select
         id="paymentPlanInstallmentSelect"
         class="form-input"
-        aria-label="Choose a scheduled payment"
+        aria-label="Choose a Scheduled Payment"
         style="
           width:100%;
           height:52px;
