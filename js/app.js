@@ -17059,11 +17059,14 @@ async function openNotificationCenter(restore = false) {
       }
 
       #notificationCenterContent {
-        overflow-y:auto;
-        overscroll-behavior:contain;
-        min-height:0;
-        padding:4px 16px 18px;
-      }
+  flex:1 1 auto;
+  min-height:0;
+  min-width:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  padding:4px 16px 18px;
+}
 
       #notificationCenterSheet .bbn-group {
         margin:17px 4px 9px;
