@@ -11779,7 +11779,7 @@ function openIncomeSourceForm(sourceId = null) {
                 id="incomeSourceName"
                 type="text"
                 placeholder="Military pay"
-                value="${escapeHtml(source ? escapeHtml(source.name) : '')}"
+                value="${escapeHtml(source ? source.name : '')}"
                 style="text-align: left;"
               >
             </div>
@@ -12472,7 +12472,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   id="billName"
                   type="text"
                   placeholder="Electricity"
-                  value="${escapeHtml(bill ? escapeHtml(bill.name) : "")}"
+                  value="${escapeHtml(bill ? bill.name : "")}"
                   style="text-align:left"
                 >
               </div>
@@ -12680,7 +12680,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   type="text"
                   inputmode="url"
                   placeholder="provider.com/pay"
-                  value="${escapeHtml(bill ? escapeHtml(bill.paymentUrl || "") : "")}"
+                  value="${escapeHtml(bill ? bill.paymentUrl || "" : "")}"
                   style="text-align:left"
                 >
               </div>
