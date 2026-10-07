@@ -4368,12 +4368,12 @@ function renderToday() {
             ${escapeHtml(name)}${voided ? " · Voided" : ""}
           </div>
           <div class="bill-meta">
-            ${voided ? "Payment voided" : "Paid"}
+            ${voided ? "Payment Voided" : "Paid"}
             ${escapeHtml(dateLabel)}
           </div>
           ${removed ? `
             <div class="bill-meta" style="color:var(--overdue);">
-              Removed — history retained
+              Removed — History Retained
             </div>
           ` : ""}
         </div>
@@ -5287,7 +5287,7 @@ function renderRecurring() {
         ${renderSection({
           id: 'upcoming',
           title: 'Upcoming',
-          subtitle: 'Due today through the next 5 days',
+          subtitle: 'Due Today & Over The Next 5 Days',
           bills: upcoming,
           emptyMessage:
             'You have no unpaid bills or payment plans due in the next 5 days.'
@@ -12175,7 +12175,7 @@ function openBillDetailsSheet(billId) {
                         : ""
                     }"
                   >
-                    ${isVoided ? "Payment voided" : "Payment made"}
+                    ${isVoided ? "Payment Voided" : "Payment made"}
                   </div>
 
                   <div
