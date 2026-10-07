@@ -1,8 +1,8 @@
+# Dependencies
 node_modules/
-workers/node_modules/
-# Generated local state
+
+# Generated local state and build output
 .wrangler/
-node_modules/
 dist/
 
 # Local secrets
