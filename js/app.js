@@ -5225,9 +5225,31 @@ function renderRecurring() {
               </div>
             `
             : `
-              <div class="empty-state recurring-empty-state">
-                <div class="empty-state-text">${emptyMessage}</div>
-              </div>
+              <div class="empty-state recurring-empty-state ${
+  id === "upcoming" ? "calendar-caught-up" : ""
+}">
+  ${
+    id === "upcoming"
+      ? `
+        <div class="calendar-caught-up-icon">
+          ${svgIcon("checkCircle", 36)}
+        </div>
+
+        <h3 class="calendar-caught-up-title">
+          ${
+            overdue.length > 0
+              ? "Nothing Upcoming"
+              : "You're All Caught Up"
+          }
+        </h3>
+      `
+      : `
+        <div class="empty-state-text">
+          ${emptyMessage}
+        </div>
+      `
+  }
+</div>
             `
         }
       </section>
