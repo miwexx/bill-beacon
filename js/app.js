@@ -16677,7 +16677,7 @@ function renderNotificationCenterContent() {
 
   if (count) {
     count.textContent =
-      `${unread} unread · ${records.length} reminders`;
+      `${unread} Unread · ${records.length} Reminders`;
   }
 
   const ready = Boolean(
@@ -16955,13 +16955,27 @@ async function openNotificationCenter(restore = false) {
   container.innerHTML = `
     <style>
       #notificationCenterSheet {
-        display:flex;
-        flex-direction:column;
-        max-height:88dvh;
-        overflow:hidden;
-        border:1px solid rgba(192,151,255,.23);
-        background:var(--bg,#09090c);
-      }
+  position:fixed;
+
+  left:12px !important;
+  right:12px !important;
+  width:auto !important;
+  max-width:calc(100% - 24px);
+  min-width:0;
+  box-sizing:border-box;
+
+  top:calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  bottom:calc(88px + env(safe-area-inset-bottom, 0px)) !important;
+  max-height:none !important;
+
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+
+  border:1px solid rgba(192,151,255,.23);
+  border-radius:24px !important;
+  background:var(--bg,#09090c);
+}
 
       #notificationCenterSheet .bbn-head {
         padding:10px 20px 16px;
@@ -17211,13 +17225,13 @@ async function openNotificationCenter(restore = false) {
             type="button"
             class="bbn-tool"
             id="markAllNotificationsReadButton"
-          >Mark all read</button>
+          >Mark All Read</button>
 
           <button
             type="button"
             class="bbn-tool"
             id="clearReadNotificationsButton"
-          >Clear read</button>
+          >Clear Read</button>
         </div>
       </header>
 
