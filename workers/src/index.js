@@ -126,20 +126,37 @@ async function verifyFirebaseToken(request) {
   }
 }
 
-function isValidPushSubscription(subscription) {
-  return Boolean(
-    subscription &&
-      typeof subscription === "object" &&
-      typeof subscription.endpoint === "string" &&
-      subscription.endpoint.startsWith("https://") &&
-      subscription.keys &&
-      typeof subscription.keys === "object" &&
-      typeof subscription.keys.p256dh === "string" &&
-      subscription.keys.p256dh.length > 0 &&
-      typeof subscription.keys.auth === "string" &&
-      subscription.keys.auth.length > 0
-  );
+
+function isAllowedPushEndpoint(value) {
+  if (typeof value !== "string" || value.length > 8192 || /[\u0000-\u0020\u007f]/.test(value)) return false;
+  try {
+    const endpoint = new URL(value);
+    if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.hash || (endpoint.port && endpoint.port !== "443")) return false;
+    const host = endpoint.hostname.toLowerCase();
+    return host === "fcm.googleapis.com" || host === "android.googleapis.com" ||
+      host.endsWith(".push.apple.com") || host === "updates.push.services.mozilla.com" ||
+      host.endsWith(".push.services.mozilla.com") || host.endsWith(".notify.windows.com");
+  } catch { return false; }
 }
+
+function decodePushKey(value, expectedLength) {
+  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+={0,2}$/.test(value)) return null;
+  try {
+    const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
+    const decoded = atob(base64 + "=".repeat((4 - base64.length % 4) % 4));
+    if (decoded.length !== expectedLength) return null;
+    return decoded;
+  } catch { return null; }
+}
+
+function isValidPushSubscription(subscription) {
+  if (!subscription || typeof subscription !== "object" || Array.isArray(subscription) ||
+      !isAllowedPushEndpoint(subscription.endpoint) || !subscription.keys || typeof subscription.keys !== "object") return false;
+  const publicKey = decodePushKey(subscription.keys.p256dh, 65);
+  return Boolean(publicKey && publicKey.charCodeAt(0) === 4 && decodePushKey(subscription.keys.auth, 16));
+}
+
+
 
 function requireVapidConfiguration(env) {
   if (
@@ -154,6 +171,7 @@ function requireVapidConfiguration(env) {
 }
 
 async function sendPushNotification(subscription, payload, env) {
+  if (!isValidPushSubscription(subscription)) throw new Error("Unsupported or malformed push subscription.");
   requireVapidConfiguration(env);
 
   const { endpoint, headers, body } = await buildPushHTTPRequest({
@@ -175,17 +193,21 @@ async function sendPushNotification(subscription, payload, env) {
     }
   });
 
+  if (!isAllowedPushEndpoint(endpoint) || new URL(endpoint).href !== new URL(subscription.endpoint).href) {
+    throw new Error("Push request destination changed unexpectedly.");
+  }
   const response = await fetch(endpoint, {
     method: "POST",
+    redirect: "error",
     headers,
     body
   });
 
   if (!response.ok) {
-    const errorBody = await response.text().catch(() => "");
+    const errorBody = (await response.text().catch(() => "")).slice(0, 4096);
 
     const error = new Error(
-      `Push service rejected the notification (${response.status}): ${errorBody}`
+      `Push service rejected the notification (${response.status}).`
     );
 
     error.status = response.status;
@@ -389,18 +411,12 @@ function normalizeReminderOffsets(offsets) {
 }
 
 function isActiveBill(bill) {
-  if (!bill || typeof bill !== "object") {
-    return false;
-  }
-
-  return !(
-    bill.archived ||
-    bill.cancelled ||
-    bill.status === "cancelled" ||
-    bill.status === "paid-in-full" ||
-    bill.status === "paidInFull"
-  );
+  if (!bill || typeof bill !== "object") return false;
+  return !(bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt || bill.paidInFullAt ||
+    bill.status === "cancelled" || bill.status === "paid-in-full" || bill.status === "paidInFull");
 }
+
+
 
 function isRecurringBill(bill) {
   return Boolean(
@@ -609,57 +625,464 @@ function getEffectiveOccurrence(bill, originalDueDateKey, timeZone) {
   };
 }
 
-function getOccurrenceForDueDateKey(bill, dueDateKey, timeZone) {
-  const [year, month] = dueDateKey.split("-").map(Number);
 
-  if (!year || !month) {
+// Calendar parity: use explicit date keys in the household time zone, then UTC arithmetic.
+class ReminderCalendarDate extends Date {
+  constructor(...args) { super(...(args.length > 1 ? [Date.UTC(...args)] : args)); }
+}
+
+function validatedReminderTimeZone(value) {
+  const zone = typeof value === "string" && value ? value : DEFAULT_TIME_ZONE;
+  try { new Intl.DateTimeFormat("en", {timeZone: zone}).format(new Date()); return zone; }
+  catch { return DEFAULT_TIME_ZONE; }
+}
+
+function calendarValueForReminder(value, timeZone, field = "", depth = 0) {
+  if (depth > 24) throw new Error("Calendar data is too deeply nested.");
+  const dateFields = ["dueDate", "originalDueDate", "paidForDueDate", "paidDate", "voidedAt", "archivedAt", "postponedTo", "postponedAt", "capturedAt"];
+  if (typeof value === "string" && dateFields.includes(field) && value) {
+    const key = /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : dateKeyInTimeZone(value, timeZone);
+    return key ? `${key}T12:00:00.000Z` : value;
+  }
+  if (Array.isArray(value)) return value.map(item => calendarValueForReminder(item, timeZone, field, depth + 1));
+  if (value && typeof value === "object") {
+    const result = Object.create(null);
+    for (const [key, item] of Object.entries(value)) {
+      if (["__proto__", "constructor", "prototype"].includes(key)) throw new Error("Unsafe calendar data key.");
+      result[key] = calendarValueForReminder(item, timeZone, key, depth + 1);
+    }
+    return result;
+  }
+  return value;
+}
+
+function getReminderOccurrencesForMonth(bill, dueDateKey, timeZone, payments = []) {
+  const zone = validatedReminderTimeZone(timeZone);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDateKey)) return [];
+  const [year, month] = dueDateKey.split("-").map(Number);
+  const normalizedBill = calendarValueForReminder(bill, zone);
+  const normalizedPayments = calendarValueForReminder(payments.filter(payment => payment?.billId === bill.id), zone);
+  return reminderGetVersionedBillOccurrences(normalizedBill, new ReminderCalendarDate(year, month - 1, 1, 12), normalizedPayments)
+    .map(occurrence => ({originalDueDateKey: reminderGetLocalDateKey(occurrence.originalDueDate || occurrence.dueDate),
+      dueDateKey: reminderGetLocalDateKey(occurrence.dueDate),
+      bill: {...occurrence, id: bill.id}}));
+}
+
+function allReminderOffsets(bill) {
+  const schedules = [bill, ...(bill.scheduleHistory || []).map(version => version?.snapshot),
+    ...(bill.occurrenceOverrides || []).map(override => override?.scheduleSnapshot)].filter(Boolean);
+  return [...new Set(schedules.flatMap(schedule => normalizeReminderOffsets(schedule.reminderOffsets)))].sort((a,b)=>b-a);
+}
+
+function reminderGetMonthlyDueDay(bill) {
+  const storedDay = Number(bill?.dueDay);
+
+  if (Number.isInteger(storedDay) && storedDay >= 1 && storedDay <= 31) {
+    return storedDay;
+  }
+
+  return new ReminderCalendarDate(bill.dueDate).getUTCDate();
+}
+
+function reminderGetMonthlyOccurrenceDate(bill, year, month) {
+  const dueDay = reminderGetMonthlyDueDay(bill);
+  const lastDay = new ReminderCalendarDate(year, month + 1, 0).getUTCDate();
+  const actualDay = Math.min(dueDay, lastDay);
+
+  return new ReminderCalendarDate(year, month, actualDay, 12).toISOString();
+}
+
+function reminderGetMonthBounds(referenceDate = new ReminderCalendarDate()) {
+  const year = referenceDate.getUTCFullYear();
+  const month = referenceDate.getUTCMonth();
+
+  return {
+    start: new ReminderCalendarDate(year, month, 1, 12, 0, 0),
+    end: new ReminderCalendarDate(year, month + 1, 0, 12, 0, 0)
+  };
+}
+
+function reminderGetMonthOccurrenceDates(bill, referenceDate = new ReminderCalendarDate()) {
+  if (!bill || !reminderIsRecurringBill(bill)) return [];
+
+  const { start, end } = reminderGetMonthBounds(referenceDate);
+  const originalDueDate = new ReminderCalendarDate(bill.dueDate);
+
+  if (Number.isNaN(originalDueDate.getTime())) return [];
+
+  const occurrenceDates = [];
+
+  if (bill.recurrence === 'Weekly') {
+    const candidate = new ReminderCalendarDate(
+      originalDueDate.getUTCFullYear(),
+      originalDueDate.getUTCMonth(),
+      originalDueDate.getUTCDate(),
+      12,
+      0,
+      0
+    );
+
+    while (candidate < start) {
+      candidate.setUTCDate(candidate.getUTCDate() + 7);
+    }
+
+    while (candidate <= end) {
+      occurrenceDates.push(new ReminderCalendarDate(candidate));
+      candidate.setUTCDate(candidate.getUTCDate() + 7);
+    }
+  }
+
+  if (bill.recurrence === 'Monthly') {
+    occurrenceDates.push(
+      new ReminderCalendarDate(
+        reminderGetMonthlyOccurrenceDate(
+          bill,
+          start.getUTCFullYear(),
+          start.getUTCMonth()
+        )
+      )
+    );
+  }
+
+  if (bill.recurrence === 'Quarterly') {
+    const startYear = originalDueDate.getUTCFullYear();
+    const startMonth = originalDueDate.getUTCMonth();
+    const targetYear = start.getUTCFullYear();
+    const targetMonth = start.getUTCMonth();
+
+    const monthsSinceStart =
+      (targetYear - startYear) * 12 + (targetMonth - startMonth);
+
+    if (monthsSinceStart >= 0 && monthsSinceStart % 3 === 0) {
+      const lastDay = new ReminderCalendarDate(targetYear, targetMonth + 1, 0).getUTCDate();
+      const dueDay = Math.min(originalDueDate.getUTCDate(), lastDay);
+
+      occurrenceDates.push(
+        new ReminderCalendarDate(targetYear, targetMonth, dueDay, 12, 0, 0)
+      );
+    }
+  }
+
+  if (bill.recurrence === 'Yearly') {
+    const targetYear = start.getUTCFullYear();
+    const dueMonth = originalDueDate.getUTCMonth();
+
+    if (
+      targetYear >= originalDueDate.getUTCFullYear() &&
+      start.getUTCMonth() === dueMonth
+    ) {
+      const lastDay = new ReminderCalendarDate(targetYear, dueMonth + 1, 0).getUTCDate();
+      const dueDay = Math.min(originalDueDate.getUTCDate(), lastDay);
+
+      occurrenceDates.push(
+        new ReminderCalendarDate(targetYear, dueMonth, dueDay, 12, 0, 0)
+      );
+    }
+  }
+
+  return occurrenceDates
+    .filter(date => date >= start && date <= end)
+    .map(date => date.toISOString());
+}
+
+function reminderGetOccurrenceKey(templateId, dueDate) {
+  const date = new ReminderCalendarDate(dueDate);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
+
+  return `${templateId}:${year}-${month}-${day}`;
+}
+
+function reminderIsRecurringBill(bill) {
+  return Boolean(bill && bill.recurrence && bill.recurrence !== 'None');
+}
+
+function reminderGetRecurringTemplateId(bill) {
+  if (!bill) return null;
+  return bill.recurringTemplateId || bill.id;
+}
+
+function reminderCreateBillOccurrence(bill, dueDate) {
+  if (!bill || !dueDate) return null;
+
+  const normalizedDueDate = new ReminderCalendarDate(
+    new ReminderCalendarDate(dueDate).getUTCFullYear(),
+    new ReminderCalendarDate(dueDate).getUTCMonth(),
+    new ReminderCalendarDate(dueDate).getUTCDate(),
+    12,
+    0,
+    0
+  ).toISOString();
+
+  const templateId = reminderGetRecurringTemplateId(bill);
+
+  const occurrenceOverrides = Array.isArray(bill.occurrenceOverrides)
+    ? bill.occurrenceOverrides
+    : [];
+
+  const override = occurrenceOverrides.find(
+    (item) => item.originalDueDate === normalizedDueDate
+  );
+
+  if (override?.cancelled) {
     return null;
   }
 
-  const monthOffsets = [-1, 0, 1];
+  const effectiveDueDate =
+    override?.postponedTo || normalizedDueDate;
 
-  for (const monthOffset of monthOffsets) {
-    const monthDate = new Date(
-      Date.UTC(year, month - 1 + monthOffset, 1, 12, 0, 0)
+  const occurrenceKey = reminderGetOccurrenceKey(
+    templateId,
+    normalizedDueDate
+  );
+
+  return {
+    ...bill,
+    id: occurrenceKey,
+    occurrenceKey,
+    templateId,
+    sourceBillId: bill.id,
+    name: bill.name,
+    amount: bill.amount,
+    category: bill.category,
+    dueDate: effectiveDueDate,
+    originalDueDate: normalizedDueDate,
+    recurrence: bill.recurrence,
+    paymentMethod: bill.paymentMethod || "",
+    paymentUrl: bill.paymentUrl || "",
+    autopay: Boolean(bill.autopay),
+    notes: bill.notes || "",
+    reminderOffsets: Array.isArray(bill.reminderOffsets)
+      ? [...bill.reminderOffsets]
+      : [],
+    isOccurrence: true,
+  };
+}
+
+function reminderGetBillScheduleVersions(bill) {
+  const history = Array.isArray(bill.scheduleHistory)
+    ? bill.scheduleHistory.filter(v => v && v.snapshot)
+    : [];
+  if (!history.length) return [{effectiveFrom: null, snapshot: bill}];
+  return history.map((v, index) => ({...v, index})).sort((a, b) =>
+    String(a.effectiveFrom || "").localeCompare(String(b.effectiveFrom || "")) ||
+    a.index - b.index
+  );
+}
+
+function reminderGetBillScheduleAtDate(bill, dateValue) {
+  const key = reminderGetLocalDateKey(dateValue);
+  const versions = reminderGetBillScheduleVersions(bill);
+  let selected = versions[0];
+  for (const version of versions) {
+    if (!version.effectiveFrom || version.effectiveFrom <= key) selected = version;
+  }
+  return {...bill, ...selected.snapshot, id: bill.id};
+}
+
+function reminderGetCalendarScheduleSlot(recurrence, dateValue) {
+  const date = new ReminderCalendarDate(dateValue);
+  if (recurrence === "Weekly") {
+    date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
+    return `week:${reminderGetLocalDateKey(date)}`;
+  }
+  if (recurrence === "Yearly") return `year:${date.getUTCFullYear()}`;
+  if (recurrence === "Quarterly") return `quarter:${date.getUTCFullYear()}-${Math.floor(date.getUTCMonth() / 3)}`;
+  return `month:${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+}
+
+function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords = []) {
+  const monthKey = value => {
+    const date = new ReminderCalendarDate(value);
+    return `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
+  };
+  const targetMonth = monthKey(referenceDate);
+  const versions = reminderGetBillScheduleVersions(bill);
+  const candidates = new Map();
+  const payments = [...paymentRecords.filter(payment => payment.billId === bill.id)].sort((a, b) =>
+    Number(a.status !== "voided") - Number(b.status !== "voided") ||
+    new ReminderCalendarDate(a.paidDate) - new ReminderCalendarDate(b.paidDate)
+  );
+  const hasVersions = versions.length > 1;
+  const archiveKey = bill.archivedAt ? reminderGetLocalDateKey(bill.archivedAt) : null;
+
+  const addScheduled = (versionIndex, originalDueDate) => {
+    const version = versions[versionIndex];
+    const key = reminderGetLocalDateKey(originalDueDate);
+    const next = versions[versionIndex + 1];
+    if (!key) return;
+    const explicitOverride = (bill.occurrenceOverrides || []).find(item =>
+      reminderGetLocalDateKey(item.originalDueDate) === key && !item.cancelled && item.postponedTo
     );
+    if (!explicitOverride) {
+      if (version.effectiveFrom && key < version.effectiveFrom) return;
+      if (next?.effectiveFrom && key >= next.effectiveFrom) return;
+    } else {
+      const recordedKey = explicitOverride.postponedAt
+        ? reminderGetLocalDateKey(explicitOverride.postponedAt) : key;
+      let owner = 0;
+      versions.forEach((item, index) => {
+        if (!item.effectiveFrom || item.effectiveFrom <= recordedKey) owner = index;
+      });
+      if (owner !== versionIndex) return;
+    }
+    if (archiveKey && key >= archiveKey) return;
+    const schedule = {...bill, ...version.snapshot, id: bill.id};
+    const occurrence = reminderCreateBillOccurrence(schedule, originalDueDate);
+    if (!occurrence || monthKey(occurrence.dueDate) !== targetMonth) return;
+    const slot = reminderGetCalendarScheduleSlot(schedule.recurrence, originalDueDate);
+    if (hasVersions) {
+      const priorObligation = versions.slice(0, versionIndex).some((prior, priorIndex) => {
+        const priorSchedule = {...bill, ...prior.snapshot, id: bill.id};
+        if (!reminderIsRecurringBill(priorSchedule)) return false;
+        const priorEnd = versions[priorIndex + 1]?.effectiveFrom;
+        const date = new ReminderCalendarDate(originalDueDate);
+        const offsets = schedule.recurrence === "Yearly" ? Array.from({length: 12}, (_, i) => -i)
+          : schedule.recurrence === "Quarterly" ? [0, -1, -2] : [0, -1];
+        return offsets.some(offset => reminderGetMonthOccurrenceDates(priorSchedule,
+          new ReminderCalendarDate(date.getUTCFullYear(), date.getUTCMonth() + offset, 1, 12)
+        ).some(value => {
+          const key = reminderGetLocalDateKey(value);
+          return (!prior.effectiveFrom || key >= prior.effectiveFrom) &&
+            (!priorEnd || key < priorEnd) &&
+            reminderGetCalendarScheduleSlot(priorSchedule.recurrence, value) === slot;
+        }));
+      });
+      if (priorObligation) return;
+      const recordedElsewhere = payments.some(payment => {
+        if (!payment.paidForDueDate) return false;
+        const original = payment.originalDueDate || payment.paidForDueDate;
+        const recurrence = payment.billSnapshot?.recurrence || schedule.recurrence;
+        return reminderGetCalendarScheduleSlot(recurrence, original) === slot &&
+          reminderGetLocalDateKey(payment.paidForDueDate) !== reminderGetLocalDateKey(occurrence.dueDate);
+      });
+      if (recordedElsewhere) return;
+      const pinnedElsewhere = (bill.occurrenceOverrides || []).some(item => {
+        if (item.cancelled || !item.postponedTo || !item.originalDueDate) return false;
+        const recordedKey = item.postponedAt ? reminderGetLocalDateKey(item.postponedAt) : reminderGetLocalDateKey(item.originalDueDate);
+        let owner = 0;
+        versions.forEach((v, i) => {
+          if (!v.effectiveFrom || v.effectiveFrom <= recordedKey) owner = i;
+        });
+        return (owner < versionIndex || (item.scheduleSnapshot &&
+          reminderGetLocalDateKey(item.originalDueDate) !== reminderGetLocalDateKey(originalDueDate))) &&
+          reminderGetCalendarScheduleSlot(item.scheduleSnapshot?.recurrence || versions[owner].snapshot.recurrence, item.originalDueDate) === slot;
+      });
+      if (pinnedElsewhere) return;
+    }
+    const earlier = [...candidates.values()].find(item => item.scheduleSlot === slot);
+    // Preserve the old obligation when its date predates a mid-period edit.
+    if (hasVersions && earlier && earlier.scheduleVersionIndex < versionIndex) return;
+    candidates.set(occurrence.occurrenceKey, {
+      ...occurrence,
+      scheduleSlot: slot,
+      scheduleVersionIndex: versionIndex,
+      isArchivedHistory: Boolean(bill.archivedAt)
+    });
+  };
 
-    const possibleOriginalDates =
-      getOccurrenceOriginalDueDateKeysForMonth(
-        bill,
-        monthDate.getUTCFullYear(),
-        monthDate.getUTCMonth(),
-        timeZone
+  versions.forEach((version, index) => {
+    const schedule = {...bill, ...version.snapshot, id: bill.id};
+    if (!reminderIsRecurringBill(schedule)) {
+      if (schedule.dueDate) addScheduled(index, schedule.dueDate);
+      return;
+    }
+    reminderGetMonthOccurrenceDates(schedule, referenceDate).forEach(date => addScheduled(index, date));
+    // Include an occurrence moved here from another month, even years earlier.
+    for (const override of bill.occurrenceOverrides || []) {
+      if (!override.originalDueDate || !override.postponedTo || override.cancelled) continue;
+      if (monthKey(override.postponedTo) !== targetMonth) continue;
+      const sourceMonth = new ReminderCalendarDate(override.originalDueDate);
+      const scheduled = reminderGetMonthOccurrenceDates(schedule, sourceMonth).some(date =>
+        reminderGetLocalDateKey(date) === reminderGetLocalDateKey(override.originalDueDate)
       );
+      if (scheduled) addScheduled(index, override.originalDueDate);
+    }
+  });
 
-    for (const originalDueDateKey of possibleOriginalDates) {
-      const occurrence = getEffectiveOccurrence(
-        bill,
-        originalDueDateKey,
-        timeZone
-      );
+  for (const override of bill.occurrenceOverrides || []) {
+    if (override.cancelled || !override.scheduleSnapshot || !override.postponedTo) continue;
+    if (monthKey(override.postponedTo) !== targetMonth) continue;
+    if (archiveKey && reminderGetLocalDateKey(override.postponedTo) >= archiveKey) continue;
+    const schedule = {...bill, ...override.scheduleSnapshot, id: bill.id};
+    const occurrence = reminderCreateBillOccurrence(schedule, override.originalDueDate);
+    if (!occurrence) continue;
+    const slot = reminderGetCalendarScheduleSlot(schedule.recurrence, override.originalDueDate);
+    for (const [key, candidate] of candidates) {
+      if (candidate.scheduleSlot === slot && candidate.occurrenceKey !== occurrence.occurrenceKey) candidates.delete(key);
+    }
+    candidates.set(occurrence.occurrenceKey, {...occurrence, scheduleSlot: slot,
+      isArchivedHistory: Boolean(bill.archivedAt)});
+  }
 
-      if (occurrence?.dueDateKey === dueDateKey) {
-        return occurrence;
+  // A recorded occurrence keeps its date even if a later edit moved the template.
+  // Voided records also anchor the obligation, so reversal restores the same bill.
+  for (const payment of payments) {
+    const dueDate = payment.paidForDueDate;
+    if (!dueDate || monthKey(dueDate) !== targetMonth) continue;
+    const matched = [...candidates.values()].find(item =>
+      reminderGetLocalDateKey(item.dueDate) === reminderGetLocalDateKey(dueDate)
+    );
+    const recordedAt = [payment.billSnapshot?.capturedAt, payment.paidDate, payment.originalDueDate || dueDate]
+      .filter(value => value && !Number.isNaN(new ReminderCalendarDate(value).getTime())).sort()[0] || dueDate;
+    const schedule = reminderGetBillScheduleAtDate(bill, recordedAt);
+    const snapshot = payment.billSnapshot || {};
+    const recurrence = snapshot.recurrence || schedule.recurrence;
+    if (!reminderIsRecurringBill({recurrence}) && !hasVersions && !matched) continue;
+    const originalDueDate = payment.originalDueDate || matched?.originalDueDate || dueDate;
+    const slot = reminderGetCalendarScheduleSlot(recurrence, originalDueDate);
+    if (hasVersions) {
+      for (const [candidateKey, candidate] of candidates) {
+        if (candidate.scheduleSlot === slot &&
+            reminderGetLocalDateKey(candidate.dueDate) !== reminderGetLocalDateKey(dueDate)) {
+          candidates.delete(candidateKey);
+        }
       }
     }
+    const occurrenceKey = matched?.occurrenceKey || reminderGetOccurrenceKey(bill.id, originalDueDate);
+    const expected = snapshot.amount ?? payment.expectedAmountAtMatch ??
+      matched?.amount ?? payment.amount;
+    candidates.set(occurrenceKey, {
+      ...schedule,
+      ...(matched || {}),
+      ...snapshot,
+      id: occurrenceKey,
+      occurrenceKey,
+      templateId: reminderGetRecurringTemplateId(bill),
+      sourceBillId: bill.id,
+      dueDate,
+      originalDueDate,
+      amount: Number(expected),
+      recurrence,
+      isOccurrence: true,
+      scheduleSlot: slot,
+      isArchivedHistory: Boolean(bill.archivedAt)
+    });
   }
-
-  if (!isRecurringBill(bill)) {
-    const originalDueDateKey = dateKeyInTimeZone(
-      bill?.dueDate,
-      timeZone
-    );
-
-    if (originalDueDateKey === dueDateKey) {
-      return {
-        originalDueDateKey,
-        dueDateKey
-      };
-    }
-  }
-
-  return null;
+  return [...candidates.values()].sort((a, b) => new ReminderCalendarDate(a.dueDate) - new ReminderCalendarDate(b.dueDate));
 }
+
+function reminderGetLocalDateKey(value) {
+  const date = new ReminderCalendarDate(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
+function getOccurrenceForDueDateKey(bill, dueDateKey, timeZone, payments = []) {
+  return getReminderOccurrencesForMonth(bill, dueDateKey, timeZone, payments)
+    .find(occurrence => occurrence.dueDateKey === dueDateKey) || null;
+}
+
+
 
 function isOccurrencePaid(bill, occurrence, payments, timeZone) {
   if (!bill || !occurrence) {
@@ -812,9 +1235,7 @@ async function getUserSubscriptions(env, uid) {
         record.uid !== uid ||
         !isValidPushSubscription(record.subscription)
       ) {
-        await env.NOTIFICATIONSKV.delete(key.name);
-
-        console.info("Removed malformed push subscription record.", {
+        console.info("Skipped unsupported or malformed push subscription record.", {
           uid,
           reason: "invalid-subscription-shape"
         });
@@ -1114,7 +1535,7 @@ async function getHouseholdSnapshot(householdId, accessToken) {
   return firestoreFieldsToJs(document.fields || {});
 }
 async function writeNotificationInboxRecord(
-  uid,
+  householdId,
   notification,
   accessToken
 ) {
@@ -1140,7 +1561,7 @@ async function writeNotificationInboxRecord(
   };
 
   const response = await fetch(
-    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(uid)}/notifications/${documentId}`,
+    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(householdId)}/notifications/${documentId}`,
     {
       method: "PATCH",
       headers: {
@@ -1391,6 +1812,11 @@ async function processUserReminders(env, uid, accessToken, now) {
     };
   }
 
+  const membership = await getHouseholdMember(householdId, uid, accessToken);
+  if (!membership || !["owner", "member"].includes(membership.role) || (membership.uid && membership.uid !== uid)) {
+    return {uid, householdId, status: "no-household", reason: "no-valid-membership", eligible: 0, sent: 0, skipped: 0, removed: 0, failures: 0};
+  }
+
   const snapshot = await getHouseholdSnapshot(
     householdId,
     accessToken
@@ -1414,11 +1840,7 @@ async function processUserReminders(env, uid, accessToken, now) {
       ? snapshot.settings
       : {};
 
-  const timeZone =
-    typeof settings.timeZone === "string" &&
-    settings.timeZone
-      ? settings.timeZone
-      : DEFAULT_TIME_ZONE;
+  const timeZone = validatedReminderTimeZone(settings.timeZone);
 
   const todayKey = dateKeyInTimeZone(now, timeZone);
 
@@ -1445,9 +1867,7 @@ async function processUserReminders(env, uid, accessToken, now) {
       continue;
     }
 
-    const reminderOffsets = normalizeReminderOffsets(
-      bill.reminderOffsets
-    );
+    const reminderOffsets = allReminderOffsets(bill);
 
     if (!reminderOffsets.length) {
       continue;
@@ -1462,10 +1882,12 @@ async function processUserReminders(env, uid, accessToken, now) {
       const occurrence = getOccurrenceForDueDateKey(
         bill,
         dueDateKey,
-        timeZone
+        timeZone,
+        payments
       );
 
-      if (!occurrence) {
+      if (!occurrence || !isActiveBill(occurrence.bill) ||
+          !normalizeReminderOffsets(occurrence.bill.reminderOffsets).includes(offsetDays)) {
         continue;
       }
 
@@ -1483,7 +1905,7 @@ async function processUserReminders(env, uid, accessToken, now) {
       outcomes.eligible += 1;
 
       const notification = buildReminderPresentation(
-        bill,
+        occurrence.bill,
         occurrence.dueDateKey,
         offsetDays,
         settings,
@@ -1530,7 +1952,7 @@ async function processUserReminders(env, uid, accessToken, now) {
 
         try {
           await writeNotificationInboxRecord(
-            uid,
+            householdId,
             notification,
             accessToken
           );
