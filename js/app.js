@@ -16978,21 +16978,31 @@ async function openNotificationCenter(restore = false) {
 }
 
       #notificationCenterSheet .bbn-head {
-        padding:10px 20px 16px;
-        border-bottom:1px solid rgba(192,151,255,.14);
-        background:
-          radial-gradient(
-            circle at 100% 0,
-            rgba(246,76,174,.16),
-            transparent 58%
-          ),
-          radial-gradient(
-            circle at 0 100%,
-            rgba(143,54,255,.16),
-            transparent 55%
-          ),
-          var(--surface);
-      }
+  flex:0 0 auto;
+  min-width:0;
+  box-sizing:border-box;
+
+  margin:10px 16px 8px;
+  padding:16px;
+
+  border:1px solid rgba(192,151,255,.20);
+  border-radius:20px;
+
+  background:
+    radial-gradient(
+      ellipse at top left,
+      rgba(143,54,255,.14),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse at top right,
+      rgba(246,76,174,.14),
+      transparent 65%
+    ),
+    var(--surface);
+
+  box-shadow:0 6px 18px rgba(0,0,0,.14);
+}
 
       #notificationCenterSheet .bbn-top {
         display:flex;
@@ -17174,12 +17184,14 @@ async function openNotificationCenter(restore = false) {
       }
 
       #notificationCenterSheet .bbn-hint {
-        margin:0;
-        padding:10px 20px;
-        font-size:11px;
-        line-height:1.5;
-        color:var(--text-muted);
-      }
+  flex:0 0 auto;
+  margin:0;
+  padding:6px 20px 12px;
+
+  font-size:11px;
+  line-height:1.5;
+  color:var(--text-muted);
+}
 
       #notificationCenterSheet .bbn-empty {
         padding:30px 12px;
@@ -17237,11 +17249,6 @@ async function openNotificationCenter(restore = false) {
           >Clear Read</button>
         </div>
       </header>
-
-      <p class="bbn-hint">
-        Tap the name to mark read. Tap › to view details.
-      </p>
-
       <div id="notificationCenterContent"></div>
     </section>
   `;
