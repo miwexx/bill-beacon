@@ -3791,16 +3791,6 @@ function renderMore() {
                   Banking
                 </div>
 
-                <div
-                  style="
-                    margin-top:4px;
-                    color:var(--text-muted);
-                    font-size:12px;
-                    line-height:1.35;
-                  "
-                >
-                  Transactions and bill matches
-                </div>
               </div>
 
               <div
@@ -3845,17 +3835,7 @@ function renderMore() {
                   Installments
                 </div>
 
-                <div
-                  style="
-                    margin-top:4px;
-                    color:var(--text-muted);
-                    font-size:12px;
-                    line-height:1.35;
-                  "
-                >
-                  Payment plans and due dates
                 </div>
-              </div>
 
               <div
                 style="
@@ -3866,7 +3846,7 @@ function renderMore() {
               >
                 ${
                   activePlans
-                    ? `${activePlans} active · ${formatCurrency(upcomingInstallmentTotal)} due soon`
+                    ? `${activePlans} Active · ${formatCurrency(upcomingInstallmentTotal)} Due Soon`
                     : "No active plans"
                 }
               </div>
@@ -3904,16 +3884,6 @@ function renderMore() {
                 Credit Cards
               </div>
 
-              <div
-                style="
-                  margin-top:4px;
-                  color:var(--text-muted);
-                  font-size:13px;
-                  line-height:1.35;
-                "
-              >
-                Track card payments, minimums, and due dates.
-              </div>
             </div>
 
             <div
@@ -3975,11 +3945,7 @@ function renderMore() {
           line-height:1.35;
         "
       >
-        ${
-          activityCount
-            ? `${activityCount} recorded updates to review.`
-            : "Payments and bill updates will appear here."
-        }
+        
       </div>
     </div>
 
