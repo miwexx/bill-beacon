@@ -17004,11 +17004,24 @@ async function openNotificationCenter(restore = false) {
       }
 
       #notificationCenterSheet .bbn-count {
-        margin:5px 0 13px;
-        font-size:13px;
-        color:var(--text-muted);
-      }
+  display:inline-flex;
+  align-items:center;
+  width:fit-content;
+  max-width:100%;
+  box-sizing:border-box;
 
+  margin:8px 0 14px;
+  padding:6px 11px;
+
+  border:1px solid rgba(192,151,255,.22);
+  border-radius:999px;
+  background:rgba(143,54,255,.09);
+
+  font-size:12px;
+  font-weight:650;
+  line-height:1.4;
+  color:var(--text-muted);
+}
       #notificationCenterSheet .bbn-tool {
         padding:9px 13px;
         border:1px solid rgba(192,151,255,.28);
