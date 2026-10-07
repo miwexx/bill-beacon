@@ -5307,7 +5307,7 @@ function renderRecurring() {
         ${renderSection({
           id: 'later',
           title: 'Coming Up Later',
-          subtitle: 'Due in 6 to 10 days',
+          subtitle: 'Due In 6 To 10 Days',
           bills: comingUpLater,
           emptyMessage:
             'You have no unpaid bills or payment plans due 6 to 10 days from now.'
