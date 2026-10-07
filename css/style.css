@@ -3241,25 +3241,48 @@ body {
   --bb-brand-shadow: 0 6px 18px rgba(124, 58, 237, .06);
 }
 
-/* Shared cards: subtle lavender borders */
+/* Shared cards: More-style surfaces and lavender borders */
 .card {
-  border-color: var(--bb-brand-border);
+  border-color: var(--bb-brand-border-strong);
   border-radius: var(--bb-card-radius);
 }
 
-/* Featured cards retain their existing layouts */
+/* Apply the glow to card containers, not specialized card buttons */
+.card:not(button) {
+  background:
+    var(--bb-brand-glow),
+    var(--card);
+}
+
+/* Featured cards: visible More-style glow */
 .dashboard-month-card,
 .summary-card,
 .recurring-calendar-card {
-  border-color: var(--bb-brand-border);
-  background-color: var(--card);
+  border-color: var(--bb-brand-border-strong);
   border-radius: var(--bb-card-radius);
+
+  background:
+    radial-gradient(
+      ellipse at top right,
+      rgba(246, 76, 174, .16),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse at bottom left,
+      rgba(143, 54, 255, .16),
+      transparent 65%
+    ),
+    var(--card);
+
+  box-shadow: var(--bb-brand-shadow);
 }
 
+/* Avoid stacking the old glow over the new background */
 .dashboard-month-card::before,
 .summary-card::before {
-  background: var(--bb-brand-glow);
+  background:none;
 }
+
 
 /* Primary actions: More-style gradient pills */
 .btn-primary {
