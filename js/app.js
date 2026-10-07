@@ -23,7 +23,7 @@ const CATEGORIES = [
   { id: 'other', label: 'Other', icon: 'doc', color: 'cat-other' },
 ];
 
-const RECURRENCE = ['None', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'];
+const RECURRENCE = ['None', 'Weekly', 'Every 2 Weeks', 'Monthly', 'Quarterly', 'Yearly'];
 
 const REMINDER_OFFSETS = [
   { days: 1, label: '1 day before' },
@@ -896,6 +896,7 @@ function nextDate(afterDateStr, recurrence) {
   const d = new Date(afterDateStr);
   switch (recurrence) {
     case 'Weekly': d.setDate(d.getDate() + 7); break;
+    case 'Every 2 Weeks': d.setDate(d.getDate() + 14); break;
     case 'Monthly': d.setMonth(d.getMonth() + 1); break;
     case 'Quarterly': d.setMonth(d.getMonth() + 3); break;
     case 'Yearly': d.setFullYear(d.getFullYear() + 1); break;
@@ -1050,7 +1051,8 @@ function getMonthOccurrenceDates(bill, referenceDate = new Date()) {
 
   const occurrenceDates = [];
 
-  if (bill.recurrence === 'Weekly') {
+  if (bill.recurrence === 'Weekly' || bill.recurrence === 'Every 2 Weeks') {
+    const intervalDays = bill.recurrence === 'Every 2 Weeks' ? 14 : 7;
     const candidate = new Date(
       originalDueDate.getFullYear(),
       originalDueDate.getMonth(),
@@ -1061,12 +1063,12 @@ function getMonthOccurrenceDates(bill, referenceDate = new Date()) {
     );
 
     while (candidate < start) {
-      candidate.setDate(candidate.getDate() + 7);
+      candidate.setDate(candidate.getDate() + intervalDays);
     }
 
     while (candidate <= end) {
       occurrenceDates.push(new Date(candidate));
-      candidate.setDate(candidate.getDate() + 7);
+      candidate.setDate(candidate.getDate() + intervalDays);
     }
   }
 
@@ -1144,8 +1146,14 @@ function getBillScheduleAtDate(bill, dateValue) {
   return {...bill, ...selected.snapshot, id: bill.id};
 }
 
-function getCalendarScheduleSlot(recurrence, dateValue) {
+function getCalendarScheduleSlot(recurrence, dateValue, anchorValue = dateValue) {
   const date = new Date(dateValue);
+  if (recurrence === "Every 2 Weeks") {
+    const anchor = new Date(anchorValue);
+    const day = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+    const origin = Date.UTC(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
+    return `fortnight:${Math.floor((day - origin) / (14 * 86400000))}`;
+  }
   if (recurrence === "Weekly") {
     date.setDate(date.getDate() - (date.getDay() + 6) % 7);
     return `week:${getLocalDateKey(date)}`;
@@ -1162,6 +1170,9 @@ function getVersionedBillOccurrences(bill, referenceDate) {
   };
   const targetMonth = monthKey(referenceDate);
   const versions = getBillScheduleVersions(bill);
+  const calendarScheduleSlot = (recurrence, value) => getCalendarScheduleSlot(
+    recurrence, value, versions[0]?.snapshot?.dueDate || bill.dueDate
+  );
   const candidates = new Map();
   const payments = [...Store.getPaymentsForBill(bill.id)].sort((a, b) =>
     Number(a.status !== "voided") - Number(b.status !== "voided") ||
@@ -1194,7 +1205,7 @@ function getVersionedBillOccurrences(bill, referenceDate) {
     const schedule = {...bill, ...version.snapshot, id: bill.id};
     const occurrence = createBillOccurrence(schedule, originalDueDate);
     if (!occurrence || monthKey(occurrence.dueDate) !== targetMonth) return;
-    const slot = getCalendarScheduleSlot(schedule.recurrence, originalDueDate);
+    const slot = calendarScheduleSlot(schedule.recurrence, originalDueDate);
     if (hasVersions) {
       const priorObligation = versions.slice(0, versionIndex).some((prior, priorIndex) => {
         const priorSchedule = {...bill, ...prior.snapshot, id: bill.id};
@@ -1209,7 +1220,7 @@ function getVersionedBillOccurrences(bill, referenceDate) {
           const key = getLocalDateKey(value);
           return (!prior.effectiveFrom || key >= prior.effectiveFrom) &&
             (!priorEnd || key < priorEnd) &&
-            getCalendarScheduleSlot(priorSchedule.recurrence, value) === slot;
+            calendarScheduleSlot(priorSchedule.recurrence, value) === slot;
         }));
       });
       if (priorObligation) return;
@@ -1217,7 +1228,7 @@ function getVersionedBillOccurrences(bill, referenceDate) {
         if (!payment.paidForDueDate) return false;
         const original = payment.originalDueDate || payment.paidForDueDate;
         const recurrence = payment.billSnapshot?.recurrence || schedule.recurrence;
-        return getCalendarScheduleSlot(recurrence, original) === slot &&
+        return calendarScheduleSlot(recurrence, original) === slot &&
           getLocalDateKey(payment.paidForDueDate) !== getLocalDateKey(occurrence.dueDate);
       });
       if (recordedElsewhere) return;
@@ -1230,7 +1241,7 @@ function getVersionedBillOccurrences(bill, referenceDate) {
         });
         return (owner < versionIndex || (item.scheduleSnapshot &&
           getLocalDateKey(item.originalDueDate) !== getLocalDateKey(originalDueDate))) &&
-          getCalendarScheduleSlot(item.scheduleSnapshot?.recurrence || versions[owner].snapshot.recurrence, item.originalDueDate) === slot;
+          calendarScheduleSlot(item.scheduleSnapshot?.recurrence || versions[owner].snapshot.recurrence, item.originalDueDate) === slot;
       });
       if (pinnedElsewhere) return;
     }
@@ -1271,7 +1282,7 @@ function getVersionedBillOccurrences(bill, referenceDate) {
     const schedule = {...bill, ...override.scheduleSnapshot, id: bill.id};
     const occurrence = createBillOccurrence(schedule, override.originalDueDate);
     if (!occurrence) continue;
-    const slot = getCalendarScheduleSlot(schedule.recurrence, override.originalDueDate);
+    const slot = calendarScheduleSlot(schedule.recurrence, override.originalDueDate);
     for (const [key, candidate] of candidates) {
       if (candidate.scheduleSlot === slot && candidate.occurrenceKey !== occurrence.occurrenceKey) candidates.delete(key);
     }
@@ -1292,7 +1303,7 @@ function getVersionedBillOccurrences(bill, referenceDate) {
     const recurrence = snapshot.recurrence || schedule.recurrence;
     if (!isRecurringBill({recurrence}) && !hasVersions && !matched) continue;
     const originalDueDate = payment.originalDueDate || matched?.originalDueDate || dueDate;
-    const slot = getCalendarScheduleSlot(recurrence, originalDueDate);
+    const slot = calendarScheduleSlot(recurrence, originalDueDate);
     if (hasVersions) {
       for (const [candidateKey, candidate] of candidates) {
         if (candidate.scheduleSlot === slot &&
@@ -10880,6 +10891,9 @@ function categoryIdFromImport(value) {
 function recurrenceFromImport(value) {
   const input = String(value || '').trim().toLowerCase();
 
+  if (['every 2 weeks', 'every two weeks', 'every other week', 'biweekly', 'fortnightly'].includes(input)) {
+    return 'Every 2 Weeks';
+  }
   const match = RECURRENCE.find(item => item.toLowerCase() === input);
 
   return match || 'None';
@@ -11419,6 +11433,9 @@ function getBillScheduleLabel(bill) {
   };
 
   switch (bill.recurrence) {
+    case 'Every 2 Weeks':
+      return 'Repeats Every 2 Weeks';
+
     case 'Weekly':
       return `Repeats Weekly`;
 

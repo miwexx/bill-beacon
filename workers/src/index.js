@@ -502,7 +502,8 @@ function getOccurrenceOriginalDueDateKeysForMonth(
     .split("-")
     .map(Number);
 
-  if (bill.recurrence === "Weekly") {
+  if (bill.recurrence === "Weekly" || bill.recurrence === "Every 2 Weeks") {
+    const intervalDays = bill.recurrence === "Every 2 Weeks" ? 14 : 7;
     const start = utcMiddayFromDateKey(
       makeDateKey(targetYear, targetZeroBasedMonth + 1, 1)
     );
@@ -518,7 +519,7 @@ function getOccurrenceOriginalDueDateKeysForMonth(
     const candidate = utcMiddayFromDateKey(initialKey);
 
     while (candidate < start) {
-      candidate.setUTCDate(candidate.getUTCDate() + 7);
+      candidate.setUTCDate(candidate.getUTCDate() + intervalDays);
     }
 
     const results = [];
@@ -532,7 +533,7 @@ function getOccurrenceOriginalDueDateKeysForMonth(
         )
       );
 
-      candidate.setUTCDate(candidate.getUTCDate() + 7);
+      candidate.setUTCDate(candidate.getUTCDate() + intervalDays);
     }
 
     return results;
@@ -712,7 +713,8 @@ function reminderGetMonthOccurrenceDates(bill, referenceDate = new ReminderCalen
 
   const occurrenceDates = [];
 
-  if (bill.recurrence === 'Weekly') {
+  if (bill.recurrence === 'Weekly' || bill.recurrence === 'Every 2 Weeks') {
+    const intervalDays = bill.recurrence === 'Every 2 Weeks' ? 14 : 7;
     const candidate = new ReminderCalendarDate(
       originalDueDate.getUTCFullYear(),
       originalDueDate.getUTCMonth(),
@@ -723,12 +725,12 @@ function reminderGetMonthOccurrenceDates(bill, referenceDate = new ReminderCalen
     );
 
     while (candidate < start) {
-      candidate.setUTCDate(candidate.getUTCDate() + 7);
+      candidate.setUTCDate(candidate.getUTCDate() + intervalDays);
     }
 
     while (candidate <= end) {
       occurrenceDates.push(new ReminderCalendarDate(candidate));
-      candidate.setUTCDate(candidate.getUTCDate() + 7);
+      candidate.setUTCDate(candidate.getUTCDate() + intervalDays);
     }
   }
 
@@ -881,8 +883,14 @@ function reminderGetBillScheduleAtDate(bill, dateValue) {
   return {...bill, ...selected.snapshot, id: bill.id};
 }
 
-function reminderGetCalendarScheduleSlot(recurrence, dateValue) {
+function reminderGetCalendarScheduleSlot(recurrence, dateValue, anchorValue = dateValue) {
   const date = new ReminderCalendarDate(dateValue);
+  if (recurrence === "Every 2 Weeks") {
+    const anchor = new ReminderCalendarDate(anchorValue);
+    const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    const origin = Date.UTC(anchor.getUTCFullYear(), anchor.getUTCMonth(), anchor.getUTCDate());
+    return `fortnight:${Math.floor((day - origin) / (14 * 86400000))}`;
+  }
   if (recurrence === "Weekly") {
     date.setUTCDate(date.getUTCDate() - (date.getUTCDay() + 6) % 7);
     return `week:${reminderGetLocalDateKey(date)}`;
@@ -899,6 +907,9 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
   };
   const targetMonth = monthKey(referenceDate);
   const versions = reminderGetBillScheduleVersions(bill);
+  const calendarScheduleSlot = (recurrence, value) => reminderGetCalendarScheduleSlot(
+    recurrence, value, versions[0]?.snapshot?.dueDate || bill.dueDate
+  );
   const candidates = new Map();
   const payments = [...paymentRecords.filter(payment => payment.billId === bill.id)].sort((a, b) =>
     Number(a.status !== "voided") - Number(b.status !== "voided") ||
@@ -931,7 +942,7 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
     const schedule = {...bill, ...version.snapshot, id: bill.id};
     const occurrence = reminderCreateBillOccurrence(schedule, originalDueDate);
     if (!occurrence || monthKey(occurrence.dueDate) !== targetMonth) return;
-    const slot = reminderGetCalendarScheduleSlot(schedule.recurrence, originalDueDate);
+    const slot = calendarScheduleSlot(schedule.recurrence, originalDueDate);
     if (hasVersions) {
       const priorObligation = versions.slice(0, versionIndex).some((prior, priorIndex) => {
         const priorSchedule = {...bill, ...prior.snapshot, id: bill.id};
@@ -946,7 +957,7 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
           const key = reminderGetLocalDateKey(value);
           return (!prior.effectiveFrom || key >= prior.effectiveFrom) &&
             (!priorEnd || key < priorEnd) &&
-            reminderGetCalendarScheduleSlot(priorSchedule.recurrence, value) === slot;
+            calendarScheduleSlot(priorSchedule.recurrence, value) === slot;
         }));
       });
       if (priorObligation) return;
@@ -954,7 +965,7 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
         if (!payment.paidForDueDate) return false;
         const original = payment.originalDueDate || payment.paidForDueDate;
         const recurrence = payment.billSnapshot?.recurrence || schedule.recurrence;
-        return reminderGetCalendarScheduleSlot(recurrence, original) === slot &&
+        return calendarScheduleSlot(recurrence, original) === slot &&
           reminderGetLocalDateKey(payment.paidForDueDate) !== reminderGetLocalDateKey(occurrence.dueDate);
       });
       if (recordedElsewhere) return;
@@ -967,7 +978,7 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
         });
         return (owner < versionIndex || (item.scheduleSnapshot &&
           reminderGetLocalDateKey(item.originalDueDate) !== reminderGetLocalDateKey(originalDueDate))) &&
-          reminderGetCalendarScheduleSlot(item.scheduleSnapshot?.recurrence || versions[owner].snapshot.recurrence, item.originalDueDate) === slot;
+          calendarScheduleSlot(item.scheduleSnapshot?.recurrence || versions[owner].snapshot.recurrence, item.originalDueDate) === slot;
       });
       if (pinnedElsewhere) return;
     }
@@ -1008,7 +1019,7 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
     const schedule = {...bill, ...override.scheduleSnapshot, id: bill.id};
     const occurrence = reminderCreateBillOccurrence(schedule, override.originalDueDate);
     if (!occurrence) continue;
-    const slot = reminderGetCalendarScheduleSlot(schedule.recurrence, override.originalDueDate);
+    const slot = calendarScheduleSlot(schedule.recurrence, override.originalDueDate);
     for (const [key, candidate] of candidates) {
       if (candidate.scheduleSlot === slot && candidate.occurrenceKey !== occurrence.occurrenceKey) candidates.delete(key);
     }
@@ -1031,7 +1042,7 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
     const recurrence = snapshot.recurrence || schedule.recurrence;
     if (!reminderIsRecurringBill({recurrence}) && !hasVersions && !matched) continue;
     const originalDueDate = payment.originalDueDate || matched?.originalDueDate || dueDate;
-    const slot = reminderGetCalendarScheduleSlot(recurrence, originalDueDate);
+    const slot = calendarScheduleSlot(recurrence, originalDueDate);
     if (hasVersions) {
       for (const [candidateKey, candidate] of candidates) {
         if (candidate.scheduleSlot === slot &&
