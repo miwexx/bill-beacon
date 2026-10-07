@@ -16752,12 +16752,7 @@ function renderNotificationCenterContent() {
           notificationInboxState.fromCache
             ? "Waiting for the inbox"
             : "You're all caught up"
-        }</h3>
-        <p>${
-          notificationInboxState.fromCache
-            ? "No cached reminders. Waiting for Firestore confirmation."
-            : "Your bill and installment reminders will appear here."
-        }</p>
+        }
       </div>
     `;
     return;
