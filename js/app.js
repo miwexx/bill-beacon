@@ -11144,14 +11144,17 @@ const isCalendarOccurrence = isRecurring && Boolean(occurrenceDueDate);
 const backParams = backRoute === 'recurring' && isCalendarOccurrence
   ? `{ month: '${escapeInlineString(detailBill.dueDate)}' }`
   : '{}';
+const backAction = routeParams.returnToNotificationPopup
+  ? "returnToNotificationCenter()"
+  : `navigate('${escapeInlineString(backRoute)}', ${backParams})`;
 
-const backAction = `navigate('${escapeInlineString(backRoute)}', ${backParams})`;
-
-const backLabel = backRoute === 'today'
-  ? 'Dashboard'
-  : backRoute === 'recurring'
-    ? 'Recurring'
-    : 'Bills';
+const backLabel = routeParams.returnToNotificationPopup
+  ? "Notifications"
+  : backRoute === 'today'
+    ? 'Dashboard'
+    : backRoute === 'recurring'
+      ? 'Recurring'
+      : 'Bills';
 const markPaidAction = isRecurring
   ? `confirmMarkPaidOccurrence(
       '${escapeInlineString(sourceBillId)}',
@@ -13469,28 +13472,20 @@ function exportCSV() {
 // ====================================
 // MAIN RENDER
 // ====================================
-
-function closeNotificationCenter() {
-  const overlay = document.getElementById(
-    'notificationCenterOverlay'
+function closeNotificationCenter(keepReturn = false) {
+  const container = document.getElementById(
+    "notificationCenterContainer"
   );
 
-  const sheet = document.getElementById(
-    'notificationCenterSheet'
-  );
+  if (keepReturn !== true) {
+    notificationPopupReturn = null;
+  }
 
-  overlay?.classList.remove('show');
-  sheet?.classList.remove('show');
+  if (!container) return;
 
-  setTimeout(() => {
-    document
-      .getElementById('notificationCenterContainer')
-      ?.remove();
-
-    unlockBackgroundScroll();
-  }, 300);
+  container.remove();
+  unlockBackgroundScroll();
 }
-
 window.closeNotificationCenter = closeNotificationCenter;
 let billBeaconPlaidScriptPromise = null;
 
@@ -16573,472 +16568,690 @@ function dateFromNotificationDateKey(value) {
 
   return date.toISOString();
 }
-async function openNotificationRecord(notification) {
-  if (!notification) {
-    closeNotificationCenter();
+let notificationPopupReturn = null;
+
+function returnToNotificationCenter() {
+  const saved = notificationPopupReturn;
+  const context = notificationContext();
+
+  if (
+    !saved ||
+    !context ||
+    context.uid !== saved.uid ||
+    context.householdId !== saved.householdId ||
+    context.generation !== saved.generation
+  ) {
+    notificationPopupReturn = null;
+    navigate("today");
     return;
   }
+
+  navigate(saved.route, { ...saved.params });
+  openNotificationCenter(true);
+}
+
+async function openNotificationRecord(notification) {
+  if (!notification?.billId) return;
 
   try {
-    await markNotificationRead(notification.id, true);
-  } catch (error) {
-    console.error(
-      'Could not mark notification as opened:',
-      error
-    );
-    alert(`Could not mark notification read: ${error.message}`);
-    return;
-  }
+    const context = captureNotificationAction();
 
-  closeNotificationCenter();
+    const bill =
+      Store.getBill(notification.billId) ||
+      getArchivedBills().find(
+        item => item.id === notification.billId
+      );
 
-  const rawOccurrenceDueDate =
-  notification.occurrenceDueDate ||
-  notification.dueDate ||
-  null;
-
-const occurrenceDueDate = rawOccurrenceDueDate
-  ? dateFromNotificationDateKey(rawOccurrenceDueDate)
-  : null;
-
-  /*
-   * Payment-plan reminder:
-   * pass the exact plan ID, related installment bill ID,
-   * and due-date occurrence into the Payment Plans route.
-   */
-  if (notification.installmentPlanId) {
-    navigate('payment-plans', {
-      planId: notification.installmentPlanId,
-      billId: notification.billId || null,
-      occurrenceDueDate,
-    });
-    return;
-  }
-
-  /*
-   * Normal bill reminder:
-   * open the matching bill detail.
-   */
-  if (notification.billId) {
-    const bill = Store.getBill(notification.billId);
-
-    if (bill) {
-      navigate('detail', {
-        id: notification.billId,
-        occurrenceDueDate,
-        returnRoute: 'today',
-      });
+    if (!bill) {
+      alert(
+        "This bill is no longer available. The reminder was kept."
+      );
       return;
     }
 
-    alert(
-      'This notification refers to a bill that is no longer available on this device.'
-    );
-  }
+    await markNotificationRead(notification.id, true);
 
-  navigate('today');
+    const current = notificationContext();
+
+    if (
+      !current ||
+      current.generation !== context.generation ||
+      current.uid !== context.uid
+    ) {
+      return;
+    }
+
+    if (!notificationPopupReturn) {
+      notificationPopupReturn = {
+        uid: context.uid,
+        householdId: context.householdId,
+        generation: context.generation,
+        route: currentRoute,
+        params: { ...routeParams },
+        scroll: 0
+      };
+    }
+
+    notificationPopupReturn.scroll =
+      document.getElementById("notificationCenterContent")
+        ?.scrollTop || 0;
+
+    closeNotificationCenter(true);
+
+    navigate("detail", {
+      id: notification.billId,
+      occurrenceDueDate: dateFromNotificationDateKey(
+        notification.occurrenceDueDate ||
+        notification.dueDate
+      ),
+      returnRoute: "today",
+      returnToNotificationPopup: true
+    });
+  } catch (error) {
+    alert(`Could not open this reminder: ${error.message}`);
+  }
 }
+
 function renderNotificationCenterContent() {
   const content = document.getElementById(
-    'notificationCenterContent'
+    "notificationCenterContent"
   );
 
-  if (!content) {
-    return;
-  }
+  if (!content) return;
 
-  const uid = getCurrentNotificationUserId();
+  const scroll = content.scrollTop;
 
-  const notifications = sortNotificationRecords(
+  const records = sortNotificationRecords(
     notificationInboxState.notifications.filter(
-      (notification) => !notification.clearedAt
+      notification => !notification.clearedAt
     )
   );
 
-  if (!uid) {
-    content.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">
-          ${svgIcon('lock', 48)}
-        </div>
-        <div class="empty-state-title">
-          Sign in to view notifications
-        </div>
-        <div class="empty-state-text">
-          Your delivered bill reminders will appear here after you sign in.
-        </div>
-      </div>
-    `;
+  const unread = records.filter(
+    notification => !notification.readAt
+  ).length;
+
+  const count = document.getElementById(
+    "notificationPopupCount"
+  );
+
+  if (count) {
+    count.textContent =
+      `${unread} unread · ${records.length} reminders`;
+  }
+
+  const ready = Boolean(
+    notificationContext() &&
+    notificationInboxState.loaded &&
+    !notificationInboxState.error
+  );
+
+  const markAll = document.getElementById(
+    "markAllNotificationsReadButton"
+  );
+
+  const clear = document.getElementById(
+    "clearReadNotificationsButton"
+  );
+
+  if (markAll) markAll.disabled = !ready || !unread;
+
+  if (clear) {
+    clear.disabled =
+      !ready || !records.some(notification => notification.readAt);
+  }
+
+  if (!getCurrentNotificationUserId()) {
+    content.textContent = "Sign in to view your reminders.";
     return;
   }
 
   if (notificationInboxState.error) {
-    const diagnostic = notificationDiagnostic(notificationInboxState.error);
-    content.innerHTML = `<div role="alert" style="padding:16px;color:var(--text);">
-      <h3>Notifications could not load</h3><p>${escapeHtml(diagnostic.code)}</p>
-      <p>${escapeHtml(diagnostic.message)}</p><p>${escapeHtml(diagnostic.path)}</p>
-      <button type="button" id="retryNotificationInbox" class="btn-secondary">Retry</button></div>`;
-    content.querySelector("#retryNotificationInbox")?.addEventListener("click", () => { startNotificationInboxListener(); renderNotificationCenterContent(); });
-    return;
-  }
-  if (!notificationContext()) {
-    const sync = window.billBeaconSyncStatus?.();
-    content.textContent = sync?.message
-      ? `Household not ready: ${sync.message}`
-      : "Waiting for shared household data. If this persists, check the household sync error.";
-    return;
-  }
-  if (!notificationInboxState.loaded) {
+    const error = notificationDiagnostic(
+      notificationInboxState.error
+    );
+
     content.innerHTML = `
-      <div
-        style="
-          color: var(--text-muted);
-          font-size: var(--text-sm);
-          text-align: center;
-          padding: var(--space-6) 0;
-        "
-      >
-        Loading notifications…
+      <div role="alert" class="bbn-empty">
+        <h3>Notifications could not load</h3>
+        <p>${escapeHtml(error.code)}</p>
+        <p>${escapeHtml(error.message)}</p>
+        <p>${escapeHtml(error.path)}</p>
+        <button
+          type="button"
+          id="retryNotificationInbox"
+          class="bbn-tool"
+        >Retry</button>
+      </div>
+    `;
+
+    content.querySelector("#retryNotificationInbox")
+      ?.addEventListener("click", () => {
+        startNotificationInboxListener();
+        renderNotificationCenterContent();
+      });
+
+    return;
+  }
+
+  if (
+    !notificationContext() ||
+    !notificationInboxState.loaded
+  ) {
+    content.textContent =
+      window.billBeaconSyncStatus?.().message ||
+      "Loading shared reminders…";
+    return;
+  }
+
+  if (!records.length) {
+    content.innerHTML = `
+      <div class="bbn-empty">
+        ${svgIcon("checkCircle", 36)}
+        <h3>${
+          notificationInboxState.fromCache
+            ? "Waiting for the inbox"
+            : "You're all caught up"
+        }</h3>
+        <p>${
+          notificationInboxState.fromCache
+            ? "No cached reminders. Waiting for Firestore confirmation."
+            : "Your bill and installment reminders will appear here."
+        }</p>
       </div>
     `;
     return;
   }
 
-  if (!notifications.length && notificationInboxState.fromCache) {
-    content.textContent = "No cached notifications. Waiting for Firestore to confirm the inbox; this is not a confirmed empty inbox.";
-    return;
-  }
-  if (!notifications.length) {
-    content.innerHTML = `
-      <div class="empty-state">
-        <div class="empty-state-icon">
-          ${svgIcon('checkCircle', 48)}
-        </div>
-        <div class="empty-state-title">
-          You’re all caught up
-        </div>
-        <div class="empty-state-text">
-          Delivered bill and payment-plan reminders will appear here.
-        </div>
-      </div>
-    `;
-    return;
-  }
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-  content.innerHTML = `
-    <div
-      class="notification-list"
-      style="
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-      "
-    >
-      ${notifications.map((notification) => {
-        const icon = getNotificationIcon(notification);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
 
-        const isUnread =
-          !notification.readAt &&
-          !notification.clearedAt;
+  let previousGroup = "";
 
-        const rowStyle = isUnread
-  ? `
-      width: 100%;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 14px 16px;
-      border: 1px solid rgba(143, 44, 255, 0.34);
-      border-left: 3px solid #00d4c7;
-      border-radius: 16px;
-      background:
-        linear-gradient(
-          135deg,
-          rgba(143, 44, 255, 0.18),
-          rgba(19, 16, 36, 0.96)
-        );
-      color: #f8f7ff;
-      box-shadow:
-        0 8px 22px rgba(0, 0, 0, 0.22),
-        inset 0 1px 0 rgba(255, 255, 255, 0.035);
-      text-align: left;
-      cursor: pointer;
-    `
-  : `
-      width: 100%;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      padding: 14px 16px;
-      border: 1px solid rgba(255, 255, 255, 0.075);
-      border-radius: 16px;
-      background: rgba(21, 21, 29, 0.82);
-      color: rgba(248, 247, 255, 0.58);
-      box-shadow: none;
-      text-align: left;
-      cursor: pointer;
-    `;
+  content.innerHTML =
+    (
+      notificationInboxState.fromCache
+        ? `<p class="bbn-hint">Showing cached reminders</p>`
+        : ""
+    ) +
+    records.map(notification => {
+      const date = notification.sentAt
+        ? new Date(notification.sentAt)
+        : null;
 
-const titleStyle = isUnread
-  ? `
-      margin: 0;
-      color: #f8f7ff;
-      font-size: 16px;
-      font-weight: 750;
-      line-height: 1.25;
-      letter-spacing: -0.01em;
-    `
-  : `
-      margin: 0;
-      color: rgba(248, 247, 255, 0.58);
-      font-size: 16px;
-      font-weight: 650;
-      line-height: 1.25;
-      letter-spacing: -0.01em;
-    `;
+      const validDate =
+        date && Number.isFinite(date.getTime());
 
-const messageStyle = isUnread
-  ? `
-      margin-top: 4px;
-      color: rgba(225, 220, 242, 0.76);
-      font-size: 14px;
-      font-weight: 500;
-      line-height: 1.35;
-    `
-  : `
-      margin-top: 4px;
-      color: rgba(225, 220, 242, 0.45);
-      font-size: 14px;
-      font-weight: 500;
-      line-height: 1.35;
-    `;
+      const group = validDate
+        ? date >= today
+          ? "Today"
+          : date >= yesterday
+            ? "Yesterday"
+            : "Earlier"
+        : "Date unavailable";
 
-const arrowColor = isUnread
-  ? '#00d4c7'
-  : 'rgba(225, 220, 242, 0.40)';
+      const heading = group !== previousGroup
+        ? `<h3 class="bbn-group">${group}</h3>`
+        : "";
 
-        return `
+      previousGroup = group;
+
+      const due = dateFromNotificationDateKey(
+        notification.occurrenceDueDate ||
+        notification.dueDate
+      );
+
+      const dueLabel = due
+        ? `Due ${formatDate(due, "short")}`
+        : "";
+
+      const received = validDate
+        ? group === "Today" || group === "Yesterday"
+          ? date.toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit"
+            })
+          : date.toLocaleDateString([], {
+              month: "short",
+              day: "numeric"
+            })
+        : "Date unavailable";
+
+      const metadata = [
+        dueLabel,
+        `Received ${received}`,
+        notification.readAt ? "Read" : "Unread"
+      ].filter(Boolean).join(" · ");
+
+      return `
+        ${heading}
+
+        <article class="bbn-row ${
+          notification.readAt ? "is-read" : "is-unread"
+        }">
+          <span class="bbn-icon" aria-hidden="true">
+            ${svgIcon(
+              notification.installmentPlanId
+                ? "creditcard"
+                : "bell",
+              20
+            )}
+          </span>
+
           <button
             type="button"
-            class="notification-row"
-            data-notification-id="${escapeHtml(notification.id)}"
-            style="${rowStyle}"
+            class="bbn-copy"
+            data-read-notification="${escapeHtml(notification.id)}"
+            aria-label="${escapeHtml(
+              notification.readAt
+                ? `Already read: ${notification.title}`
+                : `Mark read: ${notification.title}`
+            )}"
           >
-            <div
-              class="notification-row-icon"
-              style="
-  flex: 0 0 48px;
-  width: 48px;
-  height: 48px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  color: ${isUnread ? '#00d4c7' : 'rgba(0, 212, 199, 0.55)'};
-  background: ${isUnread
-    ? 'rgba(0, 212, 199, 0.10)'
-    : 'rgba(0, 212, 199, 0.055)'};
-  border: 1px solid ${isUnread
-    ? 'rgba(0, 212, 199, 0.10)'
-    : 'rgba(255, 255, 255, 0.04)'};
-"
-            >
-              ${svgIcon(icon.name, 22)}
-            </div>
+            <span class="bbn-title">
+              ${
+                !notification.readAt
+                  ? '<span class="bbn-dot" aria-hidden="true"></span>'
+                  : ""
+              }
+              ${escapeHtml(notification.title)}
+            </span>
 
-            <div
-              class="notification-row-copy"
-              style="
-                flex: 1;
-                min-width: 0;
-                overflow: hidden;
-              "
-            >
-              <div
-                class="notification-row-title"
-                style="
-                  ${titleStyle}
-                  overflow: hidden;
-                  text-overflow: ellipsis;
-                  white-space: nowrap;
-                "
-              >
-                ${escapeHtml(notification.title)}
-              </div>
+            <span class="bbn-message">
+              ${escapeHtml(notification.body)}
+            </span>
 
-              <div
-                class="notification-row-message"
-                style="
-                  ${messageStyle}
-                  overflow: hidden;
-                  text-overflow: ellipsis;
-                  white-space: nowrap;
-                "
-              >
-                ${escapeHtml(notification.body)}
-              </div>
-            </div>
-
-            <div
-              class="notification-row-arrow"
-              aria-hidden="true"
-              style="
-                flex: 0 0 22px;
-                width: 22px;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                color: ${arrowColor};
-              "
-            >
-              ${svgIcon('chevronRight', 20)}
-            </div>
+            <span class="bbn-meta">
+              ${escapeHtml(metadata)}
+            </span>
           </button>
-        `;
-      }).join('')}
-    </div>
-  `;
 
-  content
-    .querySelectorAll('[data-notification-id]')
-    .forEach((button) => {
-      button.addEventListener('click', () => {
-        const notificationId =
-          button.dataset.notificationId;
+          <button
+            type="button"
+            class="bbn-arrow"
+            data-open-notification="${escapeHtml(notification.id)}"
+            ${!notification.billId ? "disabled" : ""}
+            aria-label="${escapeHtml(
+              `View details: ${notification.title}`
+            )}"
+          >
+            ${svgIcon("chevronRight", 21)}
+          </button>
+        </article>
+      `;
+    }).join("");
 
-        const notification =
-          notificationInboxState.notifications.find(
-            (item) => item.id === notificationId
-          );
+  content.scrollTop = scroll;
 
-        openNotificationRecord(notification);
-      });
+  content.querySelectorAll(
+    "[data-read-notification], [data-open-notification]"
+  ).forEach(button => {
+    button.addEventListener("click", async () => {
+      const open = button.hasAttribute(
+        "data-open-notification"
+      );
+
+      const id = button.getAttribute(
+        open
+          ? "data-open-notification"
+          : "data-read-notification"
+      );
+
+      const record =
+        notificationInboxState.notifications.find(
+          notification => notification.id === id
+        );
+
+      if (!record || button.disabled) return;
+
+      button.disabled = true;
+
+      try {
+        if (open) {
+          await openNotificationRecord(record);
+        } else if (!record.readAt) {
+          await markNotificationRead(record.id);
+        }
+      } catch (error) {
+        alert(
+          `Could not update the reminder: ${error.message}`
+        );
+      } finally {
+        button.disabled = false;
+      }
     });
+  });
 }
 
-async function openNotificationCenter() {
+async function openNotificationCenter(restore = false) {
   notificationDeepLinkFailed = "";
   ensureNotificationInboxListener();
 
-  const existingContainer = document.getElementById(
-    'notificationCenterContainer'
-  );
+  const context = notificationContext();
 
-  if (existingContainer) {
-    existingContainer.remove();
+  if (restore !== true) {
+    notificationPopupReturn = context
+      ? {
+          uid: context.uid,
+          householdId: context.householdId,
+          generation: context.generation,
+          route: currentRoute,
+          params: { ...routeParams },
+          scroll: 0
+        }
+      : null;
   }
 
-  const container = document.createElement('div');
-  container.id = 'notificationCenterContainer';
+  document.getElementById(
+    "notificationCenterContainer"
+  )?.remove();
+
+  const container = document.createElement("div");
+  container.id = "notificationCenterContainer";
 
   container.innerHTML = `
+    <style>
+      #notificationCenterSheet {
+        display:flex;
+        flex-direction:column;
+        max-height:88dvh;
+        overflow:hidden;
+        border:1px solid rgba(192,151,255,.23);
+        background:var(--bg,#09090c);
+      }
+
+      #notificationCenterSheet .bbn-head {
+        padding:10px 20px 16px;
+        border-bottom:1px solid rgba(192,151,255,.14);
+        background:
+          radial-gradient(
+            circle at 100% 0,
+            rgba(246,76,174,.16),
+            transparent 58%
+          ),
+          radial-gradient(
+            circle at 0 100%,
+            rgba(143,54,255,.16),
+            transparent 55%
+          ),
+          var(--surface);
+      }
+
+      #notificationCenterSheet .bbn-top {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+      }
+
+      #notificationCenterSheet .bbn-heading {
+        margin:0;
+        font-size:22px;
+        font-weight:850;
+        color:var(--text);
+      }
+
+      #notificationCenterSheet .bbn-close {
+        width:44px;
+        height:44px;
+        border:0;
+        background:none;
+        color:#b45cff;
+        cursor:pointer;
+      }
+
+      #notificationCenterSheet .bbn-count {
+        margin:5px 0 13px;
+        font-size:13px;
+        color:var(--text-muted);
+      }
+
+      #notificationCenterSheet .bbn-tool {
+        padding:9px 13px;
+        border:1px solid rgba(192,151,255,.28);
+        border-radius:12px;
+        background:rgba(143,54,255,.08);
+        color:var(--text);
+        font:inherit;
+        font-size:12px;
+        font-weight:700;
+        cursor:pointer;
+      }
+
+      #notificationCenterSheet button:disabled {
+        opacity:.45;
+        cursor:default;
+      }
+
+      #notificationCenterSheet button:focus-visible {
+        outline:2px solid #c47cff;
+        outline-offset:2px;
+      }
+
+      #notificationCenterContent {
+        overflow-y:auto;
+        overscroll-behavior:contain;
+        min-height:0;
+        padding:4px 16px 18px;
+      }
+
+      #notificationCenterSheet .bbn-group {
+        margin:17px 4px 9px;
+        font-size:11px;
+        text-transform:uppercase;
+        letter-spacing:.1em;
+        color:var(--text-muted);
+      }
+
+      #notificationCenterSheet .bbn-row {
+        display:flex;
+        align-items:center;
+        gap:10px;
+        margin-bottom:10px;
+        padding:12px;
+        border:1px solid rgba(192,151,255,.16);
+        border-radius:17px;
+        background:var(--surface);
+      }
+
+      #notificationCenterSheet .bbn-row.is-unread {
+        border-color:rgba(192,151,255,.30);
+        background:
+          linear-gradient(
+            120deg,
+            rgba(143,54,255,.11),
+            rgba(246,76,174,.045)
+          ),
+          var(--surface);
+      }
+
+      #notificationCenterSheet .bbn-icon {
+        flex:0 0 36px;
+        height:36px;
+        display:grid;
+        place-items:center;
+        border-radius:12px;
+        color:#d9ccff;
+        background:rgba(143,54,255,.15);
+      }
+
+      #notificationCenterSheet .bbn-copy {
+        flex:1;
+        min-width:0;
+        border:0;
+        padding:3px 0;
+        background:none;
+        text-align:left;
+        color:var(--text);
+        font:inherit;
+        cursor:pointer;
+      }
+
+      #notificationCenterSheet .bbn-title {
+        display:block;
+        font-size:14px;
+        font-weight:800;
+        line-height:1.4;
+        overflow-wrap:anywhere;
+      }
+
+      #notificationCenterSheet .is-read .bbn-title {
+        font-weight:650;
+      }
+
+      #notificationCenterSheet .bbn-dot {
+        display:inline-block;
+        width:6px;
+        height:6px;
+        margin-right:7px;
+        border-radius:50%;
+        background:#00d4c7;
+        vertical-align:middle;
+      }
+
+      #notificationCenterSheet .bbn-message {
+        display:-webkit-box;
+        -webkit-line-clamp:2;
+        -webkit-box-orient:vertical;
+        overflow:hidden;
+        margin-top:4px;
+        font-size:12px;
+        line-height:1.5;
+        color:var(--text-muted);
+      }
+
+      #notificationCenterSheet .bbn-meta {
+        display:block;
+        margin-top:7px;
+        font-size:10px;
+        line-height:1.5;
+        color:var(--text-muted);
+      }
+
+      #notificationCenterSheet .bbn-arrow {
+        flex:0 0 44px;
+        height:44px;
+        border:1px solid rgba(192,151,255,.20);
+        border-radius:13px;
+        background:rgba(143,54,255,.10);
+        color:#d9ccff;
+        display:grid;
+        place-items:center;
+        cursor:pointer;
+      }
+
+      #notificationCenterSheet .bbn-hint {
+        margin:0;
+        padding:10px 20px;
+        font-size:11px;
+        line-height:1.5;
+        color:var(--text-muted);
+      }
+
+      #notificationCenterSheet .bbn-empty {
+        padding:30px 12px;
+        text-align:center;
+        color:var(--text-muted);
+      }
+    </style>
+
     <div
-      class="sheet-overlay"
+      class="sheet-overlay show"
       id="notificationCenterOverlay"
       onclick="closeNotificationCenter()"
     ></div>
 
-    <div class="sheet" id="notificationCenterSheet">
+    <section
+      class="sheet show"
+      id="notificationCenterSheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="notificationPopupTitle"
+    >
       <div class="sheet-handle"></div>
 
-      <div class="sheet-nav">
-  <button
-    class="nav-button"
-    id="notificationCenterCloseButton"
-    type="button"
-  >
-    Close
-  </button>
+      <header class="bbn-head">
+        <div class="bbn-top">
+          <h2 class="bbn-heading" id="notificationPopupTitle">
+            Notifications
+          </h2>
 
-  <div class="sheet-title">Notifications</div>
+          <button
+            type="button"
+            class="bbn-close"
+            id="notificationCenterCloseButton"
+            aria-label="Close notifications"
+          >
+            ${svgIcon("close", 24)}
+          </button>
+        </div>
 
-  <button
-    class="nav-button"
-    id="clearReadNotificationsButton"
-    type="button"
-    style="font-size: 13px;"
-  >
-    Clear Read
-  </button>
-</div>
+        <p class="bbn-count" id="notificationPopupCount">
+          Loading reminders…
+        </p>
 
-<div
-  style="
-    display: flex;
-    justify-content: flex-end;
-    padding: 0 var(--space-4) var(--space-2);
-  "
->
-  <button
-    class="btn-secondary"
-    id="markAllNotificationsReadButton"
-    type="button"
-    style="min-height: 36px; padding: 0 12px; font-size: 13px;"
-  >
-    Mark All As Read
-  </button>
-</div>
+        <div class="bbn-top">
+          <button
+            type="button"
+            class="bbn-tool"
+            id="markAllNotificationsReadButton"
+          >Mark all read</button>
 
-      <div
-        id="notificationCenterContent"
-        style="padding:var(--space-4);"
-      ></div>
-    </div>
+          <button
+            type="button"
+            class="bbn-tool"
+            id="clearReadNotificationsButton"
+          >Clear read</button>
+        </div>
+      </header>
+
+      <p class="bbn-hint">
+        Tap the name to mark read. Tap › to view details.
+      </p>
+
+      <div id="notificationCenterContent"></div>
+    </section>
   `;
 
   document.body.appendChild(container);
+  lockBackgroundScroll();
 
-lockBackgroundScroll();
+  container.querySelector("#notificationCenterCloseButton")
+    .addEventListener("click", () => closeNotificationCenter());
 
-requestAnimationFrame(() => {
-  document
-    .getElementById('notificationCenterOverlay')
-    ?.classList.add('show');
+  const actions = [
+    ["markAllNotificationsReadButton", markAllNotificationsRead],
+    ["clearReadNotificationsButton", clearReadNotifications]
+  ];
 
-  document
-    .getElementById('notificationCenterSheet')
-    ?.classList.add('show');
-});
+  for (const [id, action] of actions) {
+    container.querySelector(`#${id}`)
+      .addEventListener("click", async event => {
+        const button = event.currentTarget;
+        button.disabled = true;
 
-document
-  .getElementById('notificationCenterCloseButton')
-  ?.addEventListener('click', closeNotificationCenter);
-  document
-  .getElementById('markAllNotificationsReadButton')
-  ?.addEventListener('click', async () => {
-    try {
-      await markAllNotificationsRead();
-    } catch (error) {
-      console.error(
-        'Could not mark all notifications as read:',
-        error
-      );
-      alert(
-        'Could not mark notifications as read. Please try again.'
-      );
-    }
-  });
+        try {
+          await action();
+        } catch (error) {
+          alert(error.message);
+        } finally {
+          if (container.isConnected) {
+            renderNotificationCenterContent();
+          }
+        }
+      });
+  }
 
-document
-  .getElementById('clearReadNotificationsButton')
-  ?.addEventListener('click', async () => {
-    try {
-      await clearReadNotifications();
-    } catch (error) {
-      console.error(
-        'Could not clear read notifications:',
-        error
-      );
-      alert(
-        'Could not clear read notifications. Please try again.'
-      );
-    }
-  });
+  renderNotificationCenterContent();
 
-renderNotificationCenterContent();
-
-
-};
+  if (restore === true) {
+    container.querySelector("#notificationCenterContent")
+      .scrollTop = notificationPopupReturn?.scroll || 0;
+  }
+}
 let backgroundScrollY = 0;
 
 function lockBackgroundScroll() {
