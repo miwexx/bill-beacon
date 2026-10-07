@@ -1,2 +1,14 @@
 node_modules/
 workers/node_modules/
+# Generated local state
+.wrangler/
+node_modules/
+dist/
+
+# Local secrets
+.dev.vars*
+.env*
+
+# Operating-system files
+.DS_Store
+Thumbs.db
