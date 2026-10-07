@@ -662,7 +662,10 @@ function getReminderOccurrencesForMonth(bill, dueDateKey, timeZone, payments = [
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDateKey)) return [];
   const [year, month] = dueDateKey.split("-").map(Number);
   const normalizedBill = calendarValueForReminder(bill, zone);
-  const normalizedPayments = calendarValueForReminder(payments.filter(payment => payment?.billId === bill.id), zone);
+  const normalizedPayments = calendarValueForReminder(payments.filter(payment => payment?.billId === bill.id).map(payment => {
+    const key = reminderPaymentOccurrenceDateKey(payment, zone);
+    return !payment.paidForDueDate && key ? {...payment, paidForDueDate: key} : payment;
+  }), zone);
   return reminderGetVersionedBillOccurrences(normalizedBill, new ReminderCalendarDate(year, month - 1, 1, 12), normalizedPayments)
     .map(occurrence => ({originalDueDateKey: reminderGetLocalDateKey(occurrence.originalDueDate || occurrence.dueDate),
       dueDateKey: reminderGetLocalDateKey(occurrence.dueDate),
@@ -1095,53 +1098,38 @@ function getOccurrenceForDueDateKey(bill, dueDateKey, timeZone, payments = []) {
 
 
 
+// Exact payment links only. Ambiguous legacy payments are held for review.
+function reminderFinancialDateKey(value, timeZone) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day ? value : "";
+  }
+  return dateKeyInTimeZone(value, timeZone);
+}
+
+function reminderPaymentOccurrenceDateKey(payment, timeZone) {
+  return reminderFinancialDateKey(payment?.paidForDueDate || payment?.billSnapshot?.dueDate, timeZone);
+}
+
+function hasUnlinkedPaymentForReminderMonth(bill, occurrence, payments, timeZone) {
+  return (Array.isArray(payments) ? payments : []).some(payment => {
+    if (!payment || payment.billId !== bill.id || String(payment.status || "active").toLowerCase() === "voided" ||
+        reminderPaymentOccurrenceDateKey(payment, timeZone)) return false;
+    const paidKey = reminderFinancialDateKey(payment.paidDate, timeZone);
+    return !paidKey || paidKey.slice(0, 7) === occurrence.dueDateKey.slice(0, 7);
+  });
+}
+
 function isOccurrencePaid(bill, occurrence, payments, timeZone) {
-  if (!bill || !occurrence) {
-    return false;
-  }
-
-  const activePayments = (Array.isArray(payments) ? payments : [])
-    .filter((payment) => {
-      return (
-        payment &&
-        payment.billId === bill.id &&
-        String(payment.status || "").toLowerCase() !== "voided"
-      );
-    })
-    .sort((a, b) => {
-      return new Date(b?.paidDate || 0) -
-        new Date(a?.paidDate || 0);
-    });
-
-  const exactPayment = activePayments.find((payment) => {
-    return (
-      dateKeyInTimeZone(
-        payment?.paidForDueDate,
-        timeZone
-      ) === occurrence.dueDateKey
-    );
-  });
-
-  if (exactPayment) {
-    return true;
-  }
-
-  return activePayments.some((payment) => {
-    if (payment?.paidForDueDate) {
-      return false;
-    }
-
-    const paidDateKey = dateKeyInTimeZone(
-      payment?.paidDate,
-      timeZone
-    );
-
-    return (
-      paidDateKey &&
-      paidDateKey.slice(0, 7) ===
-        occurrence.dueDateKey.slice(0, 7)
-    );
-  });
+  if (!bill || !occurrence) return false;
+  return (Array.isArray(payments) ? payments : []).some(payment =>
+    payment && payment.billId === bill.id &&
+    String(payment.status || "active").toLowerCase() !== "voided" &&
+    reminderPaymentOccurrenceDateKey(payment, timeZone) === occurrence.dueDateKey
+  );
 }
 
 function buildReminderPresentation(
@@ -1912,6 +1900,7 @@ async function processUserReminders(env, uid, accessToken, now) {
   const outcomes = {
     uid,
     status: "processed",
+    reviewRequired: 0,
     eligible: 0,
     sent: 0,
     skipped: 0,
@@ -1959,6 +1948,10 @@ async function processUserReminders(env, uid, accessToken, now) {
         continue;
       }
 
+      if (hasUnlinkedPaymentForReminderMonth(bill, occurrence, payments, timeZone)) {
+        outcomes.reviewRequired += 1;
+        continue;
+      }
       outcomes.eligible += 1;
 
       const notification = buildReminderPresentation(
@@ -2053,6 +2046,7 @@ async function runScheduledBillReminders(env) {
     processedUsers: 0,
     noHouseholdUsers: 0,
     remindersEligible: 0,
+    remindersNeedReview: 0,
     notificationsSent: 0,
     subscriptionsRemoved: 0,
     failures: 0
@@ -2085,6 +2079,7 @@ async function runScheduledBillReminders(env) {
 
         summary.processedUsers += 1;
         summary.remindersEligible += result.eligible;
+        summary.remindersNeedReview += result.reviewRequired || 0;
         summary.notificationsSent += result.sent;
         summary.subscriptionsRemoved += result.removed;
         summary.failures += result.failures;

@@ -1174,7 +1174,11 @@ function getVersionedBillOccurrences(bill, referenceDate) {
     recurrence, value, versions[0]?.snapshot?.dueDate || bill.dueDate
   );
   const candidates = new Map();
-  const payments = [...Store.getPaymentsForBill(bill.id)].sort((a, b) =>
+  const payments = Store.getPaymentsForBill(bill.id).map(payment => {
+    const key = getPaymentOccurrenceDateKey(payment);
+    return !payment.paidForDueDate && key
+      ? {...payment, paidForDueDate: dateFromInput(key)} : payment;
+  }).sort((a, b) =>
     Number(a.status !== "voided") - Number(b.status !== "voided") ||
     new Date(a.paidDate) - new Date(b.paidDate)
   );
@@ -1904,38 +1908,82 @@ function getBillOccurrenceDueDate(bill, referenceDate = new Date()) {
   return bill.dueDate;
 }
 
+// Part 1: exact occurrence links; never infer payment assignment from its month.
+function financialDateKey(value) {
+  if (typeof value !== "string" || !value.trim()) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day ? value : "";
+  }
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? getLocalDateKey(value) : "";
+}
+
+function getPaymentOccurrenceDateKey(payment) {
+  if (!payment || typeof payment !== "object") return "";
+  const value = payment.paidForDueDate || payment.billSnapshot?.dueDate;
+  return financialDateKey(value);
+}
+
+function isFinancialPaymentActive(payment) {
+  return payment && String(payment.status || "active").toLowerCase() !== "voided";
+}
+
+function getUnlinkedPaymentsForBill(billId, includeVoided = false) {
+  return Store.getPaymentsForBill(billId).filter(payment =>
+    (includeVoided || isFinancialPaymentActive(payment)) &&
+    !getPaymentOccurrenceDateKey(payment)
+  );
+}
+
+function confirmUnlinkedPaymentReview(billId) {
+  const records = getUnlinkedPaymentsForBill(billId);
+  return !records.length || confirm(
+    `${records.length} older payment record(s) for this bill have no confirmed occurrence date. ` +
+    "Check Payment History to avoid recording the same payment twice. " +
+    "Continue recording a NEW payment for the selected occurrence? " +
+    "The older records will not be reassigned or deleted."
+  );
+}
+
+function renderLegacyPaymentReviewNotice(billId = null) {
+  const records = (billId ? Store.getPaymentsForBill(billId) : Store.getPayments()).filter(
+    payment => !getPaymentOccurrenceDateKey(payment)
+  );
+  if (!records.length) return "";
+  return `<div class="card card-pad" role="status" style="margin:12px 0;">
+    <div style="display:flex;align-items:center;gap:8px;color:var(--upcoming);font-weight:800;">
+      ${svgIcon("warning", 18)} ${records.length} Payment${records.length === 1 ? "" : "s"} Need Review
+    </div>
+    <p style="margin-top:8px;font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;">
+      Older active or voided payments without an occurrence date remain in Payment History, but are not assigned
+      to a bill occurrence or included in occurrence-based Paid totals. Automatic matching for
+      affected bills is paused. Confirm the correct occurrence before recording another payment.
+    </p>
+    <button type="button" class="bb-outline-pill" style="margin-top:12px;"
+      onclick="navigate('history')">View Payment History</button>
+  </div>`;
+}
+
+function bankMatchIsEligibleBill(bill) {
+  if (!bill || typeof bill !== "object") return false;
+  const status = String(bill.status || "").toLowerCase().replace(/[ _]/g, "-");
+  if (bill.archived || bill.archivedAt || bill.isArchivedHistory || bill.cancelled ||
+      bill.cancelledAt || bill.paidInFullAt ||
+      ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status)) return false;
+  return !getUnlinkedPaymentsForBill(getBillPaymentId(bill), true).length;
+}
+
 function getActivePaymentForOccurrence(bill, referenceDate = new Date()) {
   const billId = getBillPaymentId(bill);
-  const occurrenceDueDate = getBillOccurrenceDueDate(bill, referenceDate);
-
-  if (!billId || !occurrenceDueDate) {
-    return null;
-  }
-
-  const dueDateKey = getLocalDateKey(occurrenceDueDate);
-
-  const payments = Store.getPaymentsForBill(billId)
-    .filter((payment) => payment.status !== "voided")
-    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
-
-  const exactPayment = payments.find((payment) => {
-    return (
-      payment.paidForDueDate &&
-      getLocalDateKey(payment.paidForDueDate) === dueDateKey
-    );
-  });
-
-  if (exactPayment) {
-    return exactPayment;
-  }
-
-  return (
-    payments.find((payment) => {
-      if (payment.paidForDueDate) return false;
-
-      return isSameMonth(payment.paidDate, new Date(occurrenceDueDate));
-    }) || null
-  );
+  const dueDateKey = financialDateKey(getBillOccurrenceDueDate(bill, referenceDate));
+  if (!billId || !dueDateKey) return null;
+  return Store.getPaymentsForBill(billId)
+    .filter(isFinancialPaymentActive)
+    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
+    .find(payment => getPaymentOccurrenceDateKey(payment) === dueDateKey) || null;
 }
 
 function isOccurrencePaid(bill, referenceDate = new Date()) {
@@ -2105,6 +2153,7 @@ function markBillPaid(billId) {
     return;
   }
 
+  if (!confirmUnlinkedPaymentReview(billId)) return;
   const today = new Date();
 
   const dueDate = isRecurringBill(bill)
@@ -2316,6 +2365,7 @@ function confirmMarkPaidOccurrence(billId, dueDate) {
     alert("This occurrence is already marked as paid.");
     return;
   }
+  if (!confirmUnlinkedPaymentReview(billId)) return;
   const payment = {
     id: uid(),
     billId,
@@ -4061,9 +4111,10 @@ function getDashboardPaidOccurrences(referenceDate = new Date()) {
   const groups = new Map();
 
   for (const payment of Store.getPayments()) {
-    if (payment.status === "voided") continue;
+    if (!isFinancialPaymentActive(payment)) continue;
 
-    const dateValue = payment.paidForDueDate || payment.paidDate;
+    const dateValue = getPaymentOccurrenceDateKey(payment);
+    if (!dateValue) continue;
     const occurrenceDate = dashboardDate(dateValue);
     if (!occurrenceDate) continue;
 
@@ -4432,6 +4483,7 @@ function renderToday() {
 
     <div class="main-content fade-in">
       <div class="content-pad dashboard-content">
+        ${renderLegacyPaymentReviewNotice()}
 
         <section
   class="dashboard-month-card"
@@ -5284,6 +5336,7 @@ function renderRecurring() {
 
     <div class="main-content fade-in">
       <div class="content-pad recurring-content">
+        ${renderLegacyPaymentReviewNotice()}
         ${renderCompactRecurringCalendar()}
 
         ${renderSection({
@@ -6161,6 +6214,7 @@ window.markCalendarBillPaid = function (billId, dateString) {
     alert("Bill not found.");
     return;
   }
+if (!confirmUnlinkedPaymentReview(billId)) return;
 const confirmed = confirm(
   `Mark ${bill.name} as paid for ${formatDate(dateString, "full")}?\n\n` +
   `${formatCurrency(bill.amount)} will be recorded as paid for this occurrence.`
@@ -11374,6 +11428,7 @@ const postponeAction = isRecurring
           }
         </div>
 
+        ${renderLegacyPaymentReviewNotice(sourceBillId)}
         ${paymentAction}
 
         <button
@@ -13763,13 +13818,8 @@ function bankMatchOccurrenceKey(bill) {
 
 function bankMatchPaymentForOccurrence(payment, bill) {
   if (payment.billId !== getBillPaymentId(bill)) return false;
-
-  if (payment.paidForDueDate) {
-    return getLocalDateKey(payment.paidForDueDate) ===
-      getLocalDateKey(bill.dueDate);
-  }
-
-  return isSameMonth(payment.paidDate, new Date(bill.dueDate));
+  const key = getPaymentOccurrenceDateKey(payment);
+  return Boolean(key && key === financialDateKey(bill.dueDate));
 }
 
 function bankMatchTransactionKey(transaction) {
@@ -13865,7 +13915,7 @@ function runPlaidSandboxAutoMatch() {
     const seen = new Set();
 
     for (const bill of ordinaryOccurrences) {
-      if (bill.isArchivedHistory) continue;
+      if (!bankMatchIsEligibleBill(bill)) continue;
       const occurrenceKey = bankMatchOccurrenceKey(bill);
       if (seen.has(occurrenceKey)) continue;
       seen.add(occurrenceKey);
@@ -13906,7 +13956,7 @@ function runPlaidSandboxAutoMatch() {
       if (!bankMatchMerchantMatches(description, provider)) continue;
 
       const eligible = bills.filter(bill => {
-        if (!bankMatchIsInstallment(bill)) return false;
+        if (!bankMatchIsInstallment(bill) || !bankMatchIsEligibleBill(bill)) return false;
         if (bankMatchProvider(bill.installmentProvider) !== provider) {
           return false;
         }
@@ -16091,18 +16141,23 @@ function openInstallmentPlanForm() {
   document.body.appendChild(container);
 }
 
-function getNextInstallmentDate(date, frequencyDays) {
-  const nextDate = new Date(date);
-
-  if (frequencyDays === 30) {
-    nextDate.setMonth(nextDate.getMonth() + 1);
-  } else if (frequencyDays === 90) {
-    nextDate.setMonth(nextDate.getMonth() + 3);
-  } else {
-    nextDate.setDate(nextDate.getDate() + frequencyDays);
+function getNextInstallmentDate(date, frequencyDays, installmentIndex = 1) {
+  const anchor = new Date(date);
+  if (!Number.isFinite(anchor.getTime()) || !Number.isInteger(frequencyDays) || frequencyDays <= 0 ||
+      !Number.isInteger(installmentIndex) || installmentIndex < 0) {
+    throw new Error("Invalid installment schedule.");
   }
-
-  return nextDate;
+  const result = new Date(anchor);
+  if (frequencyDays === 30 || frequencyDays === 90) {
+    const months = (frequencyDays === 30 ? 1 : 3) * installmentIndex;
+    const month = anchor.getMonth() + months;
+    const lastDay = new Date(anchor.getFullYear(), month + 1, 0).getDate();
+    result.setDate(1);
+    result.setFullYear(anchor.getFullYear(), month, Math.min(anchor.getDate(), lastDay));
+  } else {
+    result.setDate(anchor.getDate() + frequencyDays * installmentIndex);
+  }
+  return result;
 }
 
 function saveInstallmentPlan() {
@@ -16158,8 +16213,8 @@ function saveInstallmentPlan() {
     return;
   }
 
-  if (Number.isNaN(installmentCount) || installmentCount < 2) {
-    alert("Please choose at least 2 payments.");
+  if (!Number.isInteger(installmentCount) || installmentCount < 2 || installmentCount > 60) {
+    alert("Please choose between 2 and 60 payments.");
     return;
   }
 
@@ -16193,8 +16248,7 @@ function saveInstallmentPlan() {
       const installmentCents =
         baseInstallmentCents + (index < remainderCents ? 1 : 0);
 
-      const dueDate = new Date(firstPaymentDate);
-      dueDate.setDate(dueDate.getDate() + frequencyDays * index);
+      const dueDate = getNextInstallmentDate(firstPaymentDate, frequencyDays, index);
 
       return {
         id: uid(),
