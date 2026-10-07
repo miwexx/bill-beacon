@@ -569,121 +569,11 @@ function preserveBillPaymentSnapshots(bill) {
 // UTILITIES
 // ====================================
 function getDemoBankTransactions() {
-  const existingTransactions = Store.getBankTransactions();
-
-  if (existingTransactions.length) {
-    return existingTransactions;
-  }
-
-  const demoTransactions = [
-    {
-      id: "demo-zip-oct-05",
-      accountName: "Primary Bill-Pay Account",
-      accountMask: "1234",
-      merchantName: "Zip",
-      merchantInitials: "Z",
-      amount: 23.50,
-      date: "2026-10-05T12:00:00.000Z",
-      pending: false,
-      type: "debit",
-      category: "Installments",
-      matchStatus: "matched",
-      matchedBillName: "Zip installment",
-      matchedBillId: null,
-      matchNote: "Matched to Zip installment · Paid",
-      iconColor: "#7c5cff",
-    },
-    {
-      id: "demo-apple-oct-05",
-      accountName: "Primary Bill-Pay Account",
-      accountMask: "1234",
-      merchantName: "Apple – App Store",
-      merchantInitials: "A",
-      amount: 2.99,
-      date: "2026-10-05T12:00:00.000Z",
-      pending: true,
-      type: "debit",
-      category: "Subscriptions",
-      matchStatus: "pending",
-      matchedBillName: null,
-      matchedBillId: null,
-      matchNote: "Pending bank transaction",
-      iconColor: "#8d8a9b",
-    },
-    {
-      id: "demo-klarna-oct-02",
-      accountName: "Primary Bill-Pay Account",
-      accountMask: "1234",
-      merchantName: "Klarna",
-      merchantInitials: "K",
-      amount: 35.94,
-      date: "2026-10-02T12:00:00.000Z",
-      pending: false,
-      type: "debit",
-      category: "Installments",
-      matchStatus: "possible",
-      matchedBillName: "Klarna installment",
-      matchedBillId: null,
-      matchNote: "Possible payment match",
-      iconColor: "#f4a5bd",
-    },
-    {
-      id: "demo-trader-joes-oct-02",
-      accountName: "Primary Bill-Pay Account",
-      accountMask: "1234",
-      merchantName: "Trader Joe's",
-      merchantInitials: "TJ",
-      amount: 62.09,
-      date: "2026-10-02T12:00:00.000Z",
-      pending: false,
-      type: "debit",
-      category: "Groceries",
-      matchStatus: "unmatched",
-      matchedBillName: null,
-      matchedBillId: null,
-      matchNote: "Not a tracked bill",
-      iconColor: "#f0a7bd",
-    },
-    {
-      id: "demo-dollar-tree-oct-05",
-      accountName: "Primary Bill-Pay Account",
-      accountMask: "1234",
-      merchantName: "Dollar Tree",
-      merchantInitials: "DT",
-      amount: 13.97,
-      date: "2026-10-05T12:00:00.000Z",
-      pending: true,
-      type: "debit",
-      category: "Shopping",
-      matchStatus: "pending",
-      matchedBillName: null,
-      matchedBillId: null,
-      matchNote: "Pending bank transaction",
-      iconColor: "#e6c56d",
-    },
-    {
-      id: "demo-exchange-oct-05",
-      accountName: "Primary Bill-Pay Account",
-      accountMask: "1234",
-      merchantName: "Exchange Express",
-      merchantInitials: "EX",
-      amount: 1.29,
-      date: "2026-10-05T12:00:00.000Z",
-      pending: true,
-      type: "debit",
-      category: "Shopping",
-      matchStatus: "pending",
-      matchedBillName: null,
-      matchedBillId: null,
-      matchNote: "Pending bank transaction",
-      iconColor: "#8cd9de",
-    },
-  ];
-
-  Store.saveBankTransactions(demoTransactions);
-
-  return demoTransactions;
+  // Compatibility entry point; never seed fake transactions into financial data.
+  return Store.getBankTransactions();
 }
+
+
 async function refreshBillBeaconApp() {
   try {
     if (!("serviceWorker" in navigator)) {
@@ -772,7 +662,7 @@ border-radius:0;
           this.onerror=null;
           this.replaceWith(
             Object.assign(document.createElement('span'), {
-              textContent: '${getBrandInitials(brand)}',
+              textContent: '${escapeInlineString(getBrandInitials(brand))}',
               style: 'display:inline-flex;width:${size}px;height:${size}px;align-items:center;justify-content:center;border-radius:5px;background:rgba(255,255,255,0.92);color:#1e1e2e;font-size:${Math.max(8, Math.round(size * 0.42))}px;font-weight:900;line-height:1;'
             })
           );
@@ -1020,10 +910,14 @@ function dateInputValue(date) {
 
 
 function dateFromInput(value) {
-  if (!value) return null;
-  const [year, month, day] = value.split('-').map(Number);
-  return new Date(year, month - 1, day, 12, 0, 0, 0).toISOString();
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [year, month, day] = value.split("-").map(Number);
+  if (year < 1900 || year > 9999) return null;
+  const date = new Date(year, month - 1, day, 12);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day ? date.toISOString() : null;
 }
+
+
 function getMonthlyDueDay(bill) {
   const storedDay = Number(bill?.dueDay);
 
@@ -1674,7 +1568,7 @@ function openPostponeBillSheet(billId) {
         id="postponeBillDate"
         type="date"
         min="${dateInputValue(minimumDate)}"
-        value="${dateInputValue(minimumDate)}"
+        value="${escapeHtml(dateInputValue(minimumDate))}"
         style="
           width:100%;
           height:54px;
@@ -1694,7 +1588,7 @@ function openPostponeBillSheet(billId) {
         <button
           class="btn-primary"
           style="width:100%"
-          onclick="confirmPostponeBill('${bill.id}')"
+          onclick="confirmPostponeBill('${escapeInlineString(bill.id)}')"
         >
           ${svgIcon('calendar', 20)}
           Confirm Postpone
@@ -1802,7 +1696,7 @@ function openPostponeRecurringOccurrenceSheet(
               class="form-input"
               type="date"
               min="${dateInputValue(minimumDate)}"
-              value="${dateInputValue(minimumDate)}"
+              value="${escapeHtml(dateInputValue(minimumDate))}"
               style="
                 width:100%;
                 height:54px;
@@ -1822,8 +1716,8 @@ function openPostponeRecurringOccurrenceSheet(
           class="btn-primary"
           style="width:100%"
           onclick="confirmPostponeRecurringOccurrence(
-            '${bill.id}',
-            '${originalDueDate}'
+            '${escapeInlineString(bill.id)}',
+            '${escapeInlineString(originalDueDate)}'
           )"
         >
           ${svgIcon("calendar", 20)}
@@ -2117,7 +2011,7 @@ function showPaymentUndoToast(payment, billName) {
     <span>${escapeHtml(billName)} Marked Paid</span>
     <button
       type="button"
-      data-payment-undo="${payment.id}"
+      data-payment-undo="${escapeHtml(payment.id)}"
       style="
         border:0;
         background:transparent;
@@ -2485,32 +2379,42 @@ function svgIcon(name, size = 20) {
   return `<svg viewBox="0 0 24 24" width="${size}" height="${size}" style="fill:currentColor">${path}</svg>`;
 }
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
+function escapeHtml(value) {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
+
+// Specific to string values embedded in generated JavaScript/HTML handlers.
+function escapeInlineString(value) {
+  return String(value ?? "").replace(/[^A-Za-z0-9_.:/-]/g, character =>
+    "\\u" + character.charCodeAt(0).toString(16).padStart(4, "0")
+  );
+}
+
+function safeTransactionColor(value) {
+  const color = String(value || "").trim();
+  return /^#(?:[a-f0-9]{3}|[a-f0-9]{4}|[a-f0-9]{6}|[a-f0-9]{8})$/i.test(color) ? color : "var(--accent)";
+}
+
+function csvCell(value) {
+  let text = String(value ?? "");
+  if (/^\s*[=+@-]/.test(text) || /^[\t\r\n]/.test(text)) text = "'" + text;
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+
+
+
 function safePaymentUrl(value) {
-  let url = String(value || "").trim();
-
-  if (!url) return "";
-
-  if (!/^https?:\/\//i.test(url)) {
-    url = `https://${url}`;
-  }
-
+  const raw = String(value ?? "").trim();
+  if (!raw || /[\u0000-\u0020\u007f]/.test(raw)) return "";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw) && !/^https:\/\//i.test(raw)) return "";
   try {
-    const parsed = new URL(url);
-
-    if (parsed.protocol !== "https:") {
-      return "";
-    }
-
-    return parsed.href;
-  } catch {
-    return "";
-  }
+    const url = new URL(/^https:\/\//i.test(raw) ? raw : `https://${raw}`);
+    return url.protocol === "https:" && !url.username && !url.password && url.hostname ? url.href : "";
+  } catch { return ""; }
 }
+
+
 
 function openPaymentPage(billId) {
   const bill = Store.getBill(billId);
@@ -2890,8 +2794,8 @@ function renderDashboardUpcomingBill(bill) {
         billStatus === "overdue" ? "is-overdue" : ""
       }"
       onclick="navigate('detail', {
-        id: '${sourceBillId}',
-        occurrenceDueDate: '${bill.dueDate}',
+        id: '${escapeInlineString(sourceBillId)}',
+        occurrenceDueDate: '${escapeInlineString(bill.dueDate)}',
         returnRoute: 'today'
       })"
       aria-label="View ${escapeHtml(bill.name)} details"
@@ -3313,8 +3217,8 @@ function renderDashboardPaycheckPlan(referenceDate = new Date()) {
                     <button
                       type="button"
                       onclick="navigate('detail', {
-                        id: '${sourceBillId}',
-                        occurrenceDueDate: '${bill.dueDate}',
+                        id: '${escapeInlineString(sourceBillId)}',
+                        occurrenceDueDate: '${escapeInlineString(bill.dueDate)}',
                         returnRoute: 'today'
                       })"
                       style="
@@ -3423,7 +3327,7 @@ function renderDashboardPaycheckPlan(referenceDate = new Date()) {
           min-height:42px;
           margin-top:var(--space-3);
         "
-        onclick="openPaycheckPlanSheet('${selectedKey}')"
+        onclick="openPaycheckPlanSheet('${escapeInlineString(selectedKey)}')"
       >
         <span>View all ${
           selected.bills.length
@@ -3467,8 +3371,8 @@ function openPaycheckPlanSheet(paycheckKey) {
               class="bill-row"
               style="width:100%;text-align:left;"
               onclick="closePaycheckPlanSheet();navigate('detail', {
-                id: '${sourceBillId}',
-                occurrenceDueDate: '${bill.dueDate}',
+                id: '${escapeInlineString(sourceBillId)}',
+                occurrenceDueDate: '${escapeInlineString(bill.dueDate)}',
                 returnRoute: 'today'
               })"
             >
@@ -4866,7 +4770,7 @@ function renderCompactRecurringCalendar() {
           ${isToday ? "is-today" : ""}
           ${isSelected ? "is-selected" : ""}
           ${hasOverdue ? "has-overdue" : ""}"
-        onclick="toggleRecurringCalendarDay('${dateString}')"
+        onclick="toggleRecurringCalendarDay('${escapeInlineString(dateString)}')"
         aria-label="View Bills For ${formatDate(dateString, "full")}"
         aria-pressed="${isSelected ? "true" : "false"}"
       >
@@ -4918,9 +4822,7 @@ const selectedDayHtml = selectedDate
       <button
         type="button"
         class="nav-button"
-        onclick="toggleRecurringCalendarDay('${
-          selectedDate.toISOString()
-        }')"
+        onclick="toggleRecurringCalendarDay('${escapeInlineString(selectedDate.toISOString())}')"
         aria-label="Close selected day"
         style="color:var(--text-muted);"
       >
@@ -4961,7 +4863,7 @@ const selectedDayHtml = selectedDate
         <button
           type="button"
           class="month-nav-btn"
-          onclick="navigate('recurring', { month: '${prevMonth}' })"
+          onclick="navigate('recurring', { month: '${escapeInlineString(prevMonth)}' })"
           aria-label="Previous Month"
         >
           ${svgIcon("chevronLeft", 18)}
@@ -4972,7 +4874,7 @@ const selectedDayHtml = selectedDate
         <button
           type="button"
           class="month-nav-btn"
-          onclick="navigate('recurring', { month: '${nextMonth}' })"
+          onclick="navigate('recurring', { month: '${escapeInlineString(nextMonth)}' })"
           aria-label="Next Month"
         >
           ${svgIcon("chevronRight", 18)}
@@ -4993,25 +4895,7 @@ const selectedDayHtml = selectedDate
     </section>
   `;
 }
-function toggleRecurringCalendarDay(dateString) {
-  const clickedDateKey = getLocalDateKey(dateString);
 
-  const selectedDateKey = routeParams.recurringSelectedDate
-    ? getLocalDateKey(routeParams.recurringSelectedDate)
-    : null;
-
-  if (selectedDateKey === clickedDateKey) {
-    const { recurringSelectedDate, ...remainingParams } = routeParams;
-
-    navigate("recurring", remainingParams);
-    return;
-  }
-
-  navigate("recurring", {
-    ...routeParams,
-    recurringSelectedDate: dateString
-  });
-}
 const RECURRING_SECTION_LIMIT = 3;
 function getRecurringRelativeLabel(dateString, now = new Date()) {
   const startOfToday = getStartOfLocalDay(now);
@@ -5067,10 +4951,10 @@ function renderRecurringOccurrenceRow(bill) {
           )}`;
 
   const clickAction = isPaymentPlanInstallment
-    ? `openPaymentPlanDetails('${bill.installmentPlanId}')`
+    ? `openPaymentPlanDetails('${escapeInlineString(bill.installmentPlanId)}')`
     : `navigate('detail', {
-        id: '${sourceBillId}',
-        occurrenceDueDate: '${bill.dueDate}',
+        id: '${escapeInlineString(sourceBillId)}',
+        occurrenceDueDate: '${escapeInlineString(bill.dueDate)}',
         returnRoute: 'recurring'
       })`;
 
@@ -5350,7 +5234,7 @@ function renderRecurring() {
                         type="button"
                         id="recurring-${id}-toggle"
                         class="show-more-bills-button"
-                        onclick="toggleRecurringSection('${id}')"
+                        onclick="toggleRecurringSection('${escapeInlineString(id)}')"
                         aria-expanded="false"
                       >
                         <span class="gradient-action-text">Show More</span>
@@ -5676,7 +5560,7 @@ function openBillSortSheet() {
                     color:inherit;
                     border:0;
                   "
-                  onclick="setBillSort('${option.id}')"
+                  onclick="setBillSort('${escapeInlineString(option.id)}')"
                 >
                   <div
                     style="
@@ -5834,7 +5718,7 @@ function renderCalendar() {
         class="calendar-day calendar-day-clickable ${
           isToday ? "today" : ""
         } ${hasOverdue ? "calendar-day-overdue" : ""}"
-        onclick="openCalendarDay('${date.toISOString()}')"
+        onclick="openCalendarDay('${escapeInlineString(date.toISOString())}')"
         aria-label="View ${
           dayBills.length ? `${dayBills.length} Bills Due On ` : ""
         }${formatDate(date.toISOString(), "full")}"
@@ -5871,7 +5755,7 @@ function renderCalendar() {
           <div class="month-nav">
             <button
               class="month-nav-btn"
-              onclick="navigate('calendar', { month: '${prevMonth}' })"
+              onclick="navigate('calendar', { month: '${escapeInlineString(prevMonth)}' })"
               aria-label="Previous month"
             >
               ${svgIcon("chevronLeft", 22)}
@@ -5883,7 +5767,7 @@ function renderCalendar() {
 
             <button
               class="month-nav-btn"
-              onclick="navigate('calendar', { month: '${nextMonth}' })"
+              onclick="navigate('calendar', { month: '${escapeInlineString(nextMonth)}' })"
               aria-label="Next month"
             >
               ${svgIcon("chevronRight", 22)}
@@ -6152,8 +6036,8 @@ window.openCalendarDay = function (dateString) {
                       <div class="bill-row">
                         <button
                           onclick="closeCalendarDay();navigate('detail',{
-                            id:'${sourceBillId}',
-                            occurrenceDueDate:'${bill.dueDate}',
+                            id:'${escapeInlineString(sourceBillId)}',
+                            occurrenceDueDate:'${escapeInlineString(bill.dueDate)}',
                             returnRoute:'recurring'
                           })"
                           style="display:contents;text-align:left"
@@ -6204,8 +6088,8 @@ overflow:hidden;
                               <button
                                 class="calendar-pay-button"
                                 onclick="markCalendarBillPaid(
-                                  '${sourceBillId}',
-                                  '${bill.dueDate}'
+                                  '${escapeInlineString(sourceBillId)}',
+                                  '${escapeInlineString(bill.dueDate)}'
                                 )"
                                 aria-label="Mark ${escapeHtml(
                                   bill.name
@@ -6224,7 +6108,7 @@ overflow:hidden;
 
               <button
                 class="calendar-add-pill"
-                onclick="closeCalendarDay();openCalendarAddMenu('${dateString}')"
+                onclick="closeCalendarDay();openCalendarAddMenu('${escapeInlineString(dateString)}')"
               >
                 ${svgIcon("plus", 18)}
                 Add Recurring Bill
@@ -6244,7 +6128,7 @@ overflow:hidden;
 
                 <button
                   class="calendar-add-pill"
-                  onclick="closeCalendarDay();openCalendarAddMenu('${dateString}')"
+                  onclick="closeCalendarDay();openCalendarAddMenu('${escapeInlineString(dateString)}')"
                 >
                   ${svgIcon("plus", 18)}
                   Add Recurring Bill
@@ -6621,8 +6505,8 @@ function openDashboardStatusSheet(status) {
                       <button
                         class="bill-row"
                         onclick="closeDashboardStatusSheet();navigate('detail',{
-                        id:'${sourceBillId}',
-                         occurrenceDueDate:'${bill.dueDate}',
+                        id:'${escapeInlineString(sourceBillId)}',
+                         occurrenceDueDate:'${escapeInlineString(bill.dueDate)}',
                         returnRoute:'today'
                         })"
                         style="width:100%;text-align:left"
@@ -7011,7 +6895,7 @@ function renderPaymentPlans() {
           background:var(--surface);
           border:1px solid rgba(192, 151, 255, 0.18);
         "
-        onclick="openPaymentPlanDetails('${plan.id}')"
+        onclick="openPaymentPlanDetails('${escapeInlineString(plan.id)}')"
         aria-label="View payment plan details for ${escapeHtml(planTitle)}"
       >
         <div style="display:flex; align-items:flex-start; gap:var(--space-3);">
@@ -7136,7 +7020,7 @@ function renderPaymentPlans() {
     return `
       <button
         type="button"
-        onclick="openPaymentPlanDetails('${plan.id}')"
+        onclick="openPaymentPlanDetails('${escapeInlineString(plan.id)}')"
         style="
           display:flex;
           width:100%;
@@ -7217,7 +7101,7 @@ function renderPaymentPlans() {
   const renderJumpButton = (targetId, label = "See More") => `
     <button
       type="button"
-      onclick="document.getElementById('${targetId}').scrollIntoView({ behavior: 'smooth' })"
+      onclick="document.getElementById('${escapeInlineString(targetId)}').scrollIntoView({ behavior: 'smooth' })"
       style="
         width:100%;
         padding:var(--space-3) var(--space-4);
@@ -7832,7 +7716,7 @@ function openPaymentPlanSchedule(type = "month") {
           color:inherit;
           cursor:pointer;
         "
-        onclick="closePaymentPlanSchedule(); openPaymentPlanDetails('${item.planId}')"
+        onclick="closePaymentPlanSchedule(); openPaymentPlanDetails('${escapeInlineString(item.planId)}')"
         aria-label="View ${escapeHtml(item.storeName)} payment plan"
       >
         <div
@@ -7955,7 +7839,7 @@ function openPaymentPlanSchedule(type = "month") {
       style="max-height:94vh;"
       role="dialog"
       aria-modal="true"
-      aria-label="${title}"
+      aria-label="${escapeHtml(title)}"
     >
       <div class="sheet-handle"></div>
 
@@ -8103,7 +7987,7 @@ function openCompletedPlansHistory() {
   return `
     <button
       type="button"
-      onclick="closeCompletedPlansHistory(); openPaymentPlanDetails('${plan.id}')"
+      onclick="closeCompletedPlansHistory(); openPaymentPlanDetails('${escapeInlineString(plan.id)}')"
       style="
         display:flex;
         width:100%;
@@ -8411,7 +8295,7 @@ function openPaymentPlanDetails(planId) {
             const total = bill.installmentTotal || installmentCount;
 
             return `
-              <option value="${bill.id}">
+              <option value="${escapeHtml(bill.id)}">
                 Installment ${number} of ${total} ·
                 ${formatDate(bill.dueDate, "short")} ·
                 ${formatCurrency(bill.amount)}
@@ -8429,7 +8313,7 @@ function openPaymentPlanDetails(planId) {
     width:100%;
     margin:var(--space-3) 0 0;
   "
-  onclick="markSelectedPlanInstallmentPaid('${planId}')"
+  onclick="markSelectedPlanInstallmentPaid('${escapeInlineString(planId)}')"
 >
   ${svgIcon("checkCircle", 18)}
   Mark as Paid
@@ -8486,7 +8370,7 @@ function openPaymentPlanDetails(planId) {
           class="nav-button"
           onclick="
             closePaymentPlanDetails();
-            openPaymentPlanActions('${planId}');
+            openPaymentPlanActions('${escapeInlineString(planId)}');
           "
           aria-label="Payment plan actions"
           style="color:var(--text);"
@@ -8743,7 +8627,7 @@ function openPaymentPlanActions(planId) {
                 type="button"
                 class="btn-primary"
                 style="width:100%"
-                onclick="payPaymentPlanInFull('${planId}')"
+                onclick="payPaymentPlanInFull('${escapeInlineString(planId)}')"
               >
                 ${svgIcon("checkCircle", 20)}
                 Pay in Full
@@ -8755,7 +8639,7 @@ function openPaymentPlanActions(planId) {
           type="button"
           class="btn-danger"
           style="width:100%"
-          onclick="confirmDeletePaymentPlan('${planId}')"
+          onclick="confirmDeletePaymentPlan('${escapeInlineString(planId)}')"
         >
           ${svgIcon("trash", 20)}
           Delete Plan
@@ -8765,7 +8649,7 @@ function openPaymentPlanActions(planId) {
           type="button"
           class="btn-secondary"
           style="width:100%"
-          onclick="openExistingPaymentPlanEditor('${planId}')"
+          onclick="openExistingPaymentPlanEditor('${escapeInlineString(planId)}')"
         >
           ${svgIcon("gear", 20)}
           Edit Plan
@@ -9555,12 +9439,10 @@ for (let i = 5; i >= 0; i -= 1) {
                 type="button"
                 class="card card-pad"
                 onclick="navigate('detail', {
-                  id: '${
-                    largestUpcomingBill.isOccurrence
+                  id: '${escapeInlineString(largestUpcomingBill.isOccurrence
                       ? largestUpcomingBill.sourceBillId
-                      : largestUpcomingBill.id
-                  }',
-                  occurrenceDueDate: '${largestUpcomingBill.dueDate}',
+                      : largestUpcomingBill.id)}',
+                  occurrenceDueDate: '${escapeInlineString(largestUpcomingBill.dueDate)}',
                   returnRoute: 'insights'
                 })"
                 style="
@@ -9837,7 +9719,7 @@ for (let i = 5; i >= 0; i -= 1) {
                         <button
                           type="button"
                           class="h-chart-row"
-                          onclick="openCategorySpendingSheet('${categoryId}')"
+                          onclick="openCategorySpendingSheet('${escapeInlineString(categoryId)}')"
                           aria-label="View ${escapeHtml(
                             category.label
                           )} spending details"
@@ -10709,7 +10591,7 @@ const dataSummary =
                       (source) => `
                         <div
                           class="form-row"
-                          onclick="openIncomeSourceForm('${source.id}')"
+                          onclick="openIncomeSourceForm('${escapeInlineString(source.id)}')"
                           style="cursor:pointer"
                         >
                           <div>
@@ -11247,10 +11129,10 @@ const isCalendarOccurrence = isRecurring && Boolean(occurrenceDueDate);
 );
 
 const backParams = backRoute === 'recurring' && isCalendarOccurrence
-  ? `{ month: '${detailBill.dueDate}' }`
+  ? `{ month: '${escapeInlineString(detailBill.dueDate)}' }`
   : '{}';
 
-const backAction = `navigate('${backRoute}', ${backParams})`;
+const backAction = `navigate('${escapeInlineString(backRoute)}', ${backParams})`;
 
 const backLabel = backRoute === 'today'
   ? 'Dashboard'
@@ -11259,24 +11141,24 @@ const backLabel = backRoute === 'today'
     : 'Bills';
 const markPaidAction = isRecurring
   ? `confirmMarkPaidOccurrence(
-      '${sourceBillId}',
-      '${detailBill.dueDate}'
+      '${escapeInlineString(sourceBillId)}',
+      '${escapeInlineString(detailBill.dueDate)}'
     )`
-  : `markBillPaid('${sourceBillId}')`;
+  : `markBillPaid('${escapeInlineString(sourceBillId)}')`;
 
 const markUnpaidAction = isRecurring
   ? `markBillOccurrenceUnpaid(
-      '${sourceBillId}',
-      '${detailBill.dueDate}'
+      '${escapeInlineString(sourceBillId)}',
+      '${escapeInlineString(detailBill.dueDate)}'
     )`
-  : `markBillUnpaid('${sourceBillId}')`;
+  : `markBillUnpaid('${escapeInlineString(sourceBillId)}')`;
 
 const postponeAction = isRecurring
   ? `openPostponeRecurringOccurrenceSheet(
-      '${sourceBillId}',
-      '${detailBill.originalDueDate || detailBill.dueDate}'
+      '${escapeInlineString(sourceBillId)}',
+      '${escapeInlineString(detailBill.originalDueDate || detailBill.dueDate)}'
     )`
-  : `openPostponeBillSheet('${sourceBillId}')`;
+  : `openPostponeBillSheet('${escapeInlineString(sourceBillId)}')`;
   const paymentAction = isArchivedHistory ? `<div class="settings-footer">Archived history — read only.</div>` : !payment
   ? `
     <div
@@ -11334,7 +11216,7 @@ const postponeAction = isRecurring
         <button
   type="button"
   class="nav-button"
-  ${isArchivedHistory ? 'disabled' : `onclick="openBillForm('${sourceBillId}')"`}
+  ${isArchivedHistory ? 'disabled' : `onclick="openBillForm('${escapeInlineString(sourceBillId)}')"`}
   style="color:var(--text);"
 >
   ${isArchivedHistory ? "Archived" : "Edit"}
@@ -11457,7 +11339,7 @@ const postponeAction = isRecurring
                 <button
                   class="btn-primary"
                   style="width:100%;margin-top:var(--space-4);"
-                  onclick="openPaymentPage('${sourceBillId}')"
+                  onclick="openPaymentPage('${escapeInlineString(sourceBillId)}')"
                 >
                   Make a Payment
                 </button>
@@ -11466,7 +11348,7 @@ const postponeAction = isRecurring
                 <button
                   class="btn-secondary"
                   style="width:100%;margin-top:var(--space-4);"
-                  ${isArchivedHistory ? 'disabled' : `onclick="openPaymentLinkPopup('${sourceBillId}')"`}
+                  ${isArchivedHistory ? 'disabled' : `onclick="openPaymentLinkPopup('${escapeInlineString(sourceBillId)}')"`}
                 >
                   Add Payment Link
                 </button>
@@ -11484,7 +11366,7 @@ const postponeAction = isRecurring
             min-height:46px;
             margin-top:var(--space-3);
           "
-          onclick="openBillDetailsSheet('${sourceBillId}')"
+          onclick="openBillDetailsSheet('${escapeInlineString(sourceBillId)}')"
         >
           <span class="pill-icon">${svgIcon("doc", 20)}</span>
           <span>Show Details</span>
@@ -11596,13 +11478,13 @@ function billRow(bill, clickable = false) {
 
   const rowClick = clickable
     ? `
-      onclick="openBillDetailsSheet('${detailBillId}')"
+      onclick="openBillDetailsSheet('${escapeInlineString(detailBillId)}')"
       role="button"
       tabindex="0"
       onkeydown="
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
-          openBillDetailsSheet('${detailBillId}');
+          openBillDetailsSheet('${escapeInlineString(detailBillId)}');
         }
       "
     `
@@ -11611,12 +11493,12 @@ function billRow(bill, clickable = false) {
   const moreButtonAction = bill.isOccurrence
     ? `
       navigate('detail', {
-        id: '${detailBillId}',
-        occurrenceDueDate: '${detailDueDate}',
+        id: '${escapeInlineString(detailBillId)}',
+        occurrenceDueDate: '${escapeInlineString(detailDueDate)}',
         returnRoute: 'recurring'
       })
     `
-    : `openBillQuickActions('${detailBillId}')`;
+    : `openBillQuickActions('${escapeInlineString(detailBillId)}')`;
 
   return `
     <div class="bill-row ${clickable ? "clickable" : ""}" ${rowClick}>
@@ -11701,7 +11583,7 @@ function tabBar() {
   return `
     <div class="tab-bar">
       ${tabs.map(tab => `
-        <button class="tab-item ${currentRoute === tab.id ? 'active' : ''}" onclick="navigate('${tab.id}')">
+        <button class="tab-item ${currentRoute === tab.id ? 'active' : ''}" onclick="navigate('${escapeInlineString(tab.id)}')">
           <div class="tab-icon">${svgIcon(tab.icon, 24)}</div>
           <span>${tab.label}</span>
         </button>
@@ -11804,7 +11686,7 @@ window.openCalendarAddMenu = function(dateString) {
 
         <button
           class="btn-primary"
-          onclick="closeCalendarAddMenu(); openBillForm(null, '${selectedDate}')"
+          onclick="closeCalendarAddMenu(); openBillForm(null, '${escapeInlineString(selectedDate)}')"
         >
           ${svgIcon('plus', 20)}
           Add Recurring Bill
@@ -11897,7 +11779,7 @@ function openIncomeSourceForm(sourceId = null) {
                 id="incomeSourceName"
                 type="text"
                 placeholder="Military pay"
-                value="${source ? escapeHtml(source.name) : ''}"
+                value="${escapeHtml(source ? escapeHtml(source.name) : '')}"
                 style="text-align: left;"
               >
             </div>
@@ -11913,7 +11795,7 @@ function openIncomeSourceForm(sourceId = null) {
                 min="0"
                 step="0.01"
                 placeholder="0.00"
-                value="${source ? source.expectedAmount : ''}"
+                value="${escapeHtml(source ? source.expectedAmount : '')}"
               >
             </div>
           </div>
@@ -11929,7 +11811,7 @@ function openIncomeSourceForm(sourceId = null) {
               <select class="form-select" id="incomeSourceFrequency">
                 ${INCOME_FREQUENCIES.map(frequency => `
                   <option
-                    value="${frequency}"
+                    value="${escapeHtml(frequency)}"
                     ${source?.frequency === frequency ? 'selected' : ''}
                   >
                     ${frequency}
@@ -11945,7 +11827,7 @@ function openIncomeSourceForm(sourceId = null) {
                 class="form-input"
                 id="incomeSourceNextPayDate"
                 type="date"
-                value="${source ? source.nextPayDate.split('T')[0] : today}"
+                value="${escapeHtml(source ? source.nextPayDate.split('T')[0] : today)}"
               >
             </div>
           </div>
@@ -11958,7 +11840,7 @@ function openIncomeSourceForm(sourceId = null) {
         ${source ? `
           <button
             class="btn-danger"
-            onclick="confirmDeleteIncomeSource('${source.id}')"
+            onclick="confirmDeleteIncomeSource('${escapeInlineString(source.id)}')"
           >
             ${svgIcon('trash', 16)}
             Delete income source
@@ -12073,10 +11955,10 @@ function openBillQuickActions(billId) {
           ${
             isRecurringBill(bill)
               ? `markBillOccurrenceUnpaid(
-                  '${sourceBillId}',
-                  '${occurrenceDueDate}'
+                  '${escapeInlineString(sourceBillId)}',
+                  '${escapeInlineString(occurrenceDueDate)}'
                 )`
-              : `markBillUnpaid('${sourceBillId}')`
+              : `markBillUnpaid('${escapeInlineString(sourceBillId)}')`
           };
         "
       >
@@ -12094,10 +11976,10 @@ function openBillQuickActions(billId) {
           ${
             isRecurringBill(bill)
               ? `confirmMarkPaidOccurrence(
-                  '${sourceBillId}',
-                  '${occurrenceDueDate}'
+                  '${escapeInlineString(sourceBillId)}',
+                  '${escapeInlineString(occurrenceDueDate)}'
                 )`
-              : `markBillPaid('${sourceBillId}')`
+              : `markBillPaid('${escapeInlineString(sourceBillId)}')`
           };
         "
       >
@@ -12140,7 +12022,7 @@ function openBillQuickActions(billId) {
             class="bill-sheet-action"
             onclick="
               closeBillQuickActions();
-              openBillForm('${sourceBillId}');
+              openBillForm('${escapeInlineString(sourceBillId)}');
             "
           >
             <span>${svgIcon("gear", 20)}</span>
@@ -12155,7 +12037,7 @@ function openBillQuickActions(billId) {
             class="bill-sheet-action bill-sheet-action-danger"
             onclick="
               closeBillQuickActions();
-              openBillActionRemove('${sourceBillId}');
+              openBillActionRemove('${escapeInlineString(sourceBillId)}');
             "
           >
             <span>${svgIcon("trash", 20)}</span>
@@ -12590,7 +12472,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   id="billName"
                   type="text"
                   placeholder="Electricity"
-                  value="${bill ? escapeHtml(bill.name) : ""}"
+                  value="${escapeHtml(bill ? escapeHtml(bill.name) : "")}"
                   style="text-align:left"
                 >
               </div>
@@ -12604,7 +12486,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   type="number"
                   step="0.01"
                   placeholder="0.00"
-                  value="${bill ? bill.amount : ""}"
+                  value="${escapeHtml(bill ? bill.amount : "")}"
                 >
               </div>
             </div>
@@ -12622,7 +12504,7 @@ function openBillForm(billId = null, selectedDate = null) {
                 ${CATEGORIES.map(
                   (category) => `
                     <option
-                      value="${category.id}"
+                      value="${escapeHtml(category.id)}"
                       ${
                         bill && bill.category === category.id
                           ? "selected"
@@ -12652,7 +12534,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   ${RECURRENCE.map(
                     (recurrence) => `
                       <option
-                        value="${recurrence}"
+                        value="${escapeHtml(recurrence)}"
                         ${
                           bill && bill.recurrence === recurrence
                             ? "selected"
@@ -12673,7 +12555,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   class="form-input"
                   id="billDueDate"
                   type="date"
-                  value="${dueDate}"
+                  value="${escapeHtml(dueDate)}"
                 >
 
                 <select
@@ -12686,7 +12568,7 @@ function openBillForm(billId = null, selectedDate = null) {
 
                     return `
                       <option
-                        value="${day}"
+                        value="${escapeHtml(day)}"
                         ${currentDueDay === day ? "selected" : ""}
                       >
                         ${day}
@@ -12770,7 +12652,7 @@ function openBillForm(billId = null, selectedDate = null) {
                 ${PAYMENT_METHODS.map(
                   (method) => `
                     <option
-                      value="${method}"
+                      value="${escapeHtml(method)}"
                       ${
                         bill && bill.paymentMethod === method
                           ? "selected"
@@ -12798,7 +12680,7 @@ function openBillForm(billId = null, selectedDate = null) {
                   type="text"
                   inputmode="url"
                   placeholder="provider.com/pay"
-                  value="${bill ? escapeHtml(bill.paymentUrl || "") : ""}"
+                  value="${escapeHtml(bill ? escapeHtml(bill.paymentUrl || "") : "")}"
                   style="text-align:left"
                 >
               </div>
@@ -12848,8 +12730,8 @@ function openBillForm(billId = null, selectedDate = null) {
                         type="checkbox"
                         class="reminder-toggle"
                         name="billReminderOffsets"
-                        value="${reminder.days}"
-                        data-days="${reminder.days}"
+                        value="${escapeHtml(reminder.days)}"
+                        data-days="${escapeHtml(reminder.days)}"
                         ${
                           selectedReminders.includes(reminder.days)
                             ? "checked"
@@ -12889,7 +12771,7 @@ function openBillForm(billId = null, selectedDate = null) {
               ? `
                 <button
                   class="btn-danger"
-                  onclick="confirmDeleteBill('${bill.id}', true)"
+                  onclick="confirmDeleteBill('${escapeInlineString(bill.id)}', true)"
                 >
                   ${svgIcon("trash", 16)}
                   Delete Bill
@@ -12984,7 +12866,7 @@ function openPaymentLinkPopup(billId) {
 
         <button
           class="nav-button"
-          onclick="savePaymentLinkPopup('${bill.id}')"
+          onclick="savePaymentLinkPopup('${escapeInlineString(bill.id)}')"
           style="font-weight:700"
         >
           Save
@@ -13090,7 +12972,7 @@ function saveBill() {
     return;
   }
 
-  if (Number.isNaN(amount) || amount < 0) {
+  if (!Number.isFinite(amount) || amount < 0) {
     alert("Please enter a valid amount.");
     return;
   }
@@ -13500,34 +13382,12 @@ function openCreditCardsComingSoon() {
 }
 
 function openBillPaymentLink(billId) {
-  const bill = Store.getBill(billId);
-
-  if (!bill || !bill.paymentUrl) {
-    alert("No payment link has been added for this bill yet.");
-    return;
-  }
-
-  let url = bill.paymentUrl.trim();
-
-  if (!/^https?:\/\//i.test(url)) {
-    url = `https://${url}`;
-  }
-
-  try {
-    const paymentUrl = new URL(url);
-
-    if (
-      paymentUrl.protocol !== "https:" &&
-      paymentUrl.protocol !== "http:"
-    ) {
-      throw new Error("Unsupported link");
-    }
-
-    window.open(paymentUrl.href, "_blank", "noopener,noreferrer");
-  } catch {
-    alert("Please enter a valid payment website link.");
-  }
+  const url = safePaymentUrl(Store.getBill(billId)?.paymentUrl);
+  if (!url) { alert("Please add a valid HTTPS payment website link."); return; }
+  window.open(url, "_blank", "noopener,noreferrer");
 }
+
+
 function confirmMarkPaid(billId) {
   if (confirm('Mark this bill as paid?')) {
     markBillPaid(billId);
@@ -13563,49 +13423,35 @@ function confirmDeleteBill(billId, fromForm = false) {
 }
 
 function clearAllAppData() {
-  const confirmed = confirm(
-    'Clear all Bill Tracker data?\n\n' +
-    'This permanently deletes bills, payments, income sources, archives, and settings stored on this device.'
-  );
-
-  if (!confirmed) return;
-
-  localStorage.removeItem('bills');
-  localStorage.removeItem('payments');
-  localStorage.removeItem('incomeSources');
-  localStorage.removeItem('archivedBills');
-  localStorage.removeItem('settings');
-  localStorage.removeItem('initialized');
-  localStorage.removeItem('billTrackerAdminToken');
-  localStorage.removeItem('billTrackerSubscriptionId');
-
-  alert('All Bill Tracker data has been cleared.');
-  navigate('today');
+  if (!confirm("Clear Bill Beacon app data?\n\nThis removes local bills, payments, income, archives, activity, saved local transactions, and settings. Empty lists may sync to your household if sync is active. This does not delete your account, disconnect the server-side bank connection, or revoke push subscriptions. Create a backup first.")) return;
+  const entries = new Map([["bills", []], ["payments", []], ["incomeSources", []], ["archivedBills", []], ["activityLog", []], ["bankTransactions", []], ["settings", {}]]);
+  const previous = new Map([...entries.keys()].map(key => [key, localStorage.getItem(key)]));
+  try { for (const [key, value] of entries) localStorage.setItem(key, JSON.stringify(value)); }
+  catch (error) {
+    let rollbackFailed = false;
+    for (const [key, value] of previous) { try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { rollbackFailed = true; } }
+    alert(rollbackFailed ? "Clear failed and rollback was incomplete. Recover from your backup before editing." : "App data could not be cleared. Check device storage and keep your backup."); return;
+  }
+  for (const key of ["initialized", "billTrackerAdminToken", "billTrackerSubscriptionId"]) localStorage.removeItem(key);
+  dismissPaymentUndoToast(); plaidSandboxSessionVersion += 1;
+  plaidSandboxBankState = {connected: false, accounts: [], selectedAccountId: null, transactions: [], lastSyncedAt: null};
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed")); initTheme(); navigate("today");
+  alert("Local app lists were cleared. Account and server-side bank connection were not deleted.");
 }
+
+
 
 function exportCSV() {
-  const bills = Store.getBills();
-  let csv = 'Name,Amount,Due Date,Category,Recurrence,Paid,Payment Method,Notes\n';
-  bills.forEach(bill => {
-    const paid = isPaidThisCycle(bill) ? 'Yes' : 'No';
-    csv += `"${bill.name}",`;
-    csv += `${bill.amount},`;
-    csv += `${bill.dueDate.split('T')[0]},`;
-    csv += `${getCategory(bill.category).label},`;
-    csv += `${bill.recurrence},`;
-    csv += `${paid},`;
-    csv += `"${bill.paymentMethod || ''}",`;
-    csv += `"${bill.notes || ''}"\n`;
-  });
-
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'bills-export.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  const rows = [["Name", "Amount", "Due Date", "Category", "Recurrence", "Paid", "Payment Method", "Notes"]];
+  for (const bill of Store.getBills()) rows.push([bill.name, bill.amount, String(bill.dueDate || "").split("T")[0],
+    getCategory(bill.category).label, bill.recurrence, isPaidThisCycle(bill) ? "Yes" : "No", bill.paymentMethod || "", bill.notes || ""]);
+  const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
+  const link = document.createElement("a"); link.href = url; link.download = "bills-export.csv"; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+
 
 // ====================================
 // MAIN RENDER
@@ -13693,6 +13539,7 @@ function setPlaidBankMessage(message) {
 }
 
 async function callPlaidSandboxWorker(path, body) {
+  if (!["/plaid/status", "/plaid/sync", "/plaid/account", "/plaid/link-token", "/plaid/exchange-token"].includes(path)) throw new Error("Unsupported banking request.");
   const firebaseToken =
     await window.getBillBeaconFirebaseToken?.();
 
@@ -13714,28 +13561,31 @@ async function callPlaidSandboxWorker(path, body) {
     }
   );
 
-  const result = await response.json();
+  const result = await response.json().catch(() => null);
 
-  if (!response.ok || !result.ok) {
-    throw new Error(result.error || "Banking request failed.");
+  if (!response.ok || !result || result.ok !== true) {
+    throw new Error(result?.error || "Banking request failed.");
   }
 
   return result;
 }
 
 function applyPlaidSandboxBankState(result) {
+  if (!result || typeof result !== "object" || Array.isArray(result)) throw new Error("The bank service returned an invalid response.");
+  const accounts = Array.isArray(result.accounts) ? result.accounts : [];
+  const transactions = Array.isArray(result.transactions) ? result.transactions : [];
   plaidSandboxBankState = {
-    connected: Boolean(result.connected),
-    accounts: result.accounts || [],
-    selectedAccountId: result.selectedAccountId || null,
-    transactions: result.transactions || [],
-    lastSyncedAt: result.lastSyncedAt || null
+    connected: result.connected === true,
+    accounts: accounts.filter(item => item && typeof item.id === "string" && typeof item.name === "string"),
+    selectedAccountId: typeof result.selectedAccountId === "string" ? result.selectedAccountId : null,
+    transactions: transactions.filter(item => item && typeof item.id === "string" && typeof item.date === "string" &&
+      Number.isFinite(new Date(item.date).getTime()) && Number.isFinite(Number(item.amount))),
+    lastSyncedAt: typeof result.lastSyncedAt === "string" ? result.lastSyncedAt : null
   };
-
-  if (currentRoute === "transactions") {
-    render();
-  }
+  if (currentRoute === "transactions") render();
 }
+
+
 let plaidSandboxRefreshInFlight = null;
 
 async function refreshPlaidSandboxAutomatically() {
@@ -14270,12 +14120,14 @@ async function syncPlaidSandboxBank() {
   }
 }
 async function choosePlaidSandboxAccount(accountId) {
+  const sessionVersion = plaidSandboxSessionVersion;
   try {
     const result = await callPlaidSandboxWorker(
       "/plaid/account",
       { accountId }
     );
 
+    if (sessionVersion !== plaidSandboxSessionVersion) return;
     applyPlaidSandboxBankState(result);
     setPlaidBankMessage("Selected account updated.");
   } catch (error) {
@@ -14284,6 +14136,7 @@ async function choosePlaidSandboxAccount(accountId) {
 }
 
 async function connectBillBeaconTestBank() {
+  const sessionVersion = plaidSandboxSessionVersion;
   const button = document.getElementById(
     "connectPlaidTestBank"
   );
@@ -14299,6 +14152,7 @@ async function connectBillBeaconTestBank() {
       "/plaid/status"
     );
 
+    if (sessionVersion !== plaidSandboxSessionVersion) return;
     if (existing.connected) {
       applyPlaidSandboxBankState(existing);
       setPlaidBankMessage(
@@ -14309,15 +14163,18 @@ async function connectBillBeaconTestBank() {
 
     await loadBillBeaconPlaidLink();
 
+    if (sessionVersion !== plaidSandboxSessionVersion) return;
     const result = await callPlaidSandboxWorker(
       "/plaid/link-token",
       {}
     );
 
+    if (sessionVersion !== plaidSandboxSessionVersion) return;
     handler = window.Plaid.create({
       token: result.link_token,
 
       onSuccess: async (publicToken) => {
+        if (sessionVersion !== plaidSandboxSessionVersion) { handler?.destroy(); return; }
         try {
           setPlaidBankMessage("Saving the Sandbox connection…");
 
@@ -14326,6 +14183,7 @@ async function connectBillBeaconTestBank() {
             { public_token: publicToken }
           );
 
+          if (sessionVersion !== plaidSandboxSessionVersion) return;
           applyPlaidSandboxBankState(saved);
           await syncPlaidSandboxBank();
         } catch (error) {
@@ -14379,7 +14237,7 @@ window.addEventListener("billbeacon:signed-out", () => {
     lastSyncedAt: null
   };
 });
-window.connectBillBeaconTestBank = connectBillBeaconTestBank;
+
 function renderTransactions() {
   const transactions = plaidSandboxBankState.transactions
     .slice()
@@ -14466,7 +14324,7 @@ function renderTransactions() {
     return `
       <button
         type="button"
-        onclick="openTransactionDetails('${transaction.id}')"
+        onclick="openTransactionDetails('${escapeInlineString(transaction.id)}')"
         style="
           width:100%;
           display:flex;
@@ -14492,7 +14350,7 @@ function renderTransactions() {
             justify-content:center;
             border-radius:14px;
             color:#fff;
-            background:${transaction.iconColor || "var(--accent)"};
+            background:${safeTransactionColor(transaction.iconColor)};
             font-size:12px;
             font-weight:900;
           "
@@ -14834,7 +14692,7 @@ function renderTransactions() {
       line-height:1.45;
     "
   >
-    Sandbox only. Household bills will not be changed.
+    Sandbox only. Test matching can update household payment records. Use disposable test bills.
   </div>
 </section>
         <section
@@ -14920,64 +14778,18 @@ function renderTransactions() {
   `;
 }
 function render() {
-  const app = document.getElementById("app");
-  if (!app) return;
-
-  let content = "";
-
-  switch (currentRoute) {
-    case "today":
-      content = renderToday();
-      break;
-    case "recurring":
-      content = renderRecurring();
-      break;
-    case "bills":
-      content = renderBills();
-      break;
-      case "more":
-  content = renderMore();
-  break;
-    case "calendar":
-      content = renderCalendar();
-      break;
-    case "insights":
-      content = renderInsights();
-      break;
-    case "activity":
-      content = renderActivity();
-      break;
-    case "payment-plans":
-      content = renderPaymentPlans();
-      break;
-    case "settings":
-      content = renderSettings();
-      break;
-      case "transactions":
-  content = renderTransactions();
-  break;
-    case "detail":
-      content = renderBillDetail();
-      break;
-    default:
-      content = renderToday();
-  }
-
-  const showTabBar = [
-  "today",
-  "recurring",
-  "bills",
-  "more",
-  "insights",
-  "settings",
-].includes(currentRoute);
-
-  if (showTabBar) {
-    content += tabBar();
-  }
-
+  const app = document.getElementById("app"); if (!app) return;
+  const views = {today: renderToday, recurring: renderRecurring, bills: renderBills, more: renderMore,
+    calendar: renderCalendar, insights: renderInsights, activity: renderActivity, "payment-plans": renderPaymentPlans,
+    settings: renderSettings, transactions: renderTransactions, detail: renderBillDetail, history: renderPaymentHistory};
+  const view = Object.prototype.hasOwnProperty.call(views, currentRoute) ? views[currentRoute] : renderToday;
+  let content = view();
+  if (["today", "recurring", "bills", "more", "insights", "settings"].includes(currentRoute)) content += tabBar();
   app.innerHTML = content;
+  if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings(); attachSignOutButton(); }
 }
+
+
 
 window.render = render;
 /* ============================================
@@ -15538,97 +15350,110 @@ function addNotificationSettings() {
   refreshNotificationSettingsCard();
 }
 
-const originalBillTrackerRender = render;
 
-render = function () {
-  originalBillTrackerRender();
-  addNotificationSettings();
-};
 /* ============================================
    Full Backup and Restore
 ============================================ */
 
-function exportBillTrackerBackup() {
-  const backup = {
-    app: "Bill Tracker",
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    bills: Store.getBills(),
-    archivedBills: getArchivedBills(),
-    payments: Store.getPayments(),
-    settings: Store.getSettings(),
+
+
+// Validate the entire backup before any application storage is changed.
+function validateBillBeaconBackup(data) {
+  const object = value => value && typeof value === "object" && !Array.isArray(value);
+  if (!object(data) || !Array.isArray(data.bills) || !Array.isArray(data.payments)) throw new Error("Invalid Bill Beacon backup.");
+  if (data.version != null && ![1, 2].includes(data.version)) throw new Error("Unsupported backup version.");
+  let visited = 0;
+  const inspect = (value, depth = 0) => {
+    if (++visited > 1000000 || depth > 24) throw new Error("Backup is too complex.");
+    if (typeof value === "string" && value.length > 100000) throw new Error("Backup field is too long.");
+    if (typeof value === "number" && !Number.isFinite(value)) throw new Error("Invalid backup number.");
+    if (value && typeof value === "object") for (const key of Object.keys(value)) {
+      if (["__proto__", "constructor", "prototype"].includes(key)) throw new Error("Unsafe backup object key.");
+      inspect(value[key], depth + 1);
+    }
   };
-
-  const blob = new Blob([JSON.stringify(backup, null, 2)], {
-    type: "application/json",
-  });
-
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-
-  link.href = url;
-  link.download = `bill-tracker-backup-${new Date()
-    .toISOString()
-    .slice(0, 10)}.json`;
-
-  link.click();
-  URL.revokeObjectURL(url);
+  inspect(data);
+  for (const key of ["bills", "payments", "archivedBills", "incomeSources", "activityLog", "bankTransactions"]) {
+    if (data[key] === undefined && !["bills", "payments"].includes(key)) continue;
+    if (!Array.isArray(data[key]) || data[key].length > 50000) throw new Error(`Invalid ${key} list.`);
+    const ids = new Set();
+    for (const record of data[key]) {
+      if (!object(record) || typeof record.id !== "string" || !record.id || record.id.length > 512 || ids.has(record.id)) throw new Error(`Invalid or duplicate ${key} ID.`);
+      ids.add(record.id);
+      if (record.amount != null && ((typeof record.amount !== "number" && typeof record.amount !== "string") || !Number.isFinite(Number(record.amount)) || Number(record.amount) < 0)) throw new Error(`Invalid ${key} amount.`);
+      for (const field of ["dueDate", "paidDate", "paidForDueDate", "originalDueDate", "voidedAt", "archivedAt"]) {
+        if (record[field] != null && record[field] !== "" && (typeof record[field] !== "string" || !Number.isFinite(new Date(record[field]).getTime()))) throw new Error(`Invalid ${field}.`);
+      }
+      if (record.scheduleHistory != null && !Array.isArray(record.scheduleHistory)) throw new Error("Invalid schedule history.");
+      for (const version of record.scheduleHistory || []) {
+        if (!object(version) || !object(version.snapshot) || (version.effectiveFrom != null && !dateFromInput(version.effectiveFrom))) throw new Error("Invalid schedule version.");
+      }
+      if (record.billSnapshot != null && !object(record.billSnapshot)) throw new Error("Invalid payment snapshot.");
+      if (record.occurrenceOverrides != null && !Array.isArray(record.occurrenceOverrides)) throw new Error("Invalid occurrence overrides.");
+      if (key === "payments" && (typeof record.billId !== "string" || !record.billId)) throw new Error("Invalid payment bill ID.");
+    }
+  }
+  if (data.settings != null && !object(data.settings)) throw new Error("Invalid backup settings.");
+  if (data.settings?.currency != null && !/^[A-Z]{3}$/.test(data.settings.currency)) throw new Error("Invalid backup currency.");
+  if (data.settings?.theme != null && !["light", "dark", "system"].includes(data.settings.theme)) throw new Error("Invalid backup theme.");
+  return data;
 }
+
+function restoreBillBeaconBackup(data) {
+  validateBillBeaconBackup(data);
+  const entries = new Map([["bills", JSON.stringify(data.bills)], ["payments", JSON.stringify(data.payments)],
+    ["archivedBills", JSON.stringify(data.archivedBills || [])], ["initialized", "true"]]);
+  for (const key of ["incomeSources", "activityLog", "bankTransactions", "settings"]) if (data[key] !== undefined) entries.set(key, JSON.stringify(data[key]));
+  const previous = new Map([...entries.keys()].map(key => [key, localStorage.getItem(key)]));
+  try { for (const [key, value] of entries) localStorage.setItem(key, value); }
+  catch (error) {
+    let rollbackFailed = false;
+    for (const [key, value] of previous) {
+      try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { rollbackFailed = true; }
+    }
+    if (rollbackFailed) throw new Error("Restore failed and rollback was incomplete. Keep your backup and recover storage before editing data.");
+    throw error;
+  }
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
+}
+
+function exportBillTrackerBackup() {
+  const backup = {app: "Bill Beacon", version: 2, exportedAt: new Date().toISOString(),
+    bills: Store.getBills(), archivedBills: getArchivedBills(), payments: Store.getPayments(),
+    incomeSources: Store.getIncomeSources(), activityLog: Store.getActivityLog(),
+    bankTransactions: Store.getBankTransactions(), settings: Store.getSettings()};
+  const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], {type: "application/json"}));
+  const link = document.createElement("a"); link.href = url;
+  link.download = `bill-beacon-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+
 
 function chooseBillTrackerBackup() {
   document.getElementById("billTrackerBackupFile").click();
 }
 
 function importBillTrackerBackup(event) {
-  const file = event.target.files[0];
-
-  if (!file) {
-    return;
-  }
-
+  const input = event.target; const file = input.files?.[0]; if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { alert("Backup exceeds the supported 10 MB limit."); input.value = ""; return; }
   const reader = new FileReader();
-
+  reader.onerror = () => { alert("Backup file could not be read."); input.value = ""; };
   reader.onload = () => {
     try {
-      const backup = JSON.parse(reader.result);
-
-      if (!Array.isArray(backup.bills) || !Array.isArray(backup.payments)) {
-        throw new Error("This is not a valid Bill Tracker backup file.");
-      }
-
-      const replace = confirm(
-        "Restore this backup? It will replace the bills and payment history currently stored on this device."
-      );
-
-      if (!replace) {
-        return;
-      }
-
-      Store.saveBills(backup.bills);
-
-      saveArchivedBills(
-       Array.isArray(backup.archivedBills) ? backup.archivedBills : []
-        );
-
-Store.savePayments(backup.payments);
-
-      if (backup.settings) {
-        Store.saveSettings(backup.settings);
-      }
-
-      localStorage.setItem("initialized", "true");
-    
-      alert("Backup restored successfully.");
-      render();
-    } catch (error) {
-      alert(`Could not restore backup: ${error.message}`);
-    } finally {
-      event.target.value = "";
-    }
+      const backup = validateBillBeaconBackup(JSON.parse(String(reader.result)));
+      const omitted = ["incomeSources", "activityLog", "bankTransactions"].filter(key => backup[key] === undefined);
+      const summary = `${backup.bills.length} active bills, ${backup.payments.length} payments, ${(backup.archivedBills || []).length} archived bills.`;
+      const notice = omitted.length ? " Older backups omit some lists; those lists will remain unchanged." : "";
+      if (!confirm(`Restore this backup? ${summary}\n\nIncluded app data will be replaced and may sync to your household.${notice}`)) return;
+      restoreBillBeaconBackup(backup); initTheme(); render(); alert("Backup restored successfully.");
+    } catch (error) { alert(`Could not restore backup: ${error.message}`); }
+    finally { input.value = ""; }
   };
-
   reader.readAsText(file);
 }
+
+
 
 function addBackupSettings() {
   if (
@@ -15732,12 +15557,7 @@ container.appendChild(section);
 }
  
 
-const renderWithBackupSettings = render;
 
-render = function () {
-  renderWithBackupSettings();
-  addBackupSettings();
-};
 function attachSignOutButton() {
   const signOutButton = document.getElementById("signout-button");
 
@@ -15760,12 +15580,7 @@ function attachSignOutButton() {
   });
 }
 
-const renderWithSignOutButton = render;
 
-render = function () {
-  renderWithSignOutButton();
-  attachSignOutButton();
-};
 /* ============================================
    Archive Bills and Payment History
 ============================================ */
@@ -16050,21 +15865,7 @@ function renderPaymentHistory() {
     </div>
   `;
 }
-const renderWithArchiveHistory = render;
 
-render = function () {
-  if (currentRoute === "history") {
-    const app = document.getElementById("app");
-
-    if (app) {
-      app.innerHTML = renderPaymentHistory();
-    }
-
-    return;
-  }
-
-  renderWithArchiveHistory();
-};
 
 /* ============================================
    Installment / Pay-in-4 Plan Form
@@ -16225,7 +16026,7 @@ function openInstallmentPlanForm() {
                 class="form-input"
                 id="installmentFirstPaymentDate"
                 type="date"
-                value="${today}"
+                value="${escapeHtml(today)}"
               />
             </div>
           </div>
@@ -17492,7 +17293,11 @@ if ("serviceWorker" in navigator) {
     }
   });
 }
-document.addEventListener("DOMContentLoaded", init);
+function initializeBillBeaconApp() { initTheme(); render(); }
+
+document.addEventListener("DOMContentLoaded", () => {
+  if (typeof window.init === "function") window.init(); else initializeBillBeaconApp();
+});
 window.addEventListener("storage", () => {
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 });
