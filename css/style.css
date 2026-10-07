@@ -3179,3 +3179,172 @@ body {
   border-radius: 12px;
   overflow: hidden;
 }
+/* BILL BEACON — MORE THEME PREVIEW: START */
+
+/* Shared brand colors and component styling */
+:root {
+  --bb-brand-gradient: linear-gradient(
+    105deg,
+    #8f36ff 0%,
+    #c44cff 34%,
+    #f64cae 65%,
+    #ff7138 100%
+  );
+
+  --bb-brand-border: rgba(192, 151, 255, .20);
+  --bb-brand-border-strong: rgba(192, 151, 255, .34);
+  --bb-brand-soft: rgba(143, 54, 255, .10);
+  --bb-brand-icon: #d9ccff;
+
+  --bb-brand-glow:
+    radial-gradient(
+      circle at top right,
+      rgba(246, 76, 174, .10),
+      transparent 58%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(143, 54, 255, .10),
+      transparent 58%
+    );
+
+  --bb-brand-shadow: 0 6px 18px rgba(143, 54, 255, .10);
+
+  --bb-card-radius: 20px;
+  --bb-pill-radius: 999px;
+
+  /* Connect existing shared styles to the new palette */
+  --sunset: var(--bb-brand-gradient);
+  --sunset-soft: var(--bb-brand-glow);
+  --accent-soft: var(--bb-brand-soft);
+}
+
+/* Keep the theme readable in light mode */
+:root[data-theme="light"] {
+  --bb-brand-border: rgba(124, 58, 237, .18);
+  --bb-brand-border-strong: rgba(124, 58, 237, .32);
+  --bb-brand-soft: rgba(143, 54, 255, .055);
+  --bb-brand-icon: #7130a8;
+
+  --bb-brand-glow:
+    radial-gradient(
+      circle at top right,
+      rgba(246, 76, 174, .055),
+      transparent 58%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(143, 54, 255, .055),
+      transparent 58%
+    );
+
+  --bb-brand-shadow: 0 6px 18px rgba(124, 58, 237, .06);
+}
+
+/* Shared cards: subtle lavender borders */
+.card {
+  border-color: var(--bb-brand-border);
+  border-radius: var(--bb-card-radius);
+}
+
+/* Featured cards retain their existing layouts */
+.dashboard-month-card,
+.summary-card,
+.recurring-calendar-card {
+  border-color: var(--bb-brand-border);
+  background-color: var(--card);
+  border-radius: var(--bb-card-radius);
+}
+
+.dashboard-month-card::before,
+.summary-card::before {
+  background: var(--bb-brand-glow);
+}
+
+/* Primary actions: More-style gradient pills */
+.btn-primary {
+  background: var(--bb-brand-gradient);
+  border-radius: var(--bb-pill-radius);
+  color: #fff;
+  box-shadow: var(--bb-brand-shadow);
+}
+
+/* Secondary actions: quiet purple-tinted pills */
+.btn-secondary {
+  border: 1px solid var(--bb-brand-border-strong);
+  border-radius: var(--bb-pill-radius);
+
+  background:
+    linear-gradient(
+      var(--bb-brand-soft),
+      var(--bb-brand-soft)
+    ),
+    var(--surface);
+
+  color: var(--text);
+  box-shadow: var(--bb-brand-shadow);
+}
+
+/* Existing branded outline pills */
+.bb-outline-pill {
+  border: 2px solid transparent !important;
+  border-radius: var(--bb-pill-radius);
+
+  background:
+    linear-gradient(
+      var(--surface),
+      var(--surface)
+    ) padding-box,
+    var(--bb-brand-gradient) border-box !important;
+
+  color: var(--text) !important;
+  box-shadow: var(--bb-brand-shadow);
+}
+
+.bb-outline-pill .pill-icon {
+  color: var(--bb-brand-icon) !important;
+}
+
+.bb-outline-pill .pill-chevron {
+  color: var(--text-muted);
+}
+
+/* Quiet pills and inactive filters */
+.bb-muted-pill,
+.filter-pill:not(.active) {
+  border-color: var(--bb-brand-border);
+  border-radius: var(--bb-pill-radius);
+  background: var(--bb-brand-soft);
+  color: var(--text-secondary);
+}
+
+/* Popup header separators */
+.sheet-nav {
+  border-bottom-color: var(--bb-brand-border);
+}
+
+/* Bill actions, excluding destructive actions */
+.bill-sheet-action:not(.bill-sheet-action-danger),
+.bill-details-toggle {
+  border: 1px solid var(--bb-brand-border);
+
+  background:
+    linear-gradient(
+      var(--bb-brand-soft),
+      var(--bb-brand-soft)
+    ),
+    var(--surface);
+
+  color: var(--text);
+}
+
+/* Keyboard focus remains visible */
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.bb-outline-pill:focus-visible,
+.bb-muted-pill:focus-visible {
+  outline: 2px solid var(--bb-brand-icon);
+  outline-offset: 3px;
+}
+
+/* BILL BEACON — MORE THEME PREVIEW: END */

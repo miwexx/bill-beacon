@@ -16751,7 +16751,7 @@ function renderNotificationCenterContent() {
         <h3>${
           notificationInboxState.fromCache
             ? "Waiting for the inbox"
-            : "You're all caught up"
+            : "You're All Caught Up"
         }
       </div>
     `;
