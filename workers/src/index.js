@@ -1556,12 +1556,13 @@ async function writeNotificationInboxRecord(
     body: notification.body,
     url: notification.url,
     sentAt: new Date().toISOString(),
+    deliveryState: "pending",
     readAt: null,
     openedAt: null
   };
 
   const response = await fetch(
-    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(householdId)}/notifications/${documentId}`,
+    `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(householdId)}/notifications/${documentId}?currentDocument.exists=false`,
     {
       method: "PATCH",
       headers: {
@@ -1574,6 +1575,7 @@ async function writeNotificationInboxRecord(
     }
   );
 
+  if (response.status === 409 || response.status === 412) return;
   if (!response.ok) {
     const body = await response.text().catch(() => "");
 
@@ -1581,6 +1583,50 @@ async function writeNotificationInboxRecord(
       `Could not write notification inbox record (${response.status}): ${body}`
     );
   }
+}
+async function markInboxDelivered(householdId, notificationId, accessToken) {
+  const url = new URL(`${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(householdId)}/notifications/${encodeURIComponent(notificationId)}`);
+  url.searchParams.append("updateMask.fieldPaths", "deliveryState");
+  url.searchParams.append("updateMask.fieldPaths", "deliveredAt");
+  url.searchParams.set("currentDocument.exists", "true");
+  const response = await fetch(url, {method: "PATCH", headers: {
+    authorization: `Bearer ${accessToken}`, "content-type": "application/json"
+  }, body: JSON.stringify({fields: jsObjectToFirestoreFields({deliveryState: "delivered", deliveredAt: new Date().toISOString()})})});
+  if (!response.ok) throw new Error(`Could not record push delivery (${response.status}).`);
+}
+async function getHouseholdUnreadCount(householdId, accessToken) {
+  let count = 0, pageToken = "";
+  do {
+    const url = new URL(`${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(householdId)}/notifications`);
+    url.searchParams.set("pageSize", "1000");
+    if (pageToken) url.searchParams.set("pageToken", pageToken);
+    const response = await fetch(url, {headers: {authorization: `Bearer ${accessToken}`}});
+    if (!response.ok) throw new Error(`Unread count failed (${response.status}).`);
+    const result = await response.json();
+    for (const document of result.documents || []) {
+      const data = firestoreFieldsToJs(document.fields || {});
+      if (!data.readAt && !data.clearedAt) count += 1;
+    }
+    pageToken = result.nextPageToken || "";
+  } while (pageToken);
+  return count;
+}
+async function prepareInboxPush(householdId, notification, accessToken) {
+  notification.householdId = householdId;
+  const link = new URL(notification.url || "/", APP_ORIGIN);
+  link.searchParams.set("notificationId", notification.notificationId);
+  link.searchParams.set("householdId", householdId);
+  notification.url = link.pathname + link.search;
+  await writeNotificationInboxRecord(householdId, notification, accessToken);
+  try {
+    const observedAt = Date.now();
+    notification.unreadCount = await getHouseholdUnreadCount(householdId, accessToken);
+    notification.badgeObservedAt = observedAt;
+  } catch (error) {
+    // Inbox creation succeeded; a count outage must not suppress the reminder.
+    console.warn("Badge count unavailable:", error.message);
+  }
+  return notification;
 }
 const HOUSEHOLD_INVITE_PREFIX = "household-invite:";
 const HOUSEHOLD_INVITE_TTL_SECONDS = 60 * 60 * 24 * 7;
@@ -1922,6 +1968,7 @@ async function processUserReminders(env, uid, accessToken, now) {
         continue;
       }
 
+      await prepareInboxPush(householdId, notification, accessToken);
       const delivery = await sendReminderToUserSubscriptions(
         env,
         uid,
@@ -1951,11 +1998,7 @@ async function processUserReminders(env, uid, accessToken, now) {
         );
 
         try {
-          await writeNotificationInboxRecord(
-            householdId,
-            notification,
-            accessToken
-          );
+          await markInboxDelivered(householdId, notification.notificationId, accessToken);
         } catch (error) {
           console.error(
             "Push was delivered, but notification inbox history could not be written.",
@@ -3040,17 +3083,26 @@ if (sandboxBankRoutes.has(url.pathname)) {
       }
 
       try {
-        await sendPushNotification(
-          subscription,
-          {
-            title: "Payment Reminder",
-            body: message,
-            url: buildBillDeepLink(bill.id),
-            billId: bill.id,
-            kind: "bill-reminder-test"
-          },
-          env
-        );
+        const accessToken = await getFirestoreAccessToken(env);
+        const profile = await getUserProfile(authentication.user.uid, accessToken);
+        const householdId = profile?.householdId;
+        if (typeof householdId !== "string" || !householdId.trim()) throw new Error("No household profile.");
+        const member = await getHouseholdMember(householdId, authentication.user.uid, accessToken);
+        if (!member || !["owner", "member"].includes(member.role) || (member.uid && member.uid !== authentication.user.uid))
+          throw new Error("Valid household membership required.");
+        const household = await getHouseholdSnapshot(householdId, accessToken);
+        const actualBill = (household?.bills || []).find(item => item.id === bill.id);
+        if (!actualBill || !isActiveBill(actualBill)) throw new Error("Choose an active shared household bill.");
+        const notification = buildReminderPresentation(actualBill,
+          dateKeyInTimeZone(actualBill.dueDate, validatedReminderTimeZone(household?.settings?.timeZone)),
+          0, household?.settings || {}, authentication.user.uid);
+        notification.notificationId = `test:${crypto.randomUUID()}`;
+        notification.title = "Payment Reminder (Test)";
+        notification.body = message;
+        notification.kind = "bill-reminder-test";
+        await prepareInboxPush(householdId, notification, accessToken);
+        await sendPushNotification(subscription, notification, env);
+        await markInboxDelivered(householdId, notification.notificationId, accessToken);
 
         return json(
           {

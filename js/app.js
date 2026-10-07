@@ -2512,17 +2512,15 @@ document.addEventListener("visibilitychange", () => {
   navigate("today");
 });
 
-window.addEventListener("billbeacon-authenticated", () => {
+window.addEventListener("billbeacon:authenticated", () => {
   startNotificationInboxListener();
 
   if (handleHouseholdInviteFromUrl()) {
     return;
   }
 
-  if (!consumeNotificationDeepLink()) {
-    currentRoute = "today";
-    render();
-  }
+  currentRoute = "today";
+  render();
 });
 
 window.addEventListener('billbeacon:signed-out', () => {
@@ -2655,23 +2653,38 @@ function getNotificationDeepLink() {
   return null;
 }
 
+let notificationDeepLinkBusy = false;
+let notificationDeepLinkFailed = "";
 function consumeNotificationDeepLink() {
   const destination = getNotificationDeepLink();
-
-  if (!destination) {
+  if (!destination || !notificationContext() || !notificationInboxState.loaded || notificationDeepLinkBusy) return false;
+  const url = new URL(window.location.href);
+  if (notificationDeepLinkFailed === url.href) return false;
+  const householdId = url.searchParams.get("householdId");
+  if (householdId && householdId !== notificationInboxState.householdId) {
+    console.warn("Notification belongs to another household; no read update or navigation was performed.");
     return false;
   }
-
-  window.history.replaceState(
-    {},
-    document.title,
-    window.location.pathname
-  );
-
-  navigate(destination.route, destination.params);
-
+  notificationDeepLinkBusy = true;
+  const context = notificationContext();
+  (async () => {
+    try {
+      const id = url.searchParams.get("notificationId");
+      if (id) await markNotificationRead(id, true);
+      if (notificationContext()?.generation !== context.generation) return;
+      for (const key of ["notification", "billId", "planId", "dueDate", "notificationId", "householdId"])
+        url.searchParams.delete(key);
+      window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+      navigate(destination.route, destination.params);
+    } catch (error) {
+      notificationDeepLinkFailed = url.href;
+      console.error("External notification could not be marked read:", error);
+      alert(`Notification could not be marked read: ${error.message}. Open the bell and retry. The link was retained.`);
+    } finally { notificationDeepLinkBusy = false; }
+  })();
   return true;
 }
+
 // ====================================
 // VIEWS
 // ====================================
@@ -16301,64 +16314,59 @@ document.addEventListener(
 ============================================ */
 
 let notificationInboxState = {
-  notifications: [],
-  unreadCount: 0,
-  loaded: false,
-  unsubscribe: null,
-  uid: null,
+  notifications: [], unreadCount: 0, loaded: false, unsubscribe: null,
+  uid: null, householdId: null, generation: 0, error: null, fromCache: false
 };
-
-getNotificationCount = function () {
-  return notificationInboxState.unreadCount || 0;
-};
-function getNotificationCount() {
-  return notificationInboxState.unreadCount || 0;
+let badgeQueue = Promise.resolve();
+function getNotificationCount() { return notificationInboxState.unreadCount || 0; }
+function getCurrentNotificationUserId() { return window.getBillBeaconFirebaseUser?.()?.uid || null; }
+function getNotificationFirestore() { return window.getBillBeaconFirestore?.() || null; }
+function notificationContext() {
+  const context = window.getBillBeaconHouseholdContext?.();
+  return context?.ready && context.uid === getCurrentNotificationUserId() && context.householdId
+    ? context : null;
 }
-
-async function syncHomeScreenNotificationBadge() {
-  const count = getNotificationCount();
-
-  try {
-    if (count > 0 && "setAppBadge" in navigator) {
-      await navigator.setAppBadge(count);
-      return;
-    }
-
-    if (count === 0 && "clearAppBadge" in navigator) {
-      await navigator.clearAppBadge();
-    }
-  } catch (error) {
-    console.warn(
-      "Could not update the Home Screen badge:",
-      error
-    );
-  }
+function notificationDiagnostic(error) {
+  return {code: error?.code || "notification-error", message: error?.message || "Could not load notifications.",
+    path: notificationInboxState.householdId ? `households/${notificationInboxState.householdId}/notifications` : "Household not ready"};
 }
-function getCurrentNotificationUserId() {
-  return window.getBillBeaconFirebaseUser?.()?.uid || null;
+window.getBillBeaconNotificationDiagnostics = () => ({
+  ...notificationDiagnostic(notificationInboxState.error), loaded: notificationInboxState.loaded,
+  fromCache: notificationInboxState.fromCache, count: notificationInboxState.notifications.length,
+  unread: getNotificationCount(), error: notificationInboxState.error?.code || null
+});
+async function syncHomeScreenNotificationBadge(reset = false) {
+  if (!reset && (!notificationInboxState.loaded || notificationInboxState.fromCache)) return;
+  const generation = notificationInboxState.generation;
+  badgeQueue = badgeQueue.catch(() => {}).then(async () => {
+    if (generation !== notificationInboxState.generation) return;
+    const count = reset ? 0 : getNotificationCount();
+    const householdId = reset ? null : notificationInboxState.householdId;
+    try {
+      if (count > 0 && navigator.setAppBadge) await navigator.setAppBadge(count);
+      else if (count === 0 && navigator.clearAppBadge) await navigator.clearAppBadge();
+      const registration = await navigator.serviceWorker?.getRegistration();
+      if (generation !== notificationInboxState.generation) return;
+      (navigator.serviceWorker?.controller || registration?.active)?.postMessage({
+        type: "BILL_BEACON_BADGE", count, householdId, observedAt: Date.now()
+      });
+    } catch (error) { console.warn("Badge reconciliation failed:", error); }
+  });
+  return badgeQueue;
 }
-
-function getNotificationFirestore() {
-  return window.getBillBeaconFirestore?.() || null;
-}
-
 function stopNotificationInboxListener() {
-  if (typeof notificationInboxState.unsubscribe === 'function') {
-    notificationInboxState.unsubscribe();
-  }
-
+  notificationInboxState.generation += 1;
+  notificationInboxState.unsubscribe?.();
   notificationInboxState.unsubscribe = null;
   notificationInboxState.uid = null;
 }
-
 function clearNotificationInboxState() {
   stopNotificationInboxListener();
-
-  notificationInboxState.notifications = [];
-  notificationInboxState.unreadCount = 0;
-  notificationInboxState.loaded = false;
+  Object.assign(notificationInboxState, {notifications: [], unreadCount: 0, loaded: false,
+    householdId: null, error: null, fromCache: false});
+  document.getElementById("notificationCenterContainer")?.remove();
+  syncHomeScreenNotificationBadge(true);
 }
-
 function normalizeNotificationRecord(documentSnapshot) {
   const data = documentSnapshot.data() || {};
 
@@ -16374,8 +16382,8 @@ function normalizeNotificationRecord(documentSnapshot) {
       ? Number(data.offsetDays)
       : null,
     title: data.title || 'Bill Beacon reminder',
-    body: data.body || '',
-    sentAt: data.sentAt || null,
+    body: (data.deliveryState === 'pending' ? 'Delivery pending · ' : '') + (data.body || ''),
+    sentAt: data.sentAt?.toDate?.()?.toISOString() || data.sentAt || null,
     readAt: data.readAt || null,
     openedAt: data.openedAt || null,
     clearedAt: data.clearedAt || null,
@@ -16392,179 +16400,98 @@ function sortNotificationRecords(notifications) {
   });
 }
 
+
 function startNotificationInboxListener() {
-  const uid = getCurrentNotificationUserId();
+  const context = notificationContext();
   const firestore = getNotificationFirestore();
-
-  if (!uid || !firestore) {
-    clearNotificationInboxState();
-    return;
-  }
-
-  if (
-    notificationInboxState.uid === uid &&
-    typeof notificationInboxState.unsubscribe === 'function'
-  ) {
-    return;
-  }
-
+  if (!context || !firestore || !window.firebaseOnSnapshot) return false;
+  if (notificationInboxState.uid === context.uid && notificationInboxState.householdId === context.householdId &&
+      notificationInboxState.unsubscribe && !notificationInboxState.error) return true;
   stopNotificationInboxListener();
-
-  notificationInboxState.uid = uid;
-
-  const notificationsRef = window.firebaseCollection(
-    firestore,
-    'households',
-    uid,
-    'notifications'
-  );
-
-  const notificationsQuery = window.firebaseQuery(
-    notificationsRef,
-    window.firebaseOrderBy('sentAt', 'desc'),
-    window.firebaseLimit(100)
-  );
-
-  notificationInboxState.unsubscribe = window.firebaseOnSnapshot(
-    notificationsQuery,
-    (snapshot) => {
-      notificationInboxState.notifications =
-        snapshot.docs.map(normalizeNotificationRecord);
-        console.log(
-  'Notification inbox loaded:',
-  snapshot.docs.length,
-  'records'
-);
-      notificationInboxState.unreadCount =
-  notificationInboxState.notifications.filter(
-    (notification) =>
-      !notification.readAt &&
-      !notification.clearedAt
-  ).length;
-
+  Object.assign(notificationInboxState, {uid: context.uid, householdId: context.householdId,
+    notifications: [], unreadCount: 0, loaded: false, error: null});
+  const generation = notificationInboxState.generation;
+  const valid = () => generation === notificationInboxState.generation &&
+    notificationContext()?.uid === context.uid && notificationContext()?.householdId === context.householdId;
+  const failed = error => {
+    if (!valid()) return;
+    notificationInboxState.error = error;
+    console.error("Notification inbox listener failed:", notificationDiagnostic(error));
+    renderNotificationCenterContent();
+  };
+  try {
+    // Full collection: includes old/missing sentAt records and all unread records.
+    const reference = window.firebaseCollection(firestore, "households", context.householdId, "notifications");
+    notificationInboxState.unsubscribe = window.firebaseOnSnapshot(reference, {includeMetadataChanges: true}, snapshot => {
+      if (!valid()) return;
+      notificationInboxState.notifications = snapshot.docs.map(normalizeNotificationRecord);
+      notificationInboxState.unreadCount = notificationInboxState.notifications.filter(n => !n.readAt && !n.clearedAt).length;
       notificationInboxState.loaded = true;
-
-syncHomeScreenNotificationBadge();
-render();
-renderNotificationCenterContent();
-    },
-    (error) => {
-      console.error(
-        'Notification inbox listener failed:',
-        error
-      );
-
-      notificationInboxState.notifications = [];
-      notificationInboxState.unreadCount = 0;
-      notificationInboxState.loaded = true;
-
-      render();
-      renderNotificationCenterContent();
-    }
-  );
+      notificationInboxState.error = null;
+      notificationInboxState.fromCache = snapshot.metadata.fromCache;
+      if (!snapshot.metadata.fromCache) syncHomeScreenNotificationBadge();
+      render(); renderNotificationCenterContent();
+      consumeNotificationDeepLink();
+    }, failed);
+    return true;
+  } catch (error) { failed(error); return false; }
 }
-function ensureNotificationInboxListener() {
-  const uid = getCurrentNotificationUserId();
-  const firestore = getNotificationFirestore();
-
-  if (!uid || !firestore) {
-    return false;
+function ensureNotificationInboxListener() { return startNotificationInboxListener(); }
+function captureNotificationAction() {
+  const context = notificationContext();
+  if (!context || !notificationInboxState.loaded || notificationInboxState.error ||
+      context.householdId !== notificationInboxState.householdId) throw new Error("Notification inbox is not ready. Retry loading it first.");
+  return {...context, firestore: getNotificationFirestore()};
+}
+async function writeNotificationChanges(items, updates, context = captureNotificationAction()) {
+  for (let offset = 0; offset < items.length; offset += 450) {
+    const current = notificationContext();
+    if (!current || current.uid !== context.uid || current.householdId !== context.householdId || current.generation !== context.generation)
+      throw new Error("Account changed; remaining notification updates were stopped.");
+    const batch = window.firebaseWriteBatch(context.firestore);
+    for (const item of items.slice(offset, offset + 450)) {
+      batch.update(window.firebaseDoc(context.firestore, "households", context.householdId, "notifications", item.id), updates);
+    }
+    await batch.commit();
   }
-
-  startNotificationInboxListener();
-  return true;
 }
 async function markNotificationRead(notificationId, opened = false) {
-  const uid = getCurrentNotificationUserId();
-  const firestore = getNotificationFirestore();
-
-  if (!uid || !firestore || !notificationId) {
-    return;
-  }
-
-  const notificationRef = window.firebaseDoc(
-    firestore,
-    'households',
-    uid,
-    'notifications',
-    notificationId
-  );
-
-  const updates = {
-    readAt: new Date().toISOString(),
-  };
-
-  if (opened) {
-    updates.openedAt = new Date().toISOString();
-  }
-
-  await window.firebaseUpdateDoc(notificationRef, updates);
-  syncHomeScreenNotificationBadge();
+  const context = captureNotificationAction();
+  const record = notificationInboxState.notifications.find(n => n.id === notificationId);
+  if (!record) throw new Error("Notification record not found in this household.");
+  const updates = {};
+  if (!record.readAt) updates.readAt = new Date().toISOString();
+  if (opened && !record.openedAt) updates.openedAt = new Date().toISOString();
+  if (Object.keys(updates).length) await writeNotificationChanges([record], updates, context);
 }
-
 async function markAllNotificationsRead() {
-  const unreadNotifications =
-    notificationInboxState.notifications.filter(
-      (notification) => !notification.readAt
-    );
-
-  if (!unreadNotifications.length) {
-    return;
-  }
-
-  await Promise.all(
-    unreadNotifications.map((notification) =>
-      markNotificationRead(notification.id)
-    )
-  );
+  const context = captureNotificationAction();
+  const items = notificationInboxState.notifications.filter(n => !n.readAt && !n.clearedAt);
+  await writeNotificationChanges(items, {readAt: new Date().toISOString()}, context);
 }
 async function clearReadNotifications() {
-  const uid = getCurrentNotificationUserId();
-  const firestore = getNotificationFirestore();
-
-  if (!uid || !firestore) {
-    return;
-  }
-
-  const readNotifications =
-    notificationInboxState.notifications.filter(
-      (notification) =>
-        notification.readAt && !notification.clearedAt
-    );
-
-  if (!readNotifications.length) {
-    return;
-  }
-
-  const confirmed = window.confirm(
-    `Clear ${readNotifications.length} read notification${
-      readNotifications.length === 1 ? '' : 's'
-    } from this list?`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  const clearedAt = new Date().toISOString();
-
-  await Promise.all(
-    readNotifications.map(async (notification) => {
-      const notificationRef = window.firebaseDoc(
-        firestore,
-        'households',
-        uid,
-        'notifications',
-        notification.id
-      );
-
-      await window.firebaseUpdateDoc(
-        notificationRef,
-        { clearedAt }
-      );
-    })
-  );
+  const context = captureNotificationAction();
+  const items = notificationInboxState.notifications.filter(n => n.readAt && !n.clearedAt);
+  if (!items.length || !confirm(`Hide ${items.length} read notifications? Their Firestore records will be preserved.`)) return;
+  await writeNotificationChanges(items, {clearedAt: new Date().toISOString()}, context);
 }
+window.addEventListener("billbeacon:household-ready", () => { startNotificationInboxListener(); });
+window.addEventListener("online", () => { if (notificationInboxState.error) startNotificationInboxListener(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") { startNotificationInboxListener(); consumeNotificationDeepLink(); syncHomeScreenNotificationBadge(); }
+});
+navigator.serviceWorker?.addEventListener("controllerchange", () => { syncHomeScreenNotificationBadge(); });
+
+navigator.serviceWorker?.addEventListener("message", event => {
+  if (event.data?.type !== "BILL_BEACON_NOTIFICATION_CLICK") return;
+  try {
+    const url = new URL(event.data.url, window.location.href);
+    if (url.origin !== window.location.origin || url.pathname !== window.location.pathname) return;
+    window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
+    consumeNotificationDeepLink();
+  } catch (error) { console.warn("Invalid notification click message:", error); }
+});
+
 function formatNotificationSentAt(sentAt) {
   if (!sentAt) {
     return '';
@@ -16659,6 +16586,8 @@ async function openNotificationRecord(notification) {
       'Could not mark notification as opened:',
       error
     );
+    alert(`Could not mark notification read: ${error.message}`);
+    return;
   }
 
   closeNotificationCenter();
@@ -16743,6 +16672,22 @@ function renderNotificationCenterContent() {
     return;
   }
 
+  if (notificationInboxState.error) {
+    const diagnostic = notificationDiagnostic(notificationInboxState.error);
+    content.innerHTML = `<div role="alert" style="padding:16px;color:var(--text);">
+      <h3>Notifications could not load</h3><p>${escapeHtml(diagnostic.code)}</p>
+      <p>${escapeHtml(diagnostic.message)}</p><p>${escapeHtml(diagnostic.path)}</p>
+      <button type="button" id="retryNotificationInbox" class="btn-secondary">Retry</button></div>`;
+    content.querySelector("#retryNotificationInbox")?.addEventListener("click", () => { startNotificationInboxListener(); renderNotificationCenterContent(); });
+    return;
+  }
+  if (!notificationContext()) {
+    const sync = window.billBeaconSyncStatus?.();
+    content.textContent = sync?.message
+      ? `Household not ready: ${sync.message}`
+      : "Waiting for shared household data. If this persists, check the household sync error.";
+    return;
+  }
   if (!notificationInboxState.loaded) {
     content.innerHTML = `
       <div
@@ -16759,6 +16704,10 @@ function renderNotificationCenterContent() {
     return;
   }
 
+  if (!notifications.length && notificationInboxState.fromCache) {
+    content.textContent = "No cached notifications. Waiting for Firestore to confirm the inbox; this is not a confirmed empty inbox.";
+    return;
+  }
   if (!notifications.length) {
     content.innerHTML = `
       <div class="empty-state">
@@ -16968,6 +16917,8 @@ const arrowColor = isUnread
 }
 
 async function openNotificationCenter() {
+  notificationDeepLinkFailed = "";
+  ensureNotificationInboxListener();
 
   const existingContainer = document.getElementById(
     'notificationCenterContainer'

@@ -1,4 +1,4 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
 import {
   getAuth,
@@ -17,7 +17,8 @@ import {
   orderBy,
   limit,
   onSnapshot,
-  updateDoc
+  updateDoc,
+  writeBatch
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -30,7 +31,7 @@ const firebaseConfig = {
   measurementId: "G-KTS8E5YZM1"
 };
 
-const firebaseApp = initializeApp(firebaseConfig);
+const firebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
 const firestore = getFirestore(firebaseApp);
 
@@ -376,6 +377,7 @@ window.firebaseOrderBy = orderBy;
 window.firebaseLimit = limit;
 window.firebaseOnSnapshot = onSnapshot;
 window.firebaseUpdateDoc = updateDoc;
+window.firebaseWriteBatch = writeBatch;
 
 export {
   auth,

@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v1.9";
+const CACHE_VERSION = "bill-beacon-v2.0-notification-inbox";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -27,7 +27,7 @@ self.addEventListener("activate", (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((cacheName) => cacheName !== CACHE_NAME)
+          .filter((cacheName) => cacheName.startsWith("bill-beacon-v") && cacheName !== CACHE_NAME)
           .map((cacheName) => caches.delete(cacheName))
       );
     })
@@ -68,6 +68,22 @@ async function setHomeScreenBadge(count) {
   }
 }
 
+const BADGE_STATE_CACHE = "bill-beacon-badge-state";
+const BADGE_STATE_URL = new URL("__badge_state__", self.registration.scope).href;
+let badgeTask = Promise.resolve();
+function reconcileBadge(message) {
+  badgeTask = badgeTask.catch(() => {}).then(async () => {
+    if (!Number.isInteger(message.count) || message.count < 0 || !Number.isFinite(message.observedAt)) return;
+    const cache = await caches.open(BADGE_STATE_CACHE);
+    const saved = await cache.match(BADGE_STATE_URL);
+    const state = saved ? await saved.json() : null;
+    if (!message.foreground && state && state.householdId !== message.householdId) return;
+    if (state && message.observedAt < state.observedAt) return;
+    await cache.put(BADGE_STATE_URL, new Response(JSON.stringify(message), {headers: {"content-type": "application/json"}}));
+    await setHomeScreenBadge(message.count);
+  });
+  return badgeTask;
+}
 self.addEventListener("push", (event) => {
   let payload = {
     title: "Bill Beacon",
@@ -120,6 +136,7 @@ self.addEventListener("push", (event) => {
       tag: notificationTag,
       renotify: true,
       data: {
+        householdId: payload.householdId || null,
         notificationId: payload.notificationId || null,
         billId: payload.billId || null,
         installmentPlanId:
@@ -133,7 +150,9 @@ self.addEventListener("push", (event) => {
       }
     });
 
-  const badgePromise = setHomeScreenBadge(1);
+  const badgePromise = Number.isInteger(payload.unreadCount) && payload.unreadCount >= 0
+    ? reconcileBadge({count: payload.unreadCount, householdId: payload.householdId || null,
+        observedAt: payload.badgeObservedAt}) : Promise.resolve();
 
   event.waitUntil(
     Promise.all([
@@ -143,48 +162,35 @@ self.addEventListener("push", (event) => {
   );
 });
 
-self.addEventListener("notificationclick", (event) => {
+self.addEventListener("notificationclick", event => {
   event.notification.close();
-
-  const targetUrl = new URL(
-    event.notification.data?.url || "./",
-    self.location.origin
-  ).href;
-
-  const clearBadgePromise = setHomeScreenBadge(0);
-
-  const openAppPromise = clients
-    .matchAll({
-      type: "window",
-      includeUncontrolled: true
-    })
-    .then(async (clientList) => {
-      for (const client of clientList) {
-        if (
-          client.url === targetUrl &&
-          "focus" in client
-        ) {
-          return client.focus();
-        }
+  event.waitUntil((async () => {
+    const data = event.notification.data || {};
+    let url;
+    try { url = new URL(data.url || "./", self.registration.scope); }
+    catch { url = new URL("./", self.registration.scope); }
+    const scope = new URL(self.registration.scope);
+    if (url.origin !== scope.origin || !url.pathname.startsWith(scope.pathname)) url = new URL("./", scope);
+    if (data.notificationId) url.searchParams.set("notificationId", data.notificationId);
+    if (data.householdId) url.searchParams.set("householdId", data.householdId);
+    const windows = await self.clients.matchAll({type: "window", includeUncontrolled: true});
+    for (const client of windows) {
+      const current = new URL(client.url);
+      if (current.origin === scope.origin && current.pathname.startsWith(scope.pathname) && "navigate" in client) {
+        client.postMessage({type: "BILL_BEACON_NOTIFICATION_CLICK", url: url.href});
+        await client.focus();
+        return;
       }
-
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
-      }
-
-      return undefined;
-    });
-
-  event.waitUntil(
-    Promise.all([
-      clearBadgePromise,
-      openAppPromise
-    ])
-  );
+    }
+    await self.clients.openWindow(url.href);
+    // A tap alone is not a successful Firestore read. The app reconciles afterwards.
+  })());
 });
-
-self.addEventListener("message", (event) => {
-  if (event.data?.type === "SKIP_WAITING") {
-    self.skipWaiting();
+self.addEventListener("message", event => {
+  if (event.data?.type === "SKIP_WAITING") event.waitUntil(self.skipWaiting());
+  if (event.data?.type === "BILL_BEACON_BADGE" && event.source?.url) {
+    const source = new URL(event.source.url), scope = new URL(self.registration.scope);
+    if (source.origin === scope.origin && source.pathname.startsWith(scope.pathname))
+      event.waitUntil(reconcileBadge({...event.data, foreground: true}));
   }
 });

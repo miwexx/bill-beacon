@@ -51,6 +51,11 @@ function assertSession(generation, uid = activeUserId) {
   }
 }
 
+function getNotificationHouseholdContext() {
+  return {uid: activeUserId, householdId: activeHouseholdId,
+    ready: cloudIsReady, generation: sessionGeneration};
+}
+window.getBillBeaconHouseholdContext = getNotificationHouseholdContext;
 function setSyncStatus(state, message) {
   statusMessage = message;
   window.dispatchEvent(new CustomEvent("billbeacon:sync-status", {detail: {state, message}}));
@@ -322,6 +327,7 @@ async function startHouseholdSync(user) {
     }
     localStorage.setItem(LOCAL_OWNER_KEY, JSON.stringify({uid: user.uid, householdId}));
     renderUpdatedApp();
+    window.dispatchEvent(new CustomEvent("billbeacon:household-ready", {detail: getNotificationHouseholdContext()}));
     unsubscribeFromHousehold = onSnapshot(reference, snapshot => {
       if (generation !== sessionGeneration || !cloudIsReady || snapshot.metadata?.fromCache || snapshot.metadata?.hasPendingWrites) return;
       try {
