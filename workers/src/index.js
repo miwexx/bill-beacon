@@ -2169,7 +2169,7 @@ async function plaidRequest(
       `https://production.plaid.com${endpoint}`,
       {
         method: "POST",
-        redirect: "error",
+        redirect: "manual",
         headers: {
           "content-type": "application/json"
         },
@@ -2217,7 +2217,16 @@ async function plaidRequest(
     "The Worker could not reach Plaid."
   );
 }
-
+if (
+  response.status >= 300 &&
+  response.status < 400
+) {
+  throw fail(
+    "LOCAL_PLAID_REDIRECT_BLOCKED",
+    "Plaid returned an unexpected redirect. " +
+    "The request was not forwarded."
+  );
+}
   const result = await response.json().catch(
     () => null
   );
