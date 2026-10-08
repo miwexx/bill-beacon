@@ -2180,12 +2180,43 @@ async function plaidRequest(
         })
       }
     );
-  } catch {
-    throw fail(
-      "LOCAL_PLAID_NETWORK_ERROR",
-      "The Worker could not reach Plaid."
-    );
+ } catch (cause) {
+  let diagnosticMessage = String(
+    cause?.message || "Unknown outbound request error."
+  );
+
+  // Redact credential/token values if an exception
+  // happens to include them.
+  const sensitiveValues = [
+    env.PLAID_CLIENT_ID,
+    env.PLAID_SECRET,
+    payload?.access_token,
+    payload?.public_token
+  ];
+
+  for (const value of sensitiveValues) {
+    if (typeof value === "string" && value.length) {
+      diagnosticMessage = diagnosticMessage
+        .split(value)
+        .join("[REDACTED]");
+    }
   }
+
+  console.error(
+    "Plaid outbound request exception",
+    {
+      endpoint,
+      exceptionName:
+        String(cause?.name || "Error"),
+      message: diagnosticMessage.slice(0, 1000)
+    }
+  );
+
+  throw fail(
+    "LOCAL_PLAID_NETWORK_ERROR",
+    "The Worker could not reach Plaid."
+  );
+}
 
   const result = await response.json().catch(
     () => null
