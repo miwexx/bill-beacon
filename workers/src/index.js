@@ -1904,6 +1904,7 @@ async function processUserReminders(env, uid, accessToken, now) {
     eligible: 0,
     sent: 0,
     skipped: 0,
+    noSubscriptions: 0,
     removed: 0,
     failures: 0
   };
@@ -1982,6 +1983,9 @@ async function processUserReminders(env, uid, accessToken, now) {
       outcomes.sent += delivery.sent;
       outcomes.removed += delivery.removed;
       outcomes.failures += delivery.failures;
+            if (delivery.subscriptionCount === 0) {
+        outcomes.noSubscriptions += 1;
+      }
 
       if (delivery.sent > 0) {
         await env.NOTIFICATIONSKV.put(
@@ -2047,6 +2051,8 @@ async function runScheduledBillReminders(env) {
     noHouseholdUsers: 0,
     remindersEligible: 0,
     remindersNeedReview: 0,
+    remindersAlreadySent: 0,
+    remindersWithoutSubscriptions: 0,
     notificationsSent: 0,
     subscriptionsRemoved: 0,
     failures: 0
@@ -2079,6 +2085,11 @@ async function runScheduledBillReminders(env) {
 
         summary.processedUsers += 1;
         summary.remindersEligible += result.eligible;
+                summary.remindersAlreadySent +=
+          result.skipped || 0;
+
+        summary.remindersWithoutSubscriptions +=
+          result.noSubscriptions || 0;
         summary.remindersNeedReview += result.reviewRequired || 0;
         summary.notificationsSent += result.sent;
         summary.subscriptionsRemoved += result.removed;
