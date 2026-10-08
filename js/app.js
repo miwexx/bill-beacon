@@ -14804,234 +14804,380 @@ window.addEventListener("billbeacon:signed-out", () => {
     lastSyncedAt: null
   };
 });
+function transactionMonthDisplayKey(monthKey) {
+  return JSON.stringify([
+    plaidBankState.selectedAccountId || "none",
+    String(
+      routeParams.transactionSearch || ""
+    ).trim().toLowerCase(),
+    monthKey
+  ]);
+}
 
+function setTransactionMonthLimit(
+  monthKey,
+  collapse = false
+) {
+  if (
+    currentRoute !== "transactions" ||
+    !/^\d{4}-\d{2}$/.test(monthKey)
+  ) return;
+
+  const main = document.querySelector(
+    ".main-content"
+  );
+
+  const top = main?.scrollTop || 0;
+  const windowTop = window.scrollY;
+
+  const limits = {
+    ...(routeParams.transactionMonthLimits || {})
+  };
+
+  const key = transactionMonthDisplayKey(monthKey);
+  const previous = Number(limits[key]);
+
+  limits[key] = collapse
+    ? 5
+    : (
+        Number.isSafeInteger(previous) &&
+        previous >= 5
+          ? previous
+          : 5
+      ) + 5;
+
+  routeParams.transactionMonthLimits = limits;
+
+  render();
+
+  requestAnimationFrame(() => {
+    const nextMain = document.querySelector(
+      ".main-content"
+    );
+
+    if (nextMain) {
+      nextMain.scrollTop = top;
+    }
+
+    window.scrollTo(0, windowTop);
+  });
+}
 function renderTransactions() {
-  const transactions = plaidBankState.transactions
-    .slice()
-    .sort((first, second) => {
-      return new Date(second.date) - new Date(first.date);
-    });
-
   const searchQuery = String(
     routeParams.transactionSearch || ""
-  )
-    .trim()
-    .toLowerCase();
+  ).trim().toLowerCase();
 
-  const filteredTransactions = transactions.filter(
-    (transaction) => {
-      if (!searchQuery) {
-        return true;
-      }
+  const transactions =
+    (plaidBankState.transactions || [])
+      .filter(transaction =>
+        Number.isFinite(
+          new Date(transaction.date).getTime()
+        )
+      )
+      .slice()
+      .sort((a, b) =>
+        new Date(b.date) - new Date(a.date) ||
+        String(a.id).localeCompare(String(b.id))
+      );
 
-      const searchableText = [
+  const filtered = transactions.filter(
+    transaction =>
+      !searchQuery ||
+      [
         transaction.merchantName,
         transaction.category,
         transaction.matchStatus,
         transaction.matchedBillName,
         transaction.matchNote,
-        transaction.amount,
+        transaction.amount
       ]
-        .filter(Boolean)
+        .filter(value =>
+          value !== null &&
+          value !== undefined
+        )
         .join(" ")
-        .toLowerCase();
+        .toLowerCase()
+        .includes(searchQuery)
+  );
 
-      return searchableText.includes(searchQuery);
+  const groups = new Map();
+
+  for (const transaction of filtered) {
+    const date = new Date(transaction.date);
+
+    const monthKey =
+      `${date.getFullYear()}-` +
+      String(date.getMonth() + 1).padStart(2, "0");
+
+    if (!groups.has(monthKey)) {
+      groups.set(monthKey, {
+        monthKey,
+        date: new Date(
+          date.getFullYear(),
+          date.getMonth(),
+          1,
+          12
+        ),
+        transactions: []
+      });
     }
+
+    groups.get(monthKey).transactions.push(
+      transaction
+    );
+  }
+
+  const monthGroups = [...groups.values()].sort(
+    (a, b) =>
+      b.monthKey.localeCompare(a.monthKey)
   );
 
-  const totalSpent = filteredTransactions
-    .filter((transaction) => transaction.type === "debit")
-    .reduce((total, transaction) => {
-      return total + Number(transaction.amount || 0);
-    }, 0);
+  const debitTotal = items =>
+    items
+      .filter(transaction =>
+        transaction.type === "debit"
+      )
+      .reduce(
+        (total, transaction) =>
+          total + Number(transaction.amount || 0),
+        0
+      );
 
-  const groups = filteredTransactions.reduce(
-    (result, transaction) => {
-      const transactionDate = new Date(transaction.date);
-
-      const groupKey = [
-        transactionDate.getFullYear(),
-        String(transactionDate.getMonth() + 1).padStart(2, "0"),
-      ].join("-");
-
-      if (!result[groupKey]) {
-        result[groupKey] = {
-          date: new Date(
-            transactionDate.getFullYear(),
-            transactionDate.getMonth(),
-            1,
-            12,
-            0,
-            0
-          ),
-          transactions: [],
-        };
-      }
-
-      result[groupKey].transactions.push(transaction);
-
-      return result;
-    },
-    {}
-  );
-
-  const monthGroups = Object.values(groups).sort(
-    (first, second) => second.date - first.date
-  );
-
- const getTransactionSubtitle = (transaction) => {
-  return transaction.pending ? "Pending" : "";
-};
-
-  const renderTransactionRow = (transaction) => {
-    const transactionDate = new Date(transaction.date);
-    const subtitle = getTransactionSubtitle(transaction);
-
-    return `
-      <button
-        type="button"
-        onclick="openTransactionDetails('${escapeInlineString(transaction.id)}')"
+  const row = transaction => `
+    <button
+      type="button"
+      data-bank-transaction-row
+      onclick="openTransactionDetails('${escapeInlineString(transaction.id)}')"
+      style="
+        width:100%;
+        display:flex;
+        align-items:center;
+        gap:12px;
+        padding:14px 16px;
+        border:0;
+        border-bottom:1px solid var(--border);
+        background:transparent;
+        color:var(--text);
+        text-align:left;
+        cursor:pointer;
+        font:inherit;
+      "
+    >
+      <span
         style="
-          width:100%;
+          width:40px;
+          height:40px;
+          min-width:40px;
           display:flex;
           align-items:center;
-          gap:12px;
-          padding:16px;
-          border:0;
-          border-bottom:1px solid rgba(255,255,255,.07);
-          background:transparent;
-          color:var(--text);
-          text-align:left;
-          cursor:pointer;
-          font-family:inherit;
+          justify-content:center;
+          border-radius:12px;
+          color:white;
+          background:${safeTransactionColor(transaction.iconColor)};
+          font-size:12px;
+          font-weight:900;
         "
       >
-        <div
+        ${escapeHtml(
+          transaction.merchantInitials || "?"
+        )}
+      </span>
+
+      <span style="min-width:0;flex:1;">
+        <span
           style="
-            width:44px;
-            height:44px;
-            min-width:44px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            border-radius:14px;
-            color:#fff;
-            background:${safeTransactionColor(transaction.iconColor)};
-            font-size:12px;
-            font-weight:900;
-          "
-        >
-          ${escapeHtml(transaction.merchantInitials || "?")}
-        </div>
-
-        <div style="min-width:0;flex:1">
-          <div
-            style="
-              overflow:hidden;
-              font-size:16px;
-              font-weight:850;
-              text-overflow:ellipsis;
-              white-space:nowrap;
-            "
-          >
-            ${escapeHtml(transaction.merchantName)}
-          </div>
-
-          <div
-  style="
-    margin-top:5px;
-    overflow:hidden;
-    color:${transaction.pending ? "var(--text-muted)" : "var(--text-muted)"};
-    font-size:13px;
-    font-weight:${transaction.pending ? "750" : "500"};
-    text-overflow:ellipsis;
-    white-space:nowrap;
-  "
->
-  ${formatDate(transaction.date, "short")}${
-    subtitle ? ` · ${subtitle}` : ""
-  }
-</div>
-        </div>
-
-        <div
-          style="
-            margin-left:auto;
-            font-size:17px;
-            font-weight:900;
+            display:block;
+            overflow:hidden;
+            text-overflow:ellipsis;
             white-space:nowrap;
+            font-size:15px;
+            font-weight:800;
           "
         >
-          ${transaction.type === "credit" ? "+" : "−"}${formatCurrency(
-            transaction.amount
+          ${escapeHtml(
+            transaction.merchantName || "Transaction"
           )}
-        </div>
-      </button>
-    `;
-  };
+        </span>
+
+        <span
+          style="
+            display:block;
+            margin-top:4px;
+            color:var(--text-muted);
+            font-size:12px;
+          "
+        >
+          ${formatDate(transaction.date, "short")}
+          ${transaction.pending ? " · Pending" : ""}
+        </span>
+      </span>
+
+      <span
+        style="
+          white-space:nowrap;
+          font-size:16px;
+          font-weight:850;
+          color:${
+            transaction.type === "credit"
+              ? "var(--paid)"
+              : "var(--text)"
+          };
+        "
+      >
+        ${transaction.type === "credit" ? "+" : "−"}
+        ${formatCurrency(transaction.amount)}
+      </span>
+    </button>
+  `;
 
   const transactionContent = monthGroups.length
-    ? monthGroups
-        .map((group) => {
-          const groupTotal = group.transactions
-            .filter((transaction) => {
-              return transaction.type === "debit";
-            })
-            .reduce((total, transaction) => {
-              return total + Number(transaction.amount || 0);
-            }, 0);
+    ? monthGroups.map(group => {
+        const savedLimit = Number(
+          routeParams.transactionMonthLimits?.[
+            transactionMonthDisplayKey(
+              group.monthKey
+            )
+          ]
+        );
 
-          return `
-            <section style="margin-top:20px">
-              <div
-                style="
-                  display:flex;
-                  align-items:center;
-                  justify-content:space-between;
-                  gap:12px;
-                  margin:0 4px 9px;
-                "
-              >
-                <div
+        const limit =
+          Number.isSafeInteger(savedLimit) &&
+          savedLimit >= 5
+            ? savedLimit
+            : 5;
+
+        const visible =
+          group.transactions.slice(0, limit);
+
+        const remaining =
+          group.transactions.length -
+          visible.length;
+
+        return `
+          <section
+            data-bank-month="${group.monthKey}"
+            style="margin-top:20px;"
+          >
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                align-items:flex-start;
+                gap:12px;
+                margin:0 3px 9px;
+              "
+            >
+              <div>
+                <h2
                   style="
+                    margin:0;
                     font-size:18px;
-                    font-weight:900;
+                    font-weight:850;
                   "
                 >
                   ${formatDate(
                     group.date.toISOString(),
                     "monthYear"
                   )}
-                </div>
+                </h2>
 
                 <div
                   style="
+                    margin-top:4px;
+                    font-size:12px;
                     color:var(--text-muted);
-                    font-size:14px;
-                    font-weight:700;
-                    white-space:nowrap;
                   "
                 >
-                  ${formatCurrency(groupTotal)} spent
+                  ${visible.length} of
+                  ${group.transactions.length}
+                  transactions
                 </div>
               </div>
 
               <div
-                class="card"
                 style="
-                  overflow:hidden;
-                  border:1px solid rgba(192,151,255,.18);
+                  text-align:right;
+                  color:var(--text-muted);
+                  font-size:12px;
                 "
               >
-                ${group.transactions
-                  .map(renderTransactionRow)
-                  .join("")}
+                <div style="font-weight:800;">
+                  ${formatCurrency(
+                    debitTotal(group.transactions)
+                  )}
+                </div>
+
+                <div style="margin-top:3px;">
+                  Debit total
+                </div>
               </div>
-            </section>
-          `;
-        })
-        .join("")
+            </div>
+
+            <div
+              class="card"
+              style="
+                overflow:hidden;
+                border:1px solid rgba(192,151,255,.18);
+              "
+            >
+              ${visible.map(row).join("")}
+            </div>
+
+            <div
+              style="
+                display:flex;
+                gap:8px;
+                margin-top:9px;
+              "
+            >
+              ${
+                remaining > 0
+                  ? `
+                    <button
+                      type="button"
+                      class="bb-outline-pill"
+                      onclick="setTransactionMonthLimit('${group.monthKey}')"
+                      aria-label="Show five more transactions for ${escapeHtml(
+                        formatDate(
+                          group.date.toISOString(),
+                          "monthYear"
+                        )
+                      )}"
+                      style="
+                        flex:1;
+                        min-height:42px;
+                        justify-content:center;
+                      "
+                    >
+                      Show more
+                      (${remaining} remaining)
+                    </button>
+                  `
+                  : ""
+              }
+
+              ${
+                visible.length > 5
+                  ? `
+                    <button
+                      type="button"
+                      class="bb-outline-pill"
+                      onclick="setTransactionMonthLimit('${group.monthKey}', true)"
+                      style="
+                        flex:1;
+                        min-height:42px;
+                        justify-content:center;
+                      "
+                    >
+                      Show less
+                    </button>
+                  `
+                  : ""
+              }
+            </div>
+          </section>
+        `;
+      }).join("")
     : `
       <div class="empty-state">
         <div class="empty-state-icon">
@@ -15039,14 +15185,176 @@ function renderTransactions() {
         </div>
 
         <div class="empty-state-title">
-          No matching transactions
+          ${
+            searchQuery
+              ? "No matching transactions"
+              : "No transactions loaded"
+          }
         </div>
 
         <div class="empty-state-text">
-          Connect or load your bank, then sync transactions.
+          ${
+            searchQuery
+              ? "Try another search. Your saved transactions have not been removed."
+              : "Load your saved connection or connect a bank using the controls below."
+          }
         </div>
       </div>
     `;
+
+  const accounts = plaidBankState.accounts || [];
+
+  const selected = accounts.find(
+    account =>
+      account.id ===
+      plaidBankState.selectedAccountId
+  );
+
+  const bankControls = `
+    <section
+      style="
+        margin-top:24px;
+        padding-top:18px;
+        border-top:1px solid var(--border);
+      "
+    >
+      <div class="section-header">
+        Bank connection
+      </div>
+
+      <div class="card card-pad">
+        <div
+          style="
+            font-size:13px;
+            color:var(--text-muted);
+            margin-bottom:12px;
+            line-height:1.5;
+          "
+        >
+          ${
+            selected
+              ? `
+                Selected account:
+                ${escapeHtml(selected.name)}
+                ${
+                  selected.mask
+                    ? ` · •••• ${escapeHtml(selected.mask)}`
+                    : ""
+                }
+              `
+              : plaidBankState.connected
+                ? "Bank connected. Choose your bill-pay account below."
+                : "No bank connection loaded."
+          }
+        </div>
+
+        <div style="display:grid;gap:9px;">
+          <button
+            id="connectPlaidBank"
+            type="button"
+            class="btn-primary"
+            onclick="connectBillBeaconBank()"
+            style="width:100%;margin:0;"
+          >
+            Connect Bank
+          </button>
+
+          <button
+            type="button"
+            class="bb-outline-pill"
+            onclick="loadPlaidSandboxBank()"
+            style="
+              width:100%;
+              min-height:44px;
+              justify-content:center;
+            "
+          >
+            Load Saved Connection
+          </button>
+
+          <button
+            type="button"
+            class="bb-outline-pill"
+            onclick="syncPlaidBank()"
+            style="
+              width:100%;
+              min-height:44px;
+              justify-content:center;
+            "
+          >
+            Sync Transactions
+          </button>
+
+          ${
+            accounts.length
+              ? `
+                <label
+                  for="plaidSandboxAccount"
+                  style="
+                    margin-top:5px;
+                    font-size:13px;
+                    color:var(--text-muted);
+                  "
+                >
+                  Bill-pay account
+                </label>
+
+                <select
+                  id="plaidSandboxAccount"
+                  class="form-input"
+                  onchange="choosePlaidSandboxAccount(this.value)"
+                  style="
+                    width:100%;
+                    min-height:48px;
+                    text-align:left;
+                    background:var(--surface);
+                    color:var(--text);
+                  "
+                >
+                  ${
+                    accounts.map(account => `
+                      <option
+                        value="${escapeHtml(account.id)}"
+                        ${
+                          account.id ===
+                          plaidBankState.selectedAccountId
+                            ? "selected"
+                            : ""
+                        }
+                      >
+                        ${escapeHtml(account.name)}
+                        ${
+                          account.mask
+                            ? ` · ${escapeHtml(account.mask)}`
+                            : ""
+                        }
+                      </option>
+                    `).join("")
+                  }
+                </select>
+              `
+              : ""
+          }
+        </div>
+
+        <div
+          id="plaidConnectionStatus"
+          role="status"
+          aria-live="polite"
+          style="
+            margin-top:12px;
+            font-size:12px;
+            color:var(--text-muted);
+            line-height:1.5;
+          "
+        >
+          Load or sync your saved bank connection.
+          No new bank enrollment is needed on each
+          device using the same login.
+        </div>
+      </div>
+    </section>
+  `;
 
   return `
     <div class="nav-bar">
@@ -15063,13 +15371,9 @@ function renderTransactions() {
           class="nav-button"
           onclick="navigate('more')"
           aria-label="Back to More"
-          title="Back to More"
           style="
             width:44px;
             height:44px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
             padding:0;
             color:var(--text);
           "
@@ -15079,12 +15383,12 @@ function renderTransactions() {
 
         <div
           class="nav-title"
-          style="text-align:center"
+          style="text-align:center;"
         >
           Transactions
         </div>
 
-        <div style="width:44px;height:44px"></div>
+        <div style="width:44px;"></div>
       </div>
     </div>
 
@@ -15092,192 +15396,27 @@ function renderTransactions() {
       <div
         class="content-pad"
         style="
-          padding-bottom:calc(36px + env(safe-area-inset-bottom));
+          padding-bottom:calc(
+            36px + env(safe-area-inset-bottom)
+          );
         "
       >
-        <section
-          style="
-            margin-top:8px;
-            padding:16px;
-            border:1px solid rgba(192,151,255,.18);
-            border-radius:18px;
-            background:var(--surface);
-          "
-        >
-          <div
-            style="
-              display:flex;
-              align-items:center;
-              gap:12px;
-            "
-          >
-            <div
-              style="
-                width:42px;
-                height:42px;
-                min-width:42px;
-                display:flex;
-                align-items:center;
-                justify-content:center;
-                border-radius:14px;
-                color:#d9ccff;
-                background:rgba(143,54,255,.18);
-              "
-            >
-              ${svgIcon("internaldrive", 21)}
-            </div>
-
-            <div style="min-width:0;flex:1">
-              <div
-                style="
-                  overflow:hidden;
-                  font-size:15px;
-                  font-weight:850;
-                  text-overflow:ellipsis;
-                  white-space:nowrap;
-                "
-              >
-                Primary bill-pay account
-              </div>
-
-              <div
-                style="
-                  margin-top:4px;
-                  color:var(--text-muted);
-                  font-size:12px;
-                "
-              >
-                ${
-  plaidBankState.connected
-    ? "Plaid · Bank connected"
-    : "Plaid · No bank connection loaded"
-}
-              </div>
-            </div>
-
-            <div
-              style="
-                padding:6px 9px;
-                border-radius:999px;
-                color:#d9ccff;
-                background:rgba(143,54,255,.14);
-                font-size:11px;
-                font-weight:850;
-                white-space:nowrap;
-              "
-            >
-              Production
-            </div>
-          </div>
-        </section>
-        <section style="margin-top:12px">
-  <div style="display:grid;gap:10px">
-    <button
-      id="connectPlaidBank"
-      type="button"
-      class="btn-primary"
-      onclick="connectBillBeaconBank()"
-      style="width:100%"
-    >
-      Connect Bank
-    </button>
-
-    <button
-      type="button"
-      class="bb-outline-pill"
-      onclick="loadPlaidSandboxBank()"
-      style="width:100%;min-height:44px"
-    >
-      Load Saved Connection
-    </button>
-
-    <button
-      type="button"
-      class="bb-outline-pill"
-      onclick="syncPlaidBank()"
-      style="width:100%;min-height:44px"
-    >
-      Sync Transactions
-    </button>
-
-    ${
-      plaidBankState.accounts.length
-        ? `
-          <label
-            for="plaidSandboxAccount"
-            style="font-size:13px;color:var(--text-muted)"
-          >
-            Test bill-pay account
-          </label>
-
-          <select
-            id="plaidSandboxAccount"
-            class="form-input"
-            onchange="choosePlaidSandboxAccount(this.value)"
-            style="
-              width:100%;
-              min-height:48px;
-              text-align:left;
-              background:var(--surface);
-              color:var(--text);
-            "
-          >
-            ${plaidBankState.accounts
-              .map((account) => `
-                <option
-                  value="${escapeHtml(account.id)}"
-                  ${
-                    account.id ===
-                    plaidBankState.selectedAccountId
-                      ? "selected"
-                      : ""
-                  }
-                >
-                  ${escapeHtml(account.name)}
-                  ${
-                    account.mask
-                      ? ` · ${escapeHtml(account.mask)}`
-                      : ""
-                  }
-                </option>
-              `)
-              .join("")}
-          </select>
-        `
-        : ""
-    }
-  </div>
-
-  <div
-    id="plaidConnectionStatus"
-    role="status"
-    aria-live="polite"
-    style="
-      margin-top:10px;
-      color:var(--text-muted);
-      font-size:13px;
-      line-height:1.45;
-    "
-  >
-    Production bank data. Transactions currently load without changing bill payments.
-  </div>
-</section>
         <section
           style="
             display:flex;
             align-items:center;
             gap:10px;
-            margin-top:16px;
+            margin-top:10px;
             padding:0 14px;
-            min-height:54px;
+            min-height:52px;
             border:1px solid rgba(192,151,255,.20);
             border-radius:16px;
             background:var(--surface);
           "
         >
-          <div style="color:var(--text-muted)">
+          <span style="color:var(--text-muted);">
             ${svgIcon("search", 22)}
-          </div>
+          </span>
 
           <input
             type="search"
@@ -15285,6 +15424,7 @@ function renderTransactions() {
               routeParams.transactionSearch || ""
             )}"
             placeholder="Search transactions"
+            aria-label="Search transactions"
             oninput="searchTransactions(this.value)"
             style="
               min-width:0;
@@ -15293,53 +15433,36 @@ function renderTransactions() {
               outline:0;
               background:transparent;
               color:var(--text);
-              font-family:inherit;
+              font:inherit;
               font-size:16px;
             "
           />
-
-          <div
-            style="
-              width:1px;
-              height:26px;
-              background:rgba(255,255,255,.10);
-            "
-          ></div>
-
-          <div
-            style="
-              color:var(--text-muted);
-              display:flex;
-            "
-            aria-hidden="true"
-          >
-            ${svgIcon("sort", 20)}
-          </div>
         </section>
 
         <div
           style="
             display:flex;
-            align-items:center;
             justify-content:space-between;
             gap:12px;
-            margin-top:13px;
+            margin-top:12px;
             color:var(--text-muted);
             font-size:12px;
           "
         >
           <span>
-            ${filteredTransactions.length} transaction${
-              filteredTransactions.length === 1 ? "" : "s"
-            }
+            ${filtered.length}
+            transaction${filtered.length === 1 ? "" : "s"}
           </span>
 
           <span>
-            ${formatCurrency(totalSpent)} total shown
+            ${formatCurrency(debitTotal(filtered))}
+            debit total
           </span>
         </div>
 
         ${transactionContent}
+
+        ${bankControls}
       </div>
     </div>
   `;
