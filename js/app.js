@@ -11015,134 +11015,6 @@ function normaliseImportedDate(value) {
   return date.toISOString();
 }
 
-function importBillsCSV(event) {
-  const file = event.target.files?.[0];
-
-  if (!file) return;
-
-  const reader = new FileReader();
-
-  reader.onload = () => {
-    try {
-      const rows = parseCSV(String(reader.result || ''));
-
-      if (rows.length < 2) {
-        alert('The file needs a header row and at least one bill.');
-        return;
-      }
-
-      const headerMap = {};
-
-      rows[0].forEach((header, index) => {
-        headerMap[normaliseHeader(header)] = index;
-      });
-
-      const requiredHeaders = ['name', 'amount', 'duedate'];
-      const missingHeaders = requiredHeaders.filter(
-        header => headerMap[header] === undefined
-      );
-
-      if (missingHeaders.length) {
-        alert(
-          `Missing required column(s): ${missingHeaders.join(', ')}.`
-        );
-        return;
-      }
-
-      const importedBills = [];
-      const skippedRows = [];
-
-      rows.slice(1).forEach((row, rowIndex) => {
-        const name = getImportedValue(row, headerMap, ['Name']);
-        const amount = Number(
-          getImportedValue(row, headerMap, ['Amount'])
-            .replace(/[$,]/g, '')
-        );
-        const dueDate = normaliseImportedDate(
-          getImportedValue(row, headerMap, ['Due Date', 'DueDate'])
-        );
-
-        if (!name || !Number.isFinite(amount) || amount < 0 || !dueDate) {
-          skippedRows.push(rowIndex + 2);
-          return;
-        }
-
-        const category = categoryIdFromImport(
-          getImportedValue(row, headerMap, ['Category'])
-        );
-
-        const recurrence = recurrenceFromImport(
-          getImportedValue(row, headerMap, ['Recurrence'])
-        );
-
-        const payCycle = payCycleFromImport(
-          getImportedValue(row, headerMap, ['Pay Cycle', 'PayCycle']),
-          dueDate.slice(0, 10)
-        );
-
-        const paymentMethod = paymentMethodFromImport(
-          getImportedValue(row, headerMap, ['Payment Method', 'PaymentMethod'])
-        );
-
-        importedBills.push({
-          id: uid(),
-          name,
-          amount: amount.toString(),
-          dueDate,
-          category,
-          recurrence,
-          payCycle,
-          paymentMethod,
-          paymentUrl: getImportedValue(row, headerMap, [
-            'Payment Link',
-            'PaymentLink',
-            'Website'
-          ]),
-          autopay: booleanFromImport(
-            getImportedValue(row, headerMap, ['Autopay'])
-          ),
-          notes: getImportedValue(row, headerMap, ['Notes']),
-          reminderOffsets: [7, 1],
-          createdAt: new Date().toISOString()
-        });
-      });
-
-      if (!importedBills.length) {
-        alert('No valid bills were found. Check Name, Amount, and Due Date.');
-        return;
-      }
-
-      const existingBills = Store.getBills();
-
-      const confirmed = confirm(
-        `Import ${importedBills.length} bill(s) into this device?` +
-        (skippedRows.length
-          ? `\\n\\nSkipped row(s): ${skippedRows.join(', ')}.`
-          : '')
-      );
-
-      if (!confirmed) return;
-
-      Store.saveBills([...existingBills, ...importedBills]);
-
-      event.target.value = '';
-
-      alert(
-        `${importedBills.length} bill(s) imported successfully.` +
-        (skippedRows.length
-          ? `\\nSkipped row(s): ${skippedRows.join(', ')}.`
-          : '')
-      );
-
-      render();
-    } catch (error) {
-      console.error(error);
-      alert('Unable to import this CSV file. Please use the Bill Beacon template.');
-    }
-  };
-
-  reader.readAsText(file);
-}
 function toggleBillDetails() {
   const content = document.getElementById('billDetailsContent');
   const button = document.getElementById('billDetailsToggle');
@@ -13525,16 +13397,357 @@ function clearAllAppData() {
   alert("Local app lists were cleared. Account and server-side bank connection were not deleted.");
 }
 
+const BB_BILLS_CSV_HEADERS = [
+  "Format", "Source Household", "ID", "Record Type", "Name", "Amount",
+  "Due Date", "Category", "Recurrence", "Due Day", "Reminders",
+  "Pay Cycle", "Paycheck Assignment", "Payment Method", "Payment Link",
+  "Autopay", "Notes", "Plan ID", "Provider", "Merchant",
+  "Installment Number", "Installment Total", "Frequency Days", "Original Plan Total",
+  "Paid (Information Only)"
+];
+let bbBillsCsvBusy = false;
 
+function bbBillsCsvCanonical(value) {
+  if (Array.isArray(value)) return value.map(bbBillsCsvCanonical);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, bbBillsCsvCanonical(value[key])]));
+  }
+  return value;
+}
 
-function exportCSV() {
-  const rows = [["Name", "Amount", "Due Date", "Category", "Recurrence", "Paid", "Payment Method", "Notes"]];
-  for (const bill of Store.getBills()) rows.push([bill.name, bill.amount, String(bill.dueDate || "").split("T")[0],
-    getCategory(bill.category).label, bill.recurrence, isPaidThisCycle(bill) ? "Yes" : "No", bill.paymentMethod || "", bill.notes || ""]);
-  const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
-  const url = URL.createObjectURL(new Blob([csv], {type: "text/csv;charset=utf-8"}));
-  const link = document.createElement("a"); link.href = url; link.download = "bills-export.csv"; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+function bbBillsCsvZone() {
+  const zone = Store.getSettings().timeZone || "America/New_York";
+  new Intl.DateTimeFormat("en", {timeZone: zone}).format(new Date());
+  return zone;
+}
+
+function bbBillsCsvValidDate(key) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return false;
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return y >= 1900 && y <= 9999 && date.getUTCFullYear() === y &&
+    date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+function bbBillsCsvDateKey(value, zone = bbBillsCsvZone()) {
+  const text = String(value || "").trim();
+  if (bbBillsCsvValidDate(text)) return text;
+  const us = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (us) {
+    const key = `${us[3]}-${us[1].padStart(2, "0")}-${us[2].padStart(2, "0")}`;
+    if (bbBillsCsvValidDate(key)) return key;
+    throw new Error("Invalid calendar date.");
+  }
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(text) || !bbBillsCsvValidDate(text.slice(0, 10))) {
+    throw new Error("Use YYYY-MM-DD or MM/DD/YYYY for dates.");
+  }
+  const date = new Date(text);
+  if (!Number.isFinite(date.getTime())) throw new Error("Invalid date.");
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en", {
+    timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit"
+  }).formatToParts(date).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function bbBillsCsvDateISO(key, zone = bbBillsCsvZone()) {
+  if (!bbBillsCsvValidDate(key)) throw new Error("Invalid due date.");
+  const [y, m, d] = key.split("-").map(Number);
+  const desired = Date.UTC(y, m - 1, d, 12);
+  let time = desired;
+  const formatter = new Intl.DateTimeFormat("en", {timeZone: zone,
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit",
+    minute: "2-digit", second: "2-digit", hourCycle: "h23"});
+  for (let n = 0; n < 3; n += 1) {
+    const p = Object.fromEntries(formatter.formatToParts(new Date(time)).map(part => [part.type, part.value]));
+    const represented = Date.UTC(Number(p.year), Number(p.month)-1, Number(p.day),
+      Number(p.hour), Number(p.minute), Number(p.second));
+    time += desired - represented;
+  }
+  const iso = new Date(time).toISOString();
+  if (bbBillsCsvDateKey(iso, zone) !== key) throw new Error("Due date could not be represented safely.");
+  return iso;
+}
+
+function bbBillsCsvCell(value) {
+  let text = String(value ?? "");
+  if (/^\s*[=+@-]/.test(text) || /^[\t\r\n']/.test(text)) text = "'" + text;
+  return '"' + text.replace(/"/g, '""') + '"';
+}
+
+function bbBillsCsvParse(text) {
+  text = String(text).replace(/^\uFEFF/, "");
+  const rows = []; let row = [], cell = "", quoted = false, closed = false;
+  const finishCell = () => {row.push(cell); cell = ""; closed = false;};
+  const finishRow = () => {finishCell(); if (row.some(value => value !== "")) rows.push(row); row = [];};
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {cell += '"'; i += 1;}
+        else {quoted = false; closed = true;}
+      } else cell += ch;
+    } else if (ch === ',') finishCell();
+    else if (ch === '\r' || ch === '\n') {
+      if (ch === '\r' && text[i + 1] === '\n') i += 1;
+      finishRow();
+    } else if (ch === '"') {
+      if (cell || closed) throw new Error("Unexpected quote in CSV.");
+      quoted = true;
+    } else {
+      if (closed) throw new Error("Unexpected characters after a quoted CSV value.");
+      cell += ch;
+    }
+    if (cell.length > 100000 || rows.length > 50000) throw new Error("CSV is too large or complex.");
+  }
+  if (quoted) throw new Error("CSV contains an unclosed quoted value.");
+  if (cell || row.length || closed) finishRow();
+  return rows;
+}
+
+async function bbBillsCsvHash(value) {
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(hash)).map(byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function bbBillsCsvFingerprint(bill) {
+  return JSON.stringify([String(bill.name).trim().toLowerCase(), Number(bill.amount).toFixed(2),
+    bbBillsCsvDateKey(bill.dueDate), bill.category || "other", bill.recurrence || "None",
+    bill.dueDay || null, bill.installmentProvider || "", bill.installmentStore || "",
+    bill.installmentNumber || null, bill.installmentTotal || null]);
+}
+
+function bbBillsCsvBuild(bills, householdId, isPaid) {
+  const rows = [BB_BILLS_CSV_HEADERS];
+  for (const bill of bills) {
+    if (bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt || bill.paidInFullAt ||
+        ["cancelled", "canceled", "paid-in-full", "paidInFull"].includes(bill.status)) continue;
+    const paid = isPaid(bill);
+    if (bill.installmentPlanId && paid) continue;
+    rows.push(["Bill Beacon Bills CSV 1", householdId, bill.id,
+      bill.installmentPlanId ? "Installment" : "Bill", bill.name, bill.amount,
+      bbBillsCsvDateKey(bill.dueDate), bill.category || "other", bill.recurrence || "None",
+      bill.dueDay ?? "", JSON.stringify(bill.reminderOffsets || []), bill.payCycle || "",
+      bill.paycheckAssignment || "auto", bill.paymentMethod || "", bill.paymentUrl || "",
+      bill.autopay ? "Yes" : "No", bill.notes || "", bill.installmentPlanId || "",
+      bill.installmentProvider || "", bill.installmentStore || "",
+      bill.installmentNumber ?? "", bill.installmentTotal ?? "",
+      bill.installmentFrequencyDays ?? "", bill.installmentOriginalTotal ?? "", paid ? "Yes" : "No"]);
+  }
+  return {count: rows.length - 1, csv: "\uFEFF" + rows.map(row => row.map(bbBillsCsvCell).join(",")).join("\r\n") + "\r\n"};
+}
+
+async function exportCSV() {
+  if (bbBillsCsvBusy) return;
+  bbBillsCsvBusy = true;
+  try {
+    if (typeof window.billBeaconPrepareDataTransfer !== "function") {
+      throw new Error("The sync-aware transfer helper is missing. Keep the earlier firebase-sync.js export helper.");
+    }
+    const prepared = await window.billBeaconPrepareDataTransfer();
+    const result = bbBillsCsvBuild(prepared.snapshot.bills, prepared.householdId,
+      bill => isOccurrencePaid(bill, new Date(bill.dueDate)));
+    if (!result.count) throw new Error("No active bills or unpaid installments to export.");
+    const url = URL.createObjectURL(new Blob([result.csv], {type: "text/csv;charset=utf-8"}));
+    const link = document.createElement("a"); link.href = url;
+    link.download = `bill-beacon-bills-${new Date().toISOString().slice(0,10)}.csv`;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch (error) {alert(`Could not export bills: ${error.message}`);}
+  finally {bbBillsCsvBusy = false;}
+}
+
+async function bbBillsCsvPreview(text, existing, archived, householdId) {
+  const rows = bbBillsCsvParse(text);
+  if (rows.length < 2) throw new Error("CSV needs a header and at least one record.");
+  const normalize = header => String(header).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const headers = new Map();
+  rows[0].forEach((header, i) => {
+    const key = normalize(header);
+    if (!key || headers.has(key)) throw new Error("CSV has blank or duplicate column names.");
+    headers.set(key, i);
+  });
+  for (const key of ["name", "amount", "duedate"]) {
+    if (!headers.has(key)) throw new Error(`Missing required column: ${key}`);
+  }
+  const known = new Map([...existing, ...archived].map(bill => [bill.id, bill]));
+  const fingerprints = new Set();
+  for (const bill of [...existing, ...archived]) {
+    try {fingerprints.add(bbBillsCsvFingerprint(bill));} catch {}
+  }
+  const added = [], skipped = [], errors = [], seen = new Map(), planNumbers = new Map();
+  const planDefinitions = new Map(); let paidLabels = 0;
+  for (let index = 1; index < rows.length; index += 1) {
+    const row = rows[index], rowNumber = index + 1;
+    try {
+      if (row.length !== rows[0].length) throw new Error("Column count differs from the header.");
+      const raw = (...names) => {
+        const key = names.map(normalize).find(name => headers.has(name));
+        return key ? String(row[headers.get(key)] ?? "") : "";
+      };
+      const format = raw("Format");
+      const modern = format === "Bill Beacon Bills CSV 1";
+      if (format && !modern) throw new Error("Unsupported CSV format.");
+      const get = (...names) => {
+        const value = raw(...names);
+        return modern && value.startsWith("'") ? value.slice(1) : value;
+      };
+      const name = get("Name").trim();
+      const amountText = get("Amount").trim().replace(/^\$/, "");
+      if (!name || !/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(amountText)) {
+        throw new Error("Name and a nonnegative amount with up to two decimal places are required.");
+      }
+      const amount = Number(amountText.replace(/,/g, ""));
+      if (!Number.isFinite(amount) || !Number.isSafeInteger(Math.round(amount * 100))) throw new Error("Amount is too large.");
+      const dateKey = bbBillsCsvDateKey(get("Due Date"));
+      const recurrenceText = get("Recurrence").trim();
+      const recurrence = recurrenceText ? RECURRENCE.find(value => value.toLowerCase() === recurrenceText.toLowerCase()) : "None";
+      if (!recurrence) throw new Error("Unknown recurrence.");
+      let reminders = [7, 1];
+      if (headers.has("reminders")) {
+        const value = get("Reminders").trim();
+        reminders = value ? (value.startsWith("[") ? JSON.parse(value) : value.split(/[;|,]/).map(Number)) : [];
+      }
+      if (!Array.isArray(reminders) || reminders.some(value => !Number.isInteger(value) || value < 0 || value > 365)) {
+        throw new Error("Reminders must be whole-number offsets from 0 to 365.");
+      }
+      reminders = [...new Set(reminders)].sort((a,b) => a-b);
+      const bool = value => {
+        const v = String(value).trim().toLowerCase();
+        if (["", "no", "false", "0"].includes(v)) return false;
+        if (["yes", "true", "1"].includes(v)) return true;
+        throw new Error("Use Yes or No for Autopay/Paid.");
+      };
+      const integer = (label, required = false) => {
+        const value = get(label).trim();
+        if (!value && !required) return null;
+        if (!/^\d+$/.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < 1) {
+          throw new Error(`${label} must be a positive whole number.`);
+        }
+        return Number(value);
+      };
+      const dueDay = recurrence === "Monthly" ? (integer("Due Day") || Number(dateKey.slice(-2))) : null;
+      if (dueDay > 31) throw new Error("Due Day cannot exceed 31.");
+      const methodText = get("Payment Method").trim();
+      if (methodText.length > 200) throw new Error("Payment method is too long.");
+      const method = methodText;
+      const paymentUrl = get("Payment Link", "Website").trim();
+      if (paymentUrl) {
+        const candidate = /^[a-z][a-z0-9+.-]*:/i.test(paymentUrl) ? paymentUrl : "https://" + paymentUrl;
+        const url = new URL(candidate);
+        if (!["https:", "http:"].includes(url.protocol) || url.username || url.password) {
+          throw new Error("Payment Link must be a web address without embedded credentials.");
+        }
+      }
+      const assignment = get("Paycheck Assignment").trim() || "auto";
+      if (!["auto", "first", "second", "previous"].includes(assignment)) throw new Error("Invalid paycheck assignment.");
+      const cycle = get("Pay Cycle").trim() || (Number(dateKey.slice(-2)) <= 15 ? "first" : "second");
+      if (!["first", "second"].includes(cycle)) throw new Error("Pay Cycle must be first or second.");
+      const sourceHousehold = get("Source Household").trim();
+      const sourceId = get("ID").trim();
+      const sourcePlan = get("Plan ID").trim();
+      if ([sourceHousehold,sourceId,sourcePlan].some(value => value.length > 512)) throw new Error("Record identifier is too long.");
+      const type = get("Record Type").trim().toLowerCase() || (sourcePlan ? "installment" : "bill");
+      if (!["bill","installment"].includes(type) || (type === "bill" && sourcePlan)) throw new Error("Record Type conflicts with Plan ID.");
+      const bill = {name, amount, dueDate: bbBillsCsvDateISO(dateKey), category: categoryIdFromImport(get("Category")),
+        recurrence, dueDay, reminderOffsets: reminders, payCycle: cycle, paycheckAssignment: assignment,
+        paymentMethod: method, paymentUrl, autopay: bool(get("Autopay")), notes: get("Notes")};
+      if (type === "installment") {
+        if (!sourcePlan || !get("Provider").trim() || recurrence !== "None") throw new Error("Installments require Plan ID, Provider, and recurrence None.");
+        const number = integer("Installment Number", true), total = integer("Installment Total", true);
+        if (number > total || total > 1000) throw new Error("Invalid installment number or total.");
+        const planId = sourceHousehold && sourceHousehold !== householdId
+          ? "csv-plan-" + await bbBillsCsvHash(JSON.stringify([sourceHousehold, sourcePlan])) : sourcePlan;
+        const frequency = integer("Frequency Days");
+        const originalText = get("Original Plan Total").trim();
+        if (originalText && !/^\d+(?:\.\d{1,2})?$/.test(originalText)) throw new Error("Invalid original plan total.");
+        const original = originalText ? Number(originalText) : null;
+        if (original !== null && (!Number.isFinite(original) || original < amount)) throw new Error("Original plan total is too small.");
+        Object.assign(bill, {installmentPlanId: planId, isPaymentPlanInstallment: true,
+          installmentProvider: get("Provider").trim(), installmentStore: get("Merchant").trim(),
+          installmentNumber: number, installmentTotal: total});
+        if (frequency !== null) bill.installmentFrequencyDays = frequency;
+        if (original !== null) bill.installmentOriginalTotal = original;
+        const samePlan = [...existing, ...archived].filter(record => record.installmentPlanId === planId);
+        if (samePlan.some(record =>
+          (record.installmentProvider && record.installmentProvider !== bill.installmentProvider) ||
+          (record.installmentStore && record.installmentStore !== bill.installmentStore) ||
+          (record.installmentTotal != null && Number(record.installmentTotal) !== total))) {
+          throw new Error("Plan ID conflicts with an existing installment plan.");
+        }
+        const definition = JSON.stringify([bill.installmentProvider, bill.installmentStore, total, frequency, original]);
+        if (planDefinitions.has(planId) && planDefinitions.get(planId) !== definition) throw new Error("Conflicting fields within the same installment plan.");
+        planDefinitions.set(planId, definition);
+        const planKey = `${planId}:${number}`;
+        const slot = JSON.stringify(bbBillsCsvCanonical(bill));
+        if (planNumbers.has(planKey) && planNumbers.get(planKey) !== slot) throw new Error("Conflicting rows for the same installment number.");
+        planNumbers.set(planKey, slot);
+      }
+      const fingerprint = bbBillsCsvFingerprint(bill);
+      const id = sourceId
+        ? (sourceHousehold && sourceHousehold !== householdId
+          ? "csv-bill-" + await bbBillsCsvHash(JSON.stringify([sourceHousehold, sourceId])) : sourceId)
+        : "csv-bill-" + await bbBillsCsvHash(fingerprint);
+      bill.id = id;
+      const signature = JSON.stringify(bbBillsCsvCanonical(bill));
+      if (seen.has(id)) {
+        if (seen.get(id) !== signature) throw new Error("Conflicting duplicate ID in this file.");
+        skipped.push(`Row ${rowNumber}: duplicate file ID`); continue;
+      }
+      seen.set(id, signature);
+      if (bool(get("Paid (Information Only)", "Paid"))) paidLabels += 1;
+      if (known.has(id)) {skipped.push(`Row ${rowNumber}: existing or archived ID (not updated)`); continue;}
+      if (bill.installmentPlanId && [...existing,...archived].some(record =>
+        record.installmentPlanId === bill.installmentPlanId && Number(record.installmentNumber) === bill.installmentNumber)) {
+        skipped.push(`Row ${rowNumber}: installment number already exists`); continue;
+      }
+      if (fingerprints.has(fingerprint)) {skipped.push(`Row ${rowNumber}: possible duplicate definition`); continue;}
+      fingerprints.add(fingerprint);
+      const now = new Date().toISOString();
+      bill.createdAt = now; bill.updatedAt = now; bill.occurrenceOverrides = []; bill.postponementHistory = [];
+      added.push(bill);
+    } catch (error) {errors.push(`Row ${rowNumber}: ${error.message}`);}
+  }
+  return {added, skipped, errors, paidLabels};
+}
+
+async function importBillsCSV(event) {
+  const input = event.target, file = input.files?.[0];
+  if (!file || bbBillsCsvBusy) {input.value = ""; return;}
+  bbBillsCsvBusy = true; let applied = false;
+  try {
+    if (file.size > 10 * 1024 * 1024) throw new Error("CSV exceeds the 10 MB limit.");
+    if (typeof window.billBeaconPrepareDataTransfer !== "function") {
+      throw new Error("The sync-aware transfer helper is missing. Keep the earlier firebase-sync.js export helper.");
+    }
+    const prepared = await window.billBeaconPrepareDataTransfer();
+    const preview = await bbBillsCsvPreview(await file.text(), prepared.snapshot.bills,
+      prepared.snapshot.archivedBills, prepared.householdId);
+    if (preview.errors.length) throw new Error("Nothing imported. Correct these rows:\n" + preview.errors.slice(0,20).join("\n") +
+      (preview.errors.length > 20 ? `\nPlus ${preview.errors.length-20} more errors.` : ""));
+    if (!preview.added.length) {alert(`No new records to add. ${preview.skipped.length} existing/duplicate rows skipped.`); return;}
+    const installments = preview.added.filter(bill => bill.installmentPlanId).length;
+    const notice = [
+      `Add ${preview.added.length-installments} bills and ${installments} installment records?`,
+      `${preview.skipped.length} existing/duplicate rows will be skipped.`,
+      preview.skipped.slice(0,8).join("\n"),
+      "Existing bills, payments, bank links, and archived records will NOT be replaced.",
+      "Imported records start unpaid. Paid labels are information only; payment history is not imported.",
+      `${preview.paidLabels} CSV row(s) contain paid labels.`,
+      "New records use today's creation timestamp. Past schedule versions and postponement history are not imported."
+    ].filter(Boolean).join("\n\n");
+    if (!confirm(notice)) return;
+    const fresh = await window.billBeaconPrepareDataTransfer();
+    if (fresh.householdId !== prepared.householdId ||
+        JSON.stringify(bbBillsCsvCanonical(fresh.snapshot)) !== JSON.stringify(bbBillsCsvCanonical(prepared.snapshot))) {
+      throw new Error("Household data changed after the preview. Select the file again.");
+    }
+    Store.saveBills([...fresh.snapshot.bills, ...preview.added]); applied = true;
+    render();
+    await window.billBeaconPrepareDataTransfer();
+    alert(`${preview.added.length} new bill/installment records added and household save completed.`);
+  } catch (error) {
+    alert((applied ? "Records were added locally, but cloud confirmation did not finish. Do not clear local data. " : "") + error.message);
+  } finally {input.value = ""; bbBillsCsvBusy = false;}
 }
 
 
@@ -16290,6 +16503,8 @@ function addBackupSettings() {
 
   const section = document.createElement("div");
   section.id = "backupSettingsCard";
+    section.hidden = true;
+  section.style.display = "none";
   section.className = "settings-section";
 
   section.innerHTML = `
