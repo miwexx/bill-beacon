@@ -14376,7 +14376,104 @@ let plaidConnectInFlight = false;
 
 const PLAID_LINK_SESSION_KEY =
   "billBeaconPlaidProductionLinkSession";
+async function showBankConnectionIdentity() {
+  try {
+    const token =
+      await window.getBillBeaconFirebaseToken?.();
 
+    if (!token) {
+      alert("Please sign in to Bill Beacon first.");
+      return;
+    }
+
+    const encoded = token.split(".")[1];
+    const base64 = encoded
+      .replace(/-/g, "+")
+      .replace(/_/g, "/");
+
+    const claims = JSON.parse(
+      atob(
+        base64 +
+        "=".repeat((4 - base64.length % 4) % 4)
+      )
+    );
+
+    const uid = claims.sub;
+
+    if (!uid) {
+      throw new Error("The sign-in token has no UID.");
+    }
+
+    const {
+      getFirestore,
+      doc,
+      getDoc
+    } = await import(
+      "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
+    );
+
+    const db = getFirestore();
+
+    const profileSnapshot = await getDoc(
+      doc(db, "users", uid)
+    );
+
+    const profile = profileSnapshot.exists()
+      ? profileSnapshot.data()
+      : null;
+
+    const householdId =
+      typeof profile?.householdId === "string"
+        ? profile.householdId.trim()
+        : "";
+
+    let member = null;
+
+    if (householdId) {
+      const memberSnapshot = await getDoc(
+        doc(
+          db,
+          "households",
+          householdId,
+          "members",
+          uid
+        )
+      );
+
+      member = memberSnapshot.exists()
+        ? memberSnapshot.data()
+        : null;
+    }
+
+    const syncContext =
+      window.getBillBeaconHouseholdContext?.();
+
+    alert([
+      "Bill Beacon identity check",
+      "",
+      "Email: " + (claims.email || "(not supplied)"),
+      "Firebase UID: " + uid,
+      "Profile exists: " + Boolean(profile),
+      "Household ID: " + (householdId || "(missing)"),
+      "Profile role: " + (profile?.role || "(missing)"),
+      "Membership exists: " + Boolean(member),
+      "Membership role: " + (member?.role || "(missing)"),
+      "Membership UID matches: " +
+        (
+          member
+            ? String(!member.uid || member.uid === uid)
+            : "(no membership)"
+        ),
+      "App sync household: " +
+        (syncContext?.householdId || "(not ready)")
+    ].join("\n"));
+  } catch (error) {
+    alert(
+      "Identity check failed: " +
+      (error?.message || "Unknown error.")
+    );
+  }
+}
 async function connectBillBeaconBank() {
   if (plaidConnectInFlight) return;
 
@@ -15084,7 +15181,14 @@ function renderTransactions() {
     >
       Connect Bank
     </button>
-
+<button
+  type="button"
+  class="bb-outline-pill"
+  style="width:100%;min-height:44px;margin-top:10px"
+  onclick="showBankConnectionIdentity()"
+>
+  Check Bank Account Identity
+</button>
     <button
       type="button"
       class="bb-outline-pill"
