@@ -1083,18 +1083,69 @@ function reminderResolveCurrentUnpaidOccurrences(bill, referenceDate, historical
   const target = period(referenceDate.toISOString());
   const status = String(bill.status || "").toLowerCase();
   if (bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt || bill.paidInFullAt ||
-      ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status)) {
-    return historical;
-  }
-  const activePayments = payments.filter(payment =>
-    String(payment.status || "active").toLowerCase() !== "voided");
-  const isPaid = occurrence => activePayments.some(payment =>
-    payment.billId === bill.id &&
+      ["archived","cancelled","canceled","paid-in-full","paidinfull"].includes(status)) return historical;
+  const activePayments = payments.filter(payment => String(payment.status || "active").toLowerCase() !== "voided");
+  const isPaid = occurrence => activePayments.some(payment => payment.billId === bill.id &&
     key(payment.paidForDueDate || payment.billSnapshot?.dueDate) === key(occurrence.dueDate));
   const overrides = Array.isArray(bill.occurrenceOverrides) ? bill.occurrenceOverrides : [];
   const overrideFor = occurrence => overrides.find(override =>
     key(override.originalDueDate) === key(occurrence.originalDueDate || occurrence.dueDate));
-  const monthly = bill.recurrence
+  const monthly = bill.recurrence === "Monthly" && !bill.installmentPlanId;
+  const paidMonthlyPeriods = new Set();
+  for (const payment of activePayments.filter(payment => payment.billId === bill.id)) {
+    const date = payment.originalDueDate || payment.billSnapshot?.originalDueDate || payment.paidForDueDate || payment.billSnapshot?.dueDate;
+    const recurrence = payment.billSnapshot?.recurrence || reminderGetBillScheduleAtDate(bill, date).recurrence;
+    if (recurrence === "Monthly") paidMonthlyPeriods.add(period(date));
+  }
+  const pinnedPeriods = new Set(overrides.filter(override => override.cancelled || override.postponedTo)
+    .map(override => period(override.originalDueDate)));
+  const applyFields = occurrence => {
+    const result = {...occurrence};
+    for (const field of ["name","amount","category","paymentMethod","paymentUrl","autopay","notes",
+      "reminderOffsets","paycheckAssignment","dueDay"]) {
+      if (bill[field] !== undefined) result[field] = Array.isArray(bill[field]) ? [...bill[field]] : bill[field];
+    }
+    result.payCycle = (result.paycheckAssignment || "auto") === "auto"
+      ? (new ReminderCalendarDate(result.dueDate).getUTCDate() <= 14 ? "first" : "second")
+      : bill.payCycle || result.payCycle;
+    return result;
+  };
+  const resolved = [];
+  for (const occurrence of historical) {
+    if (occurrence.isArchivedHistory || isPaid(occurrence)) {resolved.push(occurrence); continue;}
+    const result = {...occurrence};
+    if (monthly && occurrence.recurrence === "Monthly") {
+      const origin = occurrence.originalDueDate || occurrence.dueDate;
+      const override = overrideFor(occurrence);
+      if (override?.cancelled || paidMonthlyPeriods.has(period(origin))) continue;
+      if (!override?.postponedTo) {
+        const date = new ReminderCalendarDate(origin);
+        result.dueDate = reminderGetMonthlyOccurrenceDate(bill, date.getUTCFullYear(), date.getUTCMonth());
+      }
+    }
+    if (period(result.dueDate) === target) resolved.push(applyFields(result));
+  }
+  if (monthly && !paidMonthlyPeriods.has(target) && !pinnedPeriods.has(target) &&
+      !resolved.some(occurrence => occurrence.recurrence === "Monthly" && period(occurrence.originalDueDate || occurrence.dueDate) === target)) {
+    const anchor = period(bill.dueDate);
+    if (anchor && target >= anchor) {
+      const date = reminderGetMonthlyOccurrenceDate(bill, referenceDate.getUTCFullYear(), referenceDate.getUTCMonth());
+      const occurrence = reminderCreateBillOccurrence(bill, date);
+      if (occurrence && !isPaid(occurrence)) resolved.push(applyFields(occurrence));
+    }
+  }
+  const seen = new Set();
+  return resolved.filter(occurrence => {
+    const id = occurrence.occurrenceKey || reminderGetOccurrenceKey(bill.id, occurrence.originalDueDate || occurrence.dueDate);
+    if (seen.has(id)) return false; seen.add(id); return true;
+  }).sort((a,b) => new ReminderCalendarDate(a.dueDate) - new ReminderCalendarDate(b.dueDate));
+}
+
+function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords = []) {
+  return reminderResolveCurrentUnpaidOccurrences(bill, referenceDate,
+    reminderGetHistoricalBillOccurrences(bill, referenceDate, paymentRecords), paymentRecords);
+}
+
 function reminderGetLocalDateKey(value) {
   const date = new ReminderCalendarDate(value);
 
@@ -3269,7 +3320,7 @@ async function buildBankNewPaymentAllocationCore({
       .map(day)
       .some(paymentDay =>
         Number.isFinite(paymentDay) &&
-        Math.abs(paymentDay - dueDay) <= 1
+        Math.abs(paymentDay - dueDay) <= 14
       );
   };
 
@@ -3294,6 +3345,7 @@ async function buildBankNewPaymentAllocationCore({
   const candidates = [];
 
   let blocked = false;
+  const blockedDueDays = [];
 
   // Legacy payments without occurrence links must
   // not be silently reassigned or duplicated.
@@ -3486,13 +3538,10 @@ async function buildBankNewPaymentAllocationCore({
           cents(scheduled.amount) !== amount
         ) continue;
 
-        if (
-          forOccurrence(
-            bill.id,
-            occurrence.dueDateKey
-          ).length
-        ) {
-          blocked = true;
+        const existingPayments = forOccurrence(bill.id, occurrence.dueDateKey);
+        if (existingPayments.some(active)) continue;
+        if (existingPayments.length) {
+          blockedDueDays.push(dueDay);
           continue;
         }
 
@@ -3510,18 +3559,21 @@ async function buildBankNewPaymentAllocationCore({
     }
   }
 
-  if (blocked || candidates.length > 1) {
-    return review(
-      "The debit has conflicting or ambiguous " +
-      "unpaid bill candidates."
-    );
+  if (blocked) {
+    return review("The debit has ambiguous installment candidates or reversed history.");
   }
-
   if (!candidates.length) {
-    return { status: "unmatched" };
+    return blockedDueDays.length
+      ? review("A matching occurrence has reversed payment history.")
+      : {status: "unmatched"};
   }
-
-  const allocation = candidates[0];
+  candidates.sort((a, b) => day(a[0].dueDate) - day(b[0].dueDate));
+  const earliestDay = day(candidates[0][0].dueDate);
+  const earliest = candidates.filter(candidate => day(candidate[0].dueDate) === earliestDay);
+  if (earliest.length !== 1 || blockedDueDays.some(blockedDay => blockedDay <= earliestDay)) {
+    return review("The oldest eligible occurrence is ambiguous or has reversed history.");
+  }
+  const allocation = earliest[0];
 
   const claimId = await bankTransactionClaimId(
     itemId,
@@ -3667,367 +3719,140 @@ async function requireBankHousehold(uid, accessToken) {
   return householdId;
 }
 
-async function processBankConnection(env, uid, accessToken) {
+async function processBankConnection(env, uid, accessToken, options = {}) {
+  const dryRun = options.dryRun ?? (env.BANK_MATCHING_MODE !== "live");
   const key = plaidConnectionKey(uid);
-
   let record = await env.NOTIFICATIONSKV.get(key, "json");
-
-  const summary = {
-    uid,
-    matched: 0,
-    reconciled: 0,
-    review: 0,
-    unmatched: 0,
-    alreadyLinked: 0
-  };
-
-  if (
-    !record?.accessToken ||
-    !record.itemId ||
-    !record.selectedAccountId
-  ) {
-    return {
-      ...summary,
-      status: "no-selected-connection"
-    };
+  const summary = {uid, dryRun, matchingWindowDays: 14, matched: 0, reconciled: 0,
+    wouldMatch: 0, wouldReconcile: 0, review: 0, unmatched: 0, alreadyLinked: 0,
+    checked: 0, transactionCount: 0, proposals: []};
+  if (!record?.accessToken || !record.itemId || !record.selectedAccountId) {
+    return {...summary, status: "no-selected-connection"};
   }
-
-  const householdId = await requireBankHousehold(
-    uid,
-    accessToken
-  );
-
-  if (
-    !record.bankHouseholdId ||
-    record.bankHouseholdId !== householdId
-  ) {
-    throw new Error(
-      "Bank connection is not bound to this household. " +
-      "Do not automatically reassign it."
-    );
-  }
-
+  const householdId = await requireBankHousehold(uid, accessToken);
+  if (record.bankHouseholdId !== householdId) throw new Error("Bank connection is not bound to this household.");
   summary.householdId = householdId;
-
-  record = await syncPlaidTransactions(env, record);
-
-  await env.NOTIFICATIONSKV.put(
-    key,
-    JSON.stringify(record)
-  );
-
-  let loaded = await loadHouseholdForBankCommit(
-    householdId,
-    accessToken
-  );
-
-  const zone = validatedReminderTimeZone(
-    loaded.data.settings?.timeZone
-  );
-
-  // Evaluate all available posted outgoing history for the selected account.
-  // Creation dates do not limit matching; occurrence, amount, merchant and claims do.
-  const transactions = (record.transactions || [])
-    .filter(transaction =>
-      transaction.accountId === record.selectedAccountId &&
-      transaction.pending === false &&
-      transaction.type === "debit" &&
-      Boolean(reminderFinancialDateKey(transaction.date, zone))
-    )
-    .sort((a, b) =>
-      String(a.date).localeCompare(String(b.date)) ||
-      String(a.id).localeCompare(String(b.id))
-    );
-
-  const plans = [];
-
-  const outcomePath = id =>
-    `households/${encodeURIComponent(householdId)}/` +
-    `bankReconciliationEvents/${id}`;
-
-  const claimPath = id =>
-    `households/${encodeURIComponent(householdId)}/` +
-    `bankTransactionClaims/${id}`;
-
-  async function saveOutcome(
-    transaction,
-    claimId,
-    status,
-    reason = ""
-  ) {
-    await writeFirestoreDocument(
-      outcomePath(claimId),
-      {
-        transactionId: transaction.id,
-        accountId: transaction.accountId,
-        itemId: record.itemId,
-        amount: Number(transaction.amount),
-        postedDate: transaction.date,
-        status,
-        reason,
-        checkedAt: new Date().toISOString()
-      },
-      accessToken
-    );
+  summary.lastSyncedAt = record.lastSyncedAt || null;
+  if (!dryRun) {
+    record = await syncPlaidTransactions(env, record);
+    await env.NOTIFICATIONSKV.put(key, JSON.stringify(record));
+    summary.lastSyncedAt = record.lastSyncedAt || null;
   }
-
-  // Calculate proposals against the same household snapshot.
-  // This lets us detect transactions competing for a payment.
-  for (const transaction of transactions) {
-    const claimId = await bankTransactionClaimId(
-      record.itemId,
-      transaction
-    );
-
-    const existingClaim = await getFirestoreDocument(
-      claimPath(claimId),
-      accessToken
-    );
-
-    if (existingClaim) {
-      const linked = loaded.data.payments.filter(
-        payment =>
-          (existingClaim.paymentIds || []).includes(
-            payment.id
-          )
-      );
-
-      const changed =
-        Math.round(
-          Number(existingClaim.transactionAmount) * 100
-        ) !==
-        Math.round(Number(transaction.amount) * 100);
-
-      const missing =
-        linked.length !==
-        (existingClaim.paymentIds || []).length;
-
-      if (changed || missing) {
-        summary.review++;
-
-        await saveOutcome(
-          transaction,
-          claimId,
-          "review",
-          changed
-            ? "Claimed bank amount changed."
-            : "Previously claimed payments are missing " +
-              "after a household change or restore."
-        );
-      } else {
-        summary.alreadyLinked++;
-      }
-
-      continue;
-    }
-
-    const plan = await buildBankNewPaymentAllocation({
-      household: loaded.data,
-      transaction,
-      itemId: record.itemId
-    });
-
-    if (
-      plan.status === "allocate" ||
-      plan.status === "reconcile"
-    ) {
-      plans.push({
-        transaction,
-        claimId,
-        plan
-      });
-    } else {
-      if (
-        plan.status === "review" ||
-        plan.status === "already-linked"
-      ) {
-        summary.review++;
-      } else {
-        summary.unmatched++;
-      }
-
-      await saveOutcome(
-        transaction,
-        claimId,
-        plan.status === "already-linked"
-          ? "review"
-          : plan.status,
-        plan.reason ||
-          (
-            plan.status === "already-linked"
-              ? "Payment has a bank link but no atomic claim. " +
-                "Left unchanged."
-              : ""
-          )
-      );
-    }
-  }
-
-  const occurrenceKey = payment =>
-    payment.billId +
-    ":" +
-    reminderPaymentOccurrenceDateKey(payment, zone);
-
-  const allocations = plan =>
-    plan.nextPayments.filter(payment =>
-      plan.allocationPaymentIds.includes(payment.id)
-    );
-
-  const claims = new Map();
-
-  for (const proposal of plans) {
-    for (const payment of allocations(proposal.plan)) {
-      const occurrence = occurrenceKey(payment);
-
-      claims.set(
-        occurrence,
-        (claims.get(occurrence) || 0) + 1
-      );
-    }
-  }
-
-  for (const proposal of plans) {
-    const { transaction, claimId } = proposal;
-
-    const originalKeys = allocations(proposal.plan)
-      .map(occurrenceKey)
-      .sort();
-
-    if (
-      originalKeys.some(
-        occurrence => claims.get(occurrence) !== 1
-      )
-    ) {
-      summary.review++;
-
-      await saveOutcome(
-        transaction,
-        claimId,
-        "review",
-        "Competing transactions claim the same bill occurrence."
-      );
-
-      continue;
-    }
-
-    let committed = false;
-
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const currentHouseholdId =
-        await requireBankHousehold(uid, accessToken);
-
-      if (currentHouseholdId !== householdId) {
-        throw new Error(
-          "Bank household membership changed."
-        );
-      }
-
-      const latestRecord =
-        await env.NOTIFICATIONSKV.get(key, "json");
-
-      if (
-        latestRecord?.itemId !== record.itemId ||
-        latestRecord.selectedAccountId !==
-          record.selectedAccountId ||
-        latestRecord.bankHouseholdId !== householdId
-      ) {
-        throw new Error(
-          "Selected bank connection changed during processing."
-        );
-      }
-
-      if (
-        await getFirestoreDocument(
-          claimPath(claimId),
-          accessToken
-        )
-      ) {
-        summary.alreadyLinked++;
-        committed = true;
-        break;
-      }
-
-      loaded = await loadHouseholdForBankCommit(
-        householdId,
-        accessToken
-      );
-
-      const plan = await buildBankNewPaymentAllocation({
-        household: loaded.data,
-        transaction,
-        itemId: record.itemId
-      });
-
-      if (
-        plan.status !== "allocate" &&
-        plan.status !== "reconcile"
-      ) break;
-
-      const freshKeys = allocations(plan)
-        .map(occurrenceKey)
-        .sort();
-
-      // Never redirect a transaction to different installments
-      // merely because the household changed during processing.
-      if (
-        JSON.stringify(freshKeys) !==
-        JSON.stringify(originalKeys)
-      ) break;
-
-      const result = await commitBankPaymentAllocation({
-        loadedHousehold: loaded,
-        itemId: record.itemId,
-        transaction,
-        nextPayments: plan.nextPayments,
-        activityEntry: plan.activityEntry,
-        allocationPaymentIds: plan.allocationPaymentIds,
-        accessToken
-      });
-
-      if (result.committed) {
-        committed = true;
-
-        if (plan.status === "reconcile") {
-          summary.reconciled++;
-        } else {
-          summary.matched++;
-        }
-
-        await saveOutcome(
-          transaction,
-          claimId,
-          plan.status === "reconcile"
-            ? "reconciled"
-            : "allocated"
-        );
-
-        break;
-      }
-    }
-
-    if (!committed) {
-      summary.review++;
-
-      await saveOutcome(
-        transaction,
-        claimId,
-        "review",
-        "Household changed or allocation could not " +
-        "be committed safely."
-      );
-    }
-  }
-
-  return {
-    ...summary,
-    status: "processed"
+  let loaded = await loadHouseholdForBankCommit(householdId, accessToken);
+  const initialVersion = loaded.updateTime;
+  let virtual = JSON.parse(JSON.stringify(loaded.data));
+  const zone = validatedReminderTimeZone(loaded.data.settings?.timeZone);
+  const effectiveDate = transaction => {
+    const dates = [transaction.date, transaction.authorizedDate]
+      .filter(Boolean).map(value => reminderFinancialDateKey(value, zone)).filter(Boolean).sort();
+    return dates[0] || "";
   };
+  const unique = new Map();
+  for (const transaction of record.transactions || []) {
+    if (transaction.accountId !== record.selectedAccountId || transaction.pending !== false ||
+        transaction.type !== "debit" || !reminderFinancialDateKey(transaction.date, zone)) continue;
+    const id = JSON.stringify([transaction.accountId, transaction.id]);
+    if (unique.has(id) && JSON.stringify(unique.get(id)) !== JSON.stringify(transaction)) {
+      throw new Error("Conflicting duplicate bank transaction records. Processing stopped.");
+    }
+    unique.set(id, transaction);
+  }
+  const transactions = [...unique.values()].sort((a,b) =>
+    effectiveDate(a).localeCompare(effectiveDate(b)) ||
+    String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
+  summary.transactionCount = transactions.length;
+  const claimPath = id => `households/${encodeURIComponent(householdId)}/bankTransactionClaims/${id}`;
+  const outcomePath = id => `households/${encodeURIComponent(householdId)}/bankReconciliationEvents/${id}`;
+  const allocationKeys = plan => plan.nextPayments
+    .filter(payment => plan.allocationPaymentIds.includes(payment.id))
+    .map(payment => payment.billId + ":" + reminderPaymentOccurrenceDateKey(payment, zone)).sort();
+  async function outcome(transaction, claimId, status, reason = "", plan = null) {
+    if (dryRun) {
+      if (summary.proposals.length < 100 && status !== "unmatched") {
+        summary.proposals.push({transactionId: transaction.id, merchant: transaction.merchantName || "",
+          transactionAmount: Number(transaction.amount), postedDate: transaction.date,
+          authorizedDate: transaction.authorizedDate || null, status, reason,
+          allocations: plan ? plan.nextPayments.filter(payment => plan.allocationPaymentIds.includes(payment.id))
+            .map(payment => ({billId: payment.billId, name: payment.billSnapshot?.name || "",
+              dueDate: payment.paidForDueDate, amount: payment.amount})) : []});
+      }
+      return;
+    }
+    await writeFirestoreDocument(outcomePath(claimId), {transactionId: transaction.id,
+      accountId: transaction.accountId, itemId: record.itemId, amount: Number(transaction.amount),
+      postedDate: transaction.date, status, reason, checkedAt: new Date().toISOString()}, accessToken);
+  }
+  for (const transaction of transactions) {
+    summary.checked++;
+    const claimId = await bankTransactionClaimId(record.itemId, transaction);
+    let expectedKeys = null, completed = false;
+    for (let attempt = 0; attempt < (dryRun ? 1 : 3); attempt++) {
+      if (await requireBankHousehold(uid, accessToken) !== householdId) throw new Error("Household ownership changed.");
+      const latestRecord = await env.NOTIFICATIONSKV.get(key, "json");
+      if (latestRecord?.itemId !== record.itemId || latestRecord.selectedAccountId !== record.selectedAccountId ||
+          latestRecord.bankHouseholdId !== householdId) throw new Error("Selected bank connection changed.");
+      if (!dryRun) loaded = await loadHouseholdForBankCommit(householdId, accessToken);
+      const household = dryRun ? virtual : loaded.data;
+      const existingClaim = await getFirestoreDocument(claimPath(claimId), accessToken);
+      if (existingClaim) {
+        const ids = existingClaim.paymentIds || [];
+        const linked = household.payments.filter(payment => ids.includes(payment.id));
+        const changed = Math.round(Number(existingClaim.transactionAmount)*100) !== Math.round(Number(transaction.amount)*100);
+        const invalid = !ids.length || linked.length !== ids.length || linked.some(payment =>
+          payment.bankTransactionId !== transaction.id || payment.bankAccountId !== transaction.accountId ||
+          payment.bankItemId !== record.itemId || String(payment.status || "active").toLowerCase() === "voided");
+        if (changed || invalid) {
+          summary.review++;
+          await outcome(transaction, claimId, "review", "Existing claim amount or linked payment history needs review. Transaction was not reused.");
+        } else summary.alreadyLinked++;
+        completed = true; break;
+      }
+      const plan = await buildBankNewPaymentAllocation({household, transaction, itemId: record.itemId});
+      if (!["allocate", "reconcile"].includes(plan.status)) {
+        if (["review","already-linked"].includes(plan.status)) summary.review++; else summary.unmatched++;
+        await outcome(transaction, claimId, plan.status === "already-linked" ? "review" : plan.status,
+          plan.reason || (plan.status === "already-linked" ? "Bank link exists without a verified atomic claim. Left unchanged." : ""));
+        completed = true; break;
+      }
+      const keys = allocationKeys(plan);
+      if (expectedKeys && JSON.stringify(keys) !== JSON.stringify(expectedKeys)) break;
+      expectedKeys = keys;
+      if (dryRun) {
+        if (plan.status === "reconcile") summary.wouldReconcile++; else summary.wouldMatch++;
+        await outcome(transaction, claimId, plan.status === "reconcile" ? "would-reconcile" : "would-allocate", "", plan);
+        virtual.payments = plan.nextPayments;
+        virtual.activityLog = [...virtual.activityLog, plan.activityEntry];
+        completed = true; break;
+      }
+      const result = await commitBankPaymentAllocation({loadedHousehold: loaded, itemId: record.itemId,
+        transaction, nextPayments: plan.nextPayments, activityEntry: plan.activityEntry,
+        allocationPaymentIds: plan.allocationPaymentIds, accessToken});
+      if (result.committed) {
+        if (plan.status === "reconcile") summary.reconciled++; else summary.matched++;
+        await outcome(transaction, claimId, plan.status === "reconcile" ? "reconciled" : "allocated");
+        completed = true; break;
+      }
+    }
+    if (!completed) {
+      summary.review++;
+      await outcome(transaction, claimId, "review", "Concurrent changes altered the chosen occurrence or prevented a safe commit. No redirected allocation was made.");
+    }
+  }
+  if (dryRun) {
+    const fresh = await loadHouseholdForBankCommit(householdId, accessToken);
+    if (fresh.updateTime !== initialVersion) throw new Error("Household changed during preview. Run preview again.");
+  }
+  return {...summary, proposalsTruncated: dryRun && summary.proposals.length >= 100,
+    status: dryRun ? "preview" : "processed"};
 }
 
 async function runScheduledBankPayments(env) {
   const summary = {
     startedAt: new Date().toISOString(),
     processed: 0,
+    dryRun: env.BANK_MATCHING_MODE !== "live",
+    wouldMatch: 0,
+    wouldReconcile: 0,
     matched: 0,
     reconciled: 0,
     review: 0,
@@ -4071,7 +3896,7 @@ async function runScheduledBankPayments(env) {
     source: "scheduled"
   })
 );
-        if (result.status !== "processed") continue;
+        if (!["processed", "preview"].includes(result.status)) continue;
 
         summary.processed++;
 
@@ -4080,7 +3905,9 @@ async function runScheduledBankPayments(env) {
             "matched",
             "reconciled",
             "review",
-            "unmatched"
+            "unmatched",
+            "wouldMatch",
+            "wouldReconcile"
           ]
         ) {
           summary[field] += result[field];
@@ -4217,6 +4044,7 @@ async function handleBankAutomationRequest(
   if (
     ![
       "/plaid/automation-status",
+      "/plaid/match-preview",
       "/plaid/run-now"
     ].includes(path)
   ) {
@@ -4268,6 +4096,14 @@ async function handleBankAutomationRequest(
         accessToken
       );
 
+    if (path === "/plaid/match-preview") {
+      if (env.PLAID_ENV !== "production") {
+        return json({ok: false, error: "Production configuration required."}, 503, origin);
+      }
+      const result = await processBankConnection(env, uid, accessToken, {dryRun: true});
+      return json({ok: true, ...result}, 200, origin);
+    }
+
     if (path === "/plaid/automation-status") {
       const record =
         await env.NOTIFICATIONSKV.get(
@@ -4307,6 +4143,8 @@ async function handleBankAutomationRequest(
               : null,
 
           scheduleUtc: "00:00 and 12:00",
+          matchingMode: env.BANK_MATCHING_MODE === "live" ? "live" : "preview",
+          matchingWindowDays: 14,
 
           manualRunEnabled:
             env.BANK_RUN_NOW_ENABLED === "true"
