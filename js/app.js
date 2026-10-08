@@ -15181,14 +15181,7 @@ function renderTransactions() {
     >
       Connect Bank
     </button>
-<button
-  type="button"
-  class="bb-outline-pill"
-  style="width:100%;min-height:44px;margin-top:10px"
-  onclick="showBankConnectionIdentity()"
->
-  Check Bank Account Identity
-</button>
+
     <button
       type="button"
       class="bb-outline-pill"
