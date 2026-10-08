@@ -1910,52 +1910,7 @@ async function processUserReminders(env, uid, accessToken, now) {
   };
 
   for (const bill of bills) {
-        if (bill.name === "Test 3") {
-      const occurrence = getOccurrenceForDueDateKey(
-        bill,
-        todayKey,
-        timeZone,
-        payments
-      );
-
-      const reminderId = createReminderId(
-        uid,
-        bill.id,
-        todayKey,
-        0
-      );
-
-      const priorSend = await env.NOTIFICATIONSKV.get(
-        reminderId,
-        "json"
-      );
-
-      console.info("Test 3 reminder diagnostic", {
-        billId: bill.id,
-        householdId,
-        todayKey,
-        timeZone,
-        savedDueDate: bill.dueDate,
-        savedReminderOffsets: bill.reminderOffsets,
-        active: isActiveBill(bill),
-        occurrenceFound: Boolean(occurrence),
-
-        occurrenceReminderOffsets:
-          occurrence?.bill?.reminderOffsets || [],
-
-        occurrencePaid: occurrence
-          ? isOccurrencePaid(
-              bill,
-              occurrence,
-              payments,
-              timeZone
-            )
-          : null,
-
-        sentMarkerFound: Boolean(priorSend?.sentAt),
-        priorSentAt: priorSend?.sentAt || null
-      });
-    }
+        
     if (!isActiveBill(bill) || !bill.id || !bill.name) {
       continue;
     }
