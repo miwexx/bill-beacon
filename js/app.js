@@ -192,7 +192,7 @@ const Store = {
   const previousSchedule = buildScheduleSnapshot(previousBill);
   const updatedSchedule = buildScheduleSnapshot(updatedBill);
 
-  // A display-name correction is not a new financial schedule version.
+  // A name correction alone is not a new financial schedule version.
   const {name: previousDisplayName, ...previousScheduleFields} = previousSchedule;
   const {name: updatedDisplayName, ...updatedScheduleFields} = updatedSchedule;
   const scheduleChanged =
@@ -1345,11 +1345,17 @@ function getVersionedBillOccurrences(bill, referenceDate) {
       const historicalOnly = bill.archived || bill.archivedAt || bill.cancelled ||
         bill.cancelledAt || bill.paidInFullAt || occurrence.isArchivedHistory ||
         ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status);
-      const paid = isOccurrencePaid(occurrence, new Date(occurrence.dueDate));
-      if (historicalOnly || paid || typeof bill.name !== "string" || !bill.name.trim()) {
+      if (historicalOnly || isOccurrencePaid(occurrence, new Date(occurrence.dueDate))) {
         return occurrence;
       }
-      return {...occurrence, name: bill.name};
+      const result = {...occurrence};
+      if (typeof bill.name === "string" && bill.name.trim()) result.name = bill.name;
+      const currentAmount = Number(bill.amount);
+      if (bill.amount !== null && bill.amount !== undefined && bill.amount !== "" &&
+          Number.isFinite(currentAmount) && currentAmount >= 0) {
+        result.amount = currentAmount;
+      }
+      return result;
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
@@ -3520,6 +3526,7 @@ function openPaycheckPlanSheet(paycheckKey) {
   const container = document.createElement("div");
 
   container.id = "paycheckPlanContainer";
+  container.dataset.paycheckKey = paycheckKey;
 
   container.innerHTML = `
     <div
@@ -6487,6 +6494,7 @@ function openDashboardStatusSheet(status) {
 
   const container = document.createElement("div");
   container.id = "dashboardStatusContainer";
+  container.dataset.billStatus = status;
 
   container.innerHTML = `
     <div
@@ -12901,6 +12909,26 @@ function savePaymentLinkPopup(billId) {
   closePaymentLinkPopup();
   render();
 }
+function refreshOpenBillSummaryPanels() {
+  const statusPanel = document.getElementById("dashboardStatusContainer");
+  const paycheckPanel = document.getElementById("paycheckPlanContainer");
+  const panels = [
+    [statusPanel, "billStatus", "dashboardStatusContainer", openDashboardStatusSheet],
+    [paycheckPanel, "paycheckKey", "paycheckPlanContainer", openPaycheckPlanSheet]
+  ];
+  for (const [panel, key, id, reopen] of panels) {
+    const value = panel?.dataset?.[key];
+    if (!panel || !value) continue;
+    const top = panel.querySelector(".sheet-body")?.scrollTop || 0;
+    panel.remove();
+    reopen(value);
+    requestAnimationFrame(() => {
+      const body = document.getElementById(id)?.querySelector(".sheet-body");
+      if (body) body.scrollTop = top;
+    });
+  }
+}
+
 function saveBill() {
   const name = document.getElementById("billName")?.value.trim();
   const amount = parseFloat(
@@ -13225,6 +13253,7 @@ function saveBill() {
 
     closeBillForm();
     render();
+  refreshOpenBillSummaryPanels();
     return;
   }
 
@@ -13283,6 +13312,7 @@ function saveBill() {
 
   closeBillForm();
   render();
+  refreshOpenBillSummaryPanels();
 }
 
 // ====================================

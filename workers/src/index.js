@@ -1082,9 +1082,15 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
         String(payment.status || "active").toLowerCase() !== "voided" &&
         reminderGetLocalDateKey(payment.paidForDueDate || payment.billSnapshot?.dueDate) === dueKey
       );
-      if (!isActiveBill(bill) || occurrence.isArchivedHistory || paid ||
-          typeof bill.name !== "string" || !bill.name.trim()) return occurrence;
-      return {...occurrence, name: bill.name};
+      if (!isActiveBill(bill) || occurrence.isArchivedHistory || paid) return occurrence;
+      const result = {...occurrence};
+      if (typeof bill.name === "string" && bill.name.trim()) result.name = bill.name;
+      const currentAmount = Number(bill.amount);
+      if (bill.amount !== null && bill.amount !== undefined && bill.amount !== "" &&
+          Number.isFinite(currentAmount) && currentAmount >= 0) {
+        result.amount = currentAmount;
+      }
+      return result;
     })
     .sort((a, b) => new ReminderCalendarDate(a.dueDate) - new ReminderCalendarDate(b.dueDate));
 }
