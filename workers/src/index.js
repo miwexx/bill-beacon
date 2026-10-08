@@ -2106,25 +2106,38 @@ async function runScheduledBillReminders(env) {
     );
   }
 }
-// Plaid Sandbox: private connection and transaction storage.
-function plaidSandboxKey(uid) {
-  return `plaid:sandbox:user:${uid}`;
+// Plaid Production: private connection and transaction storage.
+function plaidConnectionKey(uid) {
+  return `plaid:production:user:${uid}`;
 }
-
-async function plaidSandboxRequest(env, endpoint, payload = {}) {
-  if (env.PLAID_ENV !== "sandbox") {
-    throw new Error("This integration is currently Sandbox-only.");
+async function plaidRequest(env, endpoint, payload = {}) {
+  if (env.PLAID_ENV !== "production") {
+    throw new Error("Plaid Production configuration is required.");
   }
 
   if (!env.PLAID_CLIENT_ID || !env.PLAID_SECRET) {
-    throw new Error("Plaid credentials are missing.");
+    throw new Error("Plaid credentials are missing in Cloudflare.");
+  }
+
+  const allowedEndpoints = new Set([
+    "/link/token/create",
+    "/item/public_token/exchange",
+    "/accounts/get",
+    "/transactions/sync"
+  ]);
+
+  if (!allowedEndpoints.has(endpoint)) {
+    throw new Error("Unsupported Plaid endpoint.");
   }
 
   const response = await fetch(
-    `https://sandbox.plaid.com${endpoint}`,
+    `https://production.plaid.com${endpoint}`,
     {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      redirect: "error",
+      headers: {
+        "content-type": "application/json"
+      },
       body: JSON.stringify({
         ...payload,
         client_id: env.PLAID_CLIENT_ID,
@@ -2133,51 +2146,57 @@ async function plaidSandboxRequest(env, endpoint, payload = {}) {
     }
   );
 
-  const result = await response.json();
+  const result = await response.json().catch(() => null);
 
-  if (!response.ok) {
-    const error = new Error(
-      result.error_message || "Plaid request failed."
-    );
-    error.code = result.error_code;
+  if (!response.ok || !result) {
+    const error = new Error("The bank service request failed.");
+    error.code = result?.error_code || "PLAID_REQUEST_FAILED";
     throw error;
   }
 
   return result;
 }
-
-function safePlaidSandboxConnection(record) {
+function safePlaidConnection(record) {
   return {
-    environment: "sandbox",
+    environment: "production",
     connected: Boolean(record),
     accounts: record?.accounts || [],
     selectedAccountId: record?.selectedAccountId || null,
     lastSyncedAt: record?.lastSyncedAt || null,
     transactions: (record?.transactions || []).filter(
-      (transaction) =>
+      transaction =>
         transaction.accountId === record?.selectedAccountId
     )
   };
 }
-
-function normalizePlaidSandboxTransaction(transaction) {
+function normalizePlaidTransaction(transaction) {
   const merchantName =
-    transaction.merchant_name || transaction.name || "Transaction";
+    transaction.merchant_name ||
+    transaction.name ||
+    "Transaction";
 
-  const signedAmount = Number(transaction.amount || 0);
+  const signedAmount = Number(transaction.amount);
+
+  if (!Number.isFinite(signedAmount)) {
+    throw new Error("The bank returned an invalid transaction amount.");
+  }
 
   return {
     id: transaction.transaction_id,
     accountId: transaction.account_id,
     merchantName,
+    originalDescription: transaction.name || "",
     merchantInitials: merchantName
       .split(/\s+/)
       .filter(Boolean)
       .slice(0, 2)
-      .map((word) => word.charAt(0).toUpperCase())
+      .map(word => word.charAt(0).toUpperCase())
       .join(""),
     amount: Math.abs(signedAmount),
     date: `${transaction.date}T12:00:00`,
+    authorizedDate: transaction.authorized_date
+      ? `${transaction.authorized_date}T12:00:00`
+      : null,
     pending: Boolean(transaction.pending),
     pendingTransactionId:
       transaction.pending_transaction_id || null,
@@ -2186,11 +2205,10 @@ function normalizePlaidSandboxTransaction(transaction) {
       transaction.personal_finance_category?.primary ||
       "Uncategorized",
     iconColor: "#7c5cff",
-    source: "plaid-sandbox"
+    source: "plaid-production"
   };
 }
-
-async function syncPlaidSandboxTransactions(env, record) {
+async function syncPlaidTransactions(env, record) {
   const originalCursor = record.cursor || "";
   let lastError;
 
@@ -2208,7 +2226,7 @@ async function syncPlaidSandboxTransactions(env, record) {
 
     try {
       while (hasMore) {
-        const result = await plaidSandboxRequest(
+        const result = await plaidRequest(
           env,
           "/transactions/sync",
           {
@@ -2224,7 +2242,7 @@ async function syncPlaidSandboxTransactions(env, record) {
         ]) {
           transactions.set(
             transaction.transaction_id,
-            normalizePlaidSandboxTransaction(transaction)
+            normalizePlaidTransaction(transaction)
           );
         }
 
@@ -2256,6 +2274,2044 @@ async function syncPlaidSandboxTransactions(env, record) {
 
   throw lastError;
 }
+async function loadHouseholdForBankCommit(
+  householdId,
+  accessToken
+) {
+  if (
+    typeof householdId !== "string" ||
+    !householdId.trim() ||
+    householdId.includes("/")
+  ) {
+    throw new Error(
+      "A valid household ID is required."
+    );
+  }
+
+  const response = await fetch(
+    `${FIRESTORE_DOCUMENT_BASE}/households/` +
+    encodeURIComponent(householdId),
+    {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    }
+  );
+
+  if (response.status === 404) {
+    throw new Error("Household not found.");
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      "Could not load household for bank processing " +
+      `(${response.status}).`
+    );
+  }
+
+  const document = await response.json();
+
+  if (!document.name || !document.updateTime) {
+    throw new Error(
+      "Household version metadata is missing."
+    );
+  }
+
+  const data = firestoreFieldsToJs(
+    document.fields || {}
+  );
+
+  if (
+    !Array.isArray(data.payments) ||
+    !Array.isArray(data.activityLog)
+  ) {
+    throw new Error(
+      "Household payment or activity data needs " +
+      "migration before bank processing."
+    );
+  }
+
+  return {
+    householdId,
+    documentName: document.name,
+    updateTime: document.updateTime,
+    data
+  };
+}
+
+async function bankTransactionClaimId(
+  itemId,
+  transaction
+) {
+  if (
+    typeof itemId !== "string" ||
+    !itemId ||
+    typeof transaction?.id !== "string" ||
+    !transaction.id ||
+    typeof transaction.accountId !== "string" ||
+    !transaction.accountId
+  ) {
+    throw new Error(
+      "Bank transaction identity is incomplete."
+    );
+  }
+
+  return sha256Hex(
+    JSON.stringify([
+      "production",
+      itemId,
+      transaction.accountId,
+      transaction.id
+    ])
+  );
+}
+
+async function commitBankPaymentAllocation({
+  loadedHousehold,
+  itemId,
+  transaction,
+  nextPayments,
+  activityEntry,
+  allocationPaymentIds,
+  accessToken
+}) {
+  if (
+    !loadedHousehold?.documentName ||
+    !loadedHousehold.updateTime
+  ) {
+    throw new Error(
+      "Load the current household before " +
+      "committing payments."
+    );
+  }
+
+  if (
+    transaction?.pending !== false ||
+    transaction.type !== "debit" ||
+    !Number.isFinite(Number(transaction.amount)) ||
+    Number(transaction.amount) <= 0
+  ) {
+    throw new Error(
+      "Only a posted outgoing bank transaction " +
+      "can be allocated."
+    );
+  }
+
+  if (
+    !Array.isArray(nextPayments) ||
+    !Array.isArray(allocationPaymentIds) ||
+    !allocationPaymentIds.length ||
+    !activityEntry ||
+    typeof activityEntry.id !== "string"
+  ) {
+    throw new Error(
+      "Payment allocation or activity entry " +
+      "is incomplete."
+    );
+  }
+
+  const ids = new Set(allocationPaymentIds);
+
+  if (
+    ids.size !== allocationPaymentIds.length ||
+    nextPayments.some(payment =>
+      !payment ||
+      typeof payment.id !== "string"
+    ) ||
+    new Set(
+      nextPayments.map(payment => payment.id)
+    ).size !== nextPayments.length
+  ) {
+    throw new Error(
+      "Payment IDs must be present and unique."
+    );
+  }
+
+  const allocated = allocationPaymentIds.map(
+    id => nextPayments.find(
+      payment => payment.id === id
+    )
+  );
+
+  if (
+    allocated.some(payment =>
+      !payment ||
+      String(
+        payment.status || "active"
+      ).toLowerCase() === "voided" ||
+      payment.bankTransactionId !== transaction.id ||
+      payment.bankAccountId !== transaction.accountId ||
+      !payment.paidForDueDate ||
+      !Number.isFinite(Number(payment.amount)) ||
+      Number(payment.amount) <= 0
+    )
+  ) {
+    throw new Error(
+      "Allocated payments must be active, " +
+      "occurrence-linked, and linked to " +
+      "this transaction."
+    );
+  }
+
+  const revision = Number(
+    loadedHousehold.data.syncRevision || 0
+  );
+
+  if (
+    !Number.isSafeInteger(revision) ||
+    revision < 0 ||
+    revision >= Number.MAX_SAFE_INTEGER
+  ) {
+    throw new Error(
+      "Invalid household sync revision."
+    );
+  }
+
+  const claimId = await bankTransactionClaimId(
+    itemId,
+    transaction
+  );
+
+  const claimName =
+    `${loadedHousehold.documentName}/` +
+    `bankTransactionClaims/${claimId}`;
+
+  const now = new Date().toISOString();
+
+  const activityLog = [
+    ...loadedHousehold.data.activityLog,
+    activityEntry
+  ];
+
+  const updates = {
+    payments: nextPayments,
+    activityLog,
+    updatedAt: now,
+    syncRevision: revision + 1,
+    syncWriteId: `bank:${crypto.randomUUID()}`
+  };
+
+  const claim = {
+    environment: "production",
+    itemId,
+    transactionId: transaction.id,
+    accountId: transaction.accountId,
+    transactionAmount: Number(transaction.amount),
+    postedDate: transaction.date,
+    paymentIds: allocationPaymentIds,
+    createdAt: now,
+    status: "allocated"
+  };
+
+  const response = await fetch(
+    `${FIRESTORE_DOCUMENT_BASE}:commit`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        writes: [
+          {
+            update: {
+              name: claimName,
+              fields: jsObjectToFirestoreFields(
+                claim
+              )
+            },
+            currentDocument: {
+              exists: false
+            }
+          },
+          {
+            update: {
+              name: loadedHousehold.documentName,
+              fields: jsObjectToFirestoreFields(
+                updates
+              )
+            },
+            updateMask: {
+              fieldPaths: Object.keys(updates)
+            },
+            currentDocument: {
+              updateTime:
+                loadedHousehold.updateTime
+            }
+          }
+        ]
+      })
+    }
+  );
+
+  const result = await response.json().catch(
+    () => null
+  );
+
+  if (!response.ok) {
+    const code = result?.error?.status;
+
+    if (
+      [
+        "ALREADY_EXISTS",
+        "FAILED_PRECONDITION",
+        "ABORTED"
+      ].includes(code)
+    ) {
+      return {
+        committed: false,
+        reason: "reload-and-recheck",
+        claimId
+      };
+    }
+
+    throw new Error(
+      `Bank payment commit failed (${response.status}).`
+    );
+  }
+
+  if (!result?.commitTime) {
+    throw new Error(
+      "Bank commit confirmation is missing. " +
+      "Reload the claim before retrying."
+    );
+  }
+
+  return {
+    committed: true,
+    claimId,
+    commitTime: result.commitTime
+  };
+}
+async function buildBankManualReconciliation({
+  household,
+  transaction,
+  itemId
+}) {
+  const review = reason => ({
+    status: "review",
+    reason
+  });
+
+  const cents = value => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) return NaN;
+
+    const amount = Number(value);
+
+    return Number.isFinite(amount)
+      ? Math.round(amount * 100)
+      : NaN;
+  };
+
+  const text = value =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+
+  const provider = value => {
+    const name = text(value);
+
+    const aliases = {
+      "zip pay in 4": "zip",
+      "zip pay": "zip",
+      "zip co": "zip",
+      "paypal pay later": "paypal",
+      "paypal pay in 4": "paypal"
+    };
+
+    return aliases[name] || name;
+  };
+
+  const zone = validatedReminderTimeZone(
+    household?.settings?.timeZone
+  );
+
+  const day = value => {
+    if (!value) return NaN;
+
+    const key = reminderFinancialDateKey(
+      value,
+      zone
+    );
+
+    const date = key
+      ? utcMiddayFromDateKey(key)
+      : null;
+
+    return date
+      ? Math.floor(date.getTime() / 86400000)
+      : NaN;
+  };
+
+  if (
+    transaction?.pending !== false ||
+    transaction.type !== "debit"
+  ) {
+    return { status: "ignored" };
+  }
+
+  const bankAmount = cents(transaction.amount);
+
+  if (
+    !Number.isSafeInteger(bankAmount) ||
+    bankAmount <= 0
+  ) {
+    return review("Invalid bank amount.");
+  }
+
+  if (
+    !Array.isArray(household?.payments) ||
+    !Array.isArray(household?.bills)
+  ) {
+    return review(
+      "Household payment or bill data is missing."
+    );
+  }
+
+  const payments = household.payments;
+
+  const billById = new Map(
+    [
+      ...(household.archivedBills || []),
+      ...household.bills
+    ].map(bill => [bill.id, bill])
+  );
+
+  const accountId = transaction.accountId;
+
+  if (!accountId || !transaction.id) {
+    return review(
+      "Bank identity is incomplete."
+    );
+  }
+
+  if (
+    payments.some(payment =>
+      payment.bankTransactionId === transaction.id &&
+      (
+        !payment.bankAccountId ||
+        payment.bankAccountId === accountId
+      )
+    )
+  ) {
+    return { status: "already-linked" };
+  }
+
+  const description =
+    ` ${text(
+      transaction.merchantName ||
+      transaction.originalDescription
+    )} `;
+
+  const postedDay = day(transaction.date);
+  const authorizedDay = day(
+    transaction.authorizedDate
+  );
+
+  if (!Number.isFinite(postedDay)) {
+    return review(
+      "Bank posting date is missing."
+    );
+  }
+
+  const groups = new Map();
+
+  for (const payment of payments) {
+    const bill = billById.get(payment.billId);
+    const snapshot = payment.billSnapshot || {};
+
+    const subject =
+      provider(
+        bill?.installmentProvider ||
+        snapshot.installmentProvider
+      ) ||
+      text(bill?.name || snapshot.name);
+
+    if (
+      !subject ||
+      !description.includes(` ${subject} `)
+    ) continue;
+
+    if (
+      payment.bankAccountId &&
+      payment.bankAccountId !== accountId
+    ) continue;
+
+    if (
+      payment.bankTransactionId ||
+      payment.bankMatchKey
+    ) continue;
+
+    const paidDay = day(payment.paidDate);
+
+    if (!Number.isFinite(paidDay)) {
+      return review(
+        "A matching manual payment has no valid payment date."
+      );
+    }
+
+    const method = text(
+      bill?.paymentMethod ||
+      snapshot.paymentMethod
+    );
+
+    const transfer =
+      /bank transfer|ach|echeck|e check/.test(method);
+
+    const near =
+      (
+        Number.isFinite(authorizedDay) &&
+        Math.abs(authorizedDay - paidDay) <= 2
+      ) ||
+      (
+        postedDay - paidDay >= -1 &&
+        postedDay - paidDay <=
+          (transfer ? 7 : 3)
+      );
+
+    if (!near) continue;
+
+    if (
+      String(
+        payment.status || "active"
+      ).toLowerCase() === "voided"
+    ) {
+      return review(
+        "A nearby manual payment was reversed."
+      );
+    }
+
+    if (
+      /sandbox|test/i.test(
+        String(payment.source || "") +
+        " " +
+        String(payment.bankMatchSource || "")
+      )
+    ) {
+      return review(
+        "Nearby test payment history must not be linked to a real debit."
+      );
+    }
+
+    const occurrence =
+      reminderPaymentOccurrenceDateKey(
+        payment,
+        zone
+      );
+
+    const amount = cents(payment.amount);
+
+    if (
+      !occurrence ||
+      !Number.isSafeInteger(amount) ||
+      amount <= 0 ||
+      !payment.id
+    ) {
+      return review(
+        "A matching manual payment is missing its occurrence, ID, or amount."
+      );
+    }
+
+    // Only combine the same provider/merchant
+    // and the same recorded local payment day.
+    const key = `${subject}:${paidDay}`;
+
+    if (!groups.has(key)) {
+      groups.set(key, []);
+    }
+
+    groups.get(key).push({
+      payment,
+      amount,
+      occurrence
+    });
+  }
+
+  if (!groups.size) {
+    return { status: "no-manual-match" };
+  }
+
+  let bestDifference = Infinity;
+  const candidates = [];
+
+  for (const records of groups.values()) {
+    if (records.length > 16) {
+      return review(
+        "Too many nearby payments to identify a safe group."
+      );
+    }
+
+    for (
+      let mask = 1;
+      mask < 2 ** records.length;
+      mask++
+    ) {
+      const selected = records.filter(
+        (_, index) =>
+          (mask & (1 << index)) !== 0
+      );
+
+      const total = selected.reduce(
+        (sum, record) => sum + record.amount,
+        0
+      );
+
+      if (!Number.isSafeInteger(total)) {
+        return review(
+          "Manual payment total is invalid."
+        );
+      }
+
+      const difference = Math.abs(
+        total - bankAmount
+      );
+
+      if (
+        difference > 200 ||
+        difference > bestDifference
+      ) continue;
+
+      const occurrenceKeys = selected.map(
+        record =>
+          `${record.payment.billId}:` +
+          record.occurrence
+      );
+
+      if (
+        new Set(occurrenceKeys).size !==
+        selected.length
+      ) {
+        return review(
+          "Duplicate manual payments exist for an occurrence."
+        );
+      }
+
+      if (difference < bestDifference) {
+        bestDifference = difference;
+        candidates.length = 0;
+      }
+
+      candidates.push({
+        selected,
+        total
+      });
+    }
+  }
+
+  if (candidates.length !== 1) {
+    return review(
+      candidates.length
+        ? "Several manual payment groups are equally close."
+        : "Nearby manual payments do not explain this debit."
+    );
+  }
+
+  const candidate = candidates[0];
+
+  const claimId = await bankTransactionClaimId(
+    itemId,
+    transaction
+  );
+
+  const groupId =
+    `plaid-production:${accountId}:` +
+    transaction.id;
+
+  const selectedIds = new Set(
+    candidate.selected.map(
+      record => record.payment.id
+    )
+  );
+
+  const now = new Date().toISOString();
+
+  const difference =
+    (bankAmount - candidate.total) / 100;
+
+  const nextPayments = payments.map(payment =>
+    selectedIds.has(payment.id)
+      ? {
+          ...payment,
+
+          paidForDueDate:
+            payment.paidForDueDate ||
+            payment.billSnapshot.dueDate,
+
+          bankTransactionId: transaction.id,
+          bankAccountId: accountId,
+          bankItemId: itemId,
+          bankMatchKey: groupId,
+          bankReconciliationGroupId: groupId,
+
+          bankMatchSource:
+            "plaid-production-reconciliation",
+
+          bankPostedDate: transaction.date,
+          bankAuthorizedDate:
+            transaction.authorizedDate || null,
+
+          bankMatchedAt: now,
+          bankAllocatedAmount:
+            Number(payment.amount),
+
+          bankTransactionAmount:
+            bankAmount / 100,
+
+          bankReconciliationDifference:
+            difference
+        }
+      : { ...payment }
+  );
+
+  const allocations = candidate.selected.map(
+    record => ({
+      paymentId: record.payment.id,
+      billId: record.payment.billId,
+
+      dueDate:
+        record.payment.paidForDueDate ||
+        record.payment.billSnapshot?.dueDate,
+
+      amount: record.amount / 100
+    })
+  );
+
+  const activityEntry = {
+    id: `bank-reconciled:${claimId}`,
+    action: "bank_payment_reconciled",
+    entityType: "bill",
+    entityId: allocations[0].billId,
+    title: "Manual payments reconciled",
+
+    detail:
+      `${transaction.merchantName || "Bank debit"} · ` +
+      `${formatAmount(transaction.amount)} · ` +
+      `${allocations.length} payment(s) linked`,
+
+    timestamp: now,
+    before: null,
+
+    after: {
+      bankMatchKey: groupId,
+      transactionAmount: bankAmount / 100,
+      recordedPaymentTotal:
+        candidate.total / 100,
+
+      reconciliationDifference: difference,
+      allocations
+    }
+  };
+
+  return {
+    status: "reconcile",
+    nextPayments,
+    activityEntry,
+    allocationPaymentIds: [...selectedIds]
+  };
+}
+async function buildBankNewPaymentAllocationCore({
+  household,
+  transaction,
+  itemId
+}) {
+  // Always reconcile existing manual payments first.
+  const manual = await buildBankManualReconciliation({
+    household,
+    transaction,
+    itemId
+  });
+
+  if (manual.status !== "no-manual-match") {
+    return manual;
+  }
+
+  const review = reason => ({
+    status: "review",
+    reason
+  });
+
+  const zone = validatedReminderTimeZone(
+    household.settings?.timeZone
+  );
+
+  const cents = value => {
+    if (
+      value === null ||
+      value === undefined ||
+      value === ""
+    ) return NaN;
+
+    const amount = Number(value);
+
+    return Number.isFinite(amount)
+      ? Math.round(amount * 100)
+      : NaN;
+  };
+
+  const text = value =>
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+
+  const provider = value => {
+    const name = text(value);
+
+    const aliases = {
+      "zip pay in 4": "zip",
+      "zip pay": "zip",
+      "zip co": "zip",
+      "paypal pay later": "paypal",
+      "paypal pay in 4": "paypal"
+    };
+
+    return aliases[name] || name;
+  };
+
+  const matches = name => {
+    const normalized = text(name);
+
+    const description =
+      ` ${text(
+        transaction.merchantName ||
+        transaction.originalDescription
+      )} `;
+
+    return (
+      Boolean(normalized) &&
+      description.includes(` ${normalized} `)
+    );
+  };
+
+  const dateKey = value =>
+    reminderFinancialDateKey(value, zone);
+
+  const day = value => {
+    const key = value ? dateKey(value) : "";
+
+    const date = key
+      ? utcMiddayFromDateKey(key)
+      : null;
+
+    return date
+      ? Math.floor(date.getTime() / 86400000)
+      : NaN;
+  };
+
+  const payments = household.payments;
+
+  const active = payment =>
+    String(
+      payment.status || "active"
+    ).toLowerCase() !== "voided";
+
+  const forOccurrence = (billId, dueKey) =>
+    payments.filter(payment =>
+      payment.billId === billId &&
+      reminderPaymentOccurrenceDateKey(
+        payment,
+        zone
+      ) === dueKey
+    );
+
+  const bills = household.bills.filter(isActiveBill);
+  const amount = cents(transaction.amount);
+  const candidates = [];
+
+  let blocked = false;
+
+  // Legacy payments without occurrence links must
+  // not be silently reassigned or duplicated.
+  for (const bill of bills) {
+    const subject = bill.installmentPlanId
+      ? provider(bill.installmentProvider)
+      : bill.name;
+
+    if (!matches(subject)) continue;
+
+    if (
+      payments.some(payment =>
+        payment.billId === bill.id &&
+        !reminderPaymentOccurrenceDateKey(
+          payment,
+          zone
+        )
+      )
+    ) {
+      return review(
+        "A matching bill has payment history " +
+        "without a confirmed occurrence."
+      );
+    }
+  }
+
+  // Payment plans: build a consecutive prefix of
+  // the next unpaid installments.
+  const providers = [
+    ...new Set(
+      bills
+        .filter(bill => bill.installmentPlanId)
+        .map(bill =>
+          provider(bill.installmentProvider)
+        )
+        .filter(Boolean)
+    )
+  ];
+
+  for (const name of providers) {
+    if (!matches(name)) continue;
+
+    const queue = bills
+      .filter(bill =>
+        bill.installmentPlanId &&
+        provider(bill.installmentProvider) === name
+      )
+      .filter(bill =>
+        !forOccurrence(
+          bill.id,
+          dateKey(bill.dueDate)
+        ).some(active)
+      );
+
+    if (!queue.length) continue;
+
+    if (
+      new Set(
+        queue.map(bill => bill.installmentPlanId)
+      ).size !== 1
+    ) {
+      blocked = true;
+      continue;
+    }
+
+    if (
+      queue.some(bill =>
+        !Number.isFinite(day(bill.dueDate)) ||
+        !Number.isSafeInteger(cents(bill.amount)) ||
+        cents(bill.amount) <= 0
+      )
+    ) {
+      blocked = true;
+      continue;
+    }
+
+    queue.sort((a, b) =>
+      day(a.dueDate) - day(b.dueDate) ||
+      Number(a.installmentNumber || 0) -
+      Number(b.installmentNumber || 0)
+    );
+
+    let total = 0;
+    const allocation = [];
+
+    for (
+      let index = 0;
+      index < queue.length;
+      index++
+    ) {
+      const bill = queue[index];
+
+      // A reversed occurrence blocks the queue;
+      // do not skip it to find a convenient total.
+      if (
+        forOccurrence(
+          bill.id,
+          dateKey(bill.dueDate)
+        ).length
+      ) {
+        blocked = true;
+        break;
+      }
+
+      total += cents(bill.amount);
+
+      if (!Number.isSafeInteger(total)) {
+        blocked = true;
+        break;
+      }
+
+      allocation.push({
+        bill,
+        dueDate: bill.dueDate,
+        originalDueDate: bill.dueDate,
+        amount: cents(bill.amount)
+      });
+
+      if (total > amount) break;
+
+      if (total === amount) {
+        const next = queue[index + 1];
+
+        if (
+          next &&
+          day(next.dueDate) === day(bill.dueDate)
+        ) {
+          blocked = true;
+        } else {
+          candidates.push(allocation);
+        }
+
+        break;
+      }
+    }
+  }
+
+  // Ordinary bills: use the existing calendar
+  // occurrence logic, not just the bill template.
+  const postedDay = day(transaction.date);
+  const authorizedDay = day(
+    transaction.authorizedDate
+  );
+
+  const postedKey = dateKey(transaction.date);
+
+  const [year, month] = postedKey
+    .split("-")
+    .map(Number);
+
+  const seen = new Set();
+
+  for (
+    const bill of bills.filter(
+      bill => !bill.installmentPlanId
+    )
+  ) {
+    for (const offset of [-1, 0, 1]) {
+      const reference = new Date(
+        Date.UTC(
+          year,
+          month - 1 + offset,
+          1,
+          12
+        )
+      );
+
+      const key = reference
+        .toISOString()
+        .slice(0, 10);
+
+      const occurrences =
+        getReminderOccurrencesForMonth(
+          bill,
+          key,
+          zone,
+          payments
+        );
+
+      for (const occurrence of occurrences) {
+        const scheduled = occurrence.bill;
+
+        if (
+          !isActiveBill(scheduled) ||
+          !matches(scheduled.name)
+        ) continue;
+
+        const occurrenceKey =
+          bill.id + ":" + occurrence.dueDateKey;
+
+        if (seen.has(occurrenceKey)) continue;
+        seen.add(occurrenceKey);
+
+        const dueDay = day(
+          occurrence.dueDateKey
+        );
+
+        const transfer =
+          /bank transfer|ach|echeck|e check/.test(
+            text(scheduled.paymentMethod)
+          );
+
+        const near =
+          (
+            Number.isFinite(authorizedDay) &&
+            Math.abs(authorizedDay - dueDay) <= 2
+          ) ||
+          (
+            postedDay - dueDay >= -2 &&
+            postedDay - dueDay <=
+              (transfer ? 7 : 3)
+          );
+
+        if (
+          !near ||
+          cents(scheduled.amount) !== amount
+        ) continue;
+
+        if (
+          forOccurrence(
+            bill.id,
+            occurrence.dueDateKey
+          ).length
+        ) {
+          blocked = true;
+          continue;
+        }
+
+        candidates.push([
+          {
+            bill: scheduled,
+            dueDate: scheduled.dueDate,
+            originalDueDate:
+              scheduled.originalDueDate ||
+              scheduled.dueDate,
+            amount
+          }
+        ]);
+      }
+    }
+  }
+
+  if (blocked || candidates.length > 1) {
+    return review(
+      "The debit has conflicting or ambiguous " +
+      "unpaid bill candidates."
+    );
+  }
+
+  if (!candidates.length) {
+    return { status: "unmatched" };
+  }
+
+  const allocation = candidates[0];
+
+  const claimId = await bankTransactionClaimId(
+    itemId,
+    transaction
+  );
+
+  const groupId =
+    `plaid-production:${transaction.accountId}:` +
+    transaction.id;
+
+  const now = new Date().toISOString();
+
+  const records = allocation.map(
+    (item, index) => {
+      const bill = item.bill;
+
+      const payment = {
+        id: `bank:${claimId}:${index}`,
+        billId: bill.id,
+        amount: item.amount / 100,
+        paidDate: transaction.date,
+        paidForDueDate: item.dueDate,
+        originalDueDate: item.originalDueDate,
+        status: "active",
+        voidedAt: null,
+
+        source: "plaid-production-auto",
+        expectedAmountAtMatch: item.amount / 100,
+
+        bankTransactionId: transaction.id,
+        bankAccountId: transaction.accountId,
+        bankItemId: itemId,
+        bankMatchKey: groupId,
+        bankReconciliationGroupId: groupId,
+        bankMatchSource: "plaid-production-auto",
+
+        bankPostedDate: transaction.date,
+        bankAuthorizedDate:
+          transaction.authorizedDate || null,
+
+        bankMatchedAt: now,
+        bankAllocatedAmount: item.amount / 100,
+        bankTransactionAmount: amount / 100,
+        bankReconciliationDifference: 0
+      };
+
+      payment.billSnapshot = {
+        id: bill.id,
+        name: bill.name,
+        amount: item.amount / 100,
+        dueDate: item.dueDate,
+        originalDueDate: item.originalDueDate,
+        recurrence: bill.recurrence || "None",
+        category: bill.category || "other",
+        paymentMethod: bill.paymentMethod || "",
+        capturedAt: now,
+
+        installmentPlanId:
+          bill.installmentPlanId || null,
+
+        installmentProvider:
+          bill.installmentProvider || null,
+
+        installmentNumber:
+          bill.installmentNumber || null,
+
+        installmentTotal:
+          bill.installmentTotal || null
+      };
+
+      return payment;
+    }
+  );
+
+  return {
+    status: "allocate",
+
+    nextPayments: [
+      ...payments.map(payment => ({ ...payment })),
+      ...records
+    ],
+
+    allocationPaymentIds: records.map(
+      payment => payment.id
+    ),
+
+    activityEntry: {
+      id: `bank-matched:${claimId}`,
+      action: "bank_payment_matched",
+      entityType: "bill",
+      entityId: records[0].billId,
+      title: "Bank payment matched",
+
+      detail:
+        `${transaction.merchantName || "Bank debit"} · ` +
+        `${formatAmount(transaction.amount)} · ` +
+        `${records.length} payment(s) recorded`,
+
+      timestamp: now,
+      before: null,
+
+      after: {
+        bankMatchKey: groupId,
+
+        allocations: records.map(payment => ({
+          paymentId: payment.id,
+          billId: payment.billId,
+          dueDate: payment.paidForDueDate,
+          amount: payment.amount
+        }))
+      }
+    }
+  };
+}
+async function requireBankHousehold(uid, accessToken) {
+  const profile = await getUserProfile(uid, accessToken);
+
+  const householdId =
+    typeof profile?.householdId === "string"
+      ? profile.householdId.trim()
+      : "";
+
+  if (!householdId) {
+    throw new Error("Bank owner has no household.");
+  }
+
+  const member = await getHouseholdMember(
+    householdId,
+    uid,
+    accessToken
+  );
+
+  if (
+    !member ||
+    member.role !== "owner" ||
+    (member.uid && member.uid !== uid)
+  ) {
+    throw new Error(
+      "Automatic banking requires the household owner connection."
+    );
+  }
+
+  return householdId;
+}
+
+async function processBankConnection(env, uid, accessToken) {
+  const key = plaidConnectionKey(uid);
+
+  let record = await env.NOTIFICATIONSKV.get(key, "json");
+
+  const summary = {
+    uid,
+    matched: 0,
+    reconciled: 0,
+    review: 0,
+    unmatched: 0,
+    alreadyLinked: 0
+  };
+
+  if (
+    !record?.accessToken ||
+    !record.itemId ||
+    !record.selectedAccountId
+  ) {
+    return {
+      ...summary,
+      status: "no-selected-connection"
+    };
+  }
+
+  const householdId = await requireBankHousehold(
+    uid,
+    accessToken
+  );
+
+  if (
+    !record.bankHouseholdId ||
+    record.bankHouseholdId !== householdId
+  ) {
+    throw new Error(
+      "Bank connection is not bound to this household. " +
+      "Do not automatically reassign it."
+    );
+  }
+
+  summary.householdId = householdId;
+
+  record = await syncPlaidTransactions(env, record);
+
+  await env.NOTIFICATIONSKV.put(
+    key,
+    JSON.stringify(record)
+  );
+
+  let loaded = await loadHouseholdForBankCommit(
+    householdId,
+    accessToken
+  );
+
+  const zone = validatedReminderTimeZone(
+    loaded.data.settings?.timeZone
+  );
+
+  // Do not apply earlier bank history to today's unpaid bills.
+  // This includes the connection date and all subsequent dates.
+  const startKey = reminderFinancialDateKey(
+    record.createdAt,
+    zone
+  );
+
+  if (!startKey) {
+    throw new Error("Bank connection start date is invalid.");
+  }
+
+  const transactions = (record.transactions || [])
+    .filter(transaction =>
+      transaction.accountId === record.selectedAccountId &&
+      transaction.pending === false &&
+      transaction.type === "debit" &&
+      reminderFinancialDateKey(
+        transaction.date,
+        zone
+      ) >= startKey
+    )
+    .sort((a, b) =>
+      String(a.date).localeCompare(String(b.date)) ||
+      String(a.id).localeCompare(String(b.id))
+    );
+
+  const plans = [];
+
+  const outcomePath = id =>
+    `households/${encodeURIComponent(householdId)}/` +
+    `bankReconciliationEvents/${id}`;
+
+  const claimPath = id =>
+    `households/${encodeURIComponent(householdId)}/` +
+    `bankTransactionClaims/${id}`;
+
+  async function saveOutcome(
+    transaction,
+    claimId,
+    status,
+    reason = ""
+  ) {
+    await writeFirestoreDocument(
+      outcomePath(claimId),
+      {
+        transactionId: transaction.id,
+        accountId: transaction.accountId,
+        itemId: record.itemId,
+        amount: Number(transaction.amount),
+        postedDate: transaction.date,
+        status,
+        reason,
+        checkedAt: new Date().toISOString()
+      },
+      accessToken
+    );
+  }
+
+  // Calculate proposals against the same household snapshot.
+  // This lets us detect transactions competing for a payment.
+  for (const transaction of transactions) {
+    const claimId = await bankTransactionClaimId(
+      record.itemId,
+      transaction
+    );
+
+    const existingClaim = await getFirestoreDocument(
+      claimPath(claimId),
+      accessToken
+    );
+
+    if (existingClaim) {
+      const linked = loaded.data.payments.filter(
+        payment =>
+          (existingClaim.paymentIds || []).includes(
+            payment.id
+          )
+      );
+
+      const changed =
+        Math.round(
+          Number(existingClaim.transactionAmount) * 100
+        ) !==
+        Math.round(Number(transaction.amount) * 100);
+
+      const missing =
+        linked.length !==
+        (existingClaim.paymentIds || []).length;
+
+      if (changed || missing) {
+        summary.review++;
+
+        await saveOutcome(
+          transaction,
+          claimId,
+          "review",
+          changed
+            ? "Claimed bank amount changed."
+            : "Previously claimed payments are missing " +
+              "after a household change or restore."
+        );
+      } else {
+        summary.alreadyLinked++;
+      }
+
+      continue;
+    }
+
+    const plan = await buildBankNewPaymentAllocation({
+      household: loaded.data,
+      transaction,
+      itemId: record.itemId
+    });
+
+    if (
+      plan.status === "allocate" ||
+      plan.status === "reconcile"
+    ) {
+      plans.push({
+        transaction,
+        claimId,
+        plan
+      });
+    } else {
+      if (
+        plan.status === "review" ||
+        plan.status === "already-linked"
+      ) {
+        summary.review++;
+      } else {
+        summary.unmatched++;
+      }
+
+      await saveOutcome(
+        transaction,
+        claimId,
+        plan.status === "already-linked"
+          ? "review"
+          : plan.status,
+        plan.reason ||
+          (
+            plan.status === "already-linked"
+              ? "Payment has a bank link but no atomic claim. " +
+                "Left unchanged."
+              : ""
+          )
+      );
+    }
+  }
+
+  const occurrenceKey = payment =>
+    payment.billId +
+    ":" +
+    reminderPaymentOccurrenceDateKey(payment, zone);
+
+  const allocations = plan =>
+    plan.nextPayments.filter(payment =>
+      plan.allocationPaymentIds.includes(payment.id)
+    );
+
+  const claims = new Map();
+
+  for (const proposal of plans) {
+    for (const payment of allocations(proposal.plan)) {
+      const occurrence = occurrenceKey(payment);
+
+      claims.set(
+        occurrence,
+        (claims.get(occurrence) || 0) + 1
+      );
+    }
+  }
+
+  for (const proposal of plans) {
+    const { transaction, claimId } = proposal;
+
+    const originalKeys = allocations(proposal.plan)
+      .map(occurrenceKey)
+      .sort();
+
+    if (
+      originalKeys.some(
+        occurrence => claims.get(occurrence) !== 1
+      )
+    ) {
+      summary.review++;
+
+      await saveOutcome(
+        transaction,
+        claimId,
+        "review",
+        "Competing transactions claim the same bill occurrence."
+      );
+
+      continue;
+    }
+
+    let committed = false;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const currentHouseholdId =
+        await requireBankHousehold(uid, accessToken);
+
+      if (currentHouseholdId !== householdId) {
+        throw new Error(
+          "Bank household membership changed."
+        );
+      }
+
+      const latestRecord =
+        await env.NOTIFICATIONSKV.get(key, "json");
+
+      if (
+        latestRecord?.itemId !== record.itemId ||
+        latestRecord.selectedAccountId !==
+          record.selectedAccountId ||
+        latestRecord.bankHouseholdId !== householdId
+      ) {
+        throw new Error(
+          "Selected bank connection changed during processing."
+        );
+      }
+
+      if (
+        await getFirestoreDocument(
+          claimPath(claimId),
+          accessToken
+        )
+      ) {
+        summary.alreadyLinked++;
+        committed = true;
+        break;
+      }
+
+      loaded = await loadHouseholdForBankCommit(
+        householdId,
+        accessToken
+      );
+
+      const plan = await buildBankNewPaymentAllocation({
+        household: loaded.data,
+        transaction,
+        itemId: record.itemId
+      });
+
+      if (
+        plan.status !== "allocate" &&
+        plan.status !== "reconcile"
+      ) break;
+
+      const freshKeys = allocations(plan)
+        .map(occurrenceKey)
+        .sort();
+
+      // Never redirect a transaction to different installments
+      // merely because the household changed during processing.
+      if (
+        JSON.stringify(freshKeys) !==
+        JSON.stringify(originalKeys)
+      ) break;
+
+      const result = await commitBankPaymentAllocation({
+        loadedHousehold: loaded,
+        itemId: record.itemId,
+        transaction,
+        nextPayments: plan.nextPayments,
+        activityEntry: plan.activityEntry,
+        allocationPaymentIds: plan.allocationPaymentIds,
+        accessToken
+      });
+
+      if (result.committed) {
+        committed = true;
+
+        if (plan.status === "reconcile") {
+          summary.reconciled++;
+        } else {
+          summary.matched++;
+        }
+
+        await saveOutcome(
+          transaction,
+          claimId,
+          plan.status === "reconcile"
+            ? "reconciled"
+            : "allocated"
+        );
+
+        break;
+      }
+    }
+
+    if (!committed) {
+      summary.review++;
+
+      await saveOutcome(
+        transaction,
+        claimId,
+        "review",
+        "Household changed or allocation could not " +
+        "be committed safely."
+      );
+    }
+  }
+
+  return {
+    ...summary,
+    status: "processed"
+  };
+}
+
+async function runScheduledBankPayments(env) {
+  const summary = {
+    startedAt: new Date().toISOString(),
+    processed: 0,
+    matched: 0,
+    reconciled: 0,
+    review: 0,
+    unmatched: 0,
+    failures: 0
+  };
+
+  try {
+    if (env.PLAID_ENV !== "production") {
+      throw new Error(
+        "Production banking configuration required."
+      );
+    }
+
+    const keys = await listAllKvKeys(
+      env,
+      "plaid:production:user:"
+    );
+
+    if (!keys.length) return summary;
+
+    const accessToken = await getFirestoreAccessToken(env);
+
+    for (const key of keys) {
+      const uid = key.name.slice(
+        "plaid:production:user:".length
+      );
+
+      try {
+        const result = await processBankConnection(
+          env,
+          uid,
+          accessToken
+        );
+        await env.NOTIFICATIONSKV.put(
+  `plaid:production:run-status:${uid}`,
+  JSON.stringify({
+    ...result,
+    startedAt: summary.startedAt,
+    finishedAt: new Date().toISOString(),
+    source: "scheduled"
+  })
+);
+        if (result.status !== "processed") continue;
+
+        summary.processed++;
+
+        for (
+          const field of [
+            "matched",
+            "reconciled",
+            "review",
+            "unmatched"
+          ]
+        ) {
+          summary[field] += result[field];
+        }
+      } catch (error) {
+        summary.failures++;
+
+        console.error(
+          "Scheduled bank processing failed.",
+          {
+            uid,
+            message: error.message
+          }
+        );
+      }
+    }
+
+    return summary;
+  } catch (error) {
+    summary.failures++;
+
+    console.error(
+      "Scheduled banking unavailable.",
+      { message: error.message }
+    );
+
+    return summary;
+  } finally {
+    summary.finishedAt = new Date().toISOString();
+
+    await env.NOTIFICATIONSKV.put(
+      "system:last-bank-run",
+      JSON.stringify(summary)
+    );
+  }
+}
+function bankBillHistoryEligibility(
+  bill,
+  transaction,
+  timeZone
+) {
+  const key = value =>
+    value
+      ? reminderFinancialDateKey(value, timeZone)
+      : "";
+
+  const createdKey = key(bill?.createdAt);
+  const postedKey = key(transaction?.date);
+  const authorizedKey = key(
+    transaction?.authorizedDate
+  );
+
+  if (!createdKey) {
+    return {
+      eligible: false,
+      reason:
+        "Bill creation date is missing or invalid."
+    };
+  }
+
+  if (!postedKey) {
+    return {
+      eligible: false,
+      reason:
+        "Transaction posting date is missing or invalid."
+    };
+  }
+
+  // Use the earlier known payment date.
+  // A later posting date must not make a newly
+  // added bill eligible for an older payment.
+  const paymentKey =
+    authorizedKey && authorizedKey < postedKey
+      ? authorizedKey
+      : postedKey;
+
+  if (createdKey > paymentKey) {
+    return {
+      eligible: false,
+      reason:
+        "The bill was added after this " +
+        "transaction's payment date."
+    };
+  }
+
+  // The transaction data currently preserves dates,
+  // not reliable transaction times. Do not invent
+  // ordering from the synthetic T12:00:00 value.
+  if (createdKey === paymentKey) {
+    return {
+      eligible: false,
+      reason:
+        "The bill and transaction have the same " +
+        "date; their order cannot be confirmed."
+    };
+  }
+
+  return {
+    eligible: true
+  };
+}
+
+async function buildBankNewPaymentAllocation({
+  household,
+  transaction,
+  itemId
+}) {
+  const plan =
+    await buildBankNewPaymentAllocationCore({
+      household,
+      transaction,
+      itemId
+    });
+
+  // Preserve manual reconciliation and all existing
+  // ignored, unmatched, already-linked, and review results.
+  if (plan.status !== "allocate") {
+    return plan;
+  }
+
+  const review = reason => ({
+    status: "review",
+    reason
+  });
+
+  if (
+    !Array.isArray(plan.nextPayments) ||
+    !Array.isArray(plan.allocationPaymentIds) ||
+    !plan.allocationPaymentIds.length ||
+    !Array.isArray(household?.bills)
+  ) {
+    return review(
+      "Allocation or bill history is incomplete."
+    );
+  }
+
+  const timeZone = validatedReminderTimeZone(
+    household.settings?.timeZone
+  );
+
+  const billById = new Map(
+    household.bills.map(
+      bill => [bill.id, bill]
+    )
+  );
+
+  for (
+    const paymentId of plan.allocationPaymentIds
+  ) {
+    const payment = plan.nextPayments.find(
+      record => record.id === paymentId
+    );
+
+    const bill = payment
+      ? billById.get(payment.billId)
+      : null;
+
+    if (!payment || !bill) {
+      return review(
+        "An allocated payment has no confirmed active bill."
+      );
+    }
+
+    const history =
+      bankBillHistoryEligibility(
+        bill,
+        transaction,
+        timeZone
+      );
+
+    if (!history.eligible) {
+      return review(
+        `${bill.name || "Bill"}: ` +
+        history.reason +
+        " No payment records were changed."
+      );
+    }
+  }
+
+  return plan;
+}
+async function handleBankAutomationRequest(
+  request,
+  env,
+  origin
+) {
+  const path = new URL(request.url).pathname;
+
+  if (
+    ![
+      "/plaid/automation-status",
+      "/plaid/run-now"
+    ].includes(path)
+  ) {
+    return null;
+  }
+
+  const method =
+    path === "/plaid/run-now"
+      ? "POST"
+      : "GET";
+
+  if (request.method !== method) {
+    return json(
+      {
+        ok: false,
+        error: "Method not allowed."
+      },
+      405,
+      origin
+    );
+  }
+
+  const authentication =
+    await verifyFirebaseToken(request);
+
+  if (!authentication.ok) {
+    return json(
+      {
+        ok: false,
+        error: authentication.error
+      },
+      authentication.status,
+      origin
+    );
+  }
+
+  const uid = authentication.user.uid;
+
+  const statusKey =
+    `plaid:production:run-status:${uid}`;
+
+  try {
+    const accessToken =
+      await getFirestoreAccessToken(env);
+
+    const householdId =
+      await requireBankHousehold(
+        uid,
+        accessToken
+      );
+
+    if (path === "/plaid/automation-status") {
+      const record =
+        await env.NOTIFICATIONSKV.get(
+          plaidConnectionKey(uid),
+          "json"
+        );
+
+      const status =
+        await env.NOTIFICATIONSKV.get(
+          statusKey,
+          "json"
+        );
+
+      const sameHousehold =
+        record?.bankHouseholdId === householdId;
+
+      return json(
+        {
+          ok: true,
+          environment: env.PLAID_ENV,
+          connected: Boolean(record),
+          householdBound: sameHousehold,
+
+          selectedAccountId:
+            sameHousehold
+              ? record?.selectedAccountId || null
+              : null,
+
+          lastSyncedAt:
+            sameHousehold
+              ? record?.lastSyncedAt || null
+              : null,
+
+          lastRun:
+            status?.householdId === householdId
+              ? status
+              : null,
+
+          scheduleUtc: "00:00 and 12:00",
+
+          manualRunEnabled:
+            env.BANK_RUN_NOW_ENABLED === "true"
+        },
+        200,
+        origin
+      );
+    }
+
+    if (env.BANK_RUN_NOW_ENABLED !== "true") {
+      return json(
+        {
+          ok: false,
+          error: "Manual bank processing is disabled."
+        },
+        403,
+        origin
+      );
+    }
+
+    if (env.PLAID_ENV !== "production") {
+      return json(
+        {
+          ok: false,
+          error: "Production configuration required."
+        },
+        503,
+        origin
+      );
+    }
+
+    const startedAt = new Date().toISOString();
+
+    const result = await processBankConnection(
+      env,
+      uid,
+      accessToken
+    );
+
+    const status = {
+      ...result,
+      householdId,
+      startedAt,
+      finishedAt: new Date().toISOString(),
+      source: "manual"
+    };
+
+    await env.NOTIFICATIONSKV.put(
+      statusKey,
+      JSON.stringify(status)
+    );
+
+    return json(
+      {
+        ok: true,
+        ...status
+      },
+      200,
+      origin
+    );
+  } catch (error) {
+    console.error(
+      "Bank automation request failed.",
+      {
+        uid,
+        message: error.message
+      }
+    );
+
+    return json(
+      {
+        ok: false,
+        error:
+          "Bank processing or status lookup failed. " +
+          "Check Worker logs; do not assume " +
+          "no payments changed."
+      },
+      500,
+      origin
+    );
+  }
+}
 export default {
   async fetch(request, env) {
     const origin = allowedOrigin(request);
@@ -2274,14 +4330,24 @@ export default {
     }
 
     const url = new URL(request.url);
-    const sandboxBankRoutes = new Set([
+    const bankAutomationResponse =
+  await handleBankAutomationRequest(
+    request,
+    env,
+    origin
+  );
+
+if (bankAutomationResponse) {
+  return bankAutomationResponse;
+}
+    const plaidBankRoutes = new Set([
   "/plaid/exchange-token",
   "/plaid/account",
   "/plaid/sync",
   "/plaid/status"
 ]);
 
-if (sandboxBankRoutes.has(url.pathname)) {
+if (plaidBankRoutes.has(url.pathname)) {
   const expectedMethod =
     url.pathname === "/plaid/status" ? "GET" : "POST";
 
@@ -2303,22 +4369,25 @@ if (sandboxBankRoutes.has(url.pathname)) {
     );
   }
 
-  if (env.PLAID_ENV !== "sandbox") {
-    return json(
-      { ok: false, error: "Sandbox configuration required." },
-      503,
-      origin
-    );
-  }
+  if (env.PLAID_ENV !== "production") {
+  return json(
+    {
+      ok: false,
+      error: "Plaid Production configuration required."
+    },
+    503,
+    origin
+  );
+}
 
-  const key = plaidSandboxKey(authentication.user.uid);
+  const key = plaidConnectionKey(authentication.user.uid);
 
   try {
     let record = await env.NOTIFICATIONSKV.get(key, "json");
 
     if (url.pathname === "/plaid/status") {
       return json(
-        { ok: true, ...safePlaidSandboxConnection(record) },
+        { ok: true, ...safePlaidConnection(record) },
         200,
         origin
       );
@@ -2331,7 +4400,7 @@ if (sandboxBankRoutes.has(url.pathname)) {
           {
             ok: false,
             error:
-              "A Sandbox bank is already connected. Use Load or Sync instead."
+              "A bank is already connected. Use Load or Sync instead"
           },
           409,
           origin
@@ -2341,27 +4410,40 @@ if (sandboxBankRoutes.has(url.pathname)) {
       const body = await request.json();
 
       if (
-        typeof body.public_token !== "string" ||
-        !body.public_token.startsWith("public-sandbox-")
-      ) {
-        return json(
-          { ok: false, error: "A valid Sandbox token is required." },
-          400,
-          origin
-        );
-      }
+  typeof body.public_token !== "string" ||
+  body.public_token.length > 512 ||
+  !body.public_token.startsWith("public-production-")
+) {
+  return json(
+    {
+      ok: false,
+      error: "A valid Production public token is required."
+    },
+    400,
+    origin
+  );
+}
 
-      const exchanged = await plaidSandboxRequest(
-        env,
-        "/item/public_token/exchange",
-        { public_token: body.public_token }
-      );
+      const bankFirestoreToken =
+  await getFirestoreAccessToken(env);
 
+const bankHouseholdId =
+  await requireBankHousehold(
+    authentication.user.uid,
+    bankFirestoreToken
+  );
+
+const exchanged = await plaidRequest(
+  env,
+  "/item/public_token/exchange",
+  { public_token: body.public_token }
+);
       // Save immediately so a later account-fetch error does not
       // discard a successfully exchanged connection.
       record = {
         accessToken: exchanged.access_token,
         itemId: exchanged.item_id,
+        bankHouseholdId,
         accounts: [],
         selectedAccountId: null,
         transactions: [],
@@ -2375,7 +4457,7 @@ if (sandboxBankRoutes.has(url.pathname)) {
         JSON.stringify(record)
       );
 
-      const accountResult = await plaidSandboxRequest(
+      const accountResult = await plaidRequest(
         env,
         "/accounts/get",
         { access_token: record.accessToken }
@@ -2397,7 +4479,7 @@ if (sandboxBankRoutes.has(url.pathname)) {
 
     if (!record) {
       return json(
-        { ok: false, error: "Connect a Sandbox bank first." },
+        { ok: false, error: "Connect a bank first." },
         400,
         origin
       );
@@ -2424,7 +4506,7 @@ if (sandboxBankRoutes.has(url.pathname)) {
     if (url.pathname === "/plaid/sync") {
       // Also repairs account loading after an interrupted enrollment.
       if (!record.accounts.length) {
-        const accountResult = await plaidSandboxRequest(
+        const accountResult = await plaidRequest(
           env,
           "/accounts/get",
           { access_token: record.accessToken }
@@ -2444,7 +4526,7 @@ if (sandboxBankRoutes.has(url.pathname)) {
           )?.id || record.accounts[0]?.id || null;
       }
 
-      record = await syncPlaidSandboxTransactions(env, record);
+      record = await syncPlaidTransactions(env, record);
     }
 
     await env.NOTIFICATIONSKV.put(
@@ -2453,7 +4535,7 @@ if (sandboxBankRoutes.has(url.pathname)) {
     );
 
     return json(
-      { ok: true, ...safePlaidSandboxConnection(record) },
+      { ok: true, ...safePlaidConnection(record) },
       200,
       origin
     );
@@ -2462,14 +4544,14 @@ if (sandboxBankRoutes.has(url.pathname)) {
     return json(
       {
         ok: false,
-        error: error.message || "Sandbox banking request failed."
+        error: error.message || "Banking request failed."
       },
       502,
       origin
     );
   }
 }
-    if (
+   if (
   request.method === "POST" &&
   url.pathname === "/plaid/link-token"
 ) {
@@ -2483,23 +4565,11 @@ if (sandboxBankRoutes.has(url.pathname)) {
     );
   }
 
-  // This first connection test must remain Sandbox-only.
-  if (env.PLAID_ENV !== "sandbox") {
+  if (env.PLAID_ENV !== "production") {
     return json(
       {
         ok: false,
-        error: "This connection test requires PLAID_ENV=sandbox."
-      },
-      503,
-      origin
-    );
-  }
-
-  if (!env.PLAID_CLIENT_ID || !env.PLAID_SECRET) {
-    return json(
-      {
-        ok: false,
-        error: "Plaid credentials are missing in Cloudflare."
+        error: "Plaid Production configuration required."
       },
       503,
       origin
@@ -2507,57 +4577,42 @@ if (sandboxBankRoutes.has(url.pathname)) {
   }
 
   try {
-    const response = await fetch(
-      "https://sandbox.plaid.com/link/token/create",
+    const result = await plaidRequest(
+      env,
+      "/link/token/create",
       {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
+        client_name: "Bill Beacon",
+        user: {
+          client_user_id: authentication.user.uid
         },
-        body: JSON.stringify({
-          client_id: env.PLAID_CLIENT_ID,
-          secret: env.PLAID_SECRET,
-          client_name: "Bill Beacon",
-          user: {
-            client_user_id: authentication.user.uid
-          },
-          products: ["transactions"],
-          country_codes: ["US"],
-          language: "en"
-        })
+        products: ["transactions"],
+        country_codes: ["US"],
+        language: "en",
+        ...(env.PLAID_REDIRECT_URI
+          ? { redirect_uri: env.PLAID_REDIRECT_URI }
+          : {})
       }
     );
 
-    const result = await response.json();
-
-    if (!response.ok || !result.link_token) {
-      return json(
-        {
-          ok: false,
-          error:
-            result.error_message ||
-            "Plaid could not create a connection token.",
-          code: result.error_code || null
-        },
-        502,
-        origin
-      );
+    if (!result.link_token) {
+      throw new Error("Plaid did not return a connection token.");
     }
 
     return json(
       {
         ok: true,
-        environment: "sandbox",
+        environment: "production",
         link_token: result.link_token
       },
       200,
       origin
     );
-  } catch {
+  } catch (error) {
     return json(
       {
         ok: false,
-        error: "Could not reach Plaid. Please try again."
+        error: "Could not create the bank connection session.",
+        code: error.code || "PLAID_LINK_TOKEN_FAILED"
       },
       502,
       origin
@@ -3232,7 +5287,20 @@ if (sandboxBankRoutes.has(url.pathname)) {
     return json({ error: "Not found." }, 404, origin);
   },
 
-  async scheduled(_event, env, ctx) {
-    ctx.waitUntil(runScheduledBillReminders(env));
+  async scheduled(event, env, ctx) {
+  if (event.cron === "0 0,12 * * *") {
+    ctx.waitUntil(runScheduledBankPayments(env));
+    return;
   }
+
+  if (event.cron === "*/5 * * * *") {
+    ctx.waitUntil(runScheduledBillReminders(env));
+    return;
+  }
+
+  console.warn(
+    "Unrecognized scheduled trigger:",
+    event.cron
+  );
+}
 };

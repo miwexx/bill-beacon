@@ -1,11 +1,16 @@
 name = "bill-beacon-notifications"
 main = "src/index.js"
 compatibility_date = "2026-09-06"
-compatibility_flags = ["nodejs_compat", "enable_nodejs_http_modules"]
+compatibility_flags = [
+  "nodejs_compat",
+  "enable_nodejs_http_modules"
+]
 keep_vars = true
 
 [vars]
-PLAID_ENV = "sandbox"
+PLAID_ENV = "production"
+PLAID_REDIRECT_URI = "https://bill-beacon.pages.dev/"
+BANK_RUN_NOW_ENABLED = "false"
 
 [observability]
 enabled = true
@@ -15,4 +20,4 @@ binding = "NOTIFICATIONSKV"
 id = "840fbd5bbad24c4caedeea2e2233fd82"
 
 [triggers]
-crons = ["*/5 * * * *"]
+crons = ["*/5 * * * *", "0 0,12 * * *"]
