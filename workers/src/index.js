@@ -2110,13 +2110,42 @@ async function runScheduledBillReminders(env) {
 function plaidConnectionKey(uid) {
   return `plaid:production:user:${uid}`;
 }
-async function plaidRequest(env, endpoint, payload = {}) {
-  if (env.PLAID_ENV !== "production") {
-    throw new Error("Plaid Production configuration is required.");
+async function plaidRequest(
+  env,
+  endpoint,
+  payload = {}
+) {
+  function fail(code, message) {
+    const error = new Error(message);
+    error.code = code;
+    return error;
   }
 
-  if (!env.PLAID_CLIENT_ID || !env.PLAID_SECRET) {
-    throw new Error("Plaid credentials are missing in Cloudflare.");
+  if (env.PLAID_ENV !== "production") {
+    throw fail(
+      "LOCAL_PLAID_ENV_INVALID",
+      "Plaid Production configuration is required."
+    );
+  }
+
+  if (
+    !env.PLAID_CLIENT_ID ||
+    !String(env.PLAID_CLIENT_ID).trim()
+  ) {
+    throw fail(
+      "LOCAL_PLAID_CLIENT_ID_MISSING",
+      "PLAID_CLIENT_ID is missing in this Worker."
+    );
+  }
+
+  if (
+    !env.PLAID_SECRET ||
+    !String(env.PLAID_SECRET).trim()
+  ) {
+    throw fail(
+      "LOCAL_PLAID_SECRET_MISSING",
+      "PLAID_SECRET is missing in this Worker."
+    );
   }
 
   const allowedEndpoints = new Set([
@@ -2127,31 +2156,90 @@ async function plaidRequest(env, endpoint, payload = {}) {
   ]);
 
   if (!allowedEndpoints.has(endpoint)) {
-    throw new Error("Unsupported Plaid endpoint.");
+    throw fail(
+      "LOCAL_PLAID_ENDPOINT_INVALID",
+      "Unsupported Plaid endpoint."
+    );
   }
 
-  const response = await fetch(
-    `https://production.plaid.com${endpoint}`,
-    {
-      method: "POST",
-      redirect: "error",
-      headers: {
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({
-        ...payload,
-        client_id: env.PLAID_CLIENT_ID,
-        secret: env.PLAID_SECRET
-      })
-    }
+  let response;
+
+  try {
+    response = await fetch(
+      `https://production.plaid.com${endpoint}`,
+      {
+        method: "POST",
+        redirect: "error",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          ...payload,
+          client_id: env.PLAID_CLIENT_ID,
+          secret: env.PLAID_SECRET
+        })
+      }
+    );
+  } catch {
+    throw fail(
+      "LOCAL_PLAID_NETWORK_ERROR",
+      "The Worker could not reach Plaid."
+    );
+  }
+
+  const result = await response.json().catch(
+    () => null
   );
 
-  const result = await response.json().catch(() => null);
+  if (
+    !result ||
+    typeof result !== "object" ||
+    Array.isArray(result)
+  ) {
+    throw fail(
+      "LOCAL_PLAID_RESPONSE_INVALID",
+      "Plaid returned an unreadable response."
+    );
+  }
 
-  if (!response.ok || !result) {
-    const error = new Error("The bank service request failed.");
-    error.code = result?.error_code || "PLAID_REQUEST_FAILED";
+  if (!response.ok) {
+    const error = fail(
+      typeof result.error_code === "string"
+        ? result.error_code
+        : "PLAID_REQUEST_FAILED",
+      "Plaid rejected the banking request."
+    );
+
+    error.plaidStatus = response.status;
+
+    error.requestId =
+      typeof result.request_id === "string"
+        ? result.request_id
+        : null;
+
+    // Log diagnostic metadata only.
+    // Never log credentials or complete responses.
+    console.warn(
+      "Plaid request rejected.",
+      {
+        endpoint,
+        code: error.code,
+        httpStatus: error.plaidStatus,
+        requestId: error.requestId
+      }
+    );
+
     throw error;
+  }
+
+  if (
+    endpoint === "/link/token/create" &&
+    typeof result.link_token !== "string"
+  ) {
+    throw fail(
+      "LOCAL_PLAID_LINK_TOKEN_MISSING",
+      "Plaid did not return a Link token."
+    );
   }
 
   return result;
