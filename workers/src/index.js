@@ -186,9 +186,9 @@ async function sendPushNotification(subscription, payload, env) {
     message: {
       payload,
       adminContact: env.VAPID_SUBJECT,
-      options: {
-        ttl: 60,
-        urgency: "normal"
+            options: {
+        ttl: 24 * 60 * 60,
+        urgency: "high"
       }
     }
   });
