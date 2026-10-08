@@ -15422,16 +15422,7 @@ const accountSelector = accounts.length
             font-size:12px;
           "
         >
-          <span>
-            ${filtered.length}
-            transaction${filtered.length === 1 ? "" : "s"}
-          </span>
-
-          <span>
-            ${formatCurrency(debitTotal(filtered))}
-            debit total
-          </span>
-        </div>
+                  </div>
 
         ${transactionContent}
 
