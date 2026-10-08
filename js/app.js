@@ -16109,20 +16109,7 @@ function addNotificationSettings() {
         ${svgIcon("bell", 20)}
         Turn On Notifications
       </button>
-        <button
-        id="notificationDeviceTestButton"
-        type="button"
-        class="bb-outline-pill"
-        style="
-          width:100%;
-          min-height:44px;
-          justify-content:center;
-          margin-top:12px;
-        "
-        onclick="sendBillNotificationTest()"
-      >
-        Test This Device
-      </button>
+  
       <p
         id="notificationTestStatus"
         style="
