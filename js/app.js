@@ -192,7 +192,6 @@ const Store = {
   const previousSchedule = buildScheduleSnapshot(previousBill);
   const updatedSchedule = buildScheduleSnapshot(updatedBill);
 
-  // A name correction alone is not a new financial schedule version.
   const {name: previousDisplayName, ...previousScheduleFields} = previousSchedule;
   const {name: updatedDisplayName, ...updatedScheduleFields} = updatedSchedule;
   const scheduleChanged =
@@ -1166,7 +1165,7 @@ function getCalendarScheduleSlot(recurrence, dateValue, anchorValue = dateValue)
   return `month:${date.getFullYear()}-${date.getMonth()}`;
 }
 
-function getVersionedBillOccurrences(bill, referenceDate) {
+function getHistoricalBillOccurrences(bill, referenceDate) {
   const monthKey = value => {
     const date = new Date(value);
     return `${date.getFullYear()}-${date.getMonth()}`;
@@ -1339,25 +1338,88 @@ function getVersionedBillOccurrences(bill, referenceDate) {
       isArchivedHistory: Boolean(bill.archivedAt)
     });
   }
-  return [...candidates.values()]
-    .map(occurrence => {
-      const status = String(bill.status || "").toLowerCase();
-      const historicalOnly = bill.archived || bill.archivedAt || bill.cancelled ||
-        bill.cancelledAt || bill.paidInFullAt || occurrence.isArchivedHistory ||
-        ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status);
-      if (historicalOnly || isOccurrencePaid(occurrence, new Date(occurrence.dueDate))) {
-        return occurrence;
+  return [...candidates.values()].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+function resolveCurrentUnpaidOccurrences(bill, referenceDate, historical, payments) {
+  const key = value => financialDateKey(value);
+  const period = value => key(value).slice(0, 7);
+  const target = period(referenceDate.toISOString());
+  const status = String(bill.status || "").toLowerCase();
+  if (bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt || bill.paidInFullAt ||
+      ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status)) {
+    return historical;
+  }
+  const activePayments = payments.filter(payment =>
+    String(payment.status || "active").toLowerCase() !== "voided");
+  const isPaid = occurrence => activePayments.some(payment =>
+    payment.billId === bill.id &&
+    key(payment.paidForDueDate || payment.billSnapshot?.dueDate) === key(occurrence.dueDate));
+  const overrides = Array.isArray(bill.occurrenceOverrides) ? bill.occurrenceOverrides : [];
+  const overrideFor = occurrence => overrides.find(override =>
+    key(override.originalDueDate) === key(occurrence.originalDueDate || occurrence.dueDate));
+  const monthly = bill.recurrence === "Monthly" && !bill.installmentPlanId;
+  const paidMonthlyPeriods = new Set();
+  for (const payment of activePayments.filter(payment => payment.billId === bill.id)) {
+    const date = payment.originalDueDate || payment.billSnapshot?.originalDueDate ||
+      payment.paidForDueDate || payment.billSnapshot?.dueDate;
+    const recordedRecurrence = payment.billSnapshot?.recurrence ||
+      getBillScheduleAtDate(bill, date).recurrence;
+    if (recordedRecurrence === "Monthly") paidMonthlyPeriods.add(period(date));
+  }
+  const pinnedPeriods = new Set(overrides.filter(override =>
+    override.cancelled || override.postponedTo).map(override => period(override.originalDueDate)));
+  const applyFields = occurrence => {
+    const result = {...occurrence};
+    for (const field of ["name", "amount", "category", "paymentMethod", "paymentUrl", "autopay",
+      "notes", "reminderOffsets", "paycheckAssignment", "dueDay"]) {
+      if (bill[field] !== undefined) result[field] =
+        Array.isArray(bill[field]) ? [...bill[field]] : bill[field];
+    }
+    if ((result.paycheckAssignment || "auto") === "auto") {
+      result.payCycle = new Date(result.dueDate).getDate() <= 14 ? "first" : "second";
+    } else result.payCycle = bill.payCycle || result.payCycle;
+    return result;
+  };
+  const resolved = [];
+  for (const occurrence of historical) {
+    if (occurrence.isArchivedHistory || isPaid(occurrence)) {resolved.push(occurrence); continue;}
+    const result = {...occurrence};
+    if (monthly && occurrence.recurrence === "Monthly") {
+      const origin = occurrence.originalDueDate || occurrence.dueDate;
+      const originPeriod = period(origin);
+      const override = overrideFor(occurrence);
+      if (override?.cancelled || paidMonthlyPeriods.has(originPeriod)) continue;
+      if (!override?.postponedTo) {
+        const date = new Date(origin);
+        result.dueDate = getMonthlyOccurrenceDate(bill, date.getFullYear(), date.getMonth());
       }
-      const result = {...occurrence};
-      if (typeof bill.name === "string" && bill.name.trim()) result.name = bill.name;
-      const currentAmount = Number(bill.amount);
-      if (bill.amount !== null && bill.amount !== undefined && bill.amount !== "" &&
-          Number.isFinite(currentAmount) && currentAmount >= 0) {
-        result.amount = currentAmount;
-      }
-      return result;
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    }
+    if (period(result.dueDate) === target) resolved.push(applyFields(result));
+  }
+  if (monthly && !paidMonthlyPeriods.has(target) && !pinnedPeriods.has(target) &&
+      !resolved.some(occurrence => occurrence.recurrence === "Monthly" &&
+        period(occurrence.originalDueDate || occurrence.dueDate) === target)) {
+    const anchorPeriod = period(bill.dueDate);
+    if (anchorPeriod && target >= anchorPeriod) {
+      const dueDate = getMonthlyOccurrenceDate(bill, referenceDate.getFullYear(), referenceDate.getMonth());
+      const occurrence = createBillOccurrence(bill, dueDate);
+      if (occurrence && !isPaid(occurrence)) resolved.push(applyFields(occurrence));
+    }
+  }
+  const seen = new Set();
+  return resolved.filter(occurrence => {
+    const identity = occurrence.occurrenceKey || getOccurrenceKey(bill.id, occurrence.originalDueDate || occurrence.dueDate);
+    if (seen.has(identity)) return false;
+    seen.add(identity); return true;
+  }).sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+function getVersionedBillOccurrences(bill, referenceDate) {
+  const historical = getHistoricalBillOccurrences(bill, referenceDate);
+  return resolveCurrentUnpaidOccurrences(
+    bill, referenceDate, historical, Store.getPaymentsForBill(bill.id)
+  );
 }
 
 function resolveCalendarBillOccurrence(billId, dueDate) {
@@ -12910,18 +12972,15 @@ function savePaymentLinkPopup(billId) {
   render();
 }
 function refreshOpenBillSummaryPanels() {
-  const statusPanel = document.getElementById("dashboardStatusContainer");
-  const paycheckPanel = document.getElementById("paycheckPlanContainer");
   const panels = [
-    [statusPanel, "billStatus", "dashboardStatusContainer", openDashboardStatusSheet],
-    [paycheckPanel, "paycheckKey", "paycheckPlanContainer", openPaycheckPlanSheet]
+    [document.getElementById("dashboardStatusContainer"), "billStatus", "dashboardStatusContainer", openDashboardStatusSheet],
+    [document.getElementById("paycheckPlanContainer"), "paycheckKey", "paycheckPlanContainer", openPaycheckPlanSheet]
   ];
   for (const [panel, key, id, reopen] of panels) {
     const value = panel?.dataset?.[key];
     if (!panel || !value) continue;
     const top = panel.querySelector(".sheet-body")?.scrollTop || 0;
-    panel.remove();
-    reopen(value);
+    panel.remove(); reopen(value);
     requestAnimationFrame(() => {
       const body = document.getElementById(id)?.querySelector(".sheet-body");
       if (body) body.scrollTop = top;
@@ -12942,11 +13001,6 @@ function saveBill() {
     document.getElementById("billRecurrence")?.value || "None";
   const dueDayValue =
     document.getElementById("billDueDay")?.value;
-  const payCycle =
-  Store.getBill(editingBillId)?.payCycle ||
-  (new Date(`${dueDateInput}T12:00:00`).getDate() <= 15
-    ? "first"
-    : "second");
   const paycheckAssignment =
     document.getElementById("billPaycheckAssignment")?.value || "auto";
   const paymentMethod =
@@ -12983,7 +13037,7 @@ function saveBill() {
     return;
   }
 
-  const dueDate = dateFromInput(dueDateInput);
+  let dueDate = dateFromInput(dueDateInput);
 
   if (!dueDate) {
     alert("Please choose a valid due date.");
@@ -13000,6 +13054,14 @@ function saveBill() {
           )
         )
       : null;
+
+  if (recurrence === "Monthly") {
+    const date = new Date(dueDate);
+    dueDate = getMonthlyOccurrenceDate(
+      {dueDate, dueDay}, date.getFullYear(), date.getMonth()
+    );
+  }
+  const payCycle = new Date(dueDate).getDate() <= 14 ? "first" : "second";
 
   const validAssignments = [
     "auto",
@@ -13262,6 +13324,24 @@ function saveBill() {
   if (!existingBill) {
     alert("Bill not found. Please refresh and try again.");
     return;
+  }
+
+  if (recurrence === "Monthly" && Number(existingBill.dueDay || new Date(existingBill.dueDate).getDate()) !== dueDay) {
+    const overlap = (existingBill.occurrenceOverrides || []).find(override => {
+      if (override.cancelled || !override.originalDueDate || !override.postponedTo) return false;
+      const moved = new Date(override.postponedTo);
+      if (!Number.isFinite(moved.getTime())) return false;
+      const movedKey = getLocalDateKey(override.postponedTo);
+      const originalKey = getLocalDateKey(override.originalDueDate);
+      const nextKey = getLocalDateKey(getMonthlyOccurrenceDate(
+        {...existingBill, ...data}, moved.getFullYear(), moved.getMonth()
+      ));
+      return originalKey.slice(0, 7) !== movedKey.slice(0, 7) && nextKey === movedKey;
+    });
+    if (overlap) {
+      alert("This due-day edit would overlap a bill occurrence postponed from another month. Resolve that postponement before changing the due day.");
+      return;
+    }
   }
 
   const before = buildBillSnapshot(existingBill);

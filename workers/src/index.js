@@ -903,7 +903,7 @@ function reminderGetCalendarScheduleSlot(recurrence, dateValue, anchorValue = da
   return `month:${date.getUTCFullYear()}-${date.getUTCMonth()}`;
 }
 
-function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords = []) {
+function reminderGetHistoricalBillOccurrences(bill, referenceDate, paymentRecords = []) {
   const monthKey = value => {
     const date = new ReminderCalendarDate(value);
     return `${date.getUTCFullYear()}-${date.getUTCMonth()}`;
@@ -1074,26 +1074,27 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
       isArchivedHistory: Boolean(bill.archivedAt)
     });
   }
-  return [...candidates.values()]
-    .map(occurrence => {
-      const dueKey = reminderGetLocalDateKey(occurrence.dueDate);
-      const paid = paymentRecords.some(payment =>
-        payment.billId === bill.id &&
-        String(payment.status || "active").toLowerCase() !== "voided" &&
-        reminderGetLocalDateKey(payment.paidForDueDate || payment.billSnapshot?.dueDate) === dueKey
-      );
-      if (!isActiveBill(bill) || occurrence.isArchivedHistory || paid) return occurrence;
-      const result = {...occurrence};
-      if (typeof bill.name === "string" && bill.name.trim()) result.name = bill.name;
-      const currentAmount = Number(bill.amount);
-      if (bill.amount !== null && bill.amount !== undefined && bill.amount !== "" &&
-          Number.isFinite(currentAmount) && currentAmount >= 0) {
-        result.amount = currentAmount;
-      }
-      return result;
-    })
-    .sort((a, b) => new ReminderCalendarDate(a.dueDate) - new ReminderCalendarDate(b.dueDate));
+  return [...candidates.values()].sort((a, b) => new ReminderCalendarDate(a.dueDate) - new ReminderCalendarDate(b.dueDate));
 }
+
+function reminderResolveCurrentUnpaidOccurrences(bill, referenceDate, historical, payments) {
+  const key = value => reminderGetLocalDateKey(value);
+  const period = value => key(value).slice(0, 7);
+  const target = period(referenceDate.toISOString());
+  const status = String(bill.status || "").toLowerCase();
+  if (bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt || bill.paidInFullAt ||
+      ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status)) {
+    return historical;
+  }
+  const activePayments = payments.filter(payment =>
+    String(payment.status || "active").toLowerCase() !== "voided");
+  const isPaid = occurrence => activePayments.some(payment =>
+    payment.billId === bill.id &&
+    key(payment.paidForDueDate || payment.billSnapshot?.dueDate) === key(occurrence.dueDate));
+  const overrides = Array.isArray(bill.occurrenceOverrides) ? bill.occurrenceOverrides : [];
+  const overrideFor = occurrence => overrides.find(override =>
+    key(override.originalDueDate) === key(occurrence.originalDueDate || occurrence.dueDate));
+  const monthly = bill.recurrence
 function reminderGetLocalDateKey(value) {
   const date = new ReminderCalendarDate(value);
 
