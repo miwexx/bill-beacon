@@ -1074,9 +1074,20 @@ function reminderGetVersionedBillOccurrences(bill, referenceDate, paymentRecords
       isArchivedHistory: Boolean(bill.archivedAt)
     });
   }
-  return [...candidates.values()].sort((a, b) => new ReminderCalendarDate(a.dueDate) - new ReminderCalendarDate(b.dueDate));
+  return [...candidates.values()]
+    .map(occurrence => {
+      const dueKey = reminderGetLocalDateKey(occurrence.dueDate);
+      const paid = paymentRecords.some(payment =>
+        payment.billId === bill.id &&
+        String(payment.status || "active").toLowerCase() !== "voided" &&
+        reminderGetLocalDateKey(payment.paidForDueDate || payment.billSnapshot?.dueDate) === dueKey
+      );
+      if (!isActiveBill(bill) || occurrence.isArchivedHistory || paid ||
+          typeof bill.name !== "string" || !bill.name.trim()) return occurrence;
+      return {...occurrence, name: bill.name};
+    })
+    .sort((a, b) => new ReminderCalendarDate(a.dueDate) - new ReminderCalendarDate(b.dueDate));
 }
-
 function reminderGetLocalDateKey(value) {
   const date = new ReminderCalendarDate(value);
 

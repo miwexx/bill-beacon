@@ -192,9 +192,12 @@ const Store = {
   const previousSchedule = buildScheduleSnapshot(previousBill);
   const updatedSchedule = buildScheduleSnapshot(updatedBill);
 
+  // A display-name correction is not a new financial schedule version.
+  const {name: previousDisplayName, ...previousScheduleFields} = previousSchedule;
+  const {name: updatedDisplayName, ...updatedScheduleFields} = updatedSchedule;
   const scheduleChanged =
-    JSON.stringify(previousSchedule) !==
-    JSON.stringify(updatedSchedule);
+    JSON.stringify(previousScheduleFields) !==
+    JSON.stringify(updatedScheduleFields);
 
   const hasRecurringHistory =
     Array.isArray(previousBill.scheduleHistory) &&
@@ -1336,7 +1339,19 @@ function getVersionedBillOccurrences(bill, referenceDate) {
       isArchivedHistory: Boolean(bill.archivedAt)
     });
   }
-  return [...candidates.values()].sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  return [...candidates.values()]
+    .map(occurrence => {
+      const status = String(bill.status || "").toLowerCase();
+      const historicalOnly = bill.archived || bill.archivedAt || bill.cancelled ||
+        bill.cancelledAt || bill.paidInFullAt || occurrence.isArchivedHistory ||
+        ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status);
+      const paid = isOccurrencePaid(occurrence, new Date(occurrence.dueDate));
+      if (historicalOnly || paid || typeof bill.name !== "string" || !bill.name.trim()) {
+        return occurrence;
+      }
+      return {...occurrence, name: bill.name};
+    })
+    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
 
 function resolveCalendarBillOccurrence(billId, dueDate) {
