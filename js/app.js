@@ -15204,157 +15204,141 @@ function renderTransactions() {
 
   const accounts = plaidBankState.accounts || [];
 
-  const selected = accounts.find(
-    account =>
-      account.id ===
-      plaidBankState.selectedAccountId
-  );
-
-  const bankControls = `
+const accountSelector = accounts.length
+  ? `
     <section
       style="
-        margin-top:24px;
-        padding-top:18px;
-        border-top:1px solid var(--border);
+        margin-top:10px;
+        padding:14px;
+        border:1px solid rgba(192,151,255,.20);
+        border-radius:16px;
+        background:var(--surface);
       "
     >
-      <div class="section-header">
-        Bank connection
-      </div>
+      <label
+        for="plaidSandboxAccount"
+        style="
+          display:block;
+          margin-bottom:8px;
+          color:var(--text-muted);
+          font-size:12px;
+          font-weight:750;
+        "
+      >
+        Bill-pay account
+      </label>
 
-      <div class="card card-pad">
-        <div
-          style="
-            font-size:13px;
-            color:var(--text-muted);
-            margin-bottom:12px;
-            line-height:1.5;
-          "
-        >
-          ${
-            selected
-              ? `
-                Selected account:
-                ${escapeHtml(selected.name)}
-                ${
-                  selected.mask
-                    ? ` · •••• ${escapeHtml(selected.mask)}`
-                    : ""
-                }
-              `
-              : plaidBankState.connected
-                ? "Bank connected. Choose your bill-pay account below."
-                : "No bank connection loaded."
-          }
-        </div>
-
-        <div style="display:grid;gap:9px;">
-          <button
-            id="connectPlaidBank"
-            type="button"
-            class="btn-primary"
-            onclick="connectBillBeaconBank()"
-            style="width:100%;margin:0;"
-          >
-            Connect Bank
-          </button>
-
-          <button
-            type="button"
-            class="bb-outline-pill"
-            onclick="loadPlaidSandboxBank()"
-            style="
-              width:100%;
-              min-height:44px;
-              justify-content:center;
-            "
-          >
-            Load Saved Connection
-          </button>
-
-          <button
-            type="button"
-            class="bb-outline-pill"
-            onclick="syncPlaidBank()"
-            style="
-              width:100%;
-              min-height:44px;
-              justify-content:center;
-            "
-          >
-            Sync Transactions
-          </button>
-
-          ${
-            accounts.length
-              ? `
-                <label
-                  for="plaidSandboxAccount"
-                  style="
-                    margin-top:5px;
-                    font-size:13px;
-                    color:var(--text-muted);
-                  "
-                >
-                  Bill-pay account
-                </label>
-
-                <select
-                  id="plaidSandboxAccount"
-                  class="form-input"
-                  onchange="choosePlaidSandboxAccount(this.value)"
-                  style="
-                    width:100%;
-                    min-height:48px;
-                    text-align:left;
-                    background:var(--surface);
-                    color:var(--text);
-                  "
-                >
-                  ${
-                    accounts.map(account => `
-                      <option
-                        value="${escapeHtml(account.id)}"
-                        ${
-                          account.id ===
-                          plaidBankState.selectedAccountId
-                            ? "selected"
-                            : ""
-                        }
-                      >
-                        ${escapeHtml(account.name)}
-                        ${
-                          account.mask
-                            ? ` · ${escapeHtml(account.mask)}`
-                            : ""
-                        }
-                      </option>
-                    `).join("")
-                  }
-                </select>
-              `
-              : ""
-          }
-        </div>
-
-        <div
-          id="plaidConnectionStatus"
-          role="status"
-          aria-live="polite"
-          style="
-            margin-top:12px;
-            font-size:12px;
-            color:var(--text-muted);
-            line-height:1.5;
-          "
-        >
-          Load or sync your saved bank connection.
-          No new bank enrollment is needed on each
-          device using the same login.
-        </div>
-      </div>
+      <select
+        id="plaidSandboxAccount"
+        class="form-input"
+        onchange="choosePlaidSandboxAccount(this.value)"
+        aria-label="Select bill-pay account"
+        style="
+          width:100%;
+          min-height:46px;
+          text-align:left;
+          background:var(--surface);
+          color:var(--text);
+          font-size:16px;
+          font-weight:750;
+        "
+      >
+        ${
+          accounts.map(account => `
+            <option
+              value="${escapeHtml(account.id)}"
+              ${
+                account.id ===
+                plaidBankState.selectedAccountId
+                  ? "selected"
+                  : ""
+              }
+            >
+              ${escapeHtml(account.name)}
+              ${
+                account.mask
+                  ? ` · •••• ${escapeHtml(account.mask)}`
+                  : ""
+              }
+            </option>
+          `).join("")
+        }
+      </select>
     </section>
-  `;
+  `
+  : "";
+
+  const bankControls = `
+  <section
+    style="
+      margin-top:24px;
+      padding-top:18px;
+      border-top:1px solid var(--border);
+    "
+  >
+    <div class="section-header">
+      Bank connection
+    </div>
+
+    <div class="card card-pad">
+      <div style="display:grid;gap:9px;">
+        <button
+          id="connectPlaidBank"
+          type="button"
+          class="btn-primary"
+          onclick="connectBillBeaconBank()"
+          style="width:100%;margin:0;"
+        >
+          Connect Bank
+        </button>
+
+        <button
+          type="button"
+          class="bb-outline-pill"
+          onclick="loadPlaidSandboxBank()"
+          style="
+            width:100%;
+            min-height:44px;
+            justify-content:center;
+          "
+        >
+          Load Saved Connection
+        </button>
+
+        <button
+          type="button"
+          class="bb-outline-pill"
+          onclick="syncPlaidBank()"
+          style="
+            width:100%;
+            min-height:44px;
+            justify-content:center;
+          "
+        >
+          Sync Transactions
+        </button>
+      </div>
+
+      <div
+        id="plaidConnectionStatus"
+        role="status"
+        aria-live="polite"
+        style="
+          margin-top:12px;
+          font-size:12px;
+          color:var(--text-muted);
+          line-height:1.5;
+        "
+      >
+        ${
+          plaidBankState.connected
+            ? "Bank connected. Select the bill-pay account at the top."
+            : "Load your saved connection or connect a bank."
+        }
+      </div>
+    </div>
+  </section>
+`;
 
   return `
     <div class="nav-bar">
@@ -15401,6 +15385,7 @@ function renderTransactions() {
           );
         "
       >
+      ${accountSelector}
         <section
           style="
             display:flex;
