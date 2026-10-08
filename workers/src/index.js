@@ -196,9 +196,9 @@ async function sendPushNotification(subscription, payload, env) {
   if (!isAllowedPushEndpoint(endpoint) || new URL(endpoint).href !== new URL(subscription.endpoint).href) {
     throw new Error("Push request destination changed unexpectedly.");
   }
-  const response = await fetch(endpoint, {
+    const response = await fetch(endpoint, {
     method: "POST",
-    redirect: "error",
+    redirect: "manual",
     headers,
     body
   });

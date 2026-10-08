@@ -10815,7 +10815,20 @@ const dataSummary =
             Household bills and activity are securely synchronized with Cloud Firestore.
           </div>
         </div>
+                    <div class="settings-section">
+          <div class="section-header">Account</div>
 
+          <div class="card card-pad">
+            <button
+              id="signout-button"
+              type="button"
+              class="btn-primary"
+              style="width:100%;margin:0;"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
         <div class="settings-section">
           <div class="section-header">About</div>
 
@@ -15387,7 +15400,7 @@ const accountSelector = accounts.length
 >
   ${
     plaidBankState.canManageBankConnection === false
-      ? "Owner manages bank connection"
+      ? "Owner Manages Bank Connection"
       : "Connect Bank"
   }
 </button>
@@ -18111,22 +18124,47 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 document.addEventListener(
-  'touchmove',
+  "touchmove",
   function (event) {
-    if (!document.body.classList.contains('popup-open')) return;
+    if (!document.body.classList.contains("popup-open")) {
+      return;
+    }
 
-    const sheet = event.target.closest('.sheet');
+    const target = event.target;
+
+    if (!(target instanceof Element)) {
+      return;
+    }
+
+    const sheet = target.closest(".sheet");
 
     if (!sheet) {
       event.preventDefault();
       return;
     }
 
-    const canScroll = sheet.scrollHeight > sheet.clientHeight;
+    let element = target;
 
-    if (!canScroll) {
-      event.preventDefault();
+    while (element && sheet.contains(element)) {
+      const overflowY =
+        getComputedStyle(element).overflowY;
+
+      const canScroll =
+        /^(auto|scroll)$/.test(overflowY) &&
+        element.scrollHeight > element.clientHeight;
+
+      if (canScroll) {
+        return;
+      }
+
+      if (element === sheet) {
+        break;
+      }
+
+      element = element.parentElement;
     }
+
+    event.preventDefault();
   },
   { passive: false }
 );
