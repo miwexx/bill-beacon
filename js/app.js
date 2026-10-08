@@ -10811,9 +10811,6 @@ const dataSummary =
             </div>
           </div>
 
-          <div class="settings-footer">
-            Household bills and activity are securely synchronized with Cloud Firestore.
-          </div>
         </div>
                     <div class="settings-section">
           <div class="section-header">Account</div>
@@ -16113,6 +16110,7 @@ function addNotificationSettings() {
       <p
         id="notificationTestStatus"
         style="
+
           font-size:var(--text-sm);
           color:var(--text-muted);
           line-height:1.5;
@@ -16195,20 +16193,62 @@ function restoreBillBeaconBackup(data) {
   }
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 }
+async function exportBillTrackerBackup() {
+  try {
+    if (
+      typeof window.billBeaconPrepareDataTransfer !==
+      "function"
+    ) {
+      throw new Error(
+        "Update the household sync file " +
+        "before creating this backup."
+      );
+    }
 
-function exportBillTrackerBackup() {
-  const backup = {app: "Bill Beacon", version: 2, exportedAt: new Date().toISOString(),
-    bills: Store.getBills(), archivedBills: getArchivedBills(), payments: Store.getPayments(),
-    incomeSources: Store.getIncomeSources(), activityLog: Store.getActivityLog(),
-    bankTransactions: Store.getBankTransactions(), settings: Store.getSettings()};
-  const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], {type: "application/json"}));
-  const link = document.createElement("a"); link.href = url;
-  link.download = `bill-beacon-backup-${new Date().toISOString().slice(0, 10)}.json`; link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const prepared =
+      await window.billBeaconPrepareDataTransfer();
+
+    const backup = {
+      app: "Bill Beacon",
+      version: 2,
+      exportedAt: new Date().toISOString(),
+      sourceHouseholdId: prepared.householdId,
+
+      ...prepared.snapshot,
+
+      bankTransactions: Store.getBankTransactions()
+    };
+
+    validateBillBeaconBackup(backup);
+
+    const url = URL.createObjectURL(
+      new Blob(
+        [JSON.stringify(backup, null, 2)],
+        { type: "application/json" }
+      )
+    );
+
+    const link = document.createElement("a");
+
+    link.href = url;
+    link.download =
+      `bill-beacon-backup-` +
+      `${new Date().toISOString().slice(0, 10)}.json`;
+
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    setTimeout(
+      () => URL.revokeObjectURL(url),
+      1000
+    );
+  } catch (error) {
+    alert(
+      `Could not create backup: ${error.message}`
+    );
+  }
 }
-
-
-
 function chooseBillTrackerBackup() {
   document.getElementById("billTrackerBackupFile").click();
 }

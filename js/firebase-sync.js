@@ -357,4 +357,60 @@ window.addEventListener("online", () => {
   if (!cloudIsReady) startHouseholdSync(activeUser); else if (hasLocalChanges() && !conflict) saveNow();
 });
 window.billBeaconSyncStatus = () => ({ready: cloudIsReady, pending: hasLocalChanges(), conflict: Boolean(conflict), message: statusMessage});
+window.billBeaconPrepareDataTransfer = async function () {
+  const generation = sessionGeneration;
+  const uid = activeUserId;
+  const householdId = activeHouseholdId;
+
+  if (!uid || !householdId || !cloudIsReady) {
+    throw new Error(
+      "Wait until the shared household has loaded."
+    );
+  }
+
+  if (conflict) {
+    throw new Error(
+      "Resolve the household sync conflict before exporting."
+    );
+  }
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    assertSession(generation, uid);
+
+    if (
+      !cloudIsReady ||
+      activeHouseholdId !== householdId ||
+      conflict
+    ) {
+      throw new Error(
+        "Household state changed. Finish syncing and try again."
+      );
+    }
+
+    if (!inFlight && !hasLocalChanges()) {
+      return {
+        householdId,
+        snapshot: JSON.parse(
+          JSON.stringify(createLocalSnapshot())
+        )
+      };
+    }
+
+    const saved = await saveNow();
+
+    assertSession(generation, uid);
+
+    if (!saved) {
+      throw new Error(
+        "Household save did not finish. " +
+        "Your local data is still retained."
+      );
+    }
+  }
+
+  throw new Error(
+    "Edits are still being saved. " +
+    "Wait a moment and try again."
+  );
+};
 export { startHouseholdSync, stopHouseholdSync, queueSave, saveNow };
