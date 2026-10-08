@@ -13711,22 +13711,33 @@ function applyPlaidBankState(result) {
     );
   }
 
-  const safeTransactions = transactions.filter(transaction =>
-    transaction &&
-    typeof transaction.id === "string" &&
-    typeof transaction.accountId === "string" &&
-    transaction.accountId === selectedAccountId &&
-    typeof transaction.date === "string" &&
-    Number.isFinite(new Date(transaction.date).getTime()) &&
-    Number.isFinite(Number(transaction.amount))
+  const safeTransactions = transactions.filter(
+    transaction =>
+      transaction &&
+      typeof transaction.id === "string" &&
+      typeof transaction.accountId === "string" &&
+      transaction.accountId === selectedAccountId &&
+      typeof transaction.date === "string" &&
+      Number.isFinite(
+        new Date(transaction.date).getTime()
+      ) &&
+      Number.isFinite(Number(transaction.amount))
   );
 
   plaidBankState = {
     environment: "production",
     connected: result.connected === true,
+
+    canManageBankConnection:
+      result.canManageBankConnection === true,
+
+    sharedHouseholdConnection:
+      result.sharedHouseholdConnection === true,
+
     accounts: safeAccounts,
     selectedAccountId,
     transactions: safeTransactions,
+
     lastSyncedAt:
       typeof result.lastSyncedAt === "string"
         ? result.lastSyncedAt
