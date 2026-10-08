@@ -16933,7 +16933,7 @@ function renderPaymentHistory() {
                 <div class="empty-state-title">No payment history yet</div>
 
                 <div class="empty-state-text">
-                  Payments you mark as paid will appear here.
+                  No Recent Payments.
                 </div>
               </div>
             `

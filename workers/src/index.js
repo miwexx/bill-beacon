@@ -3218,8 +3218,8 @@ async function buildBankNewPaymentAllocationCore({
 
     const description =
       ` ${text(
-        transaction.merchantName ||
-        transaction.originalDescription
+        `${transaction.merchantName || ""} ` +
+        `${transaction.originalDescription || ""}`
       )} `;
 
     return (
@@ -3241,6 +3241,18 @@ async function buildBankNewPaymentAllocationCore({
     return date
       ? Math.floor(date.getTime() / 86400000)
       : NaN;
+  };
+
+  const withinDueWindow = dueDate => {
+    const dueDay = day(dueDate);
+    if (!Number.isFinite(dueDay)) return false;
+    return [transaction.date, transaction.authorizedDate]
+      .filter(Boolean)
+      .map(day)
+      .some(paymentDay =>
+        Number.isFinite(paymentDay) &&
+        Math.abs(paymentDay - dueDay) <= 1
+      );
   };
 
   const payments = household.payments;
@@ -3316,7 +3328,8 @@ async function buildBankNewPaymentAllocationCore({
           bill.id,
           dateKey(bill.dueDate)
         ).some(active)
-      );
+      )
+      .filter(bill => withinDueWindow(bill.dueDate));
 
     if (!queue.length) continue;
 
@@ -3403,16 +3416,16 @@ async function buildBankNewPaymentAllocationCore({
 
   // Ordinary bills: use the existing calendar
   // occurrence logic, not just the bill template.
-  const postedDay = day(transaction.date);
-  const authorizedDay = day(
-    transaction.authorizedDate
-  );
-
-  const postedKey = dateKey(transaction.date);
-
-  const [year, month] = postedKey
-    .split("-")
-    .map(Number);
+  const monthKeys = new Set();
+  for (const value of [transaction.date, transaction.authorizedDate].filter(Boolean)) {
+    const key = dateKey(value);
+    if (!key) continue;
+    const [year, month] = key.split("-").map(Number);
+    for (const offset of [-1, 0, 1]) {
+      monthKeys.add(new Date(Date.UTC(year, month - 1 + offset, 1, 12))
+        .toISOString().slice(0, 10));
+    }
+  }
 
   const seen = new Set();
 
@@ -3421,20 +3434,7 @@ async function buildBankNewPaymentAllocationCore({
       bill => !bill.installmentPlanId
     )
   ) {
-    for (const offset of [-1, 0, 1]) {
-      const reference = new Date(
-        Date.UTC(
-          year,
-          month - 1 + offset,
-          1,
-          12
-        )
-      );
-
-      const key = reference
-        .toISOString()
-        .slice(0, 10);
-
+    for (const key of monthKeys) {
       const occurrences =
         getReminderOccurrencesForMonth(
           bill,
@@ -3461,21 +3461,7 @@ async function buildBankNewPaymentAllocationCore({
           occurrence.dueDateKey
         );
 
-        const transfer =
-          /bank transfer|ach|echeck|e check/.test(
-            text(scheduled.paymentMethod)
-          );
-
-        const near =
-          (
-            Number.isFinite(authorizedDay) &&
-            Math.abs(authorizedDay - dueDay) <= 2
-          ) ||
-          (
-            postedDay - dueDay >= -2 &&
-            postedDay - dueDay <=
-              (transfer ? 7 : 3)
-          );
+        const near = withinDueWindow(occurrence.dueDateKey);
 
         if (
           !near ||
@@ -3721,26 +3707,14 @@ async function processBankConnection(env, uid, accessToken) {
     loaded.data.settings?.timeZone
   );
 
-  // Do not apply earlier bank history to today's unpaid bills.
-  // This includes the connection date and all subsequent dates.
-  const startKey = reminderFinancialDateKey(
-    record.createdAt,
-    zone
-  );
-
-  if (!startKey) {
-    throw new Error("Bank connection start date is invalid.");
-  }
-
+  // Evaluate all available posted outgoing history for the selected account.
+  // Creation dates do not limit matching; occurrence, amount, merchant and claims do.
   const transactions = (record.transactions || [])
     .filter(transaction =>
       transaction.accountId === record.selectedAccountId &&
       transaction.pending === false &&
       transaction.type === "debit" &&
-      reminderFinancialDateKey(
-        transaction.date,
-        zone
-      ) >= startKey
+      Boolean(reminderFinancialDateKey(transaction.date, zone))
     )
     .sort((a, b) =>
       String(a.date).localeCompare(String(b.date)) ||
@@ -4125,70 +4099,15 @@ async function runScheduledBankPayments(env) {
     );
   }
 }
-function bankBillHistoryEligibility(
-  bill,
-  transaction,
-  timeZone
-) {
-  const key = value =>
-    value
-      ? reminderFinancialDateKey(value, timeZone)
-      : "";
-
-  const createdKey = key(bill?.createdAt);
-  const postedKey = key(transaction?.date);
-  const authorizedKey = key(
-    transaction?.authorizedDate
-  );
-
-  if (!createdKey) {
-    return {
-      eligible: false,
-      reason:
-        "Bill creation date is missing or invalid."
-    };
-  }
-
+function bankBillHistoryEligibility(bill, transaction, timeZone) {
+  // Eligibility is based on the actual bill occurrence, not when it was entered.
+  const postedKey = transaction?.date
+    ? reminderFinancialDateKey(transaction.date, timeZone)
+    : "";
   if (!postedKey) {
-    return {
-      eligible: false,
-      reason:
-        "Transaction posting date is missing or invalid."
-    };
+    return {eligible: false, reason: "Transaction posting date is missing or invalid."};
   }
-
-  // Use the earlier known payment date.
-  // A later posting date must not make a newly
-  // added bill eligible for an older payment.
-  const paymentKey =
-    authorizedKey && authorizedKey < postedKey
-      ? authorizedKey
-      : postedKey;
-
-  if (createdKey > paymentKey) {
-    return {
-      eligible: false,
-      reason:
-        "The bill was added after this " +
-        "transaction's payment date."
-    };
-  }
-
-  // The transaction data currently preserves dates,
-  // not reliable transaction times. Do not invent
-  // ordering from the synthetic T12:00:00 value.
-  if (createdKey === paymentKey) {
-    return {
-      eligible: false,
-      reason:
-        "The bill and transaction have the same " +
-        "date; their order cannot be confirmed."
-    };
-  }
-
-  return {
-    eligible: true
-  };
+  return {eligible: true};
 }
 
 async function buildBankNewPaymentAllocation({
