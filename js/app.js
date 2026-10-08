@@ -13607,32 +13607,64 @@ function setPlaidBankMessage(message) {
 }
 
 async function callPlaidWorker(path, body) {
-  if (!["/plaid/status", "/plaid/sync", "/plaid/account", "/plaid/link-token", "/plaid/exchange-token"].includes(path)) throw new Error("Unsupported banking request.");
+  const basePath = String(path).split("?")[0];
+
+  const allowedPaths = [
+    "/plaid/status",
+    "/plaid/sync",
+    "/plaid/account",
+    "/plaid/link-token",
+    "/plaid/exchange-token"
+  ];
+
+  if (!allowedPaths.includes(basePath)) {
+    throw new Error(
+      "Unsupported banking request."
+    );
+  }
+
   const firebaseToken =
     await window.getBillBeaconFirebaseToken?.();
 
   if (!firebaseToken) {
-    throw new Error("Please sign in to Bill Beacon first.");
+    throw new Error(
+      "Please sign in to Bill Beacon first."
+    );
   }
 
   const response = await fetch(
-    `https://bill-beacon-notifications.rodz-m-1990.workers.dev${path}`,
+    "https://bill-beacon-notifications.rodz-m-1990.workers.dev" +
+    path,
     {
-      method: body === undefined ? "GET" : "POST",
+      method:
+        body === undefined ? "GET" : "POST",
+
       headers: {
         authorization: `Bearer ${firebaseToken}`,
         "content-type": "application/json"
       },
+
       ...(body === undefined
         ? {}
         : { body: JSON.stringify(body) })
     }
   );
 
-  const result = await response.json().catch(() => null);
+  const result = await response.json().catch(
+    () => null
+  );
 
-  if (!response.ok || !result || result.ok !== true) {
-    throw new Error(result?.error || "Banking request failed.");
+  if (
+    !response.ok ||
+    !result ||
+    result.ok !== true
+  ) {
+    const error = new Error(
+      result?.error || "Banking request failed."
+    );
+
+    error.code = result?.code || null;
+    throw error;
   }
 
   return result;
@@ -13767,17 +13799,35 @@ async function loadPlaidSandboxBank() {
   const sessionVersion = plaidSessionVersion;
 
   try {
-    setPlaidBankMessage("Loading saved bank connection…");
+    setPlaidBankMessage(
+      "Loading household bank transactions…"
+    );
 
-    const result = await callPlaidWorker("/plaid/status");
+    const viewingAccountId =
+      plaidBankState.canManageBankConnection === false
+        ? plaidBankState.selectedAccountId
+        : null;
 
-    if (sessionVersion !== plaidSessionVersion) return;
+    const path = viewingAccountId
+      ? "/plaid/status?accountId=" +
+        encodeURIComponent(viewingAccountId)
+      : "/plaid/status";
+
+    const result = await callPlaidWorker(path);
+
+    if (
+      sessionVersion !== plaidSessionVersion
+    ) return;
+
     applyPlaidBankState(result);
 
     setPlaidBankMessage(
       result.connected
-        ? "Saved bank connection loaded."
-        : "No saved connection. Tap Connect Bank."
+        ? "Household bank transactions loaded."
+        : result.canManageBankConnection
+          ? "No saved bank connection. Tap Connect Bank."
+          : "The household owner has not saved " +
+            "a bank connection for this household."
     );
 
     return result;
@@ -14291,7 +14341,12 @@ let plaidSyncInFlight = null;
 let plaidSessionVersion = 0;
 
 async function syncPlaidBank() {
-  if (plaidSyncInFlight) {
+  
+  if (
+  plaidBankState.canManageBankConnection === false
+) {
+  return loadPlaidSandboxBank();
+}if (plaidSyncInFlight) {
     return plaidSyncInFlight;
   }
 
@@ -14320,7 +14375,11 @@ async function syncPlaidBank() {
       }
 
       applyPlaidBankState(result);
+      await loadPlaidSandboxBank();
 
+if (
+  sessionVersion !== plaidSessionVersion
+) return;
       // Payment allocation will run in the Worker.
       // Do not run the browser matcher here.
       render();
@@ -14359,15 +14418,36 @@ async function syncPlaidBank() {
 }
 async function choosePlaidSandboxAccount(accountId) {
   const sessionVersion = plaidSessionVersion;
+
   try {
-    const result = await callPlaidWorker(
-      "/plaid/account",
-      { accountId }
+    setPlaidBankMessage(
+      "Loading selected account…"
     );
 
-    if (sessionVersion !== plaidSessionVersion) return;
+    const result =
+      plaidBankState.canManageBankConnection === true
+        ? await callPlaidWorker(
+            "/plaid/account",
+            { accountId }
+          )
+        : await callPlaidWorker(
+            "/plaid/status?accountId=" +
+            encodeURIComponent(accountId)
+          );
+
+    if (
+      sessionVersion !== plaidSessionVersion
+    ) return;
+
     applyPlaidBankState(result);
-    setPlaidBankMessage("Selected account updated.");
+
+    if (result.canManageBankConnection === undefined) {
+      await loadPlaidSandboxBank();
+    } else {
+      setPlaidBankMessage(
+        "Selected account transactions loaded."
+      );
+    }
   } catch (error) {
     setPlaidBankMessage(error.message);
   }
@@ -14600,6 +14680,18 @@ async function connectBillBeaconBank() {
       if (version !== plaidSessionVersion) return;
 
       applyPlaidBankState(existing);
+      if (
+  existing.canManageBankConnection === false
+) {
+  setPlaidBankMessage(
+    existing.connected
+      ? "Household transactions loaded. " +
+        "Only the owner manages the bank connection."
+      : "The household owner must connect the bank."
+  );
+
+  return;
+}
 
       if (existing.connected) {
         clearSession();
@@ -15271,14 +15363,23 @@ const accountSelector = accounts.length
     <div class="card card-pad">
       <div style="display:grid;gap:9px;">
         <button
-          id="connectPlaidBank"
-          type="button"
-          class="btn-primary"
-          onclick="connectBillBeaconBank()"
-          style="width:100%;margin:0;"
-        >
-          Connect Bank
-        </button>
+  id="connectPlaidBank"
+  type="button"
+  class="btn-primary"
+  onclick="connectBillBeaconBank()"
+  ${
+    plaidBankState.canManageBankConnection === false
+      ? "disabled"
+      : ""
+  }
+  style="width:100%;margin:0;"
+>
+  ${
+    plaidBankState.canManageBankConnection === false
+      ? "Owner manages bank connection"
+      : "Connect Bank"
+  }
+</button>
 
         <button
           type="button"

@@ -4440,6 +4440,193 @@ async function handleBankAutomationRequest(
     );
   }
 }
+async function loadSharedHouseholdBankView(
+  env,
+  uid,
+  requestedAccountId = null
+) {
+  const accessToken =
+    await getFirestoreAccessToken(env);
+
+  const profile =
+    await getUserProfile(uid, accessToken);
+
+  const householdId =
+    typeof profile?.householdId === "string"
+      ? profile.householdId.trim()
+      : "";
+
+  if (!householdId) {
+    throw new Error(
+      "No household is assigned to this account."
+    );
+  }
+
+  const membership = await getHouseholdMember(
+    householdId,
+    uid,
+    accessToken
+  );
+
+  if (
+    !membership ||
+    !["owner", "member"].includes(membership.role) ||
+    (membership.uid && membership.uid !== uid)
+  ) {
+    throw new Error(
+      "Valid household membership is required " +
+      "to view transactions."
+    );
+  }
+
+  const owners = new Set();
+  let pageToken;
+
+  do {
+    const url = new URL(
+      `${FIRESTORE_DOCUMENT_BASE}/households/` +
+      `${encodeURIComponent(householdId)}/members`
+    );
+
+    url.searchParams.set("pageSize", "1000");
+
+    if (pageToken) {
+      url.searchParams.set("pageToken", pageToken);
+    }
+
+    const response = await fetch(url, {
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        "Could not verify the household bank owner."
+      );
+    }
+
+    const result = await response.json();
+
+    for (const document of result.documents || []) {
+      const member = firestoreFieldsToJs(
+        document.fields || {}
+      );
+
+      const ownerUid = document.name
+        .split("/")
+        .pop();
+
+      if (
+        member.role === "owner" &&
+        (!member.uid || member.uid === ownerUid)
+      ) {
+        owners.add(ownerUid);
+      }
+    }
+
+    pageToken = result.nextPageToken;
+  } while (pageToken);
+
+  const connections = [];
+
+  for (const ownerUid of owners) {
+    const ownerProfile = await getUserProfile(
+      ownerUid,
+      accessToken
+    );
+
+    if (
+      ownerProfile?.householdId !== householdId
+    ) continue;
+
+    const record =
+      await env.NOTIFICATIONSKV.get(
+        plaidConnectionKey(ownerUid),
+        "json"
+      );
+
+    if (
+      record &&
+      record.bankHouseholdId === householdId
+    ) {
+      connections.push({
+        ownerUid,
+        record
+      });
+    }
+  }
+
+  if (connections.length > 1) {
+    throw new Error(
+      "Multiple owner bank connections exist. " +
+      "A primary connection must be designated " +
+      "before sharing."
+    );
+  }
+
+  if (!connections.length) {
+    if (requestedAccountId) {
+      throw new Error(
+        "No shared bank account is available."
+      );
+    }
+
+    return {
+      ...safePlaidConnection(null),
+      sharedHouseholdConnection: true,
+      canManageBankConnection:
+        membership.role === "owner"
+    };
+  }
+
+  const { ownerUid, record } = connections[0];
+
+  const viewAccountId =
+    requestedAccountId ||
+    record.selectedAccountId;
+
+  if (
+    viewAccountId &&
+    !(record.accounts || []).some(
+      account => account.id === viewAccountId
+    )
+  ) {
+    throw new Error(
+      "Choose an account from the household " +
+      "bank connection."
+    );
+  }
+
+  const latestMember = await getHouseholdMember(
+    householdId,
+    uid,
+    accessToken
+  );
+
+  if (
+    !latestMember ||
+    !["owner", "member"].includes(latestMember.role) ||
+    (latestMember.uid && latestMember.uid !== uid)
+  ) {
+    throw new Error(
+      "Household access changed."
+    );
+  }
+
+  return {
+    ...safePlaidConnection({
+      ...record,
+      selectedAccountId: viewAccountId
+    }),
+
+    sharedHouseholdConnection: true,
+
+    canManageBankConnection:
+      latestMember.role === "owner" &&
+      uid === ownerUid
+  };
+}
 export default {
   async fetch(request, env) {
     const origin = allowedOrigin(request);
@@ -4514,13 +4701,40 @@ if (plaidBankRoutes.has(url.pathname)) {
     let record = await env.NOTIFICATIONSKV.get(key, "json");
 
     if (url.pathname === "/plaid/status") {
-      return json(
-        { ok: true, ...safePlaidConnection(record) },
-        200,
-        origin
-      );
-    }
+  const view = await loadSharedHouseholdBankView(
+    env,
+    authentication.user.uid,
+    url.searchParams.get("accountId")
+  );
 
+  return json(
+    {
+      ok: true,
+      ...view
+    },
+    200,
+    origin
+  );
+}
+const bankManagementToken =
+  await getFirestoreAccessToken(env);
+
+const bankManagementHouseholdId =
+  await requireBankHousehold(
+    authentication.user.uid,
+    bankManagementToken
+  );
+
+if (
+  record &&
+  record.bankHouseholdId !==
+    bankManagementHouseholdId
+) {
+  throw new Error(
+    "The bank connection does not belong " +
+    "to this household."
+  );
+}
     if (url.pathname === "/plaid/exchange-token") {
       // Avoid replacing an existing connection accidentally.
       if (record) {
