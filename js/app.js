@@ -13640,8 +13640,51 @@ async function bbBillsCsvPreview(text, existing, archived, householdId) {
       }
       const assignment = get("Paycheck Assignment").trim() || "auto";
       if (!["auto", "first", "second", "previous"].includes(assignment)) throw new Error("Invalid paycheck assignment.");
-      const cycle = get("Pay Cycle").trim() || (Number(dateKey.slice(-2)) <= 15 ? "first" : "second");
-      if (!["first", "second"].includes(cycle)) throw new Error("Pay Cycle must be first or second.");
+            const cycleText = get("Pay Cycle")
+        .trim()
+        .toLowerCase()
+        .replace(/[\s_-]+/g, " ");
+
+      const cycleAliases = {
+        first: "first",
+        "first paycheck": "first",
+        early: "first",
+        "early cycle": "first",
+
+        second: "second",
+        "second paycheck": "second",
+        late: "second",
+        "late cycle": "second"
+      };
+
+      const automaticCycleValues = [
+        "",
+        "auto",
+        "automatic",
+        "automatic by due date",
+        "none",
+        "null"
+      ];
+
+      const cycle = automaticCycleValues.includes(cycleText)
+        ? (
+            Number(dateKey.slice(-2)) <= 15
+              ? "first"
+              : "second"
+          )
+        : Object.prototype.hasOwnProperty.call(
+            cycleAliases,
+            cycleText
+          )
+          ? cycleAliases[cycleText]
+          : null;
+
+      if (!cycle) {
+        throw new Error(
+          `Unrecognized Pay Cycle: "${get("Pay Cycle")}". ` +
+          "Use first, second, Early Cycle, Late Cycle, or auto."
+        );
+      }
       const sourceHousehold = get("Source Household").trim();
       const sourceId = get("ID").trim();
       const sourcePlan = get("Plan ID").trim();
