@@ -15215,19 +15215,7 @@ const accountSelector = accounts.length
         background:var(--surface);
       "
     >
-      <label
-        for="plaidSandboxAccount"
-        style="
-          display:block;
-          margin-bottom:8px;
-          color:var(--text-muted);
-          font-size:12px;
-          font-weight:750;
-        "
-      >
-        Bill-pay account
-      </label>
-
+     
       <select
         id="plaidSandboxAccount"
         class="form-input"
