@@ -14312,6 +14312,162 @@ async function previewAllPostedDebits(button) {
 }
 
 window.previewAllPostedDebits = previewAllPostedDebits;
+let reviewedBankApplyBusy = false;
+
+async function applyOneReviewedOctoberMatch(button) {
+  if (reviewedBankApplyBusy || allPostedPreviewBusy) return;
+
+  const rows = window.billBeaconPostedScanReport || [];
+
+  const candidates = rows.filter(row =>
+    !row.overlap &&
+    ["would-allocate", "would-reconcile"].includes(row.status) &&
+    row.allocations?.length &&
+    row.allocations.every(allocation =>
+      String(allocation.dueDate).slice(0, 7) === "2026-10"
+    )
+  );
+
+  const row = candidates.find(item =>
+    /resurgent/i.test(item.merchant) &&
+    Math.round(item.amount * 100) === 1212
+  ) || candidates[0];
+
+  if (!row) {
+    setPlaidBankMessage(
+      "Run the October preview first. " +
+      "No non-overlapping October match is available."
+    );
+    return;
+  }
+
+  reviewedBankApplyBusy = true;
+  if (button) button.disabled = true;
+
+  const sessionVersion = plaidSessionVersion;
+  const accountId = plaidBankState.selectedAccountId;
+  let requestStarted = false;
+
+  try {
+    if (plaidBankState.canManageBankConnection === false) {
+      throw new Error("The household bank owner must apply matches.");
+    }
+
+    if (
+      typeof window.billBeaconPrepareDataTransfer !== "function" ||
+      typeof window.billBeaconRefreshSharedHousehold !== "function"
+    ) {
+      throw new Error(
+        "The household sync helpers are not loaded. " +
+        "Check the firebase-sync.js changes first."
+      );
+    }
+
+    const context = window.getBillBeaconHouseholdContext?.();
+
+    if (!context?.ready || !context.householdId) {
+      throw new Error("Wait for the shared household to load.");
+    }
+
+    await window.billBeaconPrepareDataTransfer();
+
+    if (
+      sessionVersion !== plaidSessionVersion ||
+      accountId !== plaidBankState.selectedAccountId
+    ) {
+      throw new Error("Session or account changed. Preview again.");
+    }
+
+    const details = row.allocations.map(allocation =>
+      `${allocation.name || allocation.billId}: ` +
+      `$${Number(allocation.amount).toFixed(2)}, ` +
+      `due ${String(allocation.dueDate).slice(0, 10)}`
+    ).join("\n");
+
+    const approved = confirm(
+      "Record this existing bank payment in Bill Beacon?\n\n" +
+      `${row.merchant}: $${row.amount.toFixed(2)}\n` +
+      details +
+      "\n\nThis updates real payment history. It does not send money."
+    );
+
+    if (!approved) return;
+
+    const status = window.billBeaconSyncStatus?.();
+    const latestContext = window.getBillBeaconHouseholdContext?.();
+
+    if (
+      !status?.ready ||
+      status.pending ||
+      status.conflict ||
+      latestContext?.generation !== context.generation ||
+      latestContext?.householdId !== context.householdId ||
+      sessionVersion !== plaidSessionVersion ||
+      accountId !== plaidBankState.selectedAccountId
+    ) {
+      throw new Error(
+        "Household or local edits changed. Finish syncing and preview again."
+      );
+    }
+
+    setPlaidBankMessage("Recording one reviewed bank payment…");
+    requestStarted = true;
+
+    const result = await callPlaidWorker("/plaid/apply-match", {
+      transactionId: row.transactionId,
+      accountId,
+      householdId: context.householdId,
+      transactionAmount: row.amount,
+      postedDate: row.date,
+      expectedStatus: row.status,
+      allocations: row.allocations
+    });
+
+    if (sessionVersion !== plaidSessionVersion) return;
+
+    if (
+      !["allocated", "reconciled", "already-linked"].includes(result.status) ||
+      result.householdId !== context.householdId ||
+      !Array.isArray(result.paymentIds) ||
+      !result.paymentIds.length
+    ) {
+      throw new Error("Payment confirmation was incomplete.");
+    }
+
+    await window.billBeaconRefreshSharedHousehold(result.paymentIds);
+
+    if (sessionVersion !== plaidSessionVersion) return;
+
+    row.status = result.status;
+    window.billBeaconPostedScanReport = null;
+
+    setPlaidBankMessage(
+      `Confirmed: ${row.merchant} — ${result.status}. ` +
+      "Shared payment loaded. Run a fresh preview before another apply."
+    );
+
+    alert(
+      "Shared payment confirmed. Check Dashboard, Calendar, " +
+      "Payment History and your other household device."
+    );
+  } catch (error) {
+    if (sessionVersion === plaidSessionVersion) {
+      setPlaidBankMessage(
+        (requestStarted
+          ? "Apply or sync confirmation failed. Check shared Payment History " +
+            "before retrying; a payment may already be recorded. "
+          : "") +
+        error.message
+      );
+    }
+  } finally {
+    reviewedBankApplyBusy = false;
+    if (button) button.disabled = false;
+  }
+}
+
+window.applyOneReviewedOctoberMatch =
+  applyOneReviewedOctoberMatch;
 
 window.addEventListener("billbeacon:signed-out", () => {
   window.billBeaconPostedScanReport = null;
