@@ -293,14 +293,30 @@ function buildNotificationUrl({
 function buildBillDeepLink(billId) {
   return buildNotificationUrl({ billId });
 }
+const reminderDateFormatterCache = new Map();
 
+function getReminderDateFormatter(timeZone) {
+  let formatter = reminderDateFormatterCache.get(timeZone);
+
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-CA", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    });
+
+    if (reminderDateFormatterCache.size >= 32) {
+      reminderDateFormatterCache.clear();
+    }
+
+    reminderDateFormatterCache.set(timeZone, formatter);
+  }
+
+  return formatter;
+}
 function getDatePartsInTimeZone(date, timeZone) {
-  const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit"
-  });
+  const formatter = getReminderDateFormatter(timeZone);
 
   const parts = formatter.formatToParts(date);
 
@@ -634,11 +650,18 @@ class ReminderCalendarDate extends Date {
 }
 
 function validatedReminderTimeZone(value) {
-  const zone = typeof value === "string" && value ? value : DEFAULT_TIME_ZONE;
-  try { new Intl.DateTimeFormat("en", {timeZone: zone}).format(new Date()); return zone; }
-  catch { return DEFAULT_TIME_ZONE; }
-}
+  const zone =
+    typeof value === "string" && value
+      ? value
+      : DEFAULT_TIME_ZONE;
 
+  try {
+    getReminderDateFormatter(zone);
+    return zone;
+  } catch {
+    return DEFAULT_TIME_ZONE;
+  }
+}
 function calendarValueForReminder(value, timeZone, field = "", depth = 0) {
   if (depth > 24) throw new Error("Calendar data is too deeply nested.");
   const dateFields = ["dueDate", "originalDueDate", "paidForDueDate", "paidDate", "voidedAt", "archivedAt", "postponedTo", "postponedAt", "capturedAt"];
@@ -3493,6 +3516,23 @@ async function buildBankNewPaymentAllocationCore({
     if (!key) continue;
     const [year, month] = key.split("-").map(Number);
     for (const offset of [-1, 0, 1]) {
+          const possibleNames = [
+      bill.name,
+
+      ...(bill.scheduleHistory || [])
+        .map(version => version?.snapshot?.name),
+
+      ...(bill.occurrenceOverrides || [])
+        .map(override => override?.scheduleSnapshot?.name),
+
+      ...payments
+        .filter(payment => payment.billId === bill.id)
+        .map(payment => payment.billSnapshot?.name)
+    ];
+
+    if (!possibleNames.some(name => matches(name))) {
+      continue;
+    }
       monthKeys.add(new Date(Date.UTC(year, month - 1 + offset, 1, 12))
         .toISOString().slice(0, 10));
     }
@@ -3811,10 +3851,31 @@ async function processBankConnection(env, uid, accessToken, options = {}) {
     }
     unique.set(id, transaction);
   }
-  const transactions = [...unique.values()].sort((a,b) =>
+  let transactions = [...unique.values()].sort((a,b) =>
     effectiveDate(a).localeCompare(effectiveDate(b)) ||
     String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
   summary.transactionCount = transactions.length;
+    if (dryRun && options.singleTransactionTest) {
+    summary.availableTransactionCount = transactions.length;
+    summary.diagnosticOnly = true;
+
+    if (options.transactionId) {
+      transactions = transactions.filter(
+        transaction => transaction.id === options.transactionId
+      );
+
+      if (transactions.length !== 1) {
+        throw new Error(
+          "Selected transaction is not an eligible posted debit " +
+          "for this bank account."
+        );
+      }
+    } else {
+      transactions = transactions.slice(0, 1);
+    }
+
+    summary.transactionCount = transactions.length;
+  }
   const claimPath = id => `households/${encodeURIComponent(householdId)}/bankTransactionClaims/${id}`;
   const outcomePath = id => `households/${encodeURIComponent(householdId)}/bankReconciliationEvents/${id}`;
   const claimIds = dryRun ? await Promise.all(transactions.map(transaction => bankTransactionClaimId(record.itemId, transaction))) : [];
@@ -3946,6 +4007,12 @@ async function runScheduledBankPayments(env, options = {}) {
     wouldMatch: 0, wouldReconcile: 0, matched: 0, reconciled: 0, review: 0, unmatched: 0, failures: 0};
   const queueKey = "system:bank-free-batch-queue";
   try {
+        if (summary.dryRun) {
+      return {
+        ...summary,
+        status: "preview-manual-only"
+      };
+    }
     if (env.PLAID_ENV !== "production") throw new Error("Production banking configuration required.");
     let queue = await env.NOTIFICATIONSKV.get(queueKey, "json");
     const mode = summary.dryRun ? "preview" : "live";
@@ -4137,7 +4204,17 @@ async function handleBankAutomationRequest(
       if (env.PLAID_ENV !== "production") {
         return json({ok: false, error: "Production configuration required."}, 503, origin);
       }
-      const result = await processBankConnection(env, uid, accessToken, {dryRun: true});
+      const result = await processBankConnection(
+  env,
+  uid,
+  accessToken,
+  {
+    dryRun: true,
+    singleTransactionTest: true,
+    transactionId:
+      new URL(request.url).searchParams.get("transactionId")
+  }
+);
       return json({ok: true, ...result}, 200, origin);
     }
 

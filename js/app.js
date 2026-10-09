@@ -14005,6 +14005,7 @@ async function callPlaidWorker(path, body) {
     "/plaid/sync",
     "/plaid/account",
     "/plaid/link-token",
+    "/plaid/match-preview",
     "/plaid/exchange-token"
   ];
 
@@ -14060,6 +14061,78 @@ async function callPlaidWorker(path, body) {
 
   return result;
 }
+let octoberPreviewInFlight = false;
+
+async function previewFirstOctoberDebit(button) {
+  if (octoberPreviewInFlight) return;
+
+  octoberPreviewInFlight = true;
+  const sessionVersion = plaidSessionVersion;
+
+  if (button) button.disabled = true;
+
+  try {
+    if (plaidBankState.canManageBankConnection === false) {
+      throw new Error(
+        "The household bank owner must run this preview."
+      );
+    }
+
+    const transaction = (plaidBankState.transactions || [])
+      .filter(item =>
+        item.accountId === plaidBankState.selectedAccountId &&
+        item.pending === false &&
+        item.type === "debit" &&
+        String(item.date).slice(0, 7) === "2026-10"
+      )
+      .slice()
+      .sort((a, b) =>
+        String(a.date).localeCompare(String(b.date)) ||
+        String(a.id).localeCompare(String(b.id))
+      )[0];
+
+    if (!transaction) {
+      throw new Error(
+        "No posted October debit is loaded for this account. " +
+        "Use Load Saved Connection or Sync Transactions first."
+      );
+    }
+
+    setPlaidBankMessage(
+      `Previewing ${transaction.merchantName || "October debit"}…`
+    );
+
+    const result = await callPlaidWorker(
+      "/plaid/match-preview?transactionId=" +
+      encodeURIComponent(transaction.id)
+    );
+
+    if (sessionVersion !== plaidSessionVersion) return;
+
+    console.log("October single-transaction preview:", result);
+
+    setPlaidBankMessage(
+      `One-debit preview: ${result.wouldMatch || 0} would match; ` +
+      `${result.wouldReconcile || 0} would reconcile; ` +
+      `${result.review || 0} need review; ` +
+      `${result.unmatched || 0} unmatched; ` +
+      `${result.alreadyLinked || 0} already linked. ` +
+      "No payments were changed."
+    );
+
+    console.table(result.proposals || []);
+  } catch (error) {
+    if (sessionVersion === plaidSessionVersion) {
+      setPlaidBankMessage(error.message);
+      console.error("October preview failed:", error.message);
+    }
+  } finally {
+    octoberPreviewInFlight = false;
+    if (button) button.disabled = false;
+  }
+}
+
+window.previewFirstOctoberDebit = previewFirstOctoberDebit;
 function applyPlaidBankState(result) {
   if (
     !result ||
@@ -15808,6 +15881,14 @@ const accountSelector = accounts.length
         >
           Sync Transactions
         </button>
+        <button
+  type="button"
+  class="bb-outline-pill"
+  onclick="previewFirstOctoberDebit(this)"
+  style="width:100%;min-height:44px;justify-content:center;"
+>
+  Preview First October Debit — No Changes
+</button>
       </div>
 
       <div
