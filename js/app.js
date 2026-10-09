@@ -14079,11 +14079,16 @@ async function previewFirstOctoberDebit(button) {
     }
 
     const transaction = (plaidBankState.transactions || [])
-      .filter(item =>
+            .filter(item =>
         item.accountId === plaidBankState.selectedAccountId &&
         item.pending === false &&
         item.type === "debit" &&
-        String(item.date).slice(0, 7) === "2026-10"
+        String(item.date).slice(0, 7) === "2026-10" &&
+        Math.round(Number(item.amount) * 100) === 1212 &&
+        /\bresurgent\b/i.test(
+          `${item.merchantName || ""} ` +
+          `${item.originalDescription || ""}`
+        )
       )
       .slice()
       .sort((a, b) =>
@@ -14093,8 +14098,8 @@ async function previewFirstOctoberDebit(button) {
 
     if (!transaction) {
       throw new Error(
-        "No posted October debit is loaded for this account. " +
-        "Use Load Saved Connection or Sync Transactions first."
+                "No posted October Resurgent debit for $12.12 is loaded " +
+        "for this account. Load or sync the bank transactions first."
       );
     }
 
@@ -15887,7 +15892,7 @@ const accountSelector = accounts.length
   onclick="previewFirstOctoberDebit(this)"
   style="width:100%;min-height:44px;justify-content:center;"
 >
-  Preview First October Debit — No Changes
+  Preview Resurgent $12.12 — No Changes
 </button>
       </div>
 
