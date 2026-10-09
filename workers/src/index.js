@@ -3515,20 +3515,7 @@ async function buildBankNewPaymentAllocationCore({
     const key = dateKey(value);
     if (!key) continue;
     const [year, month] = key.split("-").map(Number);
-    for (const offset of [-1, 0, 1]) {
-          const possibleNames = [
-      bill.name,
-
-      ...(bill.scheduleHistory || [])
-        .map(version => version?.snapshot?.name),
-
-      ...(bill.occurrenceOverrides || [])
-        .map(override => override?.scheduleSnapshot?.name),
-
-      ...payments
-        .filter(payment => payment.billId === bill.id)
-        .map(payment => payment.billSnapshot?.name)
-    ];
+    for (const offset of [-1, 0, 1]) 
 
     if (!possibleNames.some(name => matches(name))) {
       continue;
@@ -3545,6 +3532,20 @@ async function buildBankNewPaymentAllocationCore({
       bill => !bill.installmentPlanId
     )
   ) {
+    {
+          const possibleNames = [
+      bill.name,
+
+      ...(bill.scheduleHistory || [])
+        .map(version => version?.snapshot?.name),
+
+      ...(bill.occurrenceOverrides || [])
+        .map(override => override?.scheduleSnapshot?.name),
+
+      ...payments
+        .filter(payment => payment.billId === bill.id)
+        .map(payment => payment.billSnapshot?.name)
+    ];
     for (const key of monthKeys) {
       const occurrences =
         getReminderOccurrencesForMonth(
