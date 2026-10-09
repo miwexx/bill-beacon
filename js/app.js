@@ -16280,6 +16280,11 @@ const accountSelector = accounts.length
 >
   Preview September Bills — Includes ±14-Day Bank Window
 </button>
+<button type="button" class="bb-outline-pill"
+  onclick="runBillMonthMatchBatch(this, '2026-09')"
+  style="width:100%;min-height:44px;justify-content:center;">
+  Scan and Record September Matches
+</button>
 <button
   type="button"
   class="bb-outline-pill"

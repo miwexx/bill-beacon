@@ -139,6 +139,7 @@ function applyCloudSnapshot(data) {
 }
 
 function renderUpdatedApp() {
+  if (window.billBeaconDeferBankRender === true) return;
   if (typeof window.initTheme === "function") window.initTheme();
   if (typeof window.render === "function") window.render();
 }
