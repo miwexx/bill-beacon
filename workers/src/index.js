@@ -2996,16 +2996,10 @@ async function buildBankManualReconciliation({
     const transfer =
       /bank transfer|ach|echeck|e check/.test(method);
 
-    const near =
-      (
-        Number.isFinite(authorizedDay) &&
-        Math.abs(authorizedDay - paidDay) <= 2
-      ) ||
-      (
-        postedDay - paidDay >= -1 &&
-        postedDay - paidDay <=
-          (transfer ? 7 : 3)
-      );
+        const near = [postedDay, authorizedDay].some(bankDay =>
+      Number.isFinite(bankDay) &&
+      Math.abs(bankDay - paidDay) <= 14
+    );
 
     if (!near) continue;
 

@@ -14143,8 +14143,39 @@ window.previewFirstOctoberDebit = previewFirstOctoberDebit;
 let allPostedPreviewBusy = false;
 window.billBeaconPostedScanReport = null;
 
-async function previewAllPostedDebits(button) {
+async function previewAllPostedDebits(
+  button,
+  monthKey = "2026-10"
+) {
   if (allPostedPreviewBusy) return;
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(monthKey)) {
+    setPlaidBankMessage("Choose a valid bill month.");
+    return;
+  }
+
+  const [year, month] = monthKey.split("-").map(Number);
+
+  const rangeStart = new Date(
+    Date.UTC(year, month - 1, 1, 12)
+  );
+
+  const rangeEnd = new Date(
+    Date.UTC(year, month, 0, 12)
+  );
+
+  rangeStart.setUTCDate(rangeStart.getUTCDate() - 14);
+  rangeEnd.setUTCDate(rangeEnd.getUTCDate() + 14);
+
+  const startKey = rangeStart.toISOString().slice(0, 10);
+  const endKey = rangeEnd.toISOString().slice(0, 10);
+
+  const inScanWindow = value => {
+    const key = String(value || "").slice(0, 10);
+
+    return /^\d{4}-\d{2}-\d{2}$/.test(key) &&
+      key >= startKey &&
+      key <= endKey;
+  };
 
   const sessionVersion = plaidSessionVersion;
   const accountId = plaidBankState.selectedAccountId;
@@ -14155,7 +14186,10 @@ async function previewAllPostedDebits(button) {
       item.pending === false &&
       item.type === "debit" &&
       typeof item.id === "string" &&
-      String(item.date).slice(0, 7) === "2026-10"
+      (
+  inScanWindow(item.date) ||
+  inScanWindow(item.authorizedDate)
+)
     )
     .slice()
     .sort((a, b) =>
@@ -14176,7 +14210,7 @@ async function previewAllPostedDebits(button) {
   }
 
   if (!confirm(
-    `Preview ${transactions.length} posted debits, one at a time? ` +
+    `Preview ${transactions.length} posted debits for ${monthKey}, one at a time? ` +
     "No payments will be changed."
   )) return;
 
@@ -14227,7 +14261,11 @@ async function previewAllPostedDebits(button) {
 
         return (
           `${row.date} | ${row.merchant} | $${row.amount.toFixed(2)}\n` +
-          `${row.overlap ? "REVIEW: overlapping proposal" : row.status}\n` +
+          `${row.outsideSelectedMonth
+  ? "REVIEW: allocation outside the selected bill month"
+  : row.overlap
+    ? "REVIEW: overlapping proposal"
+    : row.status}\n` +
           (allocations ? `  ${allocations}\n` : "") +
           (row.reason ? `${row.reason}\n` : "")
         );
@@ -14273,7 +14311,12 @@ async function previewAllPostedDebits(button) {
       const proposal = (result.proposals || [])[0];
 
       rows.push({
-        transactionId: transaction.id,
+        transactionId: transaction.id,        scanMonth: monthKey,
+
+        outsideSelectedMonth: (proposal?.allocations || [])
+          .some(allocation =>
+            String(allocation.dueDate).slice(0, 7) !== monthKey
+          ),
         date: String(transaction.date).slice(0, 10),
         merchant: transaction.merchantName || "",
         amount: Number(transaction.amount),
@@ -14319,7 +14362,8 @@ async function applyOneReviewedOctoberMatch(button) {
 
   const rows = window.billBeaconPostedScanReport || [];
 
-  const candidates = rows.filter(row =>
+    const candidates = rows.filter(row =>
+    row.scanMonth === "2026-10" &&
     !row.overlap &&
     ["would-allocate", "would-reconcile"].includes(row.status) &&
     row.allocations?.length &&
@@ -16227,6 +16271,14 @@ const accountSelector = accounts.length
   style="width:100%;min-height:44px;justify-content:center;"
 >
   Preview October Debits — No Changes
+</button>
+<button
+  type="button"
+  class="bb-outline-pill"
+  onclick="previewAllPostedDebits(this, '2026-09')"
+  style="width:100%;min-height:44px;justify-content:center;"
+>
+  Preview September Bills — Includes ±14-Day Bank Window
 </button>
 <button
   type="button"
