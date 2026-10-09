@@ -21,4 +21,8 @@ binding = "NOTIFICATIONSKV"
 id = "840fbd5bbad24c4caedeea2e2233fd82"
 
 [triggers]
-crons = ["*/5 * * * *", "0 0,12 * * *"]
+crons = [
+  "*/5 * * * *",
+  "0 0,12 * * *",
+  "1-59/5 * * * *"
+]

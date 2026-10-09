@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT } from "jose";
 import { buildPushHTTPRequest } from "@pushforge/builder";
 
@@ -196,7 +197,7 @@ async function sendPushNotification(subscription, payload, env) {
   if (!isAllowedPushEndpoint(endpoint) || new URL(endpoint).href !== new URL(subscription.endpoint).href) {
     throw new Error("Push request destination changed unexpectedly.");
   }
-    const response = await fetch(endpoint, {
+    const response = await workerFetch(endpoint, {
     method: "POST",
     redirect: "manual",
     headers,
@@ -1426,7 +1427,7 @@ async function getFirestoreAccessToken(env) {
     .setExpirationTime(issuedAt + 3600)
     .sign(privateKey);
 
-  const response = await fetch(FIRESTORE_TOKEN_URL, {
+  const response = await workerFetch(FIRESTORE_TOKEN_URL, {
     method: "POST",
     headers: {
       "content-type":
@@ -1546,7 +1547,7 @@ function jsObjectToFirestoreFields(object) {
   return fields;
 }
 async function getUserProfile(uid, accessToken) {
-  const response = await fetch(
+  const response = await workerFetch(
     `${FIRESTORE_DOCUMENT_BASE}/users/${encodeURIComponent(uid)}`,
     {
       headers: {
@@ -1574,7 +1575,7 @@ async function getUserProfile(uid, accessToken) {
 }
 
 async function getHouseholdSnapshot(householdId, accessToken) {
-  const response = await fetch(
+  const response = await workerFetch(
     `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(
       householdId
     )}`,
@@ -1629,7 +1630,7 @@ async function writeNotificationInboxRecord(
     openedAt: null
   };
 
-  const response = await fetch(
+  const response = await workerFetch(
     `${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(householdId)}/notifications/${documentId}?currentDocument.exists=false`,
     {
       method: "PATCH",
@@ -1657,7 +1658,7 @@ async function markInboxDelivered(householdId, notificationId, accessToken) {
   url.searchParams.append("updateMask.fieldPaths", "deliveryState");
   url.searchParams.append("updateMask.fieldPaths", "deliveredAt");
   url.searchParams.set("currentDocument.exists", "true");
-  const response = await fetch(url, {method: "PATCH", headers: {
+  const response = await workerFetch(url, {method: "PATCH", headers: {
     authorization: `Bearer ${accessToken}`, "content-type": "application/json"
   }, body: JSON.stringify({fields: jsObjectToFirestoreFields({deliveryState: "delivered", deliveredAt: new Date().toISOString()})})});
   if (!response.ok) throw new Error(`Could not record push delivery (${response.status}).`);
@@ -1668,7 +1669,7 @@ async function getHouseholdUnreadCount(householdId, accessToken) {
     const url = new URL(`${FIRESTORE_DOCUMENT_BASE}/households/${encodeURIComponent(householdId)}/notifications`);
     url.searchParams.set("pageSize", "1000");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
-    const response = await fetch(url, {headers: {authorization: `Bearer ${accessToken}`}});
+    const response = await workerFetch(url, {headers: {authorization: `Bearer ${accessToken}`}});
     if (!response.ok) throw new Error(`Unread count failed (${response.status}).`);
     const result = await response.json();
     for (const document of result.documents || []) {
@@ -1727,7 +1728,7 @@ async function sha256Hex(value) {
 }
 
 async function getFirestoreDocument(path, accessToken) {
-  const response = await fetch(
+  const response = await workerFetch(
     `${FIRESTORE_DOCUMENT_BASE}/${path}`,
     {
       headers: {
@@ -1759,7 +1760,7 @@ async function writeFirestoreDocument(
   data,
   accessToken
 ) {
-  const response = await fetch(
+  const response = await workerFetch(
     `${FIRESTORE_DOCUMENT_BASE}/${path}`,
     {
       method: "PATCH",
@@ -2246,7 +2247,7 @@ async function plaidRequest(
   let response;
 
   try {
-    response = await fetch(
+    response = await workerFetch(
       `https://production.plaid.com${endpoint}`,
       {
         method: "POST",
@@ -2497,7 +2498,7 @@ async function loadHouseholdForBankCommit(
     );
   }
 
-  const response = await fetch(
+  const response = await workerFetch(
     `${FIRESTORE_DOCUMENT_BASE}/households/` +
     encodeURIComponent(householdId),
     {
@@ -2712,7 +2713,7 @@ async function commitBankPaymentAllocation({
     status: "allocated"
   };
 
-  const response = await fetch(
+  const response = await workerFetch(
     `${FIRESTORE_DOCUMENT_BASE}:commit`,
     {
       method: "POST",
@@ -3719,6 +3720,55 @@ async function requireBankHousehold(uid, accessToken) {
   return householdId;
 }
 
+
+const bankRequestScope = new AsyncLocalStorage();
+function bankRequestsRemaining() {
+  const scope = bankRequestScope.getStore();
+  return scope ? scope.limit - scope.calls : Infinity;
+}
+async function workerFetch(input, init = {}) {
+  const scope = bankRequestScope.getStore();
+  if (scope) {
+    if (scope.calls >= scope.limit) {
+      const error = new Error("Bank request budget reached. No additional remote request was issued.");
+      error.code = "BANK_REQUEST_BUDGET";
+      throw error;
+    }
+    scope.calls++;
+    init = {...init, redirect: "manual"};
+  }
+  return fetch(input, init);
+}
+async function readBankClaimsBatch(householdId, claimIds, accessToken) {
+  const claims = new Map();
+  const base = FIRESTORE_DOCUMENT_BASE.replace("https://firestore.googleapis.com/v1/", "");
+  for (let offset = 0; offset < claimIds.length; offset += 200) {
+    if (bankRequestsRemaining() < 5) throw new Error("Preview history exceeds this request budget. No payments were written.");
+    const documents = claimIds.slice(offset, offset + 200).map(id =>
+      `${base}/households/${encodeURIComponent(householdId)}/bankTransactionClaims/${id}`);
+    const response = await workerFetch(`${FIRESTORE_DOCUMENT_BASE}:batchGet`, {
+      method: "POST", headers: {authorization: `Bearer ${accessToken}`, "content-type": "application/json"},
+      body: JSON.stringify({documents})
+    });
+    if (!response.ok) throw new Error(`Bank claim batch read failed (${response.status}).`);
+    const text = await response.text();
+    let rows;
+    try { rows = JSON.parse(text); }
+    catch { rows = text.trim().split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line)); }
+    if (!Array.isArray(rows)) rows = [rows];
+    const expected = new Set(documents), seen = new Set();
+    for (const row of rows) {
+      const name = row.found?.name || row.missing;
+      if (!name && row.readTime && !row.error) continue;
+      if (!name || !expected.has(name) || seen.has(name) || row.error) throw new Error("Invalid bank claim batch response.");
+      seen.add(name);
+      claims.set(name.split("/").pop(), row.found ? firestoreFieldsToJs(row.found.fields || {}) : null);
+    }
+    if (seen.size !== expected.size) throw new Error("Incomplete bank claim batch response. Missing claims were not assumed absent.");
+  }
+  return claims;
+}
+
 async function processBankConnection(env, uid, accessToken, options = {}) {
   const dryRun = options.dryRun ?? (env.BANK_MATCHING_MODE !== "live");
   const key = plaidConnectionKey(uid);
@@ -3733,7 +3783,11 @@ async function processBankConnection(env, uid, accessToken, options = {}) {
   if (record.bankHouseholdId !== householdId) throw new Error("Bank connection is not bound to this household.");
   summary.householdId = householdId;
   summary.lastSyncedAt = record.lastSyncedAt || null;
-  if (!dryRun) {
+  const cursorKey = `plaid:production:batch-cursor:${uid}`;
+  let savedCursor = dryRun ? null : await env.NOTIFICATIONSKV.get(cursorKey, "json");
+  if (savedCursor && (savedCursor.itemId !== record.itemId || savedCursor.accountId !== record.selectedAccountId ||
+      savedCursor.householdId !== householdId)) savedCursor = null;
+  if (!dryRun && !savedCursor) {
     record = await syncPlaidTransactions(env, record);
     await env.NOTIFICATIONSKV.put(key, JSON.stringify(record));
     summary.lastSyncedAt = record.lastSyncedAt || null;
@@ -3763,6 +3817,15 @@ async function processBankConnection(env, uid, accessToken, options = {}) {
   summary.transactionCount = transactions.length;
   const claimPath = id => `households/${encodeURIComponent(householdId)}/bankTransactionClaims/${id}`;
   const outcomePath = id => `households/${encodeURIComponent(householdId)}/bankReconciliationEvents/${id}`;
+  const claimIds = dryRun ? await Promise.all(transactions.map(transaction => bankTransactionClaimId(record.itemId, transaction))) : [];
+  const previewClaims = dryRun ? await readBankClaimsBatch(householdId, claimIds, accessToken) : null;
+  let startIndex = 0;
+  if (savedCursor?.lastProcessedId) {
+    const previous = transactions.findIndex(transaction => transaction.id === savedCursor.lastProcessedId);
+    if (previous >= 0) startIndex = previous + 1;
+  }
+  let lastProcessedId = savedCursor?.lastProcessedId || null;
+  let processedThrough = startIndex;
   const allocationKeys = plan => plan.nextPayments
     .filter(payment => plan.allocationPaymentIds.includes(payment.id))
     .map(payment => payment.billId + ":" + reminderPaymentOccurrenceDateKey(payment, zone)).sort();
@@ -3782,18 +3845,23 @@ async function processBankConnection(env, uid, accessToken, options = {}) {
       accountId: transaction.accountId, itemId: record.itemId, amount: Number(transaction.amount),
       postedDate: transaction.date, status, reason, checkedAt: new Date().toISOString()}, accessToken);
   }
-  for (const transaction of transactions) {
+  for (let index = dryRun ? 0 : startIndex; index < transactions.length; index++) {
+    if (!dryRun && (summary.checked >= 2 || bankRequestsRemaining() < 20)) break;
+    const transaction = transactions[index];
     summary.checked++;
     const claimId = await bankTransactionClaimId(record.itemId, transaction);
     let expectedKeys = null, completed = false;
     for (let attempt = 0; attempt < (dryRun ? 1 : 3); attempt++) {
-      if (await requireBankHousehold(uid, accessToken) !== householdId) throw new Error("Household ownership changed.");
-      const latestRecord = await env.NOTIFICATIONSKV.get(key, "json");
+      if (!dryRun && await requireBankHousehold(uid, accessToken) !== householdId) throw new Error("Household ownership changed.");
+      const latestRecord = dryRun ? record : await env.NOTIFICATIONSKV.get(key, "json");
       if (latestRecord?.itemId !== record.itemId || latestRecord.selectedAccountId !== record.selectedAccountId ||
           latestRecord.bankHouseholdId !== householdId) throw new Error("Selected bank connection changed.");
+      if (!dryRun && JSON.stringify((latestRecord.transactions || []).find(value => value.id === transaction.id && value.accountId === transaction.accountId)) !== JSON.stringify(transaction)) {
+        throw new Error("Bank transaction changed during processing. Reload before allocating.");
+      }
       if (!dryRun) loaded = await loadHouseholdForBankCommit(householdId, accessToken);
       const household = dryRun ? virtual : loaded.data;
-      const existingClaim = await getFirestoreDocument(claimPath(claimId), accessToken);
+      const existingClaim = dryRun ? previewClaims.get(claimId) : await getFirestoreDocument(claimPath(claimId), accessToken);
       if (existingClaim) {
         const ids = existingClaim.paymentIds || [];
         const linked = household.payments.filter(payment => ids.includes(payment.id));
@@ -3837,111 +3905,80 @@ async function processBankConnection(env, uid, accessToken, options = {}) {
       summary.review++;
       await outcome(transaction, claimId, "review", "Concurrent changes altered the chosen occurrence or prevented a safe commit. No redirected allocation was made.");
     }
+    if (!dryRun) {
+      lastProcessedId = transaction.id;
+      processedThrough = index + 1;
+      await env.NOTIFICATIONSKV.put(cursorKey, JSON.stringify({itemId: record.itemId,
+        accountId: record.selectedAccountId, householdId, lastProcessedId, updatedAt: new Date().toISOString()}));
+    }
   }
   if (dryRun) {
+    if (await requireBankHousehold(uid, accessToken) !== householdId) throw new Error("Household ownership changed during preview.");
+    const latestRecord = await env.NOTIFICATIONSKV.get(key, "json");
+    if (latestRecord?.itemId !== record.itemId || latestRecord.selectedAccountId !== record.selectedAccountId ||
+        latestRecord.bankHouseholdId !== householdId || JSON.stringify(latestRecord.transactions) !== JSON.stringify(record.transactions)) {
+      throw new Error("Selected bank connection or transaction history changed during preview. Run preview again.");
+    }
     const fresh = await loadHouseholdForBankCommit(householdId, accessToken);
     if (fresh.updateTime !== initialVersion) throw new Error("Household changed during preview. Run preview again.");
   }
-  return {...summary, proposalsTruncated: dryRun && summary.proposals.length >= 100,
+  const batchComplete = dryRun || processedThrough >= transactions.length;
+  if (!dryRun) {
+    if (batchComplete) await env.NOTIFICATIONSKV.delete(cursorKey);
+    else if (!lastProcessedId) await env.NOTIFICATIONSKV.put(cursorKey, JSON.stringify({itemId: record.itemId,
+      accountId: record.selectedAccountId, householdId, lastProcessedId: null, updatedAt: new Date().toISOString()}));
+  }
+  if (!dryRun && !batchComplete) {
+    const queueKey = "system:bank-free-batch-queue";
+    let queue = await env.NOTIFICATIONSKV.get(queueKey, "json");
+    if (queue?.mode !== "live" || !Array.isArray(queue.uids)) queue = {mode: "live", uids: []};
+    if (!queue.uids.includes(uid)) queue.uids.push(uid);
+    await env.NOTIFICATIONSKV.put(queueKey, JSON.stringify(queue));
+  }
+  return {...summary, batchComplete, remainingTransactions: dryRun ? 0 : transactions.length - processedThrough,
+    requestBudget: 45, externalRequestsUsed: bankRequestScope.getStore()?.calls ?? null,
+    proposalsTruncated: dryRun && summary.proposals.length >= 100,
     status: dryRun ? "preview" : "processed"};
 }
 
-async function runScheduledBankPayments(env) {
-  const summary = {
-    startedAt: new Date().toISOString(),
-    processed: 0,
-    dryRun: env.BANK_MATCHING_MODE !== "live",
-    wouldMatch: 0,
-    wouldReconcile: 0,
-    matched: 0,
-    reconciled: 0,
-    review: 0,
-    unmatched: 0,
-    failures: 0
-  };
-
+async function runScheduledBankPayments(env, options = {}) {
+  const summary = {startedAt: new Date().toISOString(), processed: 0, dryRun: env.BANK_MATCHING_MODE !== "live",
+    wouldMatch: 0, wouldReconcile: 0, matched: 0, reconciled: 0, review: 0, unmatched: 0, failures: 0};
+  const queueKey = "system:bank-free-batch-queue";
   try {
-    if (env.PLAID_ENV !== "production") {
-      throw new Error(
-        "Production banking configuration required."
-      );
+    if (env.PLAID_ENV !== "production") throw new Error("Production banking configuration required.");
+    let queue = await env.NOTIFICATIONSKV.get(queueKey, "json");
+    const mode = summary.dryRun ? "preview" : "live";
+    if (queue?.mode !== mode) queue = null;
+    if (!queue?.uids?.length) {
+      if (options.continuationOnly) return {...summary, status: "idle"};
+      const keys = await listAllKvKeys(env, "plaid:production:user:");
+      queue = {mode, uids: keys.map(key => key.name.slice("plaid:production:user:".length))};
+      if (!queue.uids.length) return summary;
+      await env.NOTIFICATIONSKV.put(queueKey, JSON.stringify(queue));
     }
-
-    const keys = await listAllKvKeys(
-      env,
-      "plaid:production:user:"
-    );
-
-    if (!keys.length) return summary;
-
+    const uid = queue.uids[0];
     const accessToken = await getFirestoreAccessToken(env);
-
-    for (const key of keys) {
-      const uid = key.name.slice(
-        "plaid:production:user:".length
-      );
-
-      try {
-        const result = await processBankConnection(
-          env,
-          uid,
-          accessToken
-        );
-        await env.NOTIFICATIONSKV.put(
-  `plaid:production:run-status:${uid}`,
-  JSON.stringify({
-    ...result,
-    startedAt: summary.startedAt,
-    finishedAt: new Date().toISOString(),
-    source: "scheduled"
-  })
-);
-        if (!["processed", "preview"].includes(result.status)) continue;
-
-        summary.processed++;
-
-        for (
-          const field of [
-            "matched",
-            "reconciled",
-            "review",
-            "unmatched",
-            "wouldMatch",
-            "wouldReconcile"
-          ]
-        ) {
-          summary[field] += result[field];
-        }
-      } catch (error) {
-        summary.failures++;
-
-        console.error(
-          "Scheduled bank processing failed.",
-          {
-            uid,
-            message: error.message
-          }
-        );
-      }
+    const result = await processBankConnection(env, uid, accessToken);
+    await env.NOTIFICATIONSKV.put(`plaid:production:run-status:${uid}`, JSON.stringify({...result,
+      startedAt: summary.startedAt, finishedAt: new Date().toISOString(), source: "scheduled"}));
+    if (["processed", "preview"].includes(result.status)) {
+      summary.processed++;
+      for (const field of ["matched", "reconciled", "review", "unmatched", "wouldMatch", "wouldReconcile"]) summary[field] += result[field] || 0;
     }
-
+    if (result.batchComplete !== false) queue.uids.shift();
+    if (queue.uids.length) await env.NOTIFICATIONSKV.put(queueKey, JSON.stringify(queue));
+    else await env.NOTIFICATIONSKV.delete(queueKey);
+    summary.pendingConnections = queue.uids.length;
+    summary.batchComplete = result.batchComplete !== false;
     return summary;
   } catch (error) {
     summary.failures++;
-
-    console.error(
-      "Scheduled banking unavailable.",
-      { message: error.message }
-    );
-
+    console.error("Scheduled bank batch failed; pending work retained.", {message: error.message});
     return summary;
   } finally {
     summary.finishedAt = new Date().toISOString();
-
-    await env.NOTIFICATIONSKV.put(
-      "system:last-bank-run",
-      JSON.stringify(summary)
-    );
+    await env.NOTIFICATIONSKV.put("system:last-bank-run", JSON.stringify(summary));
   }
 }
 function bankBillHistoryEligibility(bill, transaction, timeZone) {
@@ -4218,9 +4255,9 @@ async function handleBankAutomationRequest(
       {
         ok: false,
         error:
-          "Bank processing or status lookup failed. " +
-          "Check Worker logs; do not assume " +
-          "no payments changed."
+          path === "/plaid/match-preview"
+            ? "Bank preview failed. No payments or transaction claims were written by this preview. Check Worker logs."
+            : "Bank processing or status lookup failed. Check Worker logs; do not assume no payments changed."
       },
       500,
       origin
@@ -4281,7 +4318,7 @@ async function loadSharedHouseholdBankView(
       url.searchParams.set("pageToken", pageToken);
     }
 
-    const response = await fetch(url, {
+    const response = await workerFetch(url, {
       headers: {
         authorization: `Bearer ${accessToken}`
       }
@@ -4414,7 +4451,7 @@ async function loadSharedHouseholdBankView(
       uid === ownerUid
   };
 }
-export default {
+const workerHandlers = {
   async fetch(request, env) {
     const origin = allowedOrigin(request);
 
@@ -5417,6 +5454,10 @@ const exchanged = await plaidRequest(
   },
 
   async scheduled(event, env, ctx) {
+  if (event.cron === "1-59/5 * * * *") {
+    ctx.waitUntil(runScheduledBankPayments(env, {continuationOnly: true}));
+    return;
+  }
   if (event.cron === "0 0,12 * * *") {
     ctx.waitUntil(runScheduledBankPayments(env));
     return;
@@ -5432,4 +5473,15 @@ const exchanged = await plaidRequest(
     event.cron
   );
 }
+};
+export default {
+  fetch(request, env, ctx) {
+    const path = new URL(request.url).pathname;
+    if (!["/plaid/match-preview", "/plaid/run-now"].includes(path)) return workerHandlers.fetch(request, env, ctx);
+    return bankRequestScope.run({calls: 0, limit: 45}, () => workerHandlers.fetch(request, env, ctx));
+  },
+  scheduled(event, env, ctx) {
+    if (!["0 0,12 * * *", "1-59/5 * * * *"].includes(event.cron)) return workerHandlers.scheduled(event, env, ctx);
+    return bankRequestScope.run({calls: 0, limit: 45}, () => workerHandlers.scheduled(event, env, ctx));
+  }
 };
