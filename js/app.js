@@ -14149,11 +14149,12 @@ async function previewAllPostedDebits(button) {
   const accountId = plaidBankState.selectedAccountId;
 
   const transactions = (plaidBankState.transactions || [])
-    .filter(item =>
+        .filter(item =>
       item.accountId === accountId &&
       item.pending === false &&
       item.type === "debit" &&
-      typeof item.id === "string"
+      typeof item.id === "string" &&
+      String(item.date).slice(0, 7) === "2026-10"
     )
     .slice()
     .sort((a, b) =>
@@ -16068,7 +16069,7 @@ const accountSelector = accounts.length
   onclick="previewAllPostedDebits(this)"
   style="width:100%;min-height:44px;justify-content:center;"
 >
-  Preview All Posted Debits — No Changes
+  Preview October Debits — No Changes
 </button>
 <pre
   id="postedScanResults"
