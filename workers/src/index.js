@@ -3508,20 +3508,25 @@ async function buildBankNewPaymentAllocationCore({
     }
   }
 
-  // Ordinary bills: use the existing calendar
-  // occurrence logic, not just the bill template.
+    // Ordinary bills: check merchant names before calculating calendars.
   const monthKeys = new Set();
-  for (const value of [transaction.date, transaction.authorizedDate].filter(Boolean)) {
+
+  for (
+    const value of [
+      transaction.date,
+      transaction.authorizedDate
+    ].filter(Boolean)
+  ) {
     const key = dateKey(value);
     if (!key) continue;
-    const [year, month] = key.split("-").map(Number);
-    for (const offset of [-1, 0, 1]) 
 
-    if (!possibleNames.some(name => matches(name))) {
-      continue;
-    }
-      monthKeys.add(new Date(Date.UTC(year, month - 1 + offset, 1, 12))
-        .toISOString().slice(0, 10));
+    const [year, month] = key.split("-").map(Number);
+
+    for (const offset of [-1, 0, 1]) {
+      monthKeys.add(
+        new Date(Date.UTC(year, month - 1 + offset, 1, 12))
+          .toISOString().slice(0, 10)
+      );
     }
   }
 
@@ -3532,8 +3537,7 @@ async function buildBankNewPaymentAllocationCore({
       bill => !bill.installmentPlanId
     )
   ) {
-    {
-          const possibleNames = [
+    const possibleNames = [
       bill.name,
 
       ...(bill.scheduleHistory || [])
@@ -3546,14 +3550,18 @@ async function buildBankNewPaymentAllocationCore({
         .filter(payment => payment.billId === bill.id)
         .map(payment => payment.billSnapshot?.name)
     ];
+
+    if (!possibleNames.some(name => matches(name))) {
+      continue;
+    }
+
     for (const key of monthKeys) {
-      const occurrences =
-        getReminderOccurrencesForMonth(
-          bill,
-          key,
-          zone,
-          payments
-        );
+      const occurrences = getReminderOccurrencesForMonth(
+        bill,
+        key,
+        zone,
+        payments
+      );
 
       for (const occurrence of occurrences) {
         const scheduled = occurrence.bill;
@@ -3561,7 +3569,9 @@ async function buildBankNewPaymentAllocationCore({
         if (
           !isActiveBill(scheduled) ||
           !matches(scheduled.name)
-        ) continue;
+        ) {
+          continue;
+        }
 
         const occurrenceKey =
           bill.id + ":" + occurrence.dueDateKey;
@@ -3569,19 +3579,23 @@ async function buildBankNewPaymentAllocationCore({
         if (seen.has(occurrenceKey)) continue;
         seen.add(occurrenceKey);
 
-        const dueDay = day(
-          occurrence.dueDateKey
-        );
-
+        const dueDay = day(occurrence.dueDateKey);
         const near = withinDueWindow(occurrence.dueDateKey);
 
         if (
           !near ||
           cents(scheduled.amount) !== amount
-        ) continue;
+        ) {
+          continue;
+        }
 
-        const existingPayments = forOccurrence(bill.id, occurrence.dueDateKey);
+        const existingPayments = forOccurrence(
+          bill.id,
+          occurrence.dueDateKey
+        );
+
         if (existingPayments.some(active)) continue;
+
         if (existingPayments.length) {
           blockedDueDays.push(dueDay);
           continue;
@@ -3592,8 +3606,7 @@ async function buildBankNewPaymentAllocationCore({
             bill: scheduled,
             dueDate: scheduled.dueDate,
             originalDueDate:
-              scheduled.originalDueDate ||
-              scheduled.dueDate,
+              scheduled.originalDueDate || scheduled.dueDate,
             amount
           }
         ]);
