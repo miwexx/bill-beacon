@@ -6,6 +6,7 @@ import {
   getFirestore,
   doc,
   getDoc,
+  getDocFromServer,
   setDoc,
 runTransaction,
   onSnapshot
@@ -412,5 +413,33 @@ window.billBeaconPrepareDataTransfer = async function () {
     "Edits are still being saved. " +
     "Wait a moment and try again."
   );
+};
+window.billBeaconRefreshSharedHousehold = async function (expectedPaymentIds = []) {
+  const generation = sessionGeneration;
+  const uid = activeUserId;
+  const householdId = activeHouseholdId;
+  assertSession(generation, uid);
+  if (!cloudIsReady || !householdId) throw new Error("Wait for household sync.");
+  if (hasLocalChanges() || inFlight || conflict) {
+    throw new Error("Payment may be saved, but this device has pending edits or a sync conflict. Resolve sync before retrying.");
+  }
+  const snapshot = await getDocFromServer(doc(db, "households", householdId));
+  assertSession(generation, uid);
+  if (activeHouseholdId !== householdId || !cloudIsReady) throw new Error("Household changed.");
+  if (!snapshot.exists()) throw new Error("Shared household is missing.");
+  const data = snapshot.data();
+  if (hasLocalChanges() || inFlight || conflict) {
+    markConflict(data);
+    throw new Error("Shared payment saved, but local edits need sync review. They were not overwritten.");
+  }
+  if (!Array.isArray(data.payments) || expectedPaymentIds.some(id => !data.payments.some(p =>
+      p.id === id && String(p.status || "active").toLowerCase() !== "voided"))) {
+    throw new Error("Payment confirmation is missing or reversed. Review shared history before retrying.");
+  }
+  applyCloudSnapshot(data);
+  baseline = snapshotVersion(data);
+  renderUpdatedApp();
+  setSyncStatus("ready", "Shared bank payment loaded.");
+  return {householdId};
 };
 export { startHouseholdSync, stopHouseholdSync, queueSave, saveNow };

@@ -14006,6 +14006,7 @@ async function callPlaidWorker(path, body) {
     "/plaid/account",
     "/plaid/link-token",
     "/plaid/match-preview",
+    "/plaid/apply-match",
     "/plaid/exchange-token"
   ];
 
@@ -16070,6 +16071,14 @@ const accountSelector = accounts.length
   style="width:100%;min-height:44px;justify-content:center;"
 >
   Preview October Debits — No Changes
+</button>
+<button
+  type="button"
+  class="bb-outline-pill"
+  onclick="applyOneReviewedOctoberMatch(this)"
+  style="width:100%;min-height:44px;justify-content:center;"
+>
+  Apply One Reviewed October Match
 </button>
 <pre
   id="postedScanResults"
