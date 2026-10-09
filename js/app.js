@@ -14138,6 +14138,182 @@ async function previewFirstOctoberDebit(button) {
 }
 
 window.previewFirstOctoberDebit = previewFirstOctoberDebit;
+
+let allPostedPreviewBusy = false;
+window.billBeaconPostedScanReport = null;
+
+async function previewAllPostedDebits(button) {
+  if (allPostedPreviewBusy) return;
+
+  const sessionVersion = plaidSessionVersion;
+  const accountId = plaidBankState.selectedAccountId;
+
+  const transactions = (plaidBankState.transactions || [])
+    .filter(item =>
+      item.accountId === accountId &&
+      item.pending === false &&
+      item.type === "debit" &&
+      typeof item.id === "string"
+    )
+    .slice()
+    .sort((a, b) =>
+      String(a.date).localeCompare(String(b.date)) ||
+      String(a.id).localeCompare(String(b.id))
+    );
+
+  if (!accountId || !transactions.length) {
+    setPlaidBankMessage(
+      "Load the bank connection and select an account first."
+    );
+    return;
+  }
+
+  if (plaidBankState.canManageBankConnection === false) {
+    setPlaidBankMessage("The bank owner must run this scan.");
+    return;
+  }
+
+  if (!confirm(
+    `Preview ${transactions.length} posted debits, one at a time? ` +
+    "No payments will be changed."
+  )) return;
+
+  allPostedPreviewBusy = true;
+  if (button) button.disabled = true;
+
+  const rows = [];
+  window.billBeaconPostedScanReport = rows;
+
+  function showReport() {
+    const occurrenceOwners = new Map();
+
+    for (const row of rows) {
+      for (const allocation of row.allocations) {
+        const key = JSON.stringify([
+          allocation.billId,
+          String(allocation.dueDate).slice(0, 10)
+        ]);
+
+        if (!occurrenceOwners.has(key)) {
+          occurrenceOwners.set(key, new Set());
+        }
+
+        occurrenceOwners.get(key).add(row.transactionId);
+      }
+    }
+
+    for (const row of rows) {
+      row.overlap = row.allocations.some(allocation => {
+        const key = JSON.stringify([
+          allocation.billId,
+          String(allocation.dueDate).slice(0, 10)
+        ]);
+
+        return occurrenceOwners.get(key)?.size > 1;
+      });
+    }
+
+    const element = document.getElementById("postedScanResults");
+
+    if (element) {
+      element.textContent = rows.map(row => {
+        const allocations = row.allocations.map(allocation =>
+          `${allocation.name || allocation.billId} — ` +
+          `$${Number(allocation.amount).toFixed(2)} — ` +
+          `due ${String(allocation.dueDate).slice(0, 10)}`
+        ).join("\n  ");
+
+        return (
+          `${row.date} | ${row.merchant} | $${row.amount.toFixed(2)}\n` +
+          `${row.overlap ? "REVIEW: overlapping proposal" : row.status}\n` +
+          (allocations ? `  ${allocations}\n` : "") +
+          (row.reason ? `${row.reason}\n` : "")
+        );
+      }).join("\n");
+    }
+  }
+
+  try {
+    for (const transaction of transactions) {
+      if (
+        sessionVersion !== plaidSessionVersion ||
+        accountId !== plaidBankState.selectedAccountId
+      ) {
+        throw new Error("Session or account changed. Scan stopped.");
+      }
+
+      setPlaidBankMessage(
+        `Scanning ${rows.length + 1} of ${transactions.length}…`
+      );
+
+      const result = await callPlaidWorker(
+        "/plaid/match-preview?transactionId=" +
+        encodeURIComponent(transaction.id)
+      );
+
+      if (
+        sessionVersion !== plaidSessionVersion ||
+        accountId !== plaidBankState.selectedAccountId
+      ) {
+        throw new Error("Session or account changed. Scan stopped.");
+      }
+
+      if (
+        result.dryRun !== true ||
+        result.diagnosticOnly !== true ||
+        result.checked !== 1
+      ) {
+        throw new Error(
+          "Worker did not return a one-transaction preview. Scan stopped."
+        );
+      }
+
+      const proposal = (result.proposals || [])[0];
+
+      rows.push({
+        transactionId: transaction.id,
+        date: String(transaction.date).slice(0, 10),
+        merchant: transaction.merchantName || "",
+        amount: Number(transaction.amount),
+        status: proposal?.status ||
+          (result.alreadyLinked ? "already-linked" :
+           result.unmatched ? "unmatched" : "review"),
+        reason: proposal?.reason || "",
+        allocations: proposal?.allocations || [],
+        overlap: false
+      });
+
+      showReport();
+
+      // Pace requests; this is not a substitute for CPU-bounded work.
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
+
+    setPlaidBankMessage(
+      `Finished: ${rows.length} posted debits checked. ` +
+      "Review the report below. No payments were changed."
+    );
+
+    console.log("Posted transaction preview report:", rows);
+  } catch (error) {
+    if (sessionVersion === plaidSessionVersion) {
+      showReport();
+      setPlaidBankMessage(
+        `Stopped after ${rows.length} of ${transactions.length}: ` +
+        error.message
+      );
+    }
+  } finally {
+    allPostedPreviewBusy = false;
+    if (button) button.disabled = false;
+  }
+}
+
+window.previewAllPostedDebits = previewAllPostedDebits;
+
+window.addEventListener("billbeacon:signed-out", () => {
+  window.billBeaconPostedScanReport = null;
+});
 function applyPlaidBankState(result) {
   if (
     !result ||
@@ -15889,11 +16065,23 @@ const accountSelector = accounts.length
         <button
   type="button"
   class="bb-outline-pill"
-  onclick="previewFirstOctoberDebit(this)"
+  onclick="previewAllPostedDebits(this)"
   style="width:100%;min-height:44px;justify-content:center;"
 >
-  Preview Resurgent $12.12 — No Changes
+  Preview All Posted Debits — No Changes
 </button>
+<pre
+  id="postedScanResults"
+  aria-label="Posted transaction preview results"
+  style="
+    white-space:pre-wrap;
+    overflow-wrap:anywhere;
+    max-height:450px;
+    overflow:auto;
+    font-size:12px;
+    margin-top:12px;
+  "
+></pre>
       </div>
 
       <div
