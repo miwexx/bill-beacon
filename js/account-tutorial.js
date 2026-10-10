@@ -8,43 +8,31 @@ let generation = 0, checking = false, checkingAgain = false;
 let root = null, previousFocus = null, appWasInert = false, screen = 0, previewMode = false;
 const steps = [
   {
-    title: "Your main tabs",
-    icon: "5",
-    text: "Dashboard: your bill summary. Calendar: bills by date. Bills: add and manage bills.",
-    detail: "Insights: payment and spending summaries. More: banking, installments, and Settings."
+    title: "Dashboard",
+    icon: "home",
+    text: "See your bill totals, what is due or overdue, recent payments, and your paycheck plan."
   },
   {
-    title: "Add and track bills",
-    icon: "+",
-    text: "Open Bills and tap +. Enter the bill name, amount, and due date.",
-    detail: "After paying, open the correct bill occurrence and mark it paid. Payment History keeps the record."
+    title: "Calendar",
+    icon: "calendar",
+    text: "See bills by date. Select a day to view its bills, open details, or mark a payment as paid."
   },
   {
-    title: "Track installments",
-    icon: "4",
-    text: "Open More → Installments to add a purchase split into several payments.",
-    detail: "Example: a $100 purchase paid in four $25 installments. Track each due date and the balance remaining."
+    title: "Bills",
+    icon: "tray",
+    text: "Add and manage your bills. Use the three dots to edit details, update payment status, or remove a bill."
   },
   {
-    title: "Sync your bank",
-    icon: "↻",
-    text: "Open More → Banking. Connect a bank, select an account, and tap Sync Transactions.",
-    detail: "The household owner manages the connection. Sync shows bank activity; it does not send payments."
+    title: "Insights",
+    icon: "chart",
+    text: "Review spending by category, monthly payment totals, your spending limit, and installment balances."
   },
   {
-    title: "Share your household",
-    icon: "2",
-    text: "Open More → Settings and tap Invite Household Member. Send the invitation link.",
-    detail: "Example: your partner joins with their own account, and you both manage the same bills. Share the invite—not your password."
-  },
-  {
-    title: "Make it yours",
-    icon: "⚙",
-    text: "Use Settings for notifications, income sources, and appearance.",
-    detail: "Payment History shows payments. Activity & Changes shows edits and reversals. You are ready to get started."
+    title: "More",
+    icon: "moreVertical",
+    text: "Sync bank transactions, manage installment plans, and open Settings for notifications, income, appearance, and household sharing."
   }
 ];
-
 function userContext() {
   const user = window.getBillBeaconFirebaseUser?.();
   const household = window.getBillBeaconHouseholdContext?.();
@@ -98,29 +86,38 @@ function finish(status) {
 }
 function renderStep() {
   if (!root) return;
-  const item=steps[screen];
-  root.innerHTML=`
+  const item = steps[screen];
+  const icon = typeof window.svgIcon === "function"
+    ? window.svgIcon(item.icon, 32)
+    : escape(item.title.charAt(0));
+
+  root.innerHTML = `
     <section style="width:min(100%,440px);max-height:calc(100dvh - 40px);overflow-y:auto;box-sizing:border-box;padding:24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--text);">
       <header style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:12px;">
-        <span style="font-size:14px;color:var(--text-muted);">${screen+1} of ${steps.length}</span>
+        <div role="img" aria-label="Step ${screen + 1} of ${steps.length}" style="display:flex;gap:6px;">
+          ${steps.map((_, index) => `<span aria-hidden="true" style="width:7px;height:7px;border-radius:50%;background:${index === screen ? 'var(--accent)' : 'var(--border)'};"></span>`).join("")}
+        </div>
         <button type="button" id="bbTutorialX" aria-label="Skip tutorial" style="min-width:44px;min-height:44px;font-size:28px;color:var(--accent);">&times;</button>
       </header>
-      <div aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:64px;height:64px;margin-bottom:18px;border-radius:18px;background:var(--accent-soft,rgba(143,54,255,.12));color:var(--accent);font-size:26px;font-weight:800;">${escape(item.icon)}</div>
+      <div aria-hidden="true" style="display:flex;align-items:center;justify-content:center;width:64px;height:64px;margin-bottom:18px;border-radius:18px;background:var(--accent-soft,rgba(143,54,255,.12));color:var(--accent);">${icon}</div>
       <h2 id="bbTutorialTitle" tabindex="-1" style="margin:0 0 14px;font-size:24px;font-weight:800;">${escape(item.title)}</h2>
-      <p style="margin:0 0 12px;font-size:16px;line-height:1.5;">${escape(item.text)}</p>
-      <p style="margin:0 0 22px;color:var(--text-muted);font-size:14px;line-height:1.5;">${escape(item.detail)}</p>
-      <button type="button" id="bbTutorialNext" class="btn-primary" style="width:100%;">${screen===steps.length-1?"Get Started":"Next"}</button>
+      <p style="margin:0 0 22px;font-size:16px;line-height:1.5;color:var(--text);">${escape(item.text)}</p>
+      <button type="button" id="bbTutorialNext" class="btn-primary" style="width:100%;">${screen === steps.length - 1 ? 'Get Started' : 'Next'}</button>
       <div style="display:flex;gap:10px;margin-top:12px;">
-        ${screen>0?'<button type="button" id="bbTutorialPrevious" class="bb-outline-pill" style="flex:1;min-height:44px;justify-content:center;">Previous</button>':""}
+        ${screen > 0 ? '<button type="button" id="bbTutorialPrevious" class="bb-outline-pill" style="flex:1;min-height:44px;justify-content:center;">Previous</button>' : ''}
         <button type="button" id="bbTutorialSkip" class="bb-outline-pill" style="flex:1;min-height:44px;justify-content:center;">Skip Tutorial</button>
       </div>
     </section>`;
-  root.querySelector("#bbTutorialNext").addEventListener("click",()=>{
-    if (screen===steps.length-1) finish("completed");else {screen++;renderStep();}
+
+  root.querySelector("#bbTutorialNext").addEventListener("click", () => {
+    if (screen === steps.length - 1) finish("completed");
+    else { screen++; renderStep(); }
   });
-  root.querySelector("#bbTutorialPrevious")?.addEventListener("click",()=>{screen--;renderStep();});
-  root.querySelector("#bbTutorialSkip").addEventListener("click",()=>finish("skipped"));
-  root.querySelector("#bbTutorialX").addEventListener("click",()=>finish("skipped"));
+  root.querySelector("#bbTutorialPrevious")?.addEventListener("click", () => {
+    screen--; renderStep();
+  });
+  root.querySelector("#bbTutorialSkip").addEventListener("click", () => finish("skipped"));
+  root.querySelector("#bbTutorialX").addEventListener("click", () => finish("skipped"));
   root.querySelector("#bbTutorialTitle").focus();
 }
 function showTutorial(uid, preview=false) {
