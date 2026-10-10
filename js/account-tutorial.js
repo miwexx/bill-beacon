@@ -7,10 +7,42 @@ const seen = new Set();
 let generation = 0, checking = false, checkingAgain = false;
 let root = null, previousFocus = null, appWasInert = false, screen = 0, previewMode = false;
 const steps = [
-  {title:"Add your first bill", icon:"+", text:"Open Bills and tap +. Enter the name, amount, and due date or due day.", detail:"Track From Month decides when recurring bills begin. Choose an earlier month only when you want to track older unpaid bills."},
-  {title:"Check Calendar and Overdue", icon:"14", text:"Select a Calendar day to see its bills. You can open a bill and return to that same selected day.", detail:"Overdue includes unpaid occurrences from earlier tracked months. Archived bills stay out of the active Calendar."},
-  {title:"Record the right payment", icon:"✓", text:"Open the bill occurrence and mark it paid after you make the payment. Payment History keeps the record.", detail:"Marking paid updates Bill Beacon only. It does not send money or pay the bill through your bank."},
-  {title:"Reminders and getting around", icon:"1·3", text:"Enable notifications in Settings. New regular bills default to reminders 3 days and 1 day before the due date.", detail:"Tap Back or X to return immediately. Swipe right to drag back; release to complete, or drag back to the start before releasing to cancel."}
+  {
+    title: "Your main tabs",
+    icon: "5",
+    text: "Dashboard: your bill summary. Calendar: bills by date. Bills: add and manage bills.",
+    detail: "Insights: payment and spending summaries. More: banking, installments, and Settings."
+  },
+  {
+    title: "Add and track bills",
+    icon: "+",
+    text: "Open Bills and tap +. Enter the bill name, amount, and due date.",
+    detail: "After paying, open the correct bill occurrence and mark it paid. Payment History keeps the record."
+  },
+  {
+    title: "Track installments",
+    icon: "4",
+    text: "Open More → Installments to add a purchase split into several payments.",
+    detail: "Example: a $100 purchase paid in four $25 installments. Track each due date and the balance remaining."
+  },
+  {
+    title: "Sync your bank",
+    icon: "↻",
+    text: "Open More → Banking. Connect a bank, select an account, and tap Sync Transactions.",
+    detail: "The household owner manages the connection. Sync shows bank activity; it does not send payments."
+  },
+  {
+    title: "Share your household",
+    icon: "2",
+    text: "Open More → Settings and tap Invite Household Member. Send the invitation link.",
+    detail: "Example: your partner joins with their own account, and you both manage the same bills. Share the invite—not your password."
+  },
+  {
+    title: "Make it yours",
+    icon: "⚙",
+    text: "Use Settings for notifications, income sources, and appearance.",
+    detail: "Payment History shows payments. Activity & Changes shows edits and reversals. You are ready to get started."
+  }
 ];
 
 function userContext() {
