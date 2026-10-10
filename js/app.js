@@ -16026,7 +16026,7 @@ function render() {
   let content = view();
   if (["today", "recurring", "bills", "more", "insights", "settings"].includes(currentRoute)) content += tabBar();
   app.innerHTML = content;
-  if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings(); attachSignOutButton(); }
+  if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings();addAccountProfileSettings(); attachSignOutButton(); }
 }
 
 
@@ -19595,3 +19595,58 @@ const viewObserver = new MutationObserver(() => {
   });
 })();
 // END BILL BEACON DRAG-BACK
+
+function addAccountProfileSettings() {
+  if (
+    currentRoute !== "settings" ||
+    document.getElementById("bbAccountSettings")
+  ) {
+    return;
+  }
+
+  const container = document.querySelector(
+    ".main-content .content-pad"
+  );
+
+  if (!container) return;
+
+  const section = document.createElement("section");
+
+  section.id = "bbAccountSettings";
+  section.className = "settings-section";
+
+  section.innerHTML = `
+    <div class="section-header">Account</div>
+
+    <div
+      class="card card-pad"
+      style="display:grid;gap:10px;"
+    >
+      <button
+        type="button"
+        class="bb-outline-pill"
+        onclick="bbOpenAccountSettings('name')"
+      >
+        Change Name
+      </button>
+
+      <button
+        type="button"
+        class="bb-outline-pill"
+        onclick="bbOpenAccountSettings('email')"
+      >
+        Change Email
+      </button>
+
+      <button
+        type="button"
+        class="bb-outline-pill"
+        onclick="bbOpenAccountSettings('password')"
+      >
+        Change Password
+      </button>
+    </div>
+  `;
+
+  container.prepend(section);
+}

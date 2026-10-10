@@ -130,90 +130,112 @@ function closeCreateAccountDialog(force = false) {
   signupPreviousFocus = null;
 }
 
-function openCreateAccountDialog() {
+async function openCreateAccountDialog() {
   if (householdLoading || auth.currentUser) return;
-  if (getElement("billBeaconSignupDialog")) return;
-  signupPreviousFocus = document.activeElement;
-  const dialog = document.createElement("div");
-  dialog.id = "billBeaconSignupDialog";
-  dialog.setAttribute("role", "dialog");
-  dialog.setAttribute("aria-modal", "true");
-  dialog.setAttribute("aria-labelledby", "billBeaconSignupTitle");
-  dialog.style.cssText = "position:fixed;inset:0;z-index:30000;display:flex;align-items:center;justify-content:center;padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));background:rgba(0,0,0,.72);overflow-y:auto;box-sizing:border-box;";
-  dialog.innerHTML = `
-    <section style="width:min(100%,440px);max-height:calc(100dvh - 40px);overflow-y:auto;padding:24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--text);box-sizing:border-box;">
-      <header style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;">
-        <h2 id="billBeaconSignupTitle" style="margin:0;font-size:24px;font-weight:800;">Create Account</h2>
-        <button id="signupClose" type="button" aria-label="Close Create Account" style="min-width:44px;min-height:44px;font-size:28px;color:var(--accent);">&times;</button>
-      </header>
-      <form id="billBeaconSignupForm" novalidate style="display:grid;gap:12px;">
-        <label class="login-label" for="signupEmail">Email</label>
-        <input class="login-input" id="signupEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required>
-        <label class="login-label" for="signupPassword">Password</label>
-        <input class="login-input" id="signupPassword" name="password" type="password" autocomplete="new-password" minlength="6" required>
-        <label class="login-label" for="signupConfirmation">Confirm Password</label>
-        <input class="login-input" id="signupConfirmation" name="confirmation" type="password" autocomplete="new-password" minlength="6" required>
-        <div id="signupError" role="alert" aria-live="polite" style="color:var(--overdue);font-size:14px;line-height:1.4;"></div>
-        <button id="signupSubmit" type="submit" class="login-button login-button-primary">Create Account</button>
-        <button id="signupCancel" type="button" class="login-button login-button-secondary">Cancel</button>
-      </form>
-    </section>`;
-  document.body.appendChild(dialog);
-  getElement("signupEmail").value = getElement("email-login")?.value.trim() || "";
-  getElement("signupClose").addEventListener("click", () => closeCreateAccountDialog());
-  getElement("signupCancel").addEventListener("click", () => closeCreateAccountDialog());
-  dialog.addEventListener("click", event => { if (event.target === dialog) closeCreateAccountDialog(); });
-  dialog.addEventListener("keydown", event => {
-    if (event.key === "Escape") { event.preventDefault(); closeCreateAccountDialog(); }
-    if (event.key === "Tab") {
-      const focusable = [...dialog.querySelectorAll("button,input")].filter(node => !node.disabled);
-      const first = focusable[0], last = focusable[focusable.length - 1];
-      if (!first) { event.preventDefault(); return; }
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    }
-  });
-  getElement("billBeaconSignupForm").addEventListener("submit", async event => {
-    event.preventDefault();
-    if (signupBusy) return;
-    const emailField = getElement("signupEmail");
-    const passwordField = getElement("signupPassword");
-    const confirmationField = getElement("signupConfirmation");
-    const email = emailField.value.trim();
-    const password = passwordField.value;
-    const confirmation = confirmationField.value;
-    const errorBox = getElement("signupError");
-    const validation = signupValidation(email, password, confirmation);
-    if (validation || !emailField.validity.valid) {
-      errorBox.textContent = validation || "Enter a valid email address.";
-      return;
-    }
-    signupBusy = true;
-    errorBox.textContent = "";
-    const controls = [...dialog.querySelectorAll("button,input")];
-    controls.forEach(control => { control.disabled = true; });
-    getElement("signupSubmit").textContent = "Creating account…";
-    try {
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
-      const loginEmail = getElement("email-login");
-      if (loginEmail) loginEmail.value = email;
-      const loginPassword = getElement("password-login");
-      if (loginPassword) loginPassword.value = "";
-      window.dispatchEvent(new CustomEvent("billbeacon:account-created", {detail: {uid: credential.user.uid}}));
-      closeCreateAccountDialog(true);
-    } catch (error) {
-      if (dialog.isConnected) errorBox.textContent = friendlyError(error);
-    } finally {
-      signupBusy = false;
-      if (dialog.isConnected) {
-        controls.forEach(control => { control.disabled = false; });
-        getElement("signupSubmit").textContent = "Create Account";
-      }
-    }
-  });
-  requestAnimationFrame(() => { if (dialog.isConnected) getElement("signupEmail")?.focus(); });
-}
 
+  let createdUser = null;
+
+  return bbAccountForm(
+    "Create Account",
+    [
+      {
+        key: "firstName",
+        label: "First Name",
+        autocomplete: "given-name"
+      },
+      {
+        key: "lastName",
+        label: "Last Name",
+        autocomplete: "family-name"
+      },
+      {
+        key: "email",
+        label: "Email",
+        type: "email",
+        autocomplete: "email",
+        value: getElement("email-login")?.value.trim()
+      },
+      {
+        key: "password",
+        label: "Password",
+        type: "password",
+        autocomplete: "new-password"
+      },
+      {
+        key: "confirmation",
+        label: "Confirm Password",
+        type: "password",
+        autocomplete: "new-password"
+      }
+    ],
+    "Create Account",
+    async (values, inputs) => {
+      if (!values.firstName.trim() || !values.lastName.trim()) {
+        throw new Error("Enter both first and last name.");
+      }
+
+      if (!createdUser) {
+        if (values.password.length < 6) {
+          throw new Error(
+            "Use a password with at least 6 characters."
+          );
+        }
+
+        if (values.password !== values.confirmation) {
+          throw new Error("The passwords do not match.");
+        }
+
+        const result = await createUserWithEmailAndPassword(
+          auth,
+          values.email.trim(),
+          values.password
+        );
+
+        createdUser = result.user;
+
+        const loginEmail = getElement("email-login");
+        if (loginEmail) loginEmail.value = values.email.trim();
+
+        const loginPassword = getElement("password-login");
+        if (loginPassword) loginPassword.value = "";
+
+        inputs.email.disabled = true;
+
+        for (const key of ["password", "confirmation"]) {
+          inputs[key].value = "";
+          inputs[key].required = false;
+          inputs[key].disabled = true;
+        }
+      }
+
+      bbCheckAccountUser(createdUser);
+
+      try {
+        await bbSaveAccountName(
+          values.firstName,
+          values.lastName,
+          createdUser
+        );
+      } catch {
+        throw new Error(
+          "The account was created, but name setup did not finish. " +
+          "Retry this button to save the name, or use Change Name " +
+          "in Settings. No second account will be created by this retry."
+        );
+      }
+
+      window.dispatchEvent(
+        new CustomEvent("billbeacon:account-created", {
+          detail: {
+            uid: createdUser.uid
+          }
+        })
+      );
+
+      return "Your account has been created.";
+    }
+  );
+}
 function setLoginControlsLocked(locked) {
   for (const id of ["email-login","password-login","email-signin-button","email-create-button","forgot-password-button"]) {
     const control = getElement(id);
@@ -518,3 +540,253 @@ window.BillBeaconAuth = {
     return user.getIdToken();
   }
 };
+const bbAccountSDK = Promise.all([
+  import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js"),
+  import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js")
+]);
+
+function bbAccountUser() {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Please sign in first.");
+  return user;
+}
+
+function bbCheckAccountUser(user) {
+  if (auth.currentUser?.uid !== user.uid) {
+    throw new Error("The signed-in account changed. Close this window and try again.");
+  }
+}
+
+async function bbWriteProfileFields(user, fields) {
+  const [, dbSDK] = await bbAccountSDK;
+  const allowed = ["firstName", "lastName", "displayName", "email"];
+  if (Object.keys(fields).some(key => !allowed.includes(key))) {
+    throw new Error("Invalid profile update.");
+  }
+  const patch = { ...fields, updatedAt: new Date().toISOString() };
+  for (let attempt = 0; attempt < 20; attempt++) {
+    bbCheckAccountUser(user);
+    try {
+      await dbSDK.runTransaction(firestore, async transaction => {
+        bbCheckAccountUser(user);
+        const userRef = dbSDK.doc(firestore, "users", user.uid);
+        const profile = await transaction.get(userRef);
+        if (!profile.exists() || !profile.data().householdId) {
+          throw Object.assign(new Error("Household profile is still loading."), { code: "bb/profile-loading" });
+        }
+        const householdId = profile.data().householdId;
+        if (typeof householdId !== "string" || householdId.includes("/")) {
+          throw new Error("The household profile needs repair.");
+        }
+        const memberRef = dbSDK.doc(firestore, "households", householdId, "members", user.uid);
+        const member = await transaction.get(memberRef);
+        bbCheckAccountUser(user);
+        if (!member.exists()) {
+          throw Object.assign(new Error("Household membership is still loading."), { code: "bb/profile-loading" });
+        }
+        const membership = member.data();
+        if (!["owner", "member"].includes(membership.role) ||
+            (membership.uid && membership.uid !== user.uid)) {
+          throw new Error("Household membership needs review.");
+        }
+        transaction.update(userRef, patch);
+        transaction.update(memberRef, patch);
+      });
+      return;
+    } catch (error) {
+      if (error.code !== "bb/profile-loading" || attempt === 19) throw error;
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  }
+}
+
+async function bbSaveAccountName(firstName, lastName, user = bbAccountUser()) {
+  firstName = String(firstName || "").trim();
+  lastName = String(lastName || "").trim();
+  if (!firstName || !lastName) throw new Error("Enter both first and last name.");
+  if (firstName.length > 100 || lastName.length > 100) {
+    throw new Error("Each name must be 100 characters or fewer.");
+  }
+  const displayName = `${firstName} ${lastName}`;
+  await bbWriteProfileFields(user, { firstName, lastName, displayName });
+  bbCheckAccountUser(user);
+  const [authSDK] = await bbAccountSDK;
+  try {
+    await authSDK.updateProfile(user, { displayName });
+  } catch {
+    throw new Error("Your name was saved in Firestore, but the sign-in profile did not update. Retry Save.");
+  }
+}
+
+async function bbReauthenticate(currentPassword) {
+  const user = bbAccountUser();
+  if (!currentPassword) throw new Error("Enter your current password.");
+  const [authSDK] = await bbAccountSDK;
+  const credential = authSDK.EmailAuthProvider.credential(user.email, currentPassword);
+  await authSDK.reauthenticateWithCredential(user, credential);
+  bbCheckAccountUser(user);
+  return user;
+}
+
+async function bbChangeAccountPassword(currentPassword, newPassword, confirmation) {
+  if (newPassword.length < 6) throw new Error("Use at least 6 characters for the new password.");
+  if (newPassword !== confirmation) throw new Error("The new passwords do not match.");
+  const user = await bbReauthenticate(currentPassword);
+  const [authSDK] = await bbAccountSDK;
+  await authSDK.updatePassword(user, newPassword);
+}
+
+async function bbChangeAccountEmail(currentPassword, newEmail) {
+  newEmail = String(newEmail || "").trim();
+  if (!newEmail) throw new Error("Enter the new email address.");
+  const user = await bbReauthenticate(currentPassword);
+  if (newEmail.toLowerCase() === user.email.toLowerCase()) {
+    throw new Error("Enter a different email address.");
+  }
+  const [authSDK] = await bbAccountSDK;
+  await authSDK.verifyBeforeUpdateEmail(user, newEmail);
+}
+
+async function bbSyncAccountEmail(user = bbAccountUser()) {
+  bbCheckAccountUser(user);
+  await user.reload();
+  bbCheckAccountUser(user);
+  await user.getIdToken(true);
+  if (!user.email) throw new Error("The account has no email address.");
+  await bbWriteProfileFields(user, { email: user.email });
+}
+
+function bbAccountForm(title, definitions, saveLabel, save) {
+  return new Promise(resolve => {
+    if (document.getElementById("bb-account-dialog")) { resolve(false); return; }
+    const dialog = document.createElement("dialog");
+    dialog.id = "bb-account-dialog";
+    dialog.style.cssText = "margin:auto;width:min(440px,calc(100% - 32px));max-height:85dvh;overflow:auto;padding:24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--text);";
+    const heading = document.createElement("h2");
+    heading.id = "bb-account-heading";
+    heading.textContent = title;
+    heading.style.cssText = "margin:0 0 18px;font-size:22px;";
+    dialog.setAttribute("aria-labelledby", heading.id);
+    const form = document.createElement("form");
+    form.style.cssText = "display:grid;gap:12px;";
+    const inputs = {};
+    for (const definition of definitions) {
+      const label = document.createElement("label");
+      label.className = "login-label";
+      label.textContent = definition.label;
+      const input = document.createElement("input");
+      input.id = `bb-account-${definition.key}`;
+      input.className = "login-input";
+      input.type = definition.type || "text";
+      input.required = true;
+      input.autocomplete = definition.autocomplete || "off";
+      input.value = definition.value || "";
+      if (input.type === "text") input.maxLength = 100;
+      if (input.type === "email") { input.autocapitalize = "none"; input.spellcheck = false; }
+      label.htmlFor = input.id;
+      inputs[definition.key] = input;
+      form.append(label, input);
+    }
+    const message = document.createElement("p");
+    message.setAttribute("role", "status");
+    message.setAttribute("aria-live", "polite");
+    message.style.cssText = "margin:0;font-size:14px;line-height:1.4;";
+    const submit = document.createElement("button");
+    submit.type = "submit";
+    submit.className = "btn-primary";
+    submit.textContent = saveLabel;
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "bb-outline-pill";
+    cancel.textContent = "Cancel";
+    let busy = false, succeeded = false;
+    cancel.addEventListener("click", () => dialog.close());
+    dialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
+    dialog.addEventListener("close", () => {
+      Object.values(inputs).forEach(input => { if (input.type === "password") input.value = ""; });
+      dialog.remove();
+      resolve(succeeded);
+    }, { once: true });
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      if (busy || succeeded) return;
+      busy = true;
+      submit.disabled = cancel.disabled = true;
+      submit.textContent = "Saving…";
+      message.textContent = "";
+      try {
+        const values = Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value]));
+        message.textContent = await save(values, inputs);
+        message.style.color = "var(--paid, #00b894)";
+        succeeded = true;
+        Object.values(inputs).forEach(input => {
+          if (input.type === "password") input.value = "";
+          input.disabled = true;
+        });
+        submit.hidden = true;
+        cancel.textContent = "Done";
+      } catch (error) {
+        message.style.color = "var(--overdue, #f43f5e)";
+        message.textContent = friendlyError(error);
+      } finally {
+        busy = false;
+        submit.disabled = cancel.disabled = false;
+        submit.textContent = saveLabel;
+      }
+    });
+    form.append(message, submit, cancel);
+    dialog.append(heading, form);
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  });
+}
+
+async function bbOpenAccountSettings(mode) {
+  try {
+    const user = bbAccountUser();
+    const [, dbSDK] = await bbAccountSDK;
+    if (mode === "name") {
+      const snapshot = await dbSDK.getDoc(dbSDK.doc(firestore, "users", user.uid));
+      bbCheckAccountUser(user);
+      const profile = snapshot.exists() ? snapshot.data() : {};
+      return bbAccountForm("Change Name", [
+        { key: "firstName", label: "First Name", autocomplete: "given-name", value: profile.firstName },
+        { key: "lastName", label: "Last Name", autocomplete: "family-name", value: profile.lastName }
+      ], "Save Name", async values => {
+        bbCheckAccountUser(user);
+        await bbSaveAccountName(values.firstName, values.lastName, user);
+        return "Your name has been updated.";
+      });
+    }
+    if (mode === "email") {
+      return bbAccountForm("Change Email", [
+        { key: "currentPassword", label: "Current Password", type: "password", autocomplete: "current-password" },
+        { key: "newEmail", label: "New Email", type: "email", autocomplete: "email" }
+      ], "Send Verification Email", async values => {
+        bbCheckAccountUser(user);
+        await bbChangeAccountEmail(values.currentPassword, values.newEmail);
+        return "Check your new email for the verification link. After verifying, sign out and sign in with the new email. Firestore will synchronize after sign-in.";
+      });
+    }
+    if (mode === "password") {
+      return bbAccountForm("Change Password", [
+        { key: "currentPassword", label: "Current Password", type: "password", autocomplete: "current-password" },
+        { key: "newPassword", label: "New Password", type: "password", autocomplete: "new-password" },
+        { key: "confirmation", label: "Confirm New Password", type: "password", autocomplete: "new-password" }
+      ], "Update Password", async values => {
+        bbCheckAccountUser(user);
+        await bbChangeAccountPassword(values.currentPassword, values.newPassword, values.confirmation);
+        return "Password updated. Use your new password next time you sign in.";
+      });
+    }
+  } catch (error) { window.alert(friendlyError(error)); }
+}
+
+window.bbOpenAccountSettings = bbOpenAccountSettings;
+window.addEventListener("billbeacon:authenticated", event => {
+  const user = event.detail?.user;
+  if (!user) return;
+  bbSyncAccountEmail(user).catch(() => {
+    console.warn("Account email synchronization did not finish. Login remains managed by Firebase Authentication.");
+  });
+});
