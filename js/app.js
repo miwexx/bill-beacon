@@ -18789,6 +18789,7 @@ document.addEventListener("DOMContentLoaded", () => {
 window.addEventListener("storage", () => {
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 });
+
 // BEGIN BILL BEACON DRAG-BACK
 (() => {
   "use strict";
@@ -18801,6 +18802,9 @@ window.addEventListener("storage", () => {
   const originalNavigate = navigate;
 
   let previous = null;
+  const pageSnapshots = new Map();
+  const formBaselines = new WeakMap();
+  let notificationPreview = null;
   let gesture = null;
   let overlay = null;
   let timer = null;
@@ -18827,10 +18831,67 @@ window.addEventListener("storage", () => {
       ).matches
     );
 
-  const allowed = () =>
-    ENABLED &&
-    ["settings", "transactions", "detail"].includes(currentRoute) &&
-    !dashboardHasOpenFormOrPopup();
+  function visible(node) {
+    if (!node?.isConnected || node.closest('[data-bb-drag-preview]')) return false;
+    const style = getComputedStyle(node);
+    return style.display !== "none" && style.visibility !== "hidden" &&
+      node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0;
+  }
+  function isCloseControl(button) {
+    const action = (button.getAttribute("onclick") || "").trim();
+    return !button.disabled && (button.id === "notificationCenterCloseButton" ||
+      /^(?:window\.)?close[A-Za-z0-9_]+\(\s*\)\s*;?$/.test(action));
+  }
+  function pageBackButton() {
+    return [...document.querySelectorAll("#app .nav-bar button.nav-button")].find(button =>
+      visible(button) && !button.disabled &&
+      /^\s*(?:navigate|returnToNotificationCenter)\s*\(/.test(button.getAttribute("onclick") || "")
+    ) || null;
+  }
+  function popupSheets() {
+    return [...document.querySelectorAll(".sheet")].filter(visible).map((node,index) =>
+      ({node,index,z:Number.parseInt(getComputedStyle(node).zIndex,10)||0})
+    ).sort((a,b)=>a.z-b.z||a.index-b.index).map(item=>item.node);
+  }
+  function dismissContext(target = null) {
+    const sheets = popupSheets();
+    if (sheets.length) {
+      const root = sheets[sheets.length-1];
+      const back = [...root.querySelectorAll("button")].find(isCloseControl);
+      return back ? {mode:"popup",root,back,sheets} : null;
+    }
+    const inline = target?.closest?.(".recurring-calendar-selected-day");
+    if (inline && visible(inline)) {
+      const back = inline.querySelector('button[aria-label="Close selected day"]');
+      if (back && !back.disabled) return {mode:"inline",root:inline,back,sheets:[]};
+    }
+    const back = pageBackButton();
+    return back && !dashboardHasOpenFormOrPopup()
+      ? {mode:"page",root:document.getElementById("app"),back,sheets:[]} : null;
+  }
+  function contextMatches(state) {
+    const now = dismissContext(state.context.root);
+    return ENABLED && currentRoute === state.route && now &&
+      now.mode === state.context.mode && now.root === state.context.root &&
+      now.back === state.back && state.back.isConnected;
+  }
+  function fieldSignature(root) {
+    return JSON.stringify([...root.querySelectorAll("input,textarea,select")]
+      .filter(field=>!field.disabled && field.type!=="hidden")
+      .map(field=>[field.name||field.id,field.type,field.value,field.checked]));
+  }
+  function formChanged(root) {
+    const formIds = ["sheetContainer","incomeSourceContainer","installmentPlanContainer",
+      "postponeBillContainer","postponeRecurringOccurrenceContainer","paymentLinkPopupContainer"];
+    const isForm = formIds.some(id=>root.closest(`[id="${id}"]`));
+    return isForm && formBaselines.has(root) && formBaselines.get(root)!==fieldSignature(root);
+  }
+  function rememberForms() {
+    for (const root of popupSheets()) {
+      if (!formBaselines.has(root)) formBaselines.set(root,fieldSignature(root));
+    }
+  }
+  const allowed = () => ENABLED && Boolean(dismissContext(gesture?.context?.root));
 
   function cleanup() {
     clearTimeout(timer);
@@ -18878,6 +18939,9 @@ window.addEventListener("storage", () => {
     const node = copies[index];
     const original = originals[index];
 
+    if (node.id) node.setAttribute("data-bb-copy-id", node.id);
+    if (original.scrollTop) node.setAttribute("data-bb-scroll-top", String(original.scrollTop));
+    if (original.scrollLeft) node.setAttribute("data-bb-scroll-left", String(original.scrollLeft));
     node.removeAttribute("id");
 
     for (const attribute of [...node.attributes]) {
@@ -18948,39 +19012,130 @@ window.addEventListener("storage", () => {
 
   navigate = function(route, params = {}) {
     cleanup();
-
     let captured = null;
-
-    if (
-      ENABLED &&
-      route !== currentRoute &&
-      ["settings", "transactions", "detail"].includes(route)
-    ) {
-      try {
-        captured = snapshot();
-      } catch (error) {
-        console.warn("Back preview skipped", error);
-      }
+    if (ENABLED && route !== currentRoute) {
+      try { captured = snapshot(); }
+      catch (error) { console.warn("Back preview skipped", error); }
     }
-
+    if (captured) pageSnapshots.set(captured.route,captured);
     const result = originalNavigate.apply(this, arguments);
-
-    previous =
-      captured && currentRoute === route
-        ? captured
-        : null;
-
+    previous = captured && currentRoute === route ? captured : null;
     return result;
   };
 
+  function panelSnapshot(root) {
+    const copy=root.cloneNode(true);
+    const originals=[root,...root.querySelectorAll("*")];
+    const copies=[copy,...copy.querySelectorAll("*")];
+    const ids=new Set(originals.map(node=>node.id).filter(Boolean));
+    originals.forEach((original,index)=>{
+      const node=copies[index];
+      if (original.id) node.setAttribute("data-bb-copy-id",original.id);
+      node.removeAttribute("id");
+      for (const attribute of [...node.attributes]) {
+        if (/^on/i.test(attribute.name)||attribute.name==="autofocus") node.removeAttribute(attribute.name);
+      }
+      node.style.setProperty("animation","none","important");
+      if (original.scrollTop) node.setAttribute("data-bb-scroll-top",String(original.scrollTop));
+      if (original.scrollLeft) node.setAttribute("data-bb-scroll-left",String(original.scrollLeft));
+      if (original instanceof HTMLInputElement) {node.value=original.value;node.checked=original.checked;}
+      if (original instanceof HTMLTextAreaElement || original instanceof HTMLSelectElement) node.value=original.value;
+    });
+    copy.querySelectorAll("script,iframe,object,embed").forEach(node=>node.remove());
+    const rect=root.getBoundingClientRect();
+    for (const [property,value] of Object.entries({position:"absolute",top:`${rect.top}px`,left:`${rect.left}px`,
+      right:"auto",bottom:"auto",width:`${rect.width}px`,height:`${rect.height}px`,maxHeight:"none",minHeight:"0",margin:"0",
+      transform:"none",display:getComputedStyle(root).display,opacity:"1"})) copy.style.setProperty(property,value,"important");
+    copy.inert=true;copy.setAttribute("aria-hidden","true");
+    const styleTexts=[...root.parentElement.querySelectorAll("style")].map(style=>style.textContent);
+    const css=styleTexts.join("\n").replace(/#([A-Za-z_][\w-]*)/g,(match,id)=>
+      ids.has(id)?`[data-bb-copy-id="${id}"]`:match);
+    return {copy,css,mainScroll:0,windowScroll:0,route:currentRoute};
+  }
+  function restoreCloneScroll(pane) {
+    for (const node of pane.querySelectorAll("[data-bb-scroll-top],[data-bb-scroll-left]")) {
+      if (node.hasAttribute("data-bb-scroll-top")) node.scrollTop=Number(node.getAttribute("data-bb-scroll-top"));
+      if (node.hasAttribute("data-bb-scroll-left")) node.scrollLeft=Number(node.getAttribute("data-bb-scroll-left"));
+    }
+  }
+  function shadeFor(root) {
+    const shade=root.parentElement.querySelector(".sheet-overlay");
+    return shade ? getComputedStyle(shade).backgroundColor : "rgba(0,0,0,.6)";
+  }
+  function addPanel(pane,snap) {
+    if (snap.css) {const style=document.createElement("style");style.textContent=snap.css;pane.appendChild(style);}
+    pane.appendChild(snap.copy.cloneNode(true));
+  }
+  function createModalPreview(state) {
+    const base=snapshot();
+    if (!base) return;
+    base.windowScroll=Math.max(0,-document.getElementById("app").getBoundingClientRect().top);
+    if (state.context.mode==="inline") base.copy.querySelector(".recurring-calendar-selected-day")?.remove();
+    const layer=document.createElement("div");
+    layer.setAttribute("data-bb-drag-preview","");layer.setAttribute("aria-hidden","true");layer.inert=true;
+    layer.style.cssText="position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
+    const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;pointer-events:none;";
+    const content=document.createElement("div");content.style.cssText=`width:100%;min-height:100%;transform:translateY(${-base.windowScroll}px);`;
+    content.appendChild(base.copy.cloneNode(true));behind.appendChild(content);layer.appendChild(behind);
+    for (const root of state.context.sheets.slice(0,-1)) {
+      const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(root)};pointer-events:none;`;
+      behind.appendChild(dim);addPanel(behind,panelSnapshot(root));
+    }
+    if (state.context.mode==="popup") {
+      const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(state.context.root)};pointer-events:none;`;
+      layer.appendChild(dim);state.dim=dim;
+    }
+    const pane=document.createElement("div");pane.style.cssText="position:absolute;inset:0;overflow:hidden;pointer-events:none;will-change:transform;";
+    addPanel(pane,panelSnapshot(state.context.root));layer.appendChild(pane);
+    overlay=layer;document.body.appendChild(layer);
+    restoreCloneScroll(layer);state.pane=pane;
+  }
+  function rememberNotificationPreview() {
+    const root=document.getElementById("notificationCenterSheet");
+    if (!root) return;
+    const base=snapshot();
+    if (!base) return;
+    base.windowScroll=Math.max(0,-document.getElementById("app").getBoundingClientRect().top);
+    notificationPreview={base,panel:panelSnapshot(root),shade:shadeFor(root)};
+  }
+  const notificationCloseBeforeDrag=closeNotificationCenter;
+  closeNotificationCenter=function() {
+    if (ENABLED && arguments[0]===true) {
+      try {rememberNotificationPreview();} catch(error) {notificationPreview=null;}
+    }
+    return notificationCloseBeforeDrag.apply(this,arguments);
+  };
+  window.closeNotificationCenter=closeNotificationCenter;
+
   function createPreview(state) {
-    const handler =
-      state.back.getAttribute("onclick") || "";
+    if (state.context.mode !== "page") {
+      createModalPreview(state);
+      return;
+    }
+    const handler = state.back.getAttribute("onclick") || "";
 
     const destination = handler.match(
       /^\s*navigate\(\s*['"]([^'"]+)['"]/
     );
 
+    if (/^\s*returnToNotificationCenter\(/.test(handler) && notificationPreview) {
+      const saved=notificationPreview;
+      const layer=document.createElement("div");
+      layer.setAttribute("data-bb-drag-preview","");layer.inert=true;layer.setAttribute("aria-hidden","true");
+      layer.style.cssText="position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
+      const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;";
+      const content=document.createElement("div");content.style.transform=`translateY(${-saved.base.windowScroll}px)`;
+      content.appendChild(saved.base.copy.cloneNode(true));behind.appendChild(content);
+      const shade=document.createElement("div");shade.style.cssText=`position:absolute;inset:0;background:${saved.shade};`;
+      behind.appendChild(shade);addPanel(behind,saved.panel);layer.appendChild(behind);
+      const ahead=document.createElement("div");ahead.style.cssText="position:absolute;inset:0;overflow:hidden;background:var(--bg);";
+      const current=snapshot();if(!current)return;
+      const frontContent=document.createElement("div");frontContent.style.transform=`translateY(${-current.windowScroll}px)`;
+      frontContent.appendChild(current.copy);ahead.appendChild(frontContent);layer.appendChild(ahead);
+      overlay=layer;document.body.appendChild(layer);restoreCloneScroll(layer);state.pane=ahead;return;
+    }
+    const destinationSnapshot = destination && pageSnapshots.get(destination[1]);
+    if (destinationSnapshot) previous = destinationSnapshot;
     if (
       !previous ||
       !destination ||
@@ -19008,6 +19163,7 @@ window.addEventListener("storage", () => {
     });
 
     overlay = layer;
+    layer.setAttribute("data-bb-drag-preview", "");
 
     const makePane = snap => {
       const pane = document.createElement("div");
@@ -19074,10 +19230,7 @@ window.addEventListener("storage", () => {
     settling = true;
 
     const complete = () => {
-      const valid =
-        allowed() &&
-        currentRoute === state.route &&
-        state.back.isConnected;
+      const valid = contextMatches(state);
 
       if (
   goBack &&
@@ -19085,6 +19238,19 @@ window.addEventListener("storage", () => {
   state.pane?.isConnected &&
   overlay?.isConnected
 ) {
+        if (state.context.mode !== "page") {
+          try {state.back.click();} catch(error) {cleanup();throw error;}
+          const started=performance.now();
+          const waitForClose=()=>{
+            if (!settling || !overlay) return;
+            if (!state.context.root.isConnected ||
+                getComputedStyle(state.context.root).display === "none" ||
+                performance.now()-started>800) {cleanup();return;}
+            timer=setTimeout(waitForClose,16);
+          };
+          waitForClose();
+          return;
+        }
         const scroll = state.returnScroll;
 
         cleanup();
@@ -19126,6 +19292,10 @@ window.addEventListener("storage", () => {
     state.pane.style.transform =
       `translateX(${goBack ? window.innerWidth : 0}px)`;
 
+    if (state.dim) {
+      state.dim.style.setProperty("transition", "opacity 180ms ease-out", "important");
+      state.dim.style.opacity = goBack ? "0" : "1";
+    }
     timer = setTimeout(complete, 190);
   }
 
@@ -19137,7 +19307,7 @@ window.addEventListener("storage", () => {
       cleanup();
 
       if (
-        !allowed() ||
+        !ENABLED ||
         event.touches.length !== 1
       ) {
         return;
@@ -19147,7 +19317,7 @@ window.addEventListener("storage", () => {
 
       if (
         !(target instanceof Element) ||
-        !target.closest("#app") ||
+        !dismissContext(target)?.root.contains(target) ||
         target.closest(
           "input,textarea,select,[contenteditable],.tab-bar"
         )
@@ -19164,9 +19334,8 @@ window.addEventListener("storage", () => {
         return;
       }
 
-      const back = document.querySelector(
-        "#app .nav-bar button.nav-button"
-      );
+      const context = dismissContext(target);
+      const back = context?.back;
 
       if (!back || back.disabled) return;
 
@@ -19176,6 +19345,7 @@ window.addEventListener("storage", () => {
 
 
      gesture = {
+  context,
   id: touch.identifier,
   x: touch.clientX,
   y: touch.clientY,
@@ -19199,10 +19369,8 @@ window.addEventListener("storage", () => {
       if (!gesture || settling) return;
 
       if (
-        !allowed() ||
-        event.touches.length !== 1 ||
-        currentRoute !== gesture.route ||
-        !gesture.back.isConnected
+        !contextMatches(gesture) ||
+        event.touches.length !== 1
       ) {
         cleanup();
         return;
@@ -19226,6 +19394,7 @@ gesture.samples = gesture.samples
   .slice(-8);
       const dx =
         touch.clientX - gesture.x;
+      if (gesture.dim) gesture.dim.style.opacity = String(1-Math.min(1,Math.max(0,dx)/window.innerWidth));
 
       const dy = Math.abs(
         touch.clientY - gesture.y
@@ -19319,12 +19488,15 @@ if (event.cancelable) event.preventDefault();
 // Release completes Back unless dragged back to the start.
 const returnedToStart = dx <= 6;
 
-const goBack = Boolean(
+let goBack = Boolean(
   touch &&
   state.armed &&
   state.pane?.isConnected &&
   !returnedToStart
 );
+      if (goBack && state.context.mode !== "page" && formChanged(state.context.root)) {
+        goBack = confirm("Discard unsaved changes and close this form?");
+      }
       finish(state, goBack);
 
   }
@@ -19342,7 +19514,7 @@ const goBack = Boolean(
 
   window.addEventListener("resize", () => {
     cleanup();
-    previous = null;
+    previous = null; pageSnapshots.clear(); notificationPreview = null;
   });
 
   document.addEventListener(
@@ -19350,7 +19522,7 @@ const goBack = Boolean(
     () => {
       if (document.visibilityState === "hidden") {
         cleanup();
-        previous = null;
+        previous = null; pageSnapshots.clear(); notificationPreview = null;
       }
     }
   );
@@ -19359,7 +19531,7 @@ const goBack = Boolean(
     "billbeacon:signed-out",
     () => {
       cleanup();
-      previous = null;
+      previous = null; pageSnapshots.clear(); notificationPreview = null;
     }
   );
 
@@ -19367,7 +19539,7 @@ const goBack = Boolean(
     "billbeacon:data-changed",
     () => {
       cleanup();
-      previous = null;
+      previous = null; pageSnapshots.clear(); notificationPreview = null;
     }
   );
   const appRoot = document.getElementById("app");
@@ -19375,28 +19547,12 @@ const goBack = Boolean(
 if (appRoot) {
 const viewObserver = new MutationObserver(() => {
   if (!gesture) return;
-
-  const back = document.querySelector(
-    "#app .nav-bar button.nav-button"
-  );
-
-  const sameBackAction = back &&
-    back.getAttribute("onclick") ===
-    gesture.back.getAttribute("onclick");
-
-  if (
-    !allowed() ||
-    currentRoute !== gesture.route ||
-    !back ||
-    back.disabled ||
-    !sameBackAction
-  ) {
-    cleanup();
-    return;
-  }
-
-  // A same-screen refresh is not a cancelled swipe.
-  gesture.back = back;
+  const context = dismissContext(gesture.context.root);
+  const same = context && context.mode === gesture.context.mode &&
+    context.root === gesture.context.root &&
+    context.back.getAttribute("onclick") === gesture.back.getAttribute("onclick");
+  if (!same || currentRoute !== gesture.route) {cleanup();return;}
+  gesture.back = context.back;
 });
 
   viewObserver.observe(appRoot, {
@@ -19404,5 +19560,14 @@ const viewObserver = new MutationObserver(() => {
     subtree: true
   });
 }
+  const formObserver = new MutationObserver(rememberForms);
+  formObserver.observe(document.body,{childList:true,subtree:true});
+  rememberForms();
+  window.addEventListener("billbeacon:authenticated",()=>{
+    cleanup();previous=null;pageSnapshots.clear();notificationPreview=null;
+  });
+  window.addEventListener("billbeacon:household-ready",()=>{
+    cleanup();previous=null;pageSnapshots.clear();notificationPreview=null;
+  });
 })();
 // END BILL BEACON DRAG-BACK
