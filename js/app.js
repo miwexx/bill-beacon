@@ -19279,40 +19279,15 @@ gesture.samples = gesture.samples
       const dy = touch
         ? Math.abs(touch.clientY - state.y)
         : Infinity;
-
-      const releasedAt = performance.now();
-
-const recent = (state.samples || [])
-  .filter(sample => releasedAt - sample.time <= 120);
-
-if (touch) {
-  recent.push({
-    x: touch.clientX,
-    time: releasedAt
-  });
-}
-
-const first = recent[0];
-const last = recent[recent.length - 1];
-
-const velocity =
-  first && last && last.time > first.time
-    ? (last.x - first.x) / (last.time - first.time)
-    : 0;
-
-// A short, deliberate right swipe completes Back.
-const passedDistance = dx >= 40;
-const pushedRight = dx >= 24 && velocity >= 0.25;
+// Release completes Back unless dragged back to the start.
+const returnedToStart = dx <= 6;
 
 const goBack = Boolean(
   touch &&
   state.armed &&
   state.pane?.isConnected &&
-  dy <= 32 &&
-  dx > dy * 2 &&
-  (passedDistance || pushedRight)
+  !returnedToStart
 );
-
       finish(state, goBack);
     },
     { passive: false }
