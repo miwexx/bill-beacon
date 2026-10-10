@@ -19300,17 +19300,16 @@ const velocity =
     ? (last.x - first.x) / (last.time - first.time)
     : 0;
 
-// Initial tuning values—not WhatsApp's implementation.
-const passedDistance = dx >= window.innerWidth * 0.35;
-const pushedRight = dx >= 48 && velocity >= 0.45;
-const movingBackLeft = velocity < -0.15;
+// A short, deliberate right swipe completes Back.
+const passedDistance = dx >= 40;
+const pushedRight = dx >= 24 && velocity >= 0.25;
 
 const goBack = Boolean(
   touch &&
+  state.armed &&
   state.pane?.isConnected &&
   dy <= 32 &&
   dx > dy * 2 &&
-  !movingBackLeft &&
   (passedDistance || pushedRight)
 );
 
