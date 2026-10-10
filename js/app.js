@@ -18830,55 +18830,87 @@ window.addEventListener("storage", () => {
   }
 
   function snapshot() {
-    const root = document.getElementById("app");
-    if (!root) return null;
+  const root = document.getElementById("app");
+  if (!root) return null;
 
-    const copy = root.cloneNode(true);
+  const copy = root.cloneNode(true);
+  const originals = [root, ...root.querySelectorAll("*")];
+  const copies = [copy, ...copy.querySelectorAll("*")];
+  const rootRect = root.getBoundingClientRect();
+  const mainScroll =
+    root.querySelector(".main-content")?.scrollTop || 0;
 
-    const mainScroll =
-      root.querySelector(".main-content")?.scrollTop || 0;
+  for (let index = 0; index < copies.length; index++) {
+    const node = copies[index];
+    const original = originals[index];
 
-    const nodes = [
-      copy,
-      ...copy.querySelectorAll("*")
-    ];
+    node.removeAttribute("id");
 
-    for (const node of nodes) {
-      node.removeAttribute("id");
-
-      for (const attribute of [...node.attributes]) {
-        if (/^on/i.test(attribute.name)) {
-          node.removeAttribute(attribute.name);
-        }
-      }
-
-      if (node.classList.contains("fade-in")) {
-        node.style.animation = "none";
+    for (const attribute of [...node.attributes]) {
+      if (/^on/i.test(attribute.name) ||
+          attribute.name === "autofocus") {
+        node.removeAttribute(attribute.name);
       }
     }
 
-    copy.querySelectorAll("script").forEach(node => {
-      node.remove();
-    });
+    node.style.setProperty("animation", "none", "important");
 
-    copy.inert = true;
-    copy.setAttribute("aria-hidden", "true");
+    const position = getComputedStyle(original).position;
 
-    Object.assign(copy.style, {
-      display: "block",
-      width: "100%",
-      minHeight: "100%",
-      margin: "0",
-      pointerEvents: "none"
-    });
+    if (
+      original !== root &&
+      (position === "fixed" || position === "sticky")
+    ) {
+      const rect = original.getBoundingClientRect();
 
-    return {
-      copy,
-      mainScroll,
-      windowScroll: window.scrollY,
-      route: currentRoute
-    };
+      if (position === "sticky") {
+        const spacer = document.createElement("div");
+
+        spacer.style.cssText =
+          `height:${rect.height}px;` +
+          `min-height:${rect.height}px;` +
+          "flex-shrink:0;pointer-events:none;";
+
+        node.parentNode.insertBefore(spacer, node);
+      }
+
+      for (const [property, value] of Object.entries({
+        position: "absolute",
+        top: `${rect.top - rootRect.top}px`,
+        left: `${rect.left - rootRect.left}px`,
+        right: "auto",
+        bottom: "auto",
+        width: `${rect.width}px`,
+        height: `${rect.height}px`
+      })) {
+        node.style.setProperty(property, value, "important");
+      }
+    }
   }
+
+  copy.querySelectorAll("script,iframe,object,embed")
+    .forEach(node => node.remove());
+
+  copy.inert = true;
+  copy.setAttribute("aria-hidden", "true");
+
+  Object.assign(copy.style, {
+    display: "flex",
+    flexDirection: "column",
+    position: "relative",
+    width: "100%",
+    minHeight: "100dvh",
+    margin: "0",
+    pointerEvents: "none"
+  });
+
+  return {
+    copy,
+    mainScroll,
+    windowScroll: window.scrollY,
+    route: currentRoute
+  };
+}
 
   navigate = function(route, params = {}) {
     cleanup();
@@ -19013,7 +19045,12 @@ window.addEventListener("storage", () => {
         currentRoute === state.route &&
         state.back.isConnected;
 
-      if (goBack && valid) {
+      if (
+  goBack &&
+  valid &&
+  state.pane?.isConnected &&
+  overlay?.isConnected
+) {
         const scroll = state.returnScroll;
 
         cleanup();
@@ -19046,8 +19083,11 @@ window.addEventListener("storage", () => {
       return;
     }
 
-    state.pane.style.transition =
-      "transform 180ms ease-out";
+    state.pane.style.setProperty(
+  "transition",
+  "transform 180ms ease-out",
+  "important"
+);
 
     state.pane.style.transform =
       `translateX(${goBack ? window.innerWidth : 0}px)`;
@@ -19276,5 +19316,17 @@ window.addEventListener("storage", () => {
       previous = null;
     }
   );
+  const appRoot = document.getElementById("app");
+
+if (appRoot) {
+  const viewObserver = new MutationObserver(() => {
+    if (gesture || settling || overlay) cleanup();
+  });
+
+  viewObserver.observe(appRoot, {
+    childList: true,
+    subtree: true
+  });
+}
 })();
 // END BILL BEACON DRAG-BACK
