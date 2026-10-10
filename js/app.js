@@ -18805,6 +18805,20 @@ window.addEventListener("storage", () => {
   let overlay = null;
   let timer = null;
   let settling = false;
+  let renderPending = false;
+  let gestureTarget = null;
+  const renderBeforeDragBack = render;
+
+  render = function() {
+    if (gesture || settling || overlay) {
+      renderPending = true;
+      return;
+    }
+    renderPending = false;
+    return renderBeforeDragBack.apply(this, arguments);
+  };
+  window.render = render;
+
 
   const reducedMotion = () =>
     Boolean(
@@ -18821,12 +18835,32 @@ window.addEventListener("storage", () => {
   function cleanup() {
     clearTimeout(timer);
     timer = null;
-
+    gestureTarget?.removeEventListener("touchend", handleDragEnd);
+    gestureTarget?.removeEventListener("touchcancel", cleanup);
+    gestureTarget = null;
     overlay?.remove();
     overlay = null;
-
     gesture = null;
     settling = false;
+
+    if (renderPending) {
+      renderPending = false;
+      const savedRoute = currentRoute;
+      const savedWindowScroll = window.scrollY;
+      const savedMainScroll = document.querySelector("#app .main-content")?.scrollTop || 0;
+      queueMicrotask(() => {
+        if (gesture || settling || overlay) {
+          renderPending = true;
+          return;
+        }
+        window.render();
+        if (currentRoute === savedRoute) {
+          window.scrollTo(0, savedWindowScroll);
+          const main = document.querySelector("#app .main-content");
+          if (main) main.scrollTop = savedMainScroll;
+        }
+      });
+    }
   }
 
   function snapshot() {
@@ -19136,6 +19170,11 @@ window.addEventListener("storage", () => {
 
       if (!back || back.disabled) return;
 
+      gestureTarget = target;
+      target.addEventListener("touchend", handleDragEnd, {passive: false});
+      target.addEventListener("touchcancel", cleanup, {passive: true});
+
+
      gesture = {
   id: touch.identifier,
   x: touch.clientX,
@@ -19203,7 +19242,8 @@ gesture.samples = gesture.samples
   cleanup();
   return;
 }
-  if (dx > 16 && dx > dy * 2) {
+
+      if (dx > 16 && dx > dy * 2) {
       if (!gesture.armed && !event.cancelable) {
   cleanup();
   return;
@@ -19252,9 +19292,7 @@ if (event.cancelable) event.preventDefault();
     { passive: false }
   );
 
-  document.addEventListener(
-    "touchend",
-    event => {
+  function handleDragEnd(event) {
       if (!gesture || settling) return;
 
       const state = gesture;
@@ -19288,9 +19326,13 @@ const goBack = Boolean(
   !returnedToStart
 );
       finish(state, goBack);
-    },
-    { passive: false }
-  );
+
+  }
+
+  document.addEventListener("touchend", handleDragEnd, {
+    capture: true,
+    passive: false
+  });
 
   document.addEventListener(
     "touchcancel",
@@ -19331,7 +19373,7 @@ const goBack = Boolean(
   const appRoot = document.getElementById("app");
 
 if (appRoot) {
-  const viewObserver = new MutationObserver(() => {
+const viewObserver = new MutationObserver(() => {
   if (!gesture) return;
 
   const back = document.querySelector(
