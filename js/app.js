@@ -11918,9 +11918,6 @@ function openIncomeSourceForm(sourceId = null) {
           </div>
         </div>
 
-        <div class="settings-footer">
-          Expected pay is used for planning. You can record a different actual amount for each paycheck later.
-        </div>
 
         ${source ? `
           <button
@@ -16548,19 +16545,7 @@ function addNotificationSettings() {
     <div class="section-header">Notifications</div>
 
     <div class="card card-pad">
-      <p
-        id="notificationPermissionStatus"
-        style="
-          font-size:var(--text-sm);
-          color:var(--text-muted);
-          line-height:1.5;
-          margin-bottom:var(--space-3);
-        "
-      >
-        Checking notification status…
-      </p>
-
-      <button
+          <button
         id="notificationPermissionButton"
         type="button"
         class="btn-primary"
