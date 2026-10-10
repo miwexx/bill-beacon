@@ -114,7 +114,14 @@
         ${svgIcon("plus", 18)}
         Generate Invite Code
       </button>
-
+        <button
+  type="button"
+  class="bb-outline-pill"
+  onclick="window.cancelHouseholdInviteCode()"
+  style="width:100%;min-height:44px;margin-top:10px;"
+>
+  Cancel Invite Code
+</button>
       <div
         id="householdInviteStatus"
         role="status"
@@ -340,8 +347,8 @@
 
       roleElement.textContent =
         role === "owner"
-          ? "You are the household owner."
-          : "You are a household member.";
+          ? "Account Status: Owner"
+          : "Account Status: Member";
 
       ownerActions.style.display = role === "owner" ? "block" : "none";
 
@@ -534,117 +541,261 @@
       if (button) button.disabled = false;
     }
   };
-
   window.openJoinHouseholdCodeDialog = function () {
-    showHouseholdCodeDialog({
-      title: "Join a Household",
-      primaryLabel: "Continue",
-      content: `
-        <label
-          class="login-label"
-          for="bbJoinHouseholdCode"
-          style="display:block;margin-bottom:8px;"
-        >
-          Invite Code
-        </label>
+    document.getElementById(
+      "bbHouseholdCodeDialog"
+    )?.remove();
 
-        <input
-          id="bbJoinHouseholdCode"
-          class="login-input"
-          type="text"
-          inputmode="text"
-          autocomplete="one-time-code"
-          autocapitalize="characters"
-          spellcheck="false"
-          maxlength="9"
-          placeholder="ABCD-EFGH"
-          style="letter-spacing:1.5px;text-transform:uppercase;"
-        >
+    const dialog = document.createElement("dialog");
 
-        <p
-          style="margin:12px 0 0;color:var(--text-muted);font-size:13px;line-height:1.45;"
-        >
-          Ask the household owner for their current invite code.
-        </p>
-      `,
-      onPrimary: async ({
-        dialog,
-        message,
-        primaryButton,
-        cancelButton
-      }) => {
-        const input = document.getElementById("bbJoinHouseholdCode");
+    dialog.id = "bbHouseholdCodeDialog";
 
-        input.value = formatInviteCode(input.value);
+    dialog.style.cssText = `
+      margin:auto;
+      width:min(440px,calc(100% - 32px));
+      padding:24px;
+      border:1px solid var(--border);
+      border-radius:24px;
+      background:var(--surface);
+      color:var(--text);
+    `;
 
-        const result = await householdWorkerRequest(
-          "/household-codes/preview",
-          {
-            code: input.value
-          }
-        );
+    dialog.innerHTML = `
+      <h2 style="margin:0 0 16px;">
+        Join a Household
+      </h2>
 
-        const ownerName = String(result.ownerFirstName || "").trim();
+      <label
+        class="login-label"
+        for="bbJoinCode"
+      >
+        Invite Code
+      </label>
 
-        if (!ownerName) {
-          throw new Error(
-            "This invite cannot be verified. Ask the owner for a new code."
-          );
-        }
+      <input
+        id="bbJoinCode"
+        class="login-input"
+        autocomplete="off"
+        autocapitalize="characters"
+        spellcheck="false"
+        maxlength="16"
+        style="margin-top:8px;text-transform:uppercase;"
+      >
 
-        message.style.color = "var(--text-secondary)";
-        message.textContent =
-          `Join ${ownerName}'s Household?`;
+      <p
+        id="bbJoinMessage"
+        role="status"
+        aria-live="polite"
+        style="margin:14px 0;line-height:1.4;"
+      ></p>
 
-        primaryButton.textContent = "Join Household";
+      <button
+        id="bbJoinContinue"
+        type="button"
+        class="btn-primary"
+      >
+        Continue
+      </button>
 
-        primaryButton.onclick = async () => {
-          primaryButton.disabled = true;
-          cancelButton.disabled = true;
+      <button
+        id="bbJoinCancel"
+        type="button"
+        class="bb-outline-pill"
+        style="width:100%;margin-top:10px;"
+      >
+        Cancel
+      </button>
+    `;
 
-          try {
+    document.body.appendChild(dialog);
+
+    const input =
+      dialog.querySelector("#bbJoinCode");
+
+    const message =
+      dialog.querySelector("#bbJoinMessage");
+
+    const button =
+      dialog.querySelector("#bbJoinContinue");
+
+    const cancel =
+      dialog.querySelector("#bbJoinCancel");
+
+    let confirmedCode = null;
+    let busy = false;
+
+    cancel.onclick = () => dialog.close();
+
+    dialog.addEventListener(
+      "cancel",
+      event => {
+        if (busy) event.preventDefault();
+      }
+    );
+
+    dialog.addEventListener(
+      "close",
+      () => dialog.remove(),
+      { once: true }
+    );
+
+    button.onclick = async () => {
+      if (busy) return;
+
+      busy = true;
+      button.disabled = true;
+      cancel.disabled = true;
+
+      try {
+        if (!confirmedCode) {
+          const result =
             await householdWorkerRequest(
-              "/household-codes/join",
+              "/household-codes/preview",
               {
                 code: input.value
               }
             );
 
-            message.style.color = "var(--paid)";
+          if (!result.ownerFirstName) {
+            throw new Error(
+              "The invite owner could not be verified."
+            );
+          }
+
+          confirmedCode = input.value;
+          input.disabled = true;
+
+          message.textContent =
+            `Join ${result.ownerFirstName}'s Household?`;
+
+          button.textContent = "Join Household";
+        } else {
+          const user =
+            window.getBillBeaconFirebaseUser?.();
+
+          const app =
+            document.getElementById("app");
+
+          const previousInert =
+            app?.inert || false;
+
+          if (!user) {
+            throw new Error("Please sign in again.");
+          }
+
+          if (app) app.inert = true;
+
+          let sync;
+          let stopped = false;
+
+          try {
+            if (!window.billBeaconPrepareDataTransfer) {
+              throw new Error(
+                "The sync helper is missing."
+              );
+            }
+
+            await window.billBeaconPrepareDataTransfer();
+
+            sync = await import(
+              "./firebase-sync.js"
+            );
+
+            const status =
+              window.billBeaconSyncStatus?.();
+
+            if (
+              !status?.ready ||
+              status.pending ||
+              status.conflict ||
+              window.getBillBeaconFirebaseUser?.()?.uid !==
+                user.uid
+            ) {
+              throw new Error(
+                "Finish syncing before joining."
+              );
+            }
+
+            sync.stopHouseholdSync();
+            stopped = true;
+
             message.textContent =
-              "You joined the shared household. Loading shared bills…";
+              "Joining household…";
+
+            await householdWorkerRequest(
+              "/household-codes/join",
+              {
+                code: confirmedCode
+              }
+            );
+
+            message.textContent =
+              "Household joined. Loading shared bills…";
 
             window.location.reload();
+            return;
           } catch (error) {
-            message.style.color = "var(--overdue)";
-            message.textContent =
-              error?.message || "Could not join the household.";
+            if (
+              stopped &&
+              window.getBillBeaconFirebaseUser?.()?.uid ===
+                user.uid
+            ) {
+              await sync.startHouseholdSync(user);
+            }
 
-            primaryButton.disabled = false;
-            cancelButton.disabled = false;
+            throw error;
+          } finally {
+            if (app) {
+              app.inert = previousInert;
+            }
           }
-        };
+        }
+      } catch (error) {
+        message.style.color = "var(--overdue)";
 
-        primaryButton.disabled = false;
-        cancelButton.disabled = false;
-
-        dialog.querySelector("#bbJoinHouseholdCode").disabled = true;
+        message.textContent =
+          error?.message ||
+          "The request did not finish. " +
+          "Refresh before retrying.";
+      } finally {
+        busy = false;
+        button.disabled = false;
+        cancel.disabled = false;
       }
-    });
+    };
 
-    requestAnimationFrame(() => {
-      const input = document.getElementById("bbJoinHouseholdCode");
-
-      if (!input) return;
-
-      input.addEventListener("input", () => {
-        input.value = formatInviteCode(input.value);
-      });
-
-      input.focus();
-    });
+    dialog.showModal();
+    input.focus();
   };
 
+  window.cancelHouseholdInviteCode =
+    async function () {
+      try {
+        await householdWorkerRequest(
+          "/household-codes/revoke",
+          {}
+        );
+
+        const status =
+          document.getElementById(
+            "householdInviteStatus"
+          );
+
+        if (status) {
+          status.textContent =
+            "The invitation code was cancelled.";
+        }
+
+        document.getElementById(
+          "bbHouseholdCodeDialog"
+        )?.close();
+      } catch (error) {
+        alert(
+          error?.message ||
+          "Could not cancel the code."
+        );
+      }
+    };
   const previousSettingsRender = render;
 
   render = function () {

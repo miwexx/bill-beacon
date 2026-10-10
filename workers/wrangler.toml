@@ -13,6 +13,7 @@ PLAID_REDIRECT_URI = "https://bill-beacon.pages.dev/"
 BANK_RUN_NOW_ENABLED = "false"
 BANK_MATCHING_MODE = "preview"
 BANK_APPLY_ENABLED = "false"
+HOUSEHOLD_CODE_JOINS_ENABLED = "false"
 
 [observability]
 enabled = true
@@ -27,3 +28,10 @@ crons = [
   "0 0,12 * * *",
   "1-59/5 * * * *"
 ]
+[[durable_objects.bindings]]
+name = "HOUSEHOLD_COORDINATOR"
+class_name = "HouseholdCodeCoordinator"
+
+[[migrations]]
+tag = "household-codes-v1"
+new_sqlite_classes = ["HouseholdCodeCoordinator"]

@@ -5650,15 +5650,976 @@ const exchanged = await plaidRequest(
   );
 }
 };
-export default {
-  fetch(request, env, ctx) {
+const BC_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+const BC_PATHS = new Set([
+  "/household-codes",
+  "/household-codes/preview",
+  "/household-codes/join",
+  "/household-codes/revoke"
+]);
+
+function bcNormalize(value) {
+  const code =
+    typeof value === "string" && value.length <= 32
+      ? value.trim().toUpperCase().replace(/[\s-]/g, "")
+      : "";
+
+  if (
+    code.length !== 8 ||
+    [...code].some(char => !BC_ALPHABET.includes(char))
+  ) {
+    throw new Error("Enter a valid eight-character invite code.");
+  }
+
+  return code;
+}
+
+function bcGenerate() {
+  const code = [
+    ...crypto.getRandomValues(new Uint8Array(8))
+  ].map(number => BC_ALPHABET[number % 32]).join("");
+
+  return `${code.slice(0, 4)}-${code.slice(4)}`;
+}
+
+async function bcHash(env, code) {
+  if (
+    !env.HOUSEHOLD_CODE_SECRET ||
+    env.HOUSEHOLD_CODE_SECRET.length < 32
+  ) {
+    throw new Error("HOUSEHOLD_CODE_SECRET is not configured.");
+  }
+
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(env.HOUSEHOLD_CODE_SECRET),
+    {
+      name: "HMAC",
+      hash: "SHA-256"
+    },
+    false,
+    ["sign"]
+  );
+
+  const digest = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(bcNormalize(code))
+  );
+
+  return [...new Uint8Array(digest)]
+    .map(number => number.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+const bcName = path =>
+  FIRESTORE_DOCUMENT_BASE.replace(
+    "https://firestore.googleapis.com/v1/",
+    ""
+  ) + "/" + path;
+
+const bcUserPath = uid =>
+  `users/${encodeURIComponent(uid)}`;
+
+const bcHomePath = id =>
+  `households/${encodeURIComponent(id)}`;
+
+const bcMemberPath = (id, uid) =>
+  `${bcHomePath(id)}/members/${encodeURIComponent(uid)}`;
+
+async function bcREST(token, suffix, body, method = "POST") {
+  const response = await workerFetch(
+    FIRESTORE_DOCUMENT_BASE + suffix,
+    {
+      method,
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json"
+      },
+      ...(body === undefined
+        ? {}
+        : { body: JSON.stringify(body) })
+    }
+  );
+
+  if (response.status === 404 && method === "GET") {
+    return null;
+  }
+
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    const error = new Error(
+      "The database operation did not finish. " +
+      "Refresh before retrying."
+    );
+
+    error.code = result?.error?.status;
+    throw error;
+  }
+
+  return result;
+}
+
+async function bcTransaction(token, action) {
+  const begun = await bcREST(
+    token,
+    ":beginTransaction",
+    {
+      options: {
+        readWrite: {}
+      }
+    }
+  );
+
+  const transaction = begun.transaction;
+  const writes = [];
+
+  const tx = {
+    async get(path) {
+      const document = await bcREST(
+        token,
+        `/${path}?transaction=${encodeURIComponent(transaction)}`,
+        undefined,
+        "GET"
+      );
+
+      return document
+        ? firestoreFieldsToJs(document.fields || {})
+        : null;
+    },
+
+    async members(id) {
+      const rows = await bcREST(
+        token,
+        `/${bcHomePath(id)}:runQuery`,
+        {
+          transaction,
+          structuredQuery: {
+            from: [
+              { collectionId: "members" }
+            ],
+            limit: 2
+          }
+        }
+      );
+
+      return rows
+        .filter(row => row.document)
+        .map(row => ({
+          ...firestoreFieldsToJs(
+            row.document.fields || {}
+          ),
+          documentUid:
+            row.document.name.split("/").pop()
+        }));
+    },
+
+    patch(path, data) {
+      writes.push({
+        update: {
+          name: bcName(path),
+          fields: jsObjectToFirestoreFields(data)
+        },
+        updateMask: {
+          fieldPaths: Object.keys(data)
+        },
+        currentDocument: {
+          exists: true
+        }
+      });
+    },
+
+    set(path, data, mustBeNew = false) {
+      writes.push({
+        update: {
+          name: bcName(path),
+          fields: jsObjectToFirestoreFields(data)
+        },
+        ...(mustBeNew
+          ? {
+              currentDocument: {
+                exists: false
+              }
+            }
+          : {})
+      });
+    },
+
+    remove(path) {
+      writes.push({
+        delete: bcName(path),
+        currentDocument: {
+          exists: true
+        }
+      });
+    }
+  };
+
+  try {
+    const result = await action(tx);
+
+    if (writes.length) {
+      await bcREST(token, ":commit", {
+        transaction,
+        writes
+      });
+    } else {
+      await bcREST(token, ":rollback", {
+        transaction
+      });
+    }
+
+    return result;
+  } catch (error) {
+    await bcREST(token, ":rollback", {
+      transaction
+    }).catch(() => {});
+
+    throw error;
+  }
+}
+
+async function bcOwner(tx, uid) {
+  const profile = await tx.get(bcUserPath(uid));
+  const id = profile?.householdId;
+
+  if (
+    typeof id !== "string" ||
+    !id ||
+    id.includes("/")
+  ) {
+    throw new Error("Wait for account setup to finish.");
+  }
+
+  const member = await tx.get(
+    bcMemberPath(id, uid)
+  );
+
+  if (
+    member?.role !== "owner" ||
+    (member.uid && member.uid !== uid)
+  ) {
+    throw new Error(
+      "Only a household owner can do this."
+    );
+  }
+
+  const home = await tx.get(bcHomePath(id));
+
+  if (!home || home.retiredAt) {
+    throw new Error("This household is unavailable.");
+  }
+
+  return {
+    profile,
+    member,
+    home,
+    id
+  };
+}
+
+function bcCheckEmpty(home) {
+  for (const key of [
+    "bills",
+    "payments",
+    "incomeSources",
+    "archivedBills",
+    "activityLog"
+  ]) {
+    if (
+      !Array.isArray(home[key]) ||
+      home[key].length
+    ) {
+      throw new Error(
+        "Only a new, empty personal household can join. " +
+        "Existing records are not moved or deleted."
+      );
+    }
+  }
+
+  if (
+    home.bankTransactions !== undefined &&
+    (
+      !Array.isArray(home.bankTransactions) ||
+      home.bankTransactions.length
+    )
+  ) {
+    throw new Error(
+      "This household has bank data and cannot switch."
+    );
+  }
+}
+
+async function bcInvite(tx, hash, uid) {
+  const path = `householdInviteCodes/${hash}`;
+  const invite = await tx.get(path);
+
+  if (
+    !invite ||
+    invite.usedAt ||
+    invite.revokedAt ||
+    !Number.isFinite(Date.parse(invite.expiresAt)) ||
+    Date.parse(invite.expiresAt) <= Date.now()
+  ) {
+    throw new Error(
+      "This code has expired, was cancelled, " +
+      "or was already used."
+    );
+  }
+
+  if (invite.createdByUid === uid) {
+    throw new Error(
+      "You cannot use your own invite code."
+    );
+  }
+
+  const owner = await bcOwner(
+    tx,
+    invite.createdByUid
+  );
+
+  const slot = await tx.get(
+    `householdInviteCodeOwners/${encodeURIComponent(owner.id)}`
+  );
+
+  if (
+    owner.id !== invite.householdId ||
+    slot?.activeHash !== hash
+  ) {
+    throw new Error(
+      "This code is no longer active."
+    );
+  }
+
+  const name = String(
+    owner.profile.firstName || ""
+  ).trim();
+
+  if (!name) {
+    throw new Error(
+      "Ask the owner to save their name in Settings " +
+      "and generate another code."
+    );
+  }
+
+  return {
+    invite,
+    owner,
+    path,
+    name
+  };
+}
+
+export class HouseholdCodeCoordinator {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+    this.queue = Promise.resolve();
+  }
+
+  fetch(request) {
+    const run = this.queue.then(
+      () => this.handle(request)
+    );
+
+    this.queue = run.catch(() => {});
+
+    return run;
+  }
+
+  async rateLimit(uid, request) {
+    const hour = Math.floor(
+      Date.now() / 3600000
+    );
+
+    const ip = await sha256Hex(
+      request.headers.get("CF-Connecting-IP") ||
+      "unknown"
+    );
+
+    for (const [key, maximum] of [
+      [`user:${uid}`, 30],
+      [`ip:${ip}`, 120]
+    ]) {
+      const old = await this.state.storage.get(key);
+
+      const count =
+        old?.hour === hour ? old.count : 0;
+
+      if (count >= maximum) {
+        throw new Error(
+          "Too many requests. Try again in an hour."
+        );
+      }
+
+      await this.state.storage.put(key, {
+        hour,
+        count: count + 1
+      });
+    }
+  }
+
+  async handle(request) {
+    const env = this.env;
+    const origin = allowedOrigin(request);
+
+    if (!origin) {
+      return new Response(
+        "Forbidden origin",
+        { status: 403 }
+      );
+    }
+
     const path = new URL(request.url).pathname;
-    if (![
-  "/plaid/match-preview",
-  "/plaid/run-now",
-  
-].includes(path)) return workerHandlers.fetch(request, env, ctx);
-    return bankRequestScope.run({calls: 0, limit: 45}, () => workerHandlers.fetch(request, env, ctx));
+
+    const authentication =
+      await verifyFirebaseToken(request);
+
+    if (!authentication.ok) {
+      return json(
+        {
+          ok: false,
+          error: authentication.error
+        },
+        authentication.status,
+        origin
+      );
+    }
+
+    const user = authentication.user;
+
+    try {
+      if (!BC_PATHS.has(path)) {
+        if (path === "/plaid/exchange-token") {
+          const token =
+            await getFirestoreAccessToken(env);
+
+          await requireBankHousehold(
+            user.uid,
+            token
+          );
+
+          await this.state.storage.put(
+            `bank-started:${user.uid}`,
+            true
+          );
+        }
+
+        return bcOriginalFetch(
+          request,
+          env
+        );
+      }
+
+      await this.rateLimit(
+        user.uid,
+        request
+      );
+
+      const token =
+        await getFirestoreAccessToken(env);
+
+      let body;
+
+      try {
+        body = await request.json();
+      } catch {
+        throw new Error(
+          "Request body must be valid JSON."
+        );
+      }
+
+      const now = new Date().toISOString();
+
+      if (path === "/household-codes") {
+        const code = bcGenerate();
+        const hash = await bcHash(env, code);
+
+        const expiresAt = new Date(
+          Date.now() + 86400000
+        ).toISOString();
+
+        await bcTransaction(
+          token,
+          async tx => {
+            const owner = await bcOwner(
+              tx,
+              user.uid
+            );
+
+            if (
+              !String(owner.profile.firstName || "").trim() ||
+              !String(owner.profile.lastName || "").trim()
+            ) {
+              throw new Error(
+                "Save your first and last name " +
+                "in Settings first."
+              );
+            }
+
+            const slotPath =
+              `householdInviteCodeOwners/${encodeURIComponent(owner.id)}`;
+
+            const slot =
+              await tx.get(slotPath);
+
+            const old = slot?.activeHash
+              ? await tx.get(
+                  `householdInviteCodes/${slot.activeHash}`
+                )
+              : null;
+
+            if (
+              old &&
+              !old.usedAt &&
+              !old.revokedAt
+            ) {
+              tx.patch(
+                `householdInviteCodes/${slot.activeHash}`,
+                { revokedAt: now }
+              );
+            }
+
+            tx.set(
+              `householdInviteCodes/${hash}`,
+              {
+                householdId: owner.id,
+                createdByUid: user.uid,
+                createdAt: now,
+                expiresAt,
+                usedAt: null,
+                usedByUid: null,
+                revokedAt: null
+              },
+              true
+            );
+
+            tx.set(slotPath, {
+              activeHash: hash,
+              updatedAt: now
+            });
+          }
+        );
+
+        return json(
+          {
+            ok: true,
+            code,
+            expiresAt
+          },
+          201,
+          origin
+        );
+      }
+
+      if (path === "/household-codes/revoke") {
+        await bcTransaction(
+          token,
+          async tx => {
+            const owner = await bcOwner(
+              tx,
+              user.uid
+            );
+
+            const slotPath =
+              `householdInviteCodeOwners/${encodeURIComponent(owner.id)}`;
+
+            const slot =
+              await tx.get(slotPath);
+
+            const old = slot?.activeHash
+              ? await tx.get(
+                  `householdInviteCodes/${slot.activeHash}`
+                )
+              : null;
+
+            if (
+              old &&
+              !old.usedAt &&
+              !old.revokedAt
+            ) {
+              tx.patch(
+                `householdInviteCodes/${slot.activeHash}`,
+                { revokedAt: now }
+              );
+            }
+
+            tx.set(slotPath, {
+              activeHash: null,
+              updatedAt: now
+            });
+          }
+        );
+
+        return json(
+          { ok: true },
+          200,
+          origin
+        );
+      }
+
+      const hash = await bcHash(
+        env,
+        body.code
+      );
+
+      if (path === "/household-codes/preview") {
+        const ownerFirstName =
+          await bcTransaction(
+            token,
+            async tx =>
+              (await bcInvite(
+                tx,
+                hash,
+                user.uid
+              )).name
+          );
+
+        return json(
+          {
+            ok: true,
+            ownerFirstName
+          },
+          200,
+          origin
+        );
+      }
+
+      if (
+        env.HOUSEHOLD_CODE_JOINS_ENABLED !== "true"
+      ) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Code joining is not enabled yet."
+          },
+          503,
+          origin
+        );
+      }
+
+      const bankStarted =
+        await this.state.storage.get(
+          `bank-started:${user.uid}`
+        );
+
+      const bankRecord =
+        await env.NOTIFICATIONSKV.get(
+          plaidConnectionKey(user.uid)
+        );
+
+      if (bankStarted || bankRecord) {
+        throw new Error(
+          "An account with a bank connection " +
+          "or bank-setup attempt cannot switch households."
+        );
+      }
+
+      const result =
+        await bcTransaction(
+          token,
+          async tx => {
+            const invitation =
+              await bcInvite(
+                tx,
+                hash,
+                user.uid
+              );
+
+            const actor =
+              await bcOwner(
+                tx,
+                user.uid
+              );
+
+            if (
+              actor.id === invitation.owner.id
+            ) {
+              throw new Error(
+                "You already belong to this household."
+              );
+            }
+
+            bcCheckEmpty(actor.home);
+
+            const members =
+              await tx.members(actor.id);
+
+            if (
+              members.length !== 1 ||
+              members[0].documentUid !== user.uid ||
+              members[0].role !== "owner"
+            ) {
+              throw new Error(
+                "Your personal household must " +
+                "have no other members."
+              );
+            }
+
+            const firstName = String(
+              actor.profile.firstName || ""
+            ).trim();
+
+            const lastName = String(
+              actor.profile.lastName || ""
+            ).trim();
+
+            if (!firstName || !lastName) {
+              throw new Error(
+                "Save your first and last name " +
+                "in Settings before joining."
+              );
+            }
+
+            const destination =
+              bcMemberPath(
+                invitation.owner.id,
+                user.uid
+              );
+
+            if (await tx.get(destination)) {
+              throw new Error(
+                "A destination membership already exists. " +
+                "Contact the owner."
+              );
+            }
+
+            const slotPath =
+              `householdInviteCodeOwners/${encodeURIComponent(actor.id)}`;
+
+            const slot =
+              await tx.get(slotPath);
+
+            const old = slot?.activeHash
+              ? await tx.get(
+                  `householdInviteCodes/${slot.activeHash}`
+                )
+              : null;
+
+            tx.patch(
+              bcUserPath(user.uid),
+              {
+                householdId:
+                  invitation.owner.id,
+                role: "member",
+                updatedAt: now
+              }
+            );
+
+            tx.set(
+              destination,
+              {
+                uid: user.uid,
+                role: "member",
+                email:
+                  user.email ||
+                  actor.profile.email ||
+                  "",
+                firstName,
+                lastName,
+                displayName:
+                  `${firstName} ${lastName}`,
+                joinedAt: now,
+                updatedAt: now
+              },
+              true
+            );
+
+            tx.remove(
+              bcMemberPath(
+                actor.id,
+                user.uid
+              )
+            );
+
+            tx.patch(
+              bcHomePath(actor.id),
+              {
+                retiredAt: now
+              }
+            );
+
+            tx.patch(
+              invitation.path,
+              {
+                usedAt: now,
+                usedByUid: user.uid
+              }
+            );
+
+            if (
+              old &&
+              !old.usedAt &&
+              !old.revokedAt
+            ) {
+              tx.patch(
+                `householdInviteCodes/${slot.activeHash}`,
+                { revokedAt: now }
+              );
+            }
+
+            tx.set(slotPath, {
+              activeHash: null,
+              updatedAt: now
+            });
+
+            return {
+              ok: true,
+              householdId:
+                invitation.owner.id,
+              role: "member"
+            };
+          }
+        );
+
+      return json(
+        result,
+        200,
+        origin
+      );
+    } catch (error) {
+      return json(
+        {
+          ok: false,
+          error:
+            error?.message ||
+            "Household request failed."
+        },
+        409,
+        origin
+      );
+    }
+  }
+}
+
+function bcOriginalFetch(request, env, ctx) {
+  const path = new URL(request.url).pathname;
+
+  if ([
+    "/plaid/match-preview",
+    "/plaid/run-now",
+    "/plaid/apply-match"
+  ].includes(path)) {
+    return bankRequestScope.run(
+      {
+        calls: 0,
+        limit: 45
+      },
+      () =>
+        workerHandlers.fetch(
+          request,
+          env,
+          ctx
+        )
+    );
+  }
+
+  return workerHandlers.fetch(
+    request,
+    env,
+    ctx
+  );
+}
+export default {
+    fetch(request, env, ctx) {
+    const path = new URL(request.url).pathname;
+
+    if (
+      request.method === "POST" &&
+      [
+        "/household-invites",
+        "/household-invites/accept"
+      ].includes(path)
+    ) {
+      const origin = allowedOrigin(request);
+
+      if (!origin) {
+        return new Response(
+          "Forbidden origin",
+          { status: 403 }
+        );
+      }
+
+      return json(
+        {
+          ok: false,
+          error:
+            "Use an invite code in Settings " +
+            "instead of a website link."
+        },
+        410,
+        origin
+      );
+    }
+
+    if (
+      BC_PATHS.has(path) &&
+      request.method !== "POST" &&
+      request.method !== "OPTIONS"
+    ) {
+      const origin = allowedOrigin(request);
+
+      return origin
+        ? json(
+            {
+              ok: false,
+              error: "Method not allowed."
+            },
+            405,
+            origin
+          )
+        : new Response(
+            "Forbidden origin",
+            { status: 403 }
+          );
+    }
+
+    if (
+      request.method === "POST" &&
+      (
+        BC_PATHS.has(path) ||
+        path.startsWith("/plaid/")
+      )
+    ) {
+      const origin = allowedOrigin(request);
+
+      if (!origin) {
+        return new Response(
+          "Forbidden origin",
+          { status: 403 }
+        );
+      }
+
+      if (!env.HOUSEHOLD_COORDINATOR) {
+        return json(
+          {
+            ok: false,
+            error:
+              "Household coordinator binding is missing."
+          },
+          503,
+          origin
+        );
+      }
+
+      const id =
+        env.HOUSEHOLD_COORDINATOR.idFromName(
+          "household-sharing-v1"
+        );
+
+      return env.HOUSEHOLD_COORDINATOR
+        .get(id)
+        .fetch(request);
+    }
+
+    return bcOriginalFetch(
+      request,
+      env,
+      ctx
+    );
   },
   scheduled(event, env, ctx) {
     if (!["0 0,12 * * *", "1-59/5 * * * *"].includes(event.cron)) return workerHandlers.scheduled(event, env, ctx);
