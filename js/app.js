@@ -16257,8 +16257,6 @@ async function refreshNotificationSettingsCard() {
       Notifications On
     `;
 
-    status.textContent =
-      "Bill reminders are enabled on this device.";
 
     return;
   }

@@ -112,7 +112,7 @@
         <div id="bbSettingsNotificationsSlot"></div>
         <section class="settings-section">
           <div class="section-header">Income & Paychecks</div>
-          <div class="card">${sourceRows || '<div class="card-pad" style="color:var(--text-muted);">Add income sources to plan your paychecks.</div>'}
+          
             ${settingsAction("Add Income Source", "plus", "openIncomeSourceForm()")}
           </div>
         </section>
@@ -126,10 +126,10 @@
         <section class="settings-section">
           <div class="section-header">Records & Transfers</div>
           <div class="card">
-            ${settingsAction("Payment History", "checkCircle", "navigate('history')", "Review payments or mark a paid occurrence as unpaid")}
-            ${settingsAction("Activity & Changes", "doc", "navigate('activity')", "Bill edits, payments, reversals and archives")}
-            ${settingsAction("Export Bills CSV", "export", "exportCSV()", "Export bill definitions")}
-            ${settingsAction("Import Bills CSV", "tray", "document.getElementById('billImportFile').click()", "Add bill definitions from a CSV")}
+            ${settingsAction("Payment History", "checkCircle", "navigate('history')",)}
+            ${settingsAction("Activity & Changes", "doc", "navigate('activity')",)}
+            ${settingsAction("Export Bills CSV", "export", "exportCSV()",)}
+            ${settingsAction("Import Bills CSV", "tray", "document.getElementById('billImportFile').click()",)}
           </div>
           <input id="billImportFile" type="file" accept=".csv,text/csv" style="display:none;" onchange="importBillsCSV(event)">
         </section>
@@ -140,7 +140,7 @@
           </div>
         </section>
         <section class="settings-section">
-          <div class="section-header">Sign Out</div>
+          
           <div class="card card-pad"><button id="signout-button" type="button" class="bb-outline-pill"
             style="width:100%;min-height:46px;justify-content:center;">Sign Out</button></div>
         </section>
@@ -203,8 +203,7 @@
         const note = document.createElement("p");
         note.dataset.defaultReminderNote = "true";
         note.className = "settings-footer";
-        note.textContent = "New bills default to reminders 3 days and 1 day before the due date. Existing reminder selections are unchanged.";
-        notifications.appendChild(note);
+               notifications.appendChild(note);
       }
     }
     return result;
