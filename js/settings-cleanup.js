@@ -51,101 +51,153 @@
       </div></div>
       <div class="main-content fade-in"><div class="content-pad content-gap">
         <section class="settings-section">
-  <div class="section-header">Account & Household</div>
+         <section class="settings-section">
+          <div class="section-header">
+            Account & Household
+          </div>
 
-  <div class="card">
-    <div style="padding:16px;border-bottom:1px solid var(--border);">
-      <div
-        id="bbAccountDisplayName"
-        style="font-size:17px;font-weight:850;overflow-wrap:anywhere;"
-      >
-        Your Account
-      </div>
+          <div class="card">
+            <div
+              style="
+                padding:16px;
+                border-bottom:1px solid var(--border);
+              "
+            >
+              <div
+                id="bbAccountDisplayName"
+                style="
+                  font-size:17px;
+                  font-weight:850;
+                  overflow-wrap:anywhere;
+                "
+              >
+                Your Account
+              </div>
 
-      <div
-        style="margin-top:4px;font-size:13px;color:var(--text-muted);overflow-wrap:anywhere;"
-      >
-        ${escapeHtml(email)}
-      </div>
-    </div>
+              <div
+                style="
+                  margin-top:4px;
+                  font-size:13px;
+                  color:var(--text-muted);
+                  overflow-wrap:anywhere;
+                "
+              >
+                ${escapeHtml(email)}
+              </div>
+            </div>
 
-    ${settingsAction(
-      "Personal Details",
-      "user",
-      "window.bbOpenAccountSettings('name')"
-    )}
+            ${settingsAction(
+              "Personal Details",
+              "user",
+              "window.bbOpenAccountSettings('name')"
+            )}
 
-    ${settingsAction(
-      "Email Address",
-      "mail",
-      "window.bbOpenAccountSettings('email')"
-    )}
+            ${settingsAction(
+              "Email Address",
+              "mail",
+              "window.bbOpenAccountSettings('email')"
+            )}
 
-    ${settingsAction(
-      "Password",
-      "lock",
-      "window.bbOpenAccountSettings('password')"
-    )}
-  </div>
+            ${settingsAction(
+              "Password",
+              "lock",
+              "window.bbOpenAccountSettings('password')"
+            )}
 
-  <div class="section-header" style="padding-top:24px;">
-    Shared Household
-  </div>
+            <div
+              style="
+                padding:16px;
+                border-top:1px solid var(--border);
+              "
+            >
+              <div
+                style="
+                  font-size:15px;
+                  font-weight:800;
+                  margin-bottom:6px;
+                "
+              >
+                Shared Household
+              </div>
 
-  <div class="card card-pad">
-    <div
-      id="bbHouseholdRole"
-      style="font-size:14px;font-weight:750;color:var(--text-secondary);"
-    >
-      Loading household…
-    </div>
+              <div
+                id="bbHouseholdRole"
+                style="
+                  font-size:13px;
+                  color:var(--text-secondary);
+                  line-height:1.4;
+                "
+              >
+                Loading household…
+              </div>
 
-    <div
-      id="bbHouseholdOwnerActions"
-      style="display:none;margin-top:14px;"
-    >
-      <button
-        id="createHouseholdInviteButton"
-        type="button"
-        class="bb-outline-pill"
-        onclick="window.createHouseholdInviteCode()"
-        style="width:100%;min-height:46px;justify-content:center;"
-      >
-        ${svgIcon("plus", 18)}
-        Generate Invite Code
-      </button>
-        <button
-  type="button"
-  class="bb-outline-pill"
-  onclick="window.cancelHouseholdInviteCode()"
-  style="width:100%;min-height:44px;margin-top:10px;"
->
-  Cancel Invite Code
-</button>
-      <div
-        id="householdInviteStatus"
-        role="status"
-        aria-live="polite"
-        style="font-size:var(--text-sm);color:var(--text-muted);margin-top:8px;"
-      ></div>
-    </div>
+              <div
+                id="bbHouseholdOwnerActions"
+                style="display:none;margin-top:14px;"
+              >
+                <button
+                  id="createHouseholdInviteButton"
+                  type="button"
+                  class="bb-outline-pill"
+                  onclick="window.createHouseholdInviteCode()"
+                  style="
+                    width:100%;
+                    min-height:46px;
+                    justify-content:center;
+                  "
+                >
+                  ${svgIcon("plus", 18)}
+                  Generate Invite Code
+                </button>
 
-    <div
-      id="bbHouseholdMemberActions"
-      style="display:none;margin-top:14px;"
-    >
-      <button
-        type="button"
-        class="bb-outline-pill"
-        onclick="window.openJoinHouseholdCodeDialog()"
-        style="width:100%;min-height:46px;justify-content:center;"
-      >
-        ${svgIcon("plus", 18)}
-        Join a Household
-      </button>
-    </div>
-  </div>
-</section>
+                <button
+                  type="button"
+                  class="bb-outline-pill"
+                  onclick="window.cancelHouseholdInviteCode()"
+                  style="
+                    width:100%;
+                    min-height:44px;
+                    margin-top:10px;
+                    justify-content:center;
+                  "
+                >
+                  Cancel Invite Code
+                </button>
+
+                <div
+                  id="householdInviteStatus"
+                  role="status"
+                  aria-live="polite"
+                  style="
+                    font-size:var(--text-sm);
+                    color:var(--text-muted);
+                    margin-top:8px;
+                    line-height:1.4;
+                  "
+                ></div>
+              </div>
+
+              <div
+                id="bbHouseholdMemberActions"
+                style="display:none;margin-top:12px;"
+              >
+                <button
+                  type="button"
+                  class="bb-outline-pill"
+                  onclick="window.openJoinHouseholdCodeDialog()"
+                  style="
+                    width:100%;
+                    min-height:46px;
+                    justify-content:center;
+                  "
+                >
+                  ${svgIcon("plus", 18)}
+                  Join a Household
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
         <div id="bbSettingsNotificationsSlot"></div>
         <section class="settings-section">
           <div class="section-header">Income & Paychecks</div>
