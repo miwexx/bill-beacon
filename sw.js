@@ -1,4 +1,5 @@
-const CACHE_VERSION = "bill-beacon-v2.1-banking-reset";
+const CACHE_VERSION =
+  "bill-beacon-v2.1-device-notification-receipts";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -150,9 +151,7 @@ self.addEventListener("push", (event) => {
       }
     });
 
-  const badgePromise = Number.isInteger(payload.unreadCount) && payload.unreadCount >= 0
-    ? reconcileBadge({count: payload.unreadCount, householdId: payload.householdId || null,
-        observedAt: payload.badgeObservedAt}) : Promise.resolve();
+  const badgePromise = Promise.resolve();
 
   event.waitUntil(
     Promise.all([

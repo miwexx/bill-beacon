@@ -17575,7 +17575,33 @@ document.addEventListener(
    Real Push Notification Inbox
    Uses Worker notification send history
 ============================================ */
+function getNotificationDeviceId() {
+  const key = "billBeaconNotificationDeviceId";
 
+  let id = localStorage.getItem(key);
+
+  if (
+    !id ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  ) {
+    id = crypto.randomUUID();
+    localStorage.setItem(key, id);
+  }
+
+  return id;
+}
+
+function notificationReceiptSegments(context) {
+  return [
+    "households",
+    context.householdId,
+    "notificationReceipts",
+    context.uid,
+    "devices",
+    context.deviceId,
+    "items"
+  ];
+}
 let notificationInboxState = {
   notifications: [], unreadCount: 0, loaded: false, unsubscribe: null,
   uid: null, householdId: null, generation: 0, error: null, fromCache: false
@@ -17619,9 +17645,13 @@ async function syncHomeScreenNotificationBadge(reset = false) {
 }
 function stopNotificationInboxListener() {
   notificationInboxState.generation += 1;
+
   notificationInboxState.unsubscribe?.();
+
   notificationInboxState.unsubscribe = null;
   notificationInboxState.uid = null;
+  notificationInboxState.deviceId = null;
+  notificationInboxState.sessionGeneration = null;
 }
 function clearNotificationInboxState() {
   stopNotificationInboxListener();
@@ -17662,59 +17692,317 @@ function sortNotificationRecords(notifications) {
     return secondTime - firstTime;
   });
 }
-
-
 function startNotificationInboxListener() {
   const context = notificationContext();
   const firestore = getNotificationFirestore();
-  if (!context || !firestore || !window.firebaseOnSnapshot) return false;
-  if (notificationInboxState.uid === context.uid && notificationInboxState.householdId === context.householdId &&
-      notificationInboxState.unsubscribe && !notificationInboxState.error) return true;
+
+  if (
+    !context ||
+    !firestore ||
+    !window.firebaseOnSnapshot
+  ) {
+    return false;
+  }
+
+  let deviceId;
+
+  try {
+    deviceId = getNotificationDeviceId();
+  } catch (error) {
+    notificationInboxState.error = error;
+    renderNotificationCenterContent();
+    return false;
+  }
+
+  if (
+    notificationInboxState.uid === context.uid &&
+    notificationInboxState.householdId === context.householdId &&
+    notificationInboxState.deviceId === deviceId &&
+    notificationInboxState.sessionGeneration === context.generation &&
+    notificationInboxState.unsubscribe &&
+    !notificationInboxState.error
+  ) {
+    return true;
+  }
+
   stopNotificationInboxListener();
-  Object.assign(notificationInboxState, {uid: context.uid, householdId: context.householdId,
-    notifications: [], unreadCount: 0, loaded: false, error: null});
+
+  Object.assign(notificationInboxState, {
+    uid: context.uid,
+    householdId: context.householdId,
+    deviceId,
+    sessionGeneration: context.generation,
+    notifications: [],
+    unreadCount: 0,
+    loaded: false,
+    error: null,
+    fromCache: true
+  });
+
   const generation = notificationInboxState.generation;
-  const valid = () => generation === notificationInboxState.generation &&
-    notificationContext()?.uid === context.uid && notificationContext()?.householdId === context.householdId;
+  const stops = [];
+
+  notificationInboxState.unsubscribe = () =>
+    stops.forEach(stop => stop());
+
+  let rawRecords = [];
+  let receipts = new Map();
+
+  let recordsReady = false;
+  let receiptsReady = false;
+
+  let recordsCached = true;
+  let receiptsCached = true;
+
+  const valid = () => {
+    const current = notificationContext();
+
+    return (
+      generation === notificationInboxState.generation &&
+      current?.uid === context.uid &&
+      current.householdId === context.householdId &&
+      current.generation === context.generation
+    );
+  };
+
   const failed = error => {
     if (!valid()) return;
+
     notificationInboxState.error = error;
-    console.error("Notification inbox listener failed:", notificationDiagnostic(error));
+    notificationInboxState.loaded = false;
+
+    console.error(
+      "Notification inbox failed:",
+      notificationDiagnostic(error)
+    );
+
     renderNotificationCenterContent();
   };
+
+  const refresh = () => {
+    if (
+      !valid() ||
+      !recordsReady ||
+      !receiptsReady ||
+      notificationInboxState.error
+    ) {
+      return;
+    }
+
+    notificationInboxState.notifications =
+      rawRecords.map(record => {
+        const receipt = receipts.get(record.id) || {};
+
+        return {
+          ...record,
+          readAt: receipt.readAt || null,
+          openedAt: receipt.openedAt || null,
+          clearedAt: receipt.clearedAt || null
+        };
+      });
+
+    notificationInboxState.unreadCount =
+      notificationInboxState.notifications.filter(
+        record => !record.readAt && !record.clearedAt
+      ).length;
+
+    notificationInboxState.loaded = true;
+
+    notificationInboxState.fromCache =
+      recordsCached || receiptsCached;
+
+    if (!notificationInboxState.fromCache) {
+      syncHomeScreenNotificationBadge();
+    }
+
+    render();
+    renderNotificationCenterContent();
+    consumeNotificationDeepLink();
+  };
+
   try {
-    // Full collection: includes old/missing sentAt records and all unread records.
-    const reference = window.firebaseCollection(firestore, "households", context.householdId, "notifications");
-    notificationInboxState.unsubscribe = window.firebaseOnSnapshot(reference, {includeMetadataChanges: true}, snapshot => {
-      if (!valid()) return;
-      notificationInboxState.notifications = snapshot.docs.map(normalizeNotificationRecord);
-      notificationInboxState.unreadCount = notificationInboxState.notifications.filter(n => !n.readAt && !n.clearedAt).length;
-      notificationInboxState.loaded = true;
-      notificationInboxState.error = null;
-      notificationInboxState.fromCache = snapshot.metadata.fromCache;
-      if (!snapshot.metadata.fromCache) syncHomeScreenNotificationBadge();
-      render(); renderNotificationCenterContent();
-      consumeNotificationDeepLink();
-    }, failed);
+    const recordsRef = window.firebaseCollection(
+      firestore,
+      "households",
+      context.householdId,
+      "notifications"
+    );
+
+    stops.push(
+      window.firebaseOnSnapshot(
+        recordsRef,
+        { includeMetadataChanges: true },
+        snapshot => {
+          if (!valid()) return;
+
+          rawRecords = snapshot.docs
+            .map(document => {
+              const record =
+                normalizeNotificationRecord(document);
+
+              const recipientUid =
+                document.data()?.recipientUid;
+
+              return {
+                ...record,
+                recipientUid: recipientUid || null
+              };
+            })
+            .filter(record =>
+              record.recipientUid
+                ? record.recipientUid === context.uid
+                : record.id.startsWith(
+                    `reminders:${context.uid}:`
+                  )
+            );
+
+          recordsReady = true;
+          recordsCached = snapshot.metadata.fromCache;
+
+          refresh();
+        },
+        failed
+      )
+    );
+
+    const receiptsRef = window.firebaseCollection(
+      firestore,
+      ...notificationReceiptSegments({
+        ...context,
+        deviceId
+      })
+    );
+
+    stops.push(
+      window.firebaseOnSnapshot(
+        receiptsRef,
+        { includeMetadataChanges: true },
+        snapshot => {
+          if (!valid()) return;
+
+          receipts = new Map(
+            snapshot.docs.map(document => [
+              document.id,
+              document.data()
+            ])
+          );
+
+          receiptsReady = true;
+          receiptsCached = snapshot.metadata.fromCache;
+
+          refresh();
+        },
+        failed
+      )
+    );
+
     return true;
-  } catch (error) { failed(error); return false; }
+  } catch (error) {
+    stops.forEach(stop => stop());
+
+    notificationInboxState.unsubscribe = null;
+    failed(error);
+
+    return false;
+  }
 }
 function ensureNotificationInboxListener() { return startNotificationInboxListener(); }
 function captureNotificationAction() {
   const context = notificationContext();
-  if (!context || !notificationInboxState.loaded || notificationInboxState.error ||
-      context.householdId !== notificationInboxState.householdId) throw new Error("Notification inbox is not ready. Retry loading it first.");
-  return {...context, firestore: getNotificationFirestore()};
+
+  if (
+    !context ||
+    !notificationInboxState.loaded ||
+    notificationInboxState.error ||
+    context.uid !== notificationInboxState.uid ||
+    context.householdId !== notificationInboxState.householdId ||
+    context.generation !== notificationInboxState.sessionGeneration
+  ) {
+    throw new Error(
+      "Notification inbox is not ready. " +
+      "Retry loading it first."
+    );
+  }
+
+  return {
+    ...context,
+    firestore: getNotificationFirestore(),
+    deviceId: notificationInboxState.deviceId,
+    inboxGeneration: notificationInboxState.generation
+  };
 }
-async function writeNotificationChanges(items, updates, context = captureNotificationAction()) {
-  for (let offset = 0; offset < items.length; offset += 450) {
+
+async function writeNotificationChanges(
+  items,
+  updates,
+  context = captureNotificationAction()
+) {
+  const allowedFields = [
+    "readAt",
+    "openedAt",
+    "clearedAt"
+  ];
+
+  if (
+    Object.keys(updates).some(
+      key => !allowedFields.includes(key)
+    )
+  ) {
+    throw new Error(
+      "Invalid notification receipt update."
+    );
+  }
+
+  for (
+    let offset = 0;
+    offset < items.length;
+    offset += 450
+  ) {
     const current = notificationContext();
-    if (!current || current.uid !== context.uid || current.householdId !== context.householdId || current.generation !== context.generation)
-      throw new Error("Account changed; remaining notification updates were stopped.");
-    const batch = window.firebaseWriteBatch(context.firestore);
-    for (const item of items.slice(offset, offset + 450)) {
-      batch.update(window.firebaseDoc(context.firestore, "households", context.householdId, "notifications", item.id), updates);
+
+    if (
+      !current ||
+      current.uid !== context.uid ||
+      current.householdId !== context.householdId ||
+      current.generation !== context.generation ||
+      notificationInboxState.generation !== context.inboxGeneration ||
+      notificationInboxState.deviceId !== context.deviceId
+    ) {
+      throw new Error(
+        "Account or device changed. " +
+        "Notification updates were stopped."
+      );
     }
+
+    const batch =
+      window.firebaseWriteBatch(context.firestore);
+
+    for (
+      const item of items.slice(offset, offset + 450)
+    ) {
+      if (
+        !notificationInboxState.notifications.some(
+          record => record.id === item.id
+        )
+      ) {
+        throw new Error(
+          "This reminder is not in your current inbox."
+        );
+      }
+
+      const receiptRef = window.firebaseDoc(
+        context.firestore,
+        ...notificationReceiptSegments(context),
+        item.id
+      );
+
+      batch.set(
+        receiptRef,
+        updates,
+        { merge: true }
+      );
+    }
+
     await batch.commit();
   }
 }

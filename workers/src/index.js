@@ -1298,7 +1298,7 @@ if (offsetDays === 1) {
   }
 
   return {
-    notificationId: reminderId,
+    notificationId: reminderId,recipientUid: uid,
     title,
     body,
     url: buildNotificationUrl({
@@ -1663,6 +1663,7 @@ async function writeNotificationInboxRecord(
 
   const record = {
     id: notification.notificationId,
+    recipientUid: notification.recipientUid,
     type: notification.kind,
     entityType: notification.entityType,
     billId: notification.billId,
@@ -1729,21 +1730,41 @@ async function getHouseholdUnreadCount(householdId, accessToken) {
   } while (pageToken);
   return count;
 }
-async function prepareInboxPush(householdId, notification, accessToken) {
+async function prepareInboxPush(
+  householdId,
+  notification,
+  accessToken
+) {
   notification.householdId = householdId;
-  const link = new URL(notification.url || "/", APP_ORIGIN);
-  link.searchParams.set("notificationId", notification.notificationId);
-  link.searchParams.set("householdId", householdId);
-  notification.url = link.pathname + link.search;
-  await writeNotificationInboxRecord(householdId, notification, accessToken);
-  try {
-    const observedAt = Date.now();
-    notification.unreadCount = await getHouseholdUnreadCount(householdId, accessToken);
-    notification.badgeObservedAt = observedAt;
-  } catch (error) {
-    // Inbox creation succeeded; a count outage must not suppress the reminder.
-    console.warn("Badge count unavailable:", error.message);
-  }
+
+  const link = new URL(
+    notification.url || "/",
+    APP_ORIGIN
+  );
+
+  link.searchParams.set(
+    "notificationId",
+    notification.notificationId
+  );
+
+  link.searchParams.set(
+    "householdId",
+    householdId
+  );
+
+  notification.url =
+    link.pathname + link.search;
+
+  await writeNotificationInboxRecord(
+    householdId,
+    notification,
+    accessToken
+  );
+
+  // A household total is not a device unread count.
+  delete notification.unreadCount;
+  delete notification.badgeObservedAt;
+
   return notification;
 }
 const HOUSEHOLD_INVITE_PREFIX = "household-invite:";
