@@ -326,95 +326,203 @@
     return result;
   }
 
+    let bbHouseholdCardCache = null;
+  let bbHouseholdCardRequest = 0;
+
   async function refreshHouseholdSettingsCard() {
-    const roleElement = document.getElementById("bbHouseholdRole");
-    const ownerActions = document.getElementById(
-      "bbHouseholdOwnerActions"
-    );
-    const memberActions = document.getElementById(
-      "bbHouseholdMemberActions"
-    );
-    const displayName = document.getElementById(
-      "bbAccountDisplayName"
-    );
+    const roleElement =
+      document.getElementById("bbHouseholdRole");
 
-    if (!roleElement || !ownerActions || !memberActions) return;
+    const ownerActions =
+      document.getElementById("bbHouseholdOwnerActions");
 
-    const user = window.getBillBeaconFirebaseUser?.();
+    const memberActions =
+      document.getElementById("bbHouseholdMemberActions");
 
-    if (!user) {
-      roleElement.textContent = "Sign in to manage your household.";
+    const displayName =
+      document.getElementById("bbAccountDisplayName");
+
+    if (
+      !roleElement ||
+      !ownerActions ||
+      !memberActions
+    ) {
       return;
     }
 
+    const user =
+      window.getBillBeaconFirebaseUser?.();
+
+    const context =
+      window.getBillBeaconHouseholdContext?.();
+
+    if (!user) {
+      bbHouseholdCardCache = null;
+      ownerActions.style.display = "none";
+      memberActions.style.display = "none";
+
+      roleElement.textContent =
+        "Sign in to manage your household.";
+
+      return;
+    }
+
+    const scopeKey =
+      `${user.uid}:${context?.householdId || ""}`;
+
+    const requestNumber =
+      ++bbHouseholdCardRequest;
+
+    function applyCard(data) {
+      if (
+        !roleElement.isConnected ||
+        !ownerActions.isConnected ||
+        !memberActions.isConnected
+      ) {
+        return;
+      }
+
+      if (displayName && data.name) {
+        displayName.textContent = data.name;
+      }
+
+      roleElement.textContent =
+        data.role === "owner"
+          ? "You are the household owner."
+          : "You are a household member.";
+
+      ownerActions.style.display =
+        data.role === "owner" ? "block" : "none";
+
+      // Owners of empty personal households may also join.
+      // The Worker checks whether switching is permitted.
+      memberActions.style.display = "block";
+    }
+
+    if (
+      bbHouseholdCardCache?.scopeKey === scopeKey
+    ) {
+      applyCard(bbHouseholdCardCache);
+    }
+
     try {
-      const firestore = window.getBillBeaconFirestore?.();
+      const firestore =
+        window.getBillBeaconFirestore?.();
 
       if (!firestore || !window.firebaseDoc) {
-        throw new Error("Account information is still loading.");
+        throw new Error(
+          "Account information is still loading."
+        );
       }
 
       const firebaseFirestore = await import(
         "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js"
       );
 
-      const profileSnapshot = await firebaseFirestore.getDoc(
-        window.firebaseDoc(firestore, "users", user.uid)
-      );
+      const profileSnapshot =
+        await firebaseFirestore.getDoc(
+          window.firebaseDoc(
+            firestore,
+            "users",
+            user.uid
+          )
+        );
 
       if (!profileSnapshot.exists()) {
-        throw new Error("Your account profile is still loading.");
+        throw new Error(
+          "Your account profile is still loading."
+        );
       }
 
       const profile = profileSnapshot.data();
-      const householdId = String(profile.householdId || "").trim();
+
+      const householdId = String(
+        profile.householdId || ""
+      ).trim();
 
       if (!householdId) {
-        throw new Error("Your household is still loading.");
+        throw new Error(
+          "Your household is still loading."
+        );
       }
 
-      const memberSnapshot = await firebaseFirestore.getDoc(
-        window.firebaseDoc(
-          firestore,
-          "households",
-          householdId,
-          "members",
-          user.uid
-        )
-      );
+      const memberSnapshot =
+        await firebaseFirestore.getDoc(
+          window.firebaseDoc(
+            firestore,
+            "households",
+            householdId,
+            "members",
+            user.uid
+          )
+        );
+
+      const latestContext =
+        window.getBillBeaconHouseholdContext?.();
+
+      if (
+        requestNumber !== bbHouseholdCardRequest ||
+        window.getBillBeaconFirebaseUser?.()?.uid !==
+          user.uid ||
+        `${user.uid}:${latestContext?.householdId || ""}` !==
+          scopeKey
+      ) {
+        return;
+      }
 
       if (!memberSnapshot.exists()) {
-        throw new Error("Your household membership is still loading.");
+        throw new Error(
+          "Your household membership is unavailable."
+        );
       }
 
       const member = memberSnapshot.data();
-      const role = member.role === "owner" ? "owner" : "member";
-      const firstName = String(profile.firstName || "").trim();
-      const lastName = String(profile.lastName || "").trim();
-      const name = `${firstName} ${lastName}`.trim();
 
-      if (displayName && name) {
-        displayName.textContent = name;
+      if (
+        !["owner", "member"].includes(member.role) ||
+        (member.uid && member.uid !== user.uid)
+      ) {
+        throw new Error(
+          "Your household membership needs review."
+        );
       }
 
-      roleElement.textContent =
-        role === "owner"
-          ? "Account Status: Owner"
-          : "Account Status: Member";
+      const firstName = String(
+        profile.firstName || ""
+      ).trim();
 
-      ownerActions.style.display = role === "owner" ? "block" : "none";
+      const lastName = String(
+        profile.lastName || ""
+      ).trim();
 
-      /*
-       * An owner can still enter a code while they have a new, empty
-       * household. The Worker makes the final safety decision.
-       */
-      memberActions.style.display = "block";
+      const data = {
+        scopeKey,
+        role: member.role,
+        name: `${firstName} ${lastName}`.trim()
+      };
+
+      bbHouseholdCardCache = data;
+      applyCard(data);
     } catch (error) {
-      roleElement.textContent =
-        error?.message || "Could not load household information.";
+      if (
+        requestNumber !== bbHouseholdCardRequest ||
+        !roleElement.isConnected
+      ) {
+        return;
+      }
+
+      if (
+        bbHouseholdCardCache?.scopeKey !== scopeKey
+      ) {
+        ownerActions.style.display = "none";
+        memberActions.style.display = "none";
+
+        roleElement.textContent =
+          error?.message ||
+          "Could not load household information.";
+      }
     }
   }
-
   function showHouseholdCodeDialog({
     title,
     content,
