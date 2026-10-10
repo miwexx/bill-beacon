@@ -18789,3 +18789,100 @@ document.addEventListener("DOMContentLoaded", () => {
 window.addEventListener("storage", () => {
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 });
+
+// BEGIN BILL BEACON EDGE-SWIPE TEST
+(() => {
+  const ENABLED = true;
+  if (window.billBeaconEdgeSwipeInstalled) return;
+  window.billBeaconEdgeSwipeInstalled = true;
+  let gesture = null;
+
+  const allowed = () => ENABLED &&
+    ["settings", "transactions", "detail"].includes(currentRoute) &&
+    !dashboardHasOpenFormOrPopup();
+
+  document.addEventListener("touchstart", event => {
+    gesture = null;
+    if (!allowed() || event.touches.length !== 1) return;
+
+    const target = event.target;
+    if (!(target instanceof Element) || !target.closest("#app")) return;
+    if (target.closest('input, textarea, select, [contenteditable], .tab-bar')) return;
+
+    const touch = event.touches[0];
+    if (touch.clientX < 16 || touch.clientX > 48) return;
+
+    const back = document.querySelector("#app .nav-bar button.nav-button");
+    if (!back || back.disabled) return;
+
+    gesture = {
+      id: touch.identifier,
+      x: touch.clientX,
+      y: touch.clientY,
+      started: performance.now(),
+      route: currentRoute,
+      back,
+      armed: false
+    };
+  }, { passive: true });
+
+  document.addEventListener("touchmove", event => {
+    if (!gesture) return;
+
+    if (!allowed() || event.touches.length !== 1 ||
+        currentRoute !== gesture.route || !gesture.back.isConnected) {
+      gesture = null;
+      return;
+    }
+
+    const touch = event.touches[0];
+    if (touch.identifier !== gesture.id) {
+      gesture = null;
+      return;
+    }
+
+    const dx = touch.clientX - gesture.x;
+    const dy = Math.abs(touch.clientY - gesture.y);
+
+    if (dx < -10 || dy > 32 || (dy > 10 && dy > Math.abs(dx))) {
+      gesture = null;
+      return;
+    }
+
+    if (dx > 16 && dx > dy * 2) {
+      if (!event.cancelable) {
+        gesture = null;
+        return;
+      }
+      gesture.armed = true;
+      event.preventDefault();
+    }
+  }, { passive: false });
+
+  document.addEventListener("touchend", event => {
+    const finished = gesture;
+    gesture = null;
+
+    if (!finished || !finished.armed || !allowed() ||
+        currentRoute !== finished.route || !finished.back.isConnected ||
+        performance.now() - finished.started > 700 || !event.cancelable) return;
+
+    const touch = [...event.changedTouches]
+      .find(item => item.identifier === finished.id);
+
+    if (!touch) return;
+
+    const dx = touch.clientX - finished.x;
+    const dy = Math.abs(touch.clientY - finished.y);
+
+    if (dx < 80 || dy > 32 || dx <= dy * 2) return;
+
+    event.preventDefault();
+    finished.back.click();
+  }, { passive: false });
+
+  document.addEventListener("touchcancel", () => {
+    gesture = null;
+  }, { passive: true });
+})();
+// END BILL BEACON EDGE-SWIPE TEST
