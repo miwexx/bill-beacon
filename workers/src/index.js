@@ -5656,7 +5656,8 @@ const BC_PATHS = new Set([
   "/household-codes",
   "/household-codes/preview",
   "/household-codes/join",
-  "/household-codes/revoke"
+  "/household-codes/revoke",
+  "/households/leave"
 ]);
 
 function bcNormalize(value) {
@@ -6259,7 +6260,137 @@ export class HouseholdCodeCoordinator {
           origin
         );
       }
+            if (path === "/households/leave") {
+        const result = await bcTransaction(
+          token,
+          async tx => {
+            const profile = await tx.get(
+              bcUserPath(user.uid)
+            );
 
+            const oldId = profile?.householdId;
+
+            if (
+              typeof oldId !== "string" ||
+              !oldId ||
+              oldId.includes("/")
+            ) {
+              throw new Error(
+                "Your household profile is unavailable."
+              );
+            }
+
+            if (body.householdId !== oldId) {
+              throw new Error(
+                "Your household changed. Refresh before leaving."
+              );
+            }
+
+            const oldMemberPath = bcMemberPath(
+              oldId,
+              user.uid
+            );
+
+            const membership = await tx.get(
+              oldMemberPath
+            );
+
+            if (
+              membership?.role !== "member" ||
+              (
+                membership.uid &&
+                membership.uid !== user.uid
+              )
+            ) {
+              throw new Error(
+                "Only a household member can leave. " +
+                "Owners must transfer ownership first."
+              );
+            }
+
+            const newId =
+              `personal_${crypto.randomUUID()}`;
+
+            const firstName = String(
+              profile.firstName || ""
+            ).trim();
+
+            const lastName = String(
+              profile.lastName || ""
+            ).trim();
+
+            const theme = [
+              "dark",
+              "light",
+              "system"
+            ].includes(body.theme)
+              ? body.theme
+              : "dark";
+
+            tx.set(
+              bcHomePath(newId),
+              {
+                bills: [],
+                payments: [],
+                incomeSources: [],
+                archivedBills: [],
+                activityLog: [],
+                settings: { theme },
+                schemaVersion: 1,
+                syncRevision: 1,
+                syncWriteId:
+                  `leave:${crypto.randomUUID()}`,
+                createdAt: now,
+                updatedAt: now
+              },
+              true
+            );
+
+            tx.set(
+              bcMemberPath(newId, user.uid),
+              {
+                uid: user.uid,
+                role: "owner",
+                email:
+                  user.email ||
+                  profile.email ||
+                  "",
+                firstName,
+                lastName,
+                displayName:
+                  `${firstName} ${lastName}`.trim(),
+                joinedAt: now,
+                updatedAt: now
+              },
+              true
+            );
+
+            tx.patch(
+              bcUserPath(user.uid),
+              {
+                householdId: newId,
+                role: "owner",
+                updatedAt: now,
+                lastHouseholdLeaveAt: now
+              }
+            );
+
+            tx.remove(oldMemberPath);
+
+            return {
+              ok: true,
+              householdId: newId,
+              role: "owner"
+            };
+          }
+        );
+
+        return json(
+          result,
+          200,
+          origin
+        );
+      }
       const hash = await bcHash(
         env,
         body.code

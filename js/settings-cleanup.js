@@ -396,7 +396,38 @@
 
       // Owners of empty personal households may also join.
       // The Worker checks whether switching is permitted.
-      memberActions.style.display = "block";
+            memberActions.style.display =
+        data.role === "owner" ? "block" : "none";
+
+      let leaveButton = document.getElementById(
+        "bbLeaveHouseholdButton"
+      );
+
+      if (!leaveButton) {
+        leaveButton = document.createElement("button");
+
+        leaveButton.id = "bbLeaveHouseholdButton";
+        leaveButton.type = "button";
+        leaveButton.className = "bb-outline-pill";
+        leaveButton.textContent = "Leave Household";
+
+        leaveButton.style.cssText = `
+          width:100%;
+          min-height:46px;
+          margin-top:12px;
+          justify-content:center;
+        `;
+
+        leaveButton.onclick = () =>
+          window.leaveSharedHousehold();
+
+        memberActions.parentElement.appendChild(
+          leaveButton
+        );
+      }
+
+      leaveButton.style.display =
+        data.role === "member" ? "flex" : "none";
     }
 
     if (
@@ -993,4 +1024,131 @@
   };
 
   window.render = render;
+    window.leaveSharedHousehold = async function () {
+    const user =
+      window.getBillBeaconFirebaseUser?.();
+
+    if (!user) {
+      alert("Please sign in first.");
+      return;
+    }
+
+    const approved = confirm(
+      "Leave this household?\n\n" +
+      "You will become the owner of a new, empty " +
+      "personal household. Your name and login " +
+      "stay the same. The shared household's " +
+      "records are not deleted."
+    );
+
+    if (!approved) return;
+
+    const app = document.getElementById("app");
+
+    const previousInert =
+      app?.inert || false;
+
+    const button = document.getElementById(
+      "bbLeaveHouseholdButton"
+    );
+
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Leaving…";
+    }
+
+    if (app) app.inert = true;
+
+    let sync;
+    let stopped = false;
+
+    try {
+      const before =
+        await window.billBeaconPrepareDataTransfer();
+
+      sync = await import(
+        "./firebase-sync.js"
+      );
+
+      const status =
+        window.billBeaconSyncStatus?.();
+
+      const context =
+        window.getBillBeaconHouseholdContext?.();
+
+      if (
+        !status?.ready ||
+        status.pending ||
+        status.conflict ||
+        context?.householdId !== before.householdId ||
+        window.getBillBeaconFirebaseUser?.()?.uid !==
+          user.uid
+      ) {
+        throw new Error(
+          "Finish syncing before leaving."
+        );
+      }
+
+      const theme =
+        document.documentElement.getAttribute(
+          "data-theme"
+        ) || "dark";
+
+      sync.stopHouseholdSync();
+      stopped = true;
+
+      await householdWorkerRequest(
+        "/households/leave",
+        {
+          householdId: before.householdId,
+          theme
+        }
+      );
+
+      // Clear shared snapshots on this device only.
+      // Do not clear Firebase's login storage.
+      for (const key of [
+        "bills",
+        "payments",
+        "incomeSources",
+        "archivedBills",
+        "activityLog",
+        "bankTransactions",
+        "settings"
+      ]) {
+        try {
+          localStorage.removeItem(key);
+        } catch {}
+      }
+
+      window.location.reload();
+    } catch (error) {
+      if (
+        stopped &&
+        window.getBillBeaconFirebaseUser?.()?.uid ===
+          user.uid
+      ) {
+        await sync.startHouseholdSync(user)
+          .catch(() => {});
+      }
+
+      alert(
+        (
+          error?.message ||
+          "The request did not finish."
+        ) +
+        "\n\nRefresh and check your household status " +
+        "before trying again."
+      );
+    } finally {
+      if (app) {
+        app.inert = previousInert;
+      }
+
+      if (button?.isConnected) {
+        button.disabled = false;
+        button.textContent = "Leave Household";
+      }
+    }
+  };
 })();
