@@ -2734,7 +2734,45 @@ window.addEventListener('billbeacon:signed-out', () => {
   routeParams = { billSort: 'dueDate' };
 });
 
+function getBillDetailReturnParams() {
+  const saved = routeParams.returnParams;
+
+  return saved &&
+    typeof saved === "object" &&
+    !Array.isArray(saved)
+      ? JSON.parse(JSON.stringify(saved))
+      : {};
+}
+
 function navigate(route, params = {}) {
+  if (
+    route === "detail" &&
+    currentRoute !== "detail" &&
+    !params.returnToNotificationPopup
+  ) {
+    const previousRoute = currentRoute;
+    const calendarRoutes = ["calendar", "recurring"];
+    let returnRoute = params.returnRoute || previousRoute;
+
+    if (
+      calendarRoutes.includes(previousRoute) &&
+      calendarRoutes.includes(returnRoute)
+    ) {
+      returnRoute = previousRoute;
+    }
+
+    params = {...params, returnRoute};
+
+    if (
+      returnRoute === previousRoute &&
+      !params.returnParams
+    ) {
+      params.returnParams = JSON.parse(
+        JSON.stringify(routeParams || {})
+      );
+    }
+  }
+
   currentRoute = route;
   routeParams = params;
 
@@ -11181,9 +11219,13 @@ const isCalendarOccurrence = isRecurring && Boolean(occurrenceDueDate);
   isCalendarOccurrence ? 'recurring' : 'bills'
 );
 
-const backParams = backRoute === 'recurring' && isCalendarOccurrence
-  ? `{ month: '${escapeInlineString(detailBill.dueDate)}' }`
-  : '{}';
+const backParams = routeParams.returnParams &&
+  typeof routeParams.returnParams === "object" &&
+  !Array.isArray(routeParams.returnParams)
+    ? "getBillDetailReturnParams()"
+    : backRoute === "recurring" && isCalendarOccurrence
+      ? `{ month: '${escapeInlineString(detailBill.dueDate)}' }`
+      : '{}';
 const backAction = routeParams.returnToNotificationPopup
   ? "returnToNotificationCenter()"
   : `navigate('${escapeInlineString(backRoute)}', ${backParams})`;
