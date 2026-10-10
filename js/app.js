@@ -1477,42 +1477,58 @@ function getRecurringOccurrencesForNextMonths(
     (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
   );
 }
-
 function getCalendarBillsForMonth(referenceDate = new Date()) {
   const matchesMonth = value => {
     const date = new Date(value);
+
     return Number.isFinite(date.getTime()) &&
       date.getFullYear() === referenceDate.getFullYear() &&
       date.getMonth() === referenceDate.getMonth();
   };
-  const active = Store.getBills();
-  const activeIds = new Set(active.map(bill => bill.id));
-  const archived = getArchivedBills().filter(bill => !activeIds.has(bill.id));
-  const oneTime = [...active, ...archived].filter(bill => {
-    if (isRecurringBill(bill) || bill.scheduleHistory?.length) return false;
-    if (!matchesMonth(bill.dueDate)) return false;
-    if (!bill.archivedAt) return true;
-    return getLocalDateKey(bill.dueDate) < getLocalDateKey(bill.archivedAt) ||
-      Store.getPaymentsForBill(bill.id).some(payment =>
-        payment.paidForDueDate &&
-        getLocalDateKey(payment.paidForDueDate) === getLocalDateKey(bill.dueDate)
-      );
-  }).map(bill => ({...bill, isArchivedHistory: Boolean(bill.archivedAt)}));
-  const archivedOccurrences = archived.flatMap(bill =>
-    getVersionedBillOccurrences(bill, referenceDate)
+
+  const active = Store.getBills().filter(bill =>
+    bill &&
+    !bill.archived &&
+    !bill.archivedAt &&
+    !bill.isArchivedHistory &&
+    String(bill.status || "").trim().toLowerCase() !== "archived"
   );
+
+  const activeIds = new Set(
+    active.map(bill => bill.id)
+  );
+
+  const oneTime = active.filter(bill =>
+    !isRecurringBill(bill) &&
+    !bill.scheduleHistory?.length &&
+    matchesMonth(bill.dueDate)
+  );
+
+  const recurring = getRecurringOccurrencesForMonth(referenceDate)
+    .filter(item =>
+      activeIds.has(getBillPaymentId(item)) &&
+      !item.archived &&
+      !item.archivedAt &&
+      !item.isArchivedHistory &&
+      String(item.status || "").trim().toLowerCase() !== "archived"
+    );
+
   const seen = new Set();
-  return [...oneTime, ...getRecurringOccurrencesForMonth(referenceDate), ...archivedOccurrences]
+
+  return [...oneTime, ...recurring]
     .filter(item => {
-      const key = `${getBillPaymentId(item)}:${getLocalDateKey(item.dueDate)}`;
+      const key =
+        `${getBillPaymentId(item)}:${getLocalDateKey(item.dueDate)}`;
+
       if (seen.has(key)) return false;
+
       seen.add(key);
       return true;
     })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    .sort((a, b) =>
+      new Date(a.dueDate) - new Date(b.dueDate)
+    );
 }
-
-
 function getCalendarBillsForDay(dateString) { 
   const selectedDate = new Date(dateString);
 
