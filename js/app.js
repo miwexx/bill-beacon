@@ -4353,7 +4353,6 @@ function getDashboardMonthSummary(referenceDate = new Date()) {
 
 function closeDashboardPaidSheet() {
   document.getElementById("dashboardPaidContainer")?.remove();
-  unlockBackgroundScroll();
 }
 
 function openDashboardPaidSheet() {
@@ -4479,7 +4478,6 @@ function openDashboardPaidSheet() {
   `;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
 }
 function renderToday() {
   const now = new Date();
