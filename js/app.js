@@ -12847,7 +12847,6 @@ function openBillForm(billId = null, selectedDate = null) {
   document.body.appendChild(sheetContainer);
 
   updateBillDueDateField();
-  lockBackgroundScroll();
 
   requestAnimationFrame(() => {
     document.getElementById("sheetOverlay")?.classList.add("show");
@@ -12884,17 +12883,13 @@ function updateBillDueDateField() {
 
 
 function closeBillForm() {
-  const overlay = document.getElementById('sheetOverlay');
-  const sheet = document.getElementById('billSheet');
+  const container = document.getElementById("sheetContainer");
 
-  if (overlay) overlay.classList.remove('show');
-  if (sheet) sheet.classList.remove('show');
+  if (container?.contains(document.activeElement)) {
+    document.activeElement?.blur?.();
+  }
 
-  setTimeout(() => {
-    document.getElementById('sheetContainer')?.remove();
-    unlockBackgroundScroll();
-  }, 300);
-
+  container?.remove();
   editingBillId = null;
 }
 function openPaymentLinkPopup(billId) {
