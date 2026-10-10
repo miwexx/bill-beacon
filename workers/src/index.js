@@ -2816,27 +2816,22 @@ async function commitBankPaymentAllocation({
     commitTime: result.commitTime
   };
 }
+
 function bankMatchWithinSameMonth(value, anchor, timeZone) {
   const valueKey = reminderFinancialDateKey(value, timeZone);
   const anchorKey = reminderFinancialDateKey(anchor, timeZone);
 
-  if (
-    !valueKey ||
-    !anchorKey ||
-    valueKey.slice(0, 7) !== anchorKey.slice(0, 7)
-  ) {
+  if (!valueKey || !anchorKey || valueKey.slice(0, 7) !== anchorKey.slice(0, 7)) {
     return false;
   }
 
   const valueDate = utcMiddayFromDateKey(valueKey);
   const anchorDate = utcMiddayFromDateKey(anchorKey);
-
   if (!valueDate || !anchorDate) return false;
 
-  return Math.abs(
-    valueDate.getTime() - anchorDate.getTime()
-  ) <= 14 * 86400000;
+  return Math.abs(valueDate.getTime() - anchorDate.getTime()) <= 14 * 86400000;
 }
+
 async function buildBankManualReconciliation({
   household,
   transaction,
@@ -3575,11 +3570,27 @@ async function buildBankNewPaymentAllocationCore({
     // Ordinary bills: check merchant names before calculating calendars.
     const bankPostedKey = dateKey(transaction.date);
 
-  const monthKeys = new Set(
-    bankPostedKey
-      ? [`${bankPostedKey.slice(0, 7)}-01`]
-      : []
-  );
+    const monthKeys = new Set();
+
+  for (
+    const value of [
+      transaction.date,
+      transaction.authorizedDate
+    ].filter(Boolean)
+  ) {
+    const key = dateKey(value);
+
+    if (!key) continue;
+
+    const [year, month] = key.split("-").map(Number);
+
+    for (const offset of [-1, 0, 1]) {
+      monthKeys.add(
+        new Date(Date.UTC(year, month - 1 + offset, 1, 12))
+          .toISOString().slice(0, 10)
+      );
+    }
+  }
 
   const seen = new Set();
 
@@ -4203,92 +4214,7 @@ async function buildBankNewPaymentAllocation({
 
   return plan;
 }
-async function handleBankApplyRequest(request, env, origin) {
-  if (new URL(request.url).pathname !== "/plaid/apply-match") return null;
-  if (request.method !== "POST") return json({ok: false, error: "Method not allowed."}, 405, origin);
-  const authentication = await verifyFirebaseToken(request);
-  if (!authentication.ok) return json({ok: false, error: authentication.error}, authentication.status, origin);
-  if (env.PLAID_ENV !== "production" || env.BANK_APPLY_ENABLED !== "true") {
-    return json({ok: false, error: "Manual payment recording is disabled."}, 403, origin);
-  }
-  let commitAttempted = false;
-  try {
-    const text = await request.text();
-    if (text.length > 16384) return json({ok: false, error: "Request too large."}, 413, origin);
-    const body = JSON.parse(text);
-    if (typeof body.transactionId !== "string" || !body.transactionId ||
-        typeof body.accountId !== "string" || typeof body.householdId !== "string" ||
-        !["would-allocate", "would-reconcile"].includes(body.expectedStatus) ||
-        !Array.isArray(body.allocations) || !body.allocations.length || body.allocations.length > 50) {
-      return json({ok: false, error: "A reviewed transaction and allocations are required."}, 400, origin);
-    }
-    const uid = authentication.user.uid;
-    const token = await getFirestoreAccessToken(env);
-    const householdId = await requireBankHousehold(uid, token);
-    if (householdId !== body.householdId) throw new Error("Household changed. Preview again.");
-    const key = plaidConnectionKey(uid);
-    const record = await env.NOTIFICATIONSKV.get(key, "json");
-    if (!record?.itemId || record.bankHouseholdId !== householdId ||
-        record.selectedAccountId !== body.accountId) throw new Error("Bank connection changed. Preview again.");
-    const found = (record.transactions || []).filter(t => t.id === body.transactionId && t.accountId === body.accountId);
-    if (found.length !== 1 || found[0].pending !== false || found[0].type !== "debit") {
-      throw new Error("A unique posted debit is required.");
-    }
-    const transaction = found[0];
-    if (Math.round(Number(transaction.amount) * 100) !== Math.round(Number(body.transactionAmount) * 100) ||
-        String(transaction.date).slice(0, 10) !== body.postedDate) throw new Error("Transaction changed. Preview again.");
-    const loaded = await loadHouseholdForBankCommit(householdId, token);
-    const zone = validatedReminderTimeZone(loaded.data.settings?.timeZone);
-    const signature = allocations => JSON.stringify(allocations.map(a => {
-      const due = reminderFinancialDateKey(a.dueDate, zone);
-      const cents = Math.round(Number(a.amount) * 100);
-      if (typeof a.billId !== "string" || !a.billId || !due || !Number.isSafeInteger(cents) || cents <= 0) {
-        throw new Error("Invalid reviewed allocation.");
-      }
-      return JSON.stringify([a.billId, due, cents]);
-    }).sort());
-    const expected = signature(body.allocations);
-    const claimId = await bankTransactionClaimId(record.itemId, transaction);
-    const claim = await getFirestoreDocument(`households/${encodeURIComponent(householdId)}/bankTransactionClaims/${claimId}`, token);
-    if (claim) {
-      const ids = claim.paymentIds;
-      const linked = loaded.data.payments.filter(p => Array.isArray(ids) && ids.includes(p.id));
-      if (!Array.isArray(ids) || !ids.length || new Set(ids).size !== ids.length || linked.length !== ids.length ||
-          Math.round(Number(claim.transactionAmount)*100) !== Math.round(Number(transaction.amount)*100) ||
-          linked.some(p => p.bankTransactionId !== transaction.id || p.bankAccountId !== transaction.accountId ||
-            p.bankItemId !== record.itemId || String(p.status || "active").toLowerCase() === "voided") ||
-          signature(linked.map(p => ({billId: p.billId, dueDate: p.paidForDueDate, amount: p.amount}))) !== expected) {
-        throw new Error("Existing claim or payment history needs review. Debit was not reused.");
-      }
-      return json({ok: true, status: "already-linked", paymentIds: ids, householdId}, 200, origin);
-    }
-    const plan = await buildBankNewPaymentAllocation({household: loaded.data, transaction, itemId: record.itemId});
-    const expectedPlanStatus = body.expectedStatus === "would-allocate" ? "allocate" : "reconcile";
-    if (plan.status !== expectedPlanStatus) throw new Error(plan.reason || "Match changed. Preview again.");
-    const allocated = plan.nextPayments.filter(p => plan.allocationPaymentIds.includes(p.id));
-    if (signature(allocated.map(p => ({billId: p.billId, dueDate: p.paidForDueDate, amount: p.amount}))) !== expected) {
-      throw new Error("Chosen bill occurrence changed. Preview again.");
-    }
-    if (await requireBankHousehold(uid, token) !== householdId) throw new Error("Ownership changed.");
-    const latest = await env.NOTIFICATIONSKV.get(key, "json");
-    const latestTransactions = (latest?.transactions || []).filter(t => t.id === transaction.id && t.accountId === transaction.accountId);
-    if (latest?.itemId !== record.itemId || latest.bankHouseholdId !== householdId ||
-        latest.selectedAccountId !== transaction.accountId || latestTransactions.length !== 1 ||
-        JSON.stringify(latestTransactions[0]) !== JSON.stringify(transaction)) throw new Error("Bank data changed. Preview again.");
-    commitAttempted = true;
-    const result = await commitBankPaymentAllocation({loadedHousehold: loaded, itemId: record.itemId,
-      transaction, nextPayments: plan.nextPayments, activityEntry: plan.activityEntry,
-      allocationPaymentIds: plan.allocationPaymentIds, accessToken: token});
-    if (!result.committed) return json({ok: false, error: "Household changed or debit was claimed. Refresh and preview again."}, 409, origin);
-    return json({ok: true, status: plan.status === "reconcile" ? "reconciled" : "allocated",
-      paymentIds: plan.allocationPaymentIds, householdId, commitTime: result.commitTime}, 200, origin);
-  } catch (error) {
-    console.error("Manual bank payment recording failed.", {message: error.message, commitAttempted});
-    return json({ok: false, error: commitAttempted
-      ? "Commit confirmation failed. Refresh shared payments before retrying; the payment may already be recorded."
-      : error.message}, commitAttempted ? 500 : 409, origin);
-  }
-}
+
 async function handleBankAutomationRequest(
   request,
   env,
@@ -4697,10 +4623,7 @@ const workerHandlers = {
     }
 
     const url = new URL(request.url);
-    const bankApplyResponse =
-  await handleBankApplyRequest(request, env, origin);
-
-if (bankApplyResponse) return bankApplyResponse;
+   
     const bankAutomationResponse =
   await handleBankAutomationRequest(
     request,
@@ -5712,7 +5635,7 @@ export default {
     if (![
   "/plaid/match-preview",
   "/plaid/run-now",
-  "/plaid/apply-match"
+  
 ].includes(path)) return workerHandlers.fetch(request, env, ctx);
     return bankRequestScope.run({calls: 0, limit: 45}, () => workerHandlers.fetch(request, env, ctx));
   },

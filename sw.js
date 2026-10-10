@@ -1,4 +1,4 @@
-const CACHE_VERSION = "bill-beacon-v2.0-notification-inbox";
+const CACHE_VERSION = "bill-beacon-v2.1-banking-reset";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
