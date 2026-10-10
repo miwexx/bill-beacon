@@ -16545,6 +16545,7 @@ function addNotificationSettings() {
     <div class="section-header">Notifications</div>
 
     <div class="card card-pad">
+      <p id="notificationPermissionStatus" hidden aria-hidden="true" style="display:none;"></p>
           <button
         id="notificationPermissionButton"
         type="button"
