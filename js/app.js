@@ -19193,21 +19193,23 @@ gesture.samples = gesture.samples
       );
 
       if (
-        dx < -10 ||
-        dy > 32 ||
-        (dy > 10 && dy > Math.abs(dx))
-      ) {
-        cleanup();
-        return;
-      }
+  !gesture.armed &&
+  (
+    dx < -10 ||
+    dy > 32 ||
+    (dy > 10 && dy > Math.abs(dx))
+  )
+) {
+  cleanup();
+  return;
+}
 
-      if (dx > 16 && dx > dy * 2) {
-        if (!event.cancelable) {
-          cleanup();
-          return;
-        }
+      if (!gesture.armed && !event.cancelable) {
+  cleanup();
+  return;
+}
 
-        event.preventDefault();
+if (event.cancelable) event.preventDefault();
 
         if (!gesture.armed) {
           gesture.armed = true;
@@ -19257,15 +19259,12 @@ gesture.samples = gesture.samples
 
       const state = gesture;
 
-      if (
-        !state.armed ||
-        !event.cancelable
-      ) {
-        cleanup();
-        return;
-      }
+      if (!state.armed) {
+  cleanup();
+  return;
+}
 
-      event.preventDefault();
+if (event.cancelable) event.preventDefault();
 
       const touch = [...event.changedTouches]
         .find(item =>
@@ -19331,10 +19330,31 @@ const goBack = Boolean(
   );
   const appRoot = document.getElementById("app");
 
-if (appRoot) {
-  const viewObserver = new MutationObserver(() => {
-    if (gesture || settling || overlay) cleanup();
-  });
+const viewObserver = new MutationObserver(() => {
+  if (!gesture) return;
+
+  const back = document.querySelector(
+    "#app .nav-bar button.nav-button"
+  );
+
+  const sameBackAction = back &&
+    back.getAttribute("onclick") ===
+    gesture.back.getAttribute("onclick");
+
+  if (
+    !allowed() ||
+    currentRoute !== gesture.route ||
+    !back ||
+    back.disabled ||
+    !sameBackAction
+  ) {
+    cleanup();
+    return;
+  }
+
+  // A same-screen refresh is not a cancelled swipe.
+  gesture.back = back;
+});
 
   viewObserver.observe(appRoot, {
     childList: true,
