@@ -429,8 +429,10 @@ function normalizeReminderOffsets(offsets) {
 
 function isActiveBill(bill) {
   if (!bill || typeof bill !== "object") return false;
-  return !(bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt || bill.paidInFullAt ||
-    bill.status === "cancelled" || bill.status === "paid-in-full" || bill.status === "paidInFull");
+  const status = String(bill.status || "").trim().toLowerCase();
+  return !(bill.archived || bill.archivedAt || bill.isArchivedHistory ||
+    bill.cancelled || bill.cancelledAt || bill.paidInFullAt ||
+    ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status));
 }
 
 
@@ -681,16 +683,40 @@ function calendarValueForReminder(value, timeZone, field = "", depth = 0) {
   return value;
 }
 
+function getReminderTrackingStartKey(bill, timeZone) {
+  const explicit = reminderFinancialDateKey(bill?.trackingStartDate, timeZone);
+  if (explicit) return explicit;
+  const created = reminderFinancialDateKey(bill?.createdAt, timeZone);
+  if (!created) return "";
+  const createdMonth = created.slice(0, 7) + "-01";
+  const original = reminderGetBillScheduleVersions(bill)[0]?.snapshot;
+  const originalDue = reminderFinancialDateKey(original?.dueDate, timeZone);
+  const originalMonth = originalDue ? originalDue.slice(0, 7) + "-01" : "";
+  return originalMonth > createdMonth ? originalMonth : createdMonth;
+}
+
 function getReminderOccurrencesForMonth(bill, dueDateKey, timeZone, payments = []) {
   const zone = validatedReminderTimeZone(timeZone);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDateKey)) return [];
   const [year, month] = dueDateKey.split("-").map(Number);
   const normalizedBill = calendarValueForReminder(bill, zone);
+  normalizedBill.trackingStartDate = getReminderTrackingStartKey(bill, zone) || null;
   const normalizedPayments = calendarValueForReminder(payments.filter(payment => payment?.billId === bill.id).map(payment => {
     const key = reminderPaymentOccurrenceDateKey(payment, zone);
     return !payment.paidForDueDate && key ? {...payment, paidForDueDate: key} : payment;
   }), zone);
+  if (!isActiveBill(bill)) return [];
+  const startKey = normalizedBill.trackingStartDate || "";
+  const recordedKeys = new Set(normalizedPayments.map(payment =>
+    reminderGetLocalDateKey(payment.paidForDueDate || payment.billSnapshot?.dueDate)
+  ).filter(Boolean));
   return reminderGetVersionedBillOccurrences(normalizedBill, new ReminderCalendarDate(year, month - 1, 1, 12), normalizedPayments)
+    .filter(occurrence => {
+      const dueKey = reminderGetLocalDateKey(occurrence.dueDate);
+      if (recordedKeys.has(dueKey)) return true;
+      const originalKey = reminderGetLocalDateKey(occurrence.originalDueDate || occurrence.dueDate);
+      return Boolean(startKey && originalKey >= startKey && dueKey >= startKey);
+    })
     .map(occurrence => ({originalDueDateKey: reminderGetLocalDateKey(occurrence.originalDueDate || occurrence.dueDate),
       dueDateKey: reminderGetLocalDateKey(occurrence.dueDate),
       bill: {...occurrence, id: bill.id}}));
@@ -2820,15 +2846,10 @@ async function commitBankPaymentAllocation({
 function bankMatchWithinSameMonth(value, anchor, timeZone) {
   const valueKey = reminderFinancialDateKey(value, timeZone);
   const anchorKey = reminderFinancialDateKey(anchor, timeZone);
-
-  if (!valueKey || !anchorKey || valueKey.slice(0, 7) !== anchorKey.slice(0, 7)) {
-    return false;
-  }
-
+  if (!valueKey || !anchorKey || valueKey.slice(0, 7) !== anchorKey.slice(0, 7)) return false;
   const valueDate = utcMiddayFromDateKey(valueKey);
   const anchorDate = utcMiddayFromDateKey(anchorKey);
   if (!valueDate || !anchorDate) return false;
-
   return Math.abs(valueDate.getTime() - anchorDate.getTime()) <= 14 * 86400000;
 }
 

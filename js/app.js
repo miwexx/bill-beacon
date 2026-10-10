@@ -4184,16 +4184,6 @@ function renderMore() {
         Settings
       </div>
 
-      <div
-        style="
-          margin-top:4px;
-          color:var(--text-muted);
-          font-size:13px;
-          line-height:1.35;
-        "
-      >
-        Income sources, notifications, backup, and household.
-      </div>
     </div>
 
     <div style="color:var(--text-muted)">
@@ -10898,16 +10888,6 @@ const dataSummary =
 
               <div style="flex:1">
                 <div style="font-weight:700">Activity & Changes</div>
-
-                <div
-                  style="
-                    margin-top:3px;
-                    font-size:var(--text-xs);
-                    color:var(--text-muted);
-                  "
-                >
-                  Payments, reversals, bill changes, and archives
-                </div>
               </div>
 
               ${svgIcon("chevronRight", 18)}
@@ -12691,12 +12671,7 @@ function openBillForm(billId = null, selectedDate = null) {
                 <input class="form-input" id="billTrackingStartMonth" type="month"
                   value="${escapeHtml(trackingMonth)}" aria-label="First month to track recurring bills">
               </div>
-              <div class="settings-footer" id="billTrackingStartHelp">
-                No unpaid recurring bills will be generated before this month.
-                Choose an earlier month only if you want to track older unpaid bills.
-                Existing recorded payment history is retained.
-              </div>
-            </div>
+                         </div>
           </div>
 
           <div>
