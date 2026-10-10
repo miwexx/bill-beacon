@@ -19203,7 +19203,7 @@ gesture.samples = gesture.samples
   cleanup();
   return;
 }
-
+  if (dx > 16 && dx > dy * 2) {
       if (!gesture.armed && !event.cancelable) {
   cleanup();
   return;
@@ -19330,7 +19330,8 @@ const goBack = Boolean(
   );
   const appRoot = document.getElementById("app");
 
-const viewObserver = new MutationObserver(() => {
+if (appRoot) {
+  const viewObserver = new MutationObserver(() => {
   if (!gesture) return;
 
   const back = document.querySelector(
