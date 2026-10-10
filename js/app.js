@@ -18789,100 +18789,492 @@ document.addEventListener("DOMContentLoaded", () => {
 window.addEventListener("storage", () => {
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 });
-
-// BEGIN BILL BEACON EDGE-SWIPE TEST
+// BEGIN BILL BEACON DRAG-BACK
 (() => {
-  const ENABLED = true;
-    if (window.billBeaconEdgeSwipeInstalled) return;
-  window.billBeaconEdgeSwipeInstalled = true;
-  let gesture = null;
+  "use strict";
 
-  const allowed = () => ENABLED &&
+  const ENABLED = true;
+
+  if (window.billBeaconDragBackInstalled) return;
+  window.billBeaconDragBackInstalled = true;
+
+  const originalNavigate = navigate;
+
+  let previous = null;
+  let gesture = null;
+  let overlay = null;
+  let timer = null;
+  let settling = false;
+
+  const reducedMotion = () =>
+    Boolean(
+      window.matchMedia?.(
+        "(prefers-reduced-motion: reduce)"
+      ).matches
+    );
+
+  const allowed = () =>
+    ENABLED &&
     ["settings", "transactions", "detail"].includes(currentRoute) &&
     !dashboardHasOpenFormOrPopup();
 
-  document.addEventListener("touchstart", event => {
+  function cleanup() {
+    clearTimeout(timer);
+    timer = null;
+
+    overlay?.remove();
+    overlay = null;
+
     gesture = null;
-    if (!allowed() || event.touches.length !== 1) return;
+    settling = false;
+  }
 
-    const target = event.target;
-    if (!(target instanceof Element) || !target.closest("#app")) return;
-    if (target.closest('input, textarea, select, [contenteditable], .tab-bar')) return;
+  function snapshot() {
+    const root = document.getElementById("app");
+    if (!root) return null;
 
-    const touch = event.touches[0];
-    if (touch.clientX < 8 || touch.clientX > 110) return;
+    const copy = root.cloneNode(true);
 
-    const back = document.querySelector("#app .nav-bar button.nav-button");
-    if (!back || back.disabled) return;
+    const mainScroll =
+      root.querySelector(".main-content")?.scrollTop || 0;
 
-    gesture = {
-      id: touch.identifier,
-      x: touch.clientX,
-      y: touch.clientY,
-      started: performance.now(),
-      route: currentRoute,
-      back,
-      armed: false
+    const nodes = [
+      copy,
+      ...copy.querySelectorAll("*")
+    ];
+
+    for (const node of nodes) {
+      node.removeAttribute("id");
+
+      for (const attribute of [...node.attributes]) {
+        if (/^on/i.test(attribute.name)) {
+          node.removeAttribute(attribute.name);
+        }
+      }
+
+      if (node.classList.contains("fade-in")) {
+        node.style.animation = "none";
+      }
+    }
+
+    copy.querySelectorAll("script").forEach(node => {
+      node.remove();
+    });
+
+    copy.inert = true;
+    copy.setAttribute("aria-hidden", "true");
+
+    Object.assign(copy.style, {
+      display: "block",
+      width: "100%",
+      minHeight: "100%",
+      margin: "0",
+      pointerEvents: "none"
+    });
+
+    return {
+      copy,
+      mainScroll,
+      windowScroll: window.scrollY,
+      route: currentRoute
     };
-  }, { passive: true });
+  }
 
-  document.addEventListener("touchmove", event => {
-    if (!gesture) return;
+  navigate = function(route, params = {}) {
+    cleanup();
 
-    if (!allowed() || event.touches.length !== 1 ||
-        currentRoute !== gesture.route || !gesture.back.isConnected) {
-      gesture = null;
+    let captured = null;
+
+    if (
+      ENABLED &&
+      route !== currentRoute &&
+      ["settings", "transactions", "detail"].includes(route)
+    ) {
+      try {
+        captured = snapshot();
+      } catch (error) {
+        console.warn("Back preview skipped", error);
+      }
+    }
+
+    const result = originalNavigate.apply(this, arguments);
+
+    previous =
+      captured && currentRoute === route
+        ? captured
+        : null;
+
+    return result;
+  };
+
+  function createPreview(state) {
+    const handler =
+      state.back.getAttribute("onclick") || "";
+
+    const destination = handler.match(
+      /^\s*navigate\(\s*['"]([^'"]+)['"]/
+    );
+
+    if (
+      !previous ||
+      !destination ||
+      destination[1] !== previous.route ||
+      reducedMotion()
+    ) {
       return;
     }
 
-    const touch = event.touches[0];
-    if (touch.identifier !== gesture.id) {
-      gesture = null;
+    const current = snapshot();
+    if (!current) return;
+
+    const layer = document.createElement("div");
+
+    layer.inert = true;
+    layer.setAttribute("aria-hidden", "true");
+
+    Object.assign(layer.style, {
+      position: "fixed",
+      inset: "0",
+      overflow: "hidden",
+      zIndex: "19000",
+      pointerEvents: "none",
+      background: "var(--bg, #09090c)"
+    });
+
+    overlay = layer;
+
+    const makePane = snap => {
+      const pane = document.createElement("div");
+
+      Object.assign(pane.style, {
+        position: "absolute",
+        inset: "0",
+        overflow: "hidden",
+        background: "var(--bg, #09090c)",
+        pointerEvents: "none",
+        willChange: "transform"
+      });
+
+      const content = document.createElement("div");
+
+      Object.assign(content.style, {
+        width: "100%",
+        minHeight: "100%",
+        transform:
+          `translateY(${-snap.windowScroll}px)`
+      });
+
+      content.appendChild(
+        snap.copy.cloneNode(true)
+      );
+
+      pane.appendChild(content);
+      layer.appendChild(pane);
+
+      return {
+        pane,
+        mainScroll: snap.mainScroll
+      };
+    };
+
+    const behind = makePane(previous);
+    const ahead = makePane(current);
+
+    ahead.pane.style.boxShadow =
+      "-8px 0 24px rgba(0,0,0,.25)";
+
+    document.body.appendChild(layer);
+
+    for (const item of [behind, ahead]) {
+      const main =
+        item.pane.querySelector(".main-content");
+
+      if (main) {
+        main.scrollTop = item.mainScroll;
+      }
+    }
+
+    state.pane = ahead.pane;
+
+    state.returnScroll = {
+      main: previous.mainScroll,
+      window: previous.windowScroll
+    };
+  }
+
+  function finish(state, goBack) {
+    if (settling) return;
+
+    settling = true;
+
+    const complete = () => {
+      const valid =
+        allowed() &&
+        currentRoute === state.route &&
+        state.back.isConnected;
+
+      if (goBack && valid) {
+        const scroll = state.returnScroll;
+
+        cleanup();
+        state.back.click();
+
+        if (scroll) {
+          const returnedRoute = currentRoute;
+
+          requestAnimationFrame(() => {
+            if (currentRoute !== returnedRoute) return;
+
+            const main = document.querySelector(
+              "#app .main-content"
+            );
+
+            if (main) {
+              main.scrollTop = scroll.main;
+            }
+
+            window.scrollTo(0, scroll.window);
+          });
+        }
+      } else {
+        cleanup();
+      }
+    };
+
+    if (!state.pane || reducedMotion()) {
+      complete();
       return;
     }
 
-    const dx = touch.clientX - gesture.x;
-    const dy = Math.abs(touch.clientY - gesture.y);
+    state.pane.style.transition =
+      "transform 180ms ease-out";
 
-    if (dx < -10 || dy > 32 || (dy > 10 && dy > Math.abs(dx))) {
-      gesture = null;
-      return;
-    }
+    state.pane.style.transform =
+      `translateX(${goBack ? window.innerWidth : 0}px)`;
 
-    if (dx > 16 && dx > dy * 2) {
-      if (!event.cancelable) {
-        gesture = null;
+    timer = setTimeout(complete, 190);
+  }
+
+  document.addEventListener(
+    "touchstart",
+    event => {
+      if (settling) return;
+
+      cleanup();
+
+      if (
+        !allowed() ||
+        event.touches.length !== 1
+      ) {
         return;
       }
-      gesture.armed = true;
+
+      const target = event.target;
+
+      if (
+        !(target instanceof Element) ||
+        !target.closest("#app") ||
+        target.closest(
+          "input,textarea,select,[contenteditable],.tab-bar"
+        )
+      ) {
+        return;
+      }
+
+      const touch = event.touches[0];
+
+      if (
+        touch.clientX < 8 ||
+        touch.clientX > 110
+      ) {
+        return;
+      }
+
+      const back = document.querySelector(
+        "#app .nav-bar button.nav-button"
+      );
+
+      if (!back || back.disabled) return;
+
+      gesture = {
+        id: touch.identifier,
+        x: touch.clientX,
+        y: touch.clientY,
+        started: performance.now(),
+        route: currentRoute,
+        back,
+        armed: false,
+        pane: null
+      };
+    },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    "touchmove",
+    event => {
+      if (!gesture || settling) return;
+
+      if (
+        !allowed() ||
+        event.touches.length !== 1 ||
+        currentRoute !== gesture.route ||
+        !gesture.back.isConnected
+      ) {
+        cleanup();
+        return;
+      }
+
+      const touch = event.touches[0];
+
+      if (touch.identifier !== gesture.id) {
+        cleanup();
+        return;
+      }
+
+      const dx =
+        touch.clientX - gesture.x;
+
+      const dy = Math.abs(
+        touch.clientY - gesture.y
+      );
+
+      if (
+        dx < -10 ||
+        dy > 32 ||
+        (dy > 10 && dy > Math.abs(dx))
+      ) {
+        cleanup();
+        return;
+      }
+
+      if (dx > 16 && dx > dy * 2) {
+        if (!event.cancelable) {
+          cleanup();
+          return;
+        }
+
+        event.preventDefault();
+
+        if (!gesture.armed) {
+          gesture.armed = true;
+
+          try {
+            createPreview(gesture);
+          } catch (error) {
+            overlay?.remove();
+            overlay = null;
+            gesture.pane = null;
+
+            console.warn(
+              "Back preview unavailable",
+              error
+            );
+          }
+        }
+
+        if (gesture.pane) {
+          gesture.pane.style.transform =
+            `translateX(${
+              Math.min(
+                Math.max(0, dx),
+                window.innerWidth
+              )
+            }px)`;
+        }
+      } else if (
+        gesture.armed &&
+        event.cancelable
+      ) {
+        event.preventDefault();
+
+        if (gesture.pane) {
+          gesture.pane.style.transform =
+            `translateX(${Math.max(0, dx)}px)`;
+        }
+      }
+    },
+    { passive: false }
+  );
+
+  document.addEventListener(
+    "touchend",
+    event => {
+      if (!gesture || settling) return;
+
+      const state = gesture;
+
+      if (
+        !state.armed ||
+        !event.cancelable
+      ) {
+        cleanup();
+        return;
+      }
+
       event.preventDefault();
+
+      const touch = [...event.changedTouches]
+        .find(item =>
+          item.identifier === state.id
+        );
+
+      const dx = touch
+        ? touch.clientX - state.x
+        : 0;
+
+      const dy = touch
+        ? Math.abs(touch.clientY - state.y)
+        : Infinity;
+
+      const goBack = Boolean(
+        touch &&
+        dx >= 60 &&
+        dy <= 32 &&
+        dx > dy * 2 &&
+        performance.now() - state.started <= 1400
+      );
+
+      finish(state, goBack);
+    },
+    { passive: false }
+  );
+
+  document.addEventListener(
+    "touchcancel",
+    cleanup,
+    { passive: true }
+  );
+
+  window.addEventListener("resize", () => {
+    cleanup();
+    previous = null;
+  });
+
+  document.addEventListener(
+    "visibilitychange",
+    () => {
+      if (document.visibilityState === "hidden") {
+        cleanup();
+        previous = null;
+      }
     }
-  }, { passive: false });
+  );
 
-  document.addEventListener("touchend", event => {
-    const finished = gesture;
-    gesture = null;
+  window.addEventListener(
+    "billbeacon:signed-out",
+    () => {
+      cleanup();
+      previous = null;
+    }
+  );
 
-    if (!finished || !finished.armed || !allowed() ||
-        currentRoute !== finished.route || !finished.back.isConnected ||
-        performance.now() - finished.started > 1400 || !event.cancelable) return;
-
-    const touch = [...event.changedTouches]
-      .find(item => item.identifier === finished.id);
-
-    if (!touch) return;
-
-    const dx = touch.clientX - finished.x;
-    const dy = Math.abs(touch.clientY - finished.y);
-
-    if (dx < 60 || dy > 32 || dx <= dy * 2) return;
-
-    event.preventDefault();
-    finished.back.click();
-  }, { passive: false });
-
-  document.addEventListener("touchcancel", () => {
-    gesture = null;
-  }, { passive: true });
+  window.addEventListener(
+    "billbeacon:data-changed",
+    () => {
+      cleanup();
+      previous = null;
+    }
+  );
 })();
-// END BILL BEACON EDGE-SWIPE TEST
+// END BILL BEACON DRAG-BACK
