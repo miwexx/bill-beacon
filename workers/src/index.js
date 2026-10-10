@@ -2816,6 +2816,27 @@ async function commitBankPaymentAllocation({
     commitTime: result.commitTime
   };
 }
+function bankMatchWithinSameMonth(value, anchor, timeZone) {
+  const valueKey = reminderFinancialDateKey(value, timeZone);
+  const anchorKey = reminderFinancialDateKey(anchor, timeZone);
+
+  if (
+    !valueKey ||
+    !anchorKey ||
+    valueKey.slice(0, 7) !== anchorKey.slice(0, 7)
+  ) {
+    return false;
+  }
+
+  const valueDate = utcMiddayFromDateKey(valueKey);
+  const anchorDate = utcMiddayFromDateKey(anchorKey);
+
+  if (!valueDate || !anchorDate) return false;
+
+  return Math.abs(
+    valueDate.getTime() - anchorDate.getTime()
+  ) <= 14 * 86400000;
+}
 async function buildBankManualReconciliation({
   household,
   transaction,
@@ -2996,9 +3017,48 @@ async function buildBankManualReconciliation({
     const transfer =
       /bank transfer|ach|echeck|e check/.test(method);
 
-        const near = [postedDay, authorizedDay].some(bankDay =>
-      Number.isFinite(bankDay) &&
-      Math.abs(bankDay - paidDay) <= 14
+            const bankMonth = reminderFinancialDateKey(
+      transaction.date,
+      zone
+    ).slice(0, 7);
+
+    const manualPaidKey = reminderFinancialDateKey(
+      payment.paidDate,
+      zone
+    );
+
+    const manualDueKey = reminderPaymentOccurrenceDateKey(
+      payment,
+      zone
+    );
+
+    const candidateDates = [
+      transaction.date,
+      transaction.authorizedDate
+    ].filter(value =>
+      value &&
+      reminderFinancialDateKey(value, zone).slice(0, 7) === bankMonth
+    );
+
+    if (manualPaidKey.slice(0, 7) !== bankMonth) continue;
+
+    const nearManualPayment = candidateDates.some(value =>
+      bankMatchWithinSameMonth(value, manualPaidKey, zone)
+    );
+
+    if (!nearManualPayment) continue;
+
+    if (!manualDueKey) {
+      return review(
+        "A matching manual payment has no confirmed bill occurrence."
+      );
+    }
+
+    if (manualDueKey.slice(0, 7) !== bankMonth) continue;
+
+    const near = candidateDates.some(value =>
+      bankMatchWithinSameMonth(value, manualPaidKey, zone) &&
+      bankMatchWithinSameMonth(value, manualDueKey, zone)
     );
 
     if (!near) continue;
@@ -3330,15 +3390,25 @@ async function buildBankNewPaymentAllocationCore({
       : NaN;
   };
 
-  const withinDueWindow = dueDate => {
-    const dueDay = day(dueDate);
-    if (!Number.isFinite(dueDay)) return false;
-    return [transaction.date, transaction.authorizedDate]
+    const withinDueWindow = dueDate => {
+    const dueKey = dateKey(dueDate);
+    const postedKey = dateKey(transaction.date);
+
+    if (
+      !dueKey ||
+      !postedKey ||
+      dueKey.slice(0, 7) !== postedKey.slice(0, 7)
+    ) {
+      return false;
+    }
+
+    return [
+      transaction.date,
+      transaction.authorizedDate
+    ]
       .filter(Boolean)
-      .map(day)
-      .some(paymentDay =>
-        Number.isFinite(paymentDay) &&
-        Math.abs(paymentDay - dueDay) <= 14
+      .some(value =>
+        bankMatchWithinSameMonth(value, dueDate, zone)
       );
   };
 
@@ -3503,26 +3573,13 @@ async function buildBankNewPaymentAllocationCore({
   }
 
     // Ordinary bills: check merchant names before calculating calendars.
-  const monthKeys = new Set();
+    const bankPostedKey = dateKey(transaction.date);
 
-  for (
-    const value of [
-      transaction.date,
-      transaction.authorizedDate
-    ].filter(Boolean)
-  ) {
-    const key = dateKey(value);
-    if (!key) continue;
-
-    const [year, month] = key.split("-").map(Number);
-
-    for (const offset of [-1, 0, 1]) {
-      monthKeys.add(
-        new Date(Date.UTC(year, month - 1 + offset, 1, 12))
-          .toISOString().slice(0, 10)
-      );
-    }
-  }
+  const monthKeys = new Set(
+    bankPostedKey
+      ? [`${bankPostedKey.slice(0, 7)}-01`]
+      : []
+  );
 
   const seen = new Set();
 

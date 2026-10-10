@@ -15,7 +15,6 @@ async function runBillMonthMatchBatch(button, monthKey = "2026-09") {
   const [year, month] = monthKey.split("-").map(Number);
   const start = new Date(Date.UTC(year, month - 1, 1, 12));
   const end = new Date(Date.UTC(year, month, 0, 12));
-  start.setUTCDate(start.getUTCDate() - 14); end.setUTCDate(end.getUTCDate() + 14);
   const first = start.toISOString().slice(0, 10), last = end.toISOString().slice(0, 10);
   const inRange = value => {
     const key = String(value || "").slice(0, 10);
@@ -25,8 +24,13 @@ async function runBillMonthMatchBatch(button, monthKey = "2026-09") {
     .filter(Boolean).map(value => String(value).slice(0, 10)).sort()[0] || "";
   const unique = new Map();
   for (const transaction of plaidBankState.transactions || []) {
-    if (transaction.accountId !== accountId || transaction.pending !== false || transaction.type !== "debit" ||
-        typeof transaction.id !== "string" || !(inRange(transaction.date) || inRange(transaction.authorizedDate))) continue;
+        if (
+      transaction.accountId !== accountId ||
+      transaction.pending !== false ||
+      transaction.type !== "debit" ||
+      typeof transaction.id !== "string" ||
+      String(transaction.date).slice(0, 7) !== monthKey
+    ) continue;
     const previous = unique.get(transaction.id);
     if (previous && JSON.stringify(previous) !== JSON.stringify(transaction)) {
       setPlaidBankMessage("Conflicting duplicate bank data. Sync before running the batch."); return;

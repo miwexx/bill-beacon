@@ -14186,10 +14186,7 @@ async function previewAllPostedDebits(
       item.pending === false &&
       item.type === "debit" &&
       typeof item.id === "string" &&
-      (
-  inScanWindow(item.date) ||
-  inScanWindow(item.authorizedDate)
-)
+      String(item.date).slice(0, 7) === monthKey
     )
     .slice()
     .sort((a, b) =>
