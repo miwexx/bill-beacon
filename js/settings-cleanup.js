@@ -752,8 +752,34 @@
         status.textContent =
           "A new invite code is ready. It expires in 24 hours.";
       }
+        } catch (error) {
+      const message =
+        error?.message ||
+        "Could not generate an invite code.";
+
+      const status = document.getElementById(
+        "householdInviteStatus"
+      );
+
+      if (status) {
+        status.style.color = "var(--overdue)";
+        status.textContent = message;
+      } else {
+        alert(message);
+      }
     } finally {
-      if (button) button.disabled = false;
+      const currentButton =
+        document.getElementById(
+          "createHouseholdInviteButton"
+        );
+
+      if (button) {
+        button.disabled = false;
+      }
+
+      if (currentButton) {
+        currentButton.disabled = false;
+      }
     }
   };
   window.openJoinHouseholdCodeDialog = function () {

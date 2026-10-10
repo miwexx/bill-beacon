@@ -6030,36 +6030,113 @@ export class HouseholdCodeCoordinator {
     return run;
   }
 
-  async rateLimit(uid, request) {
-    const hour = Math.floor(
-      Date.now() / 3600000
+   async rateLimit(uid, request) {
+    const path = new URL(request.url).pathname;
+
+    const group =
+      path === "/household-codes"
+        ? "create"
+        : [
+            "/household-codes/preview",
+            "/household-codes/join"
+          ].includes(path)
+          ? "redeem"
+          : path === "/household-codes/revoke"
+            ? "revoke"
+            : path === "/households/leave"
+              ? "leave"
+              : "other";
+
+    const userMaximum = {
+      create: 20,
+      redeem: 12,
+      revoke: 10,
+      leave: 4,
+      other: 5
+    }[group];
+
+    const windowMs = 15 * 60 * 1000;
+    const now = Date.now();
+
+    const windowNumber =
+      Math.floor(now / windowMs);
+
+    const retryAfter = Math.max(
+      1,
+      Math.ceil(
+        (
+          (windowNumber + 1) * windowMs - now
+        ) / 1000
+      )
     );
 
-    const ip = await sha256Hex(
-      request.headers.get("CF-Connecting-IP") ||
-      "unknown"
-    );
-
-    for (const [key, maximum] of [
-      [`user:${uid}`, 30],
-      [`ip:${ip}`, 120]
-    ]) {
-      const old = await this.state.storage.get(key);
-
-      const count =
-        old?.hour === hour ? old.count : 0;
-
-      if (count >= maximum) {
-        throw new Error(
-          "Too many requests. Try again in an hour."
-        );
+    const limits = [
+      {
+        key:
+          `rate:v2:${group}:user:${uid}`,
+        maximum: userMaximum,
+        scope: "account"
       }
+    ];
 
-      await this.state.storage.put(key, {
-        hour,
-        count: count + 1
+    const address =
+      request.headers.get("X-BB-Client-IP") ||
+      request.headers.get("CF-Connecting-IP");
+
+    if (address && group !== "leave") {
+      const ip = await sha256Hex(address);
+
+      limits.push({
+        key:
+          `rate:v2:${group}:ip:${ip}`,
+        maximum:
+          group === "redeem" ? 80 : 100,
+        scope: "network"
       });
     }
+
+    await this.state.storage.transaction(
+      async storage => {
+        const updates = [];
+
+        for (const limit of limits) {
+          const old =
+            await storage.get(limit.key);
+
+          const count =
+            old?.windowNumber === windowNumber &&
+            Number.isSafeInteger(old.count) &&
+            old.count >= 0
+              ? old.count
+              : 0;
+
+          if (count >= limit.maximum) {
+            const error = new Error(
+              `Too many ${group} requests from ` +
+              `this ${limit.scope}. Try again in ` +
+              `${Math.ceil(retryAfter / 60)} minute(s).`
+            );
+
+            error.httpStatus = 429;
+            error.retryAfter = retryAfter;
+
+            throw error;
+          }
+
+          updates.push([
+            limit.key,
+            {
+              windowNumber,
+              count: count + 1
+            }
+          ]);
+        }
+
+        for (const [key, value] of updates) {
+          await storage.put(key, value);
+        }
+      }
+    );
   }
 
   async handle(request) {
@@ -6611,17 +6688,33 @@ export class HouseholdCodeCoordinator {
         200,
         origin
       );
-    } catch (error) {
-      return json(
+        } catch (error) {
+      const response = json(
         {
           ok: false,
           error:
             error?.message ||
-            "Household request failed."
+            "Household request failed.",
+
+          ...(error?.httpStatus === 429
+            ? {
+                code: "RATE_LIMITED",
+                retryAfter: error.retryAfter
+              }
+            : {})
         },
-        409,
+        error?.httpStatus || 409,
         origin
       );
+
+      if (error?.httpStatus === 429) {
+        response.headers.set(
+          "Retry-After",
+          String(error.retryAfter)
+        );
+      }
+
+      return response;
     }
   }
 }
@@ -6741,9 +6834,33 @@ export default {
           "household-sharing-v1"
         );
 
+            const forwardedHeaders =
+        new Headers(request.headers);
+
+      // Discard any caller-supplied value.
+      forwardedHeaders.delete("X-BB-Client-IP");
+
+      // Forward only the IP supplied by Cloudflare.
+      const clientIP =
+        request.headers.get("CF-Connecting-IP");
+
+      if (clientIP) {
+        forwardedHeaders.set(
+          "X-BB-Client-IP",
+          clientIP
+        );
+      }
+
+      const forwardedRequest = new Request(
+        request,
+        {
+          headers: forwardedHeaders
+        }
+      );
+
       return env.HOUSEHOLD_COORDINATOR
         .get(id)
-        .fetch(request);
+        .fetch(forwardedRequest);
     }
 
     return bcOriginalFetch(
