@@ -167,6 +167,7 @@ const Store = {
 
   const updatedBill = {
     ...previousBill,
+    trackingStartDate: previousBill.trackingStartDate || getBillTrackingStartKey(previousBill) || null,
     ...updates,
     updatedAt
   };
@@ -1415,12 +1416,81 @@ function resolveCurrentUnpaidOccurrences(bill, referenceDate, historical, paymen
   }).sort((a,b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
 
-function getVersionedBillOccurrences(bill, referenceDate) {
-  const historical = getHistoricalBillOccurrences(bill, referenceDate);
-  return resolveCurrentUnpaidOccurrences(
-    bill, referenceDate, historical, Store.getPaymentsForBill(bill.id)
+function isBillArchivedForCalendar(bill) {
+  return !bill || Boolean(bill.archived || bill.archivedAt || bill.isArchivedHistory) ||
+    String(bill.status || "").trim().toLowerCase() === "archived";
+}
+
+function getBillTrackingStartKey(bill) {
+  if (!bill) return "";
+  const explicit = financialDateKey(bill.trackingStartDate);
+  if (explicit) return explicit;
+  const created = financialDateKey(bill.createdAt);
+  if (!created) return "";
+  const createdMonth = created.slice(0, 7) + "-01";
+  const original = getBillScheduleVersions(bill)[0]?.snapshot;
+  const originalDue = financialDateKey(original?.dueDate);
+  const originalMonth = originalDue ? originalDue.slice(0, 7) + "-01" : "";
+  return originalMonth > createdMonth ? originalMonth : createdMonth;
+}
+
+function getBillsNeedingTrackingStartReview() {
+  return Store.getBills().filter(bill =>
+    !isBillArchivedForCalendar(bill) &&
+    (isRecurringBill(bill) || bill.scheduleHistory?.length) &&
+    !getBillTrackingStartKey(bill)
   );
 }
+
+function getAllOverdueBillOccurrences(referenceDate = new Date()) {
+  const todayKey = getLocalDateKey(referenceDate);
+  const active = Store.getBills().filter(bill => !isBillArchivedForCalendar(bill));
+  const activeIds = new Set(active.map(bill => bill.id));
+  const starts = active.map(bill =>
+    isRecurringBill(bill) || bill.scheduleHistory?.length
+      ? getBillTrackingStartKey(bill) : financialDateKey(bill.dueDate)
+  ).filter(Boolean);
+  for (const payment of Store.getPayments()) {
+    if (!activeIds.has(payment.billId)) continue;
+    const key = getPaymentOccurrenceDateKey(payment);
+    if (key) starts.push(key);
+  }
+  const earliest = starts.sort()[0];
+  if (!earliest || earliest > todayKey) return [];
+  const [year, month] = earliest.split("-").map(Number);
+  const cursor = new Date(year, month - 1, 1, 12);
+  const end = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1, 12);
+  const seen = new Set();
+  const overdue = [];
+  while (cursor <= end) {
+    for (const bill of getCalendarBillsForMonth(cursor)) {
+      const dueKey = getLocalDateKey(bill.dueDate);
+      const key = `${getBillPaymentId(bill)}:${dueKey}`;
+      if (!dueKey || dueKey >= todayKey || seen.has(key)) continue;
+      seen.add(key);
+      if (!isOccurrencePaid(bill, new Date(bill.dueDate))) overdue.push(bill);
+    }
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return overdue.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+}
+
+function getVersionedBillOccurrences(bill, referenceDate) {
+  const payments = Store.getPaymentsForBill(bill.id);
+  const historical = getHistoricalBillOccurrences(bill, referenceDate);
+  const startKey = getBillTrackingStartKey(bill);
+  const recordedKeys = new Set(payments.map(getPaymentOccurrenceDateKey).filter(Boolean));
+  return resolveCurrentUnpaidOccurrences(bill, referenceDate, historical, payments)
+    .filter(occurrence => {
+      if (recordedKeys.has(getPaymentOccurrenceDateKey({paidForDueDate: occurrence.dueDate}))) {
+        return true;
+      }
+      const originalKey = financialDateKey(occurrence.originalDueDate || occurrence.dueDate);
+      const dueKey = financialDateKey(occurrence.dueDate);
+      return Boolean(startKey && originalKey >= startKey && dueKey >= startKey);
+    });
+}
+
 
 function resolveCalendarBillOccurrence(billId, dueDate) {
   const key = getLocalDateKey(dueDate);
@@ -1477,58 +1547,32 @@ function getRecurringOccurrencesForNextMonths(
     (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
   );
 }
+
 function getCalendarBillsForMonth(referenceDate = new Date()) {
   const matchesMonth = value => {
     const date = new Date(value);
-
     return Number.isFinite(date.getTime()) &&
       date.getFullYear() === referenceDate.getFullYear() &&
       date.getMonth() === referenceDate.getMonth();
   };
-
-  const active = Store.getBills().filter(bill =>
-    bill &&
-    !bill.archived &&
-    !bill.archivedAt &&
-    !bill.isArchivedHistory &&
-    String(bill.status || "").trim().toLowerCase() !== "archived"
-  );
-
-  const activeIds = new Set(
-    active.map(bill => bill.id)
-  );
-
+  const active = Store.getBills().filter(bill => !isBillArchivedForCalendar(bill));
+  const activeIds = new Set(active.map(bill => bill.id));
   const oneTime = active.filter(bill =>
-    !isRecurringBill(bill) &&
-    !bill.scheduleHistory?.length &&
-    matchesMonth(bill.dueDate)
+    !isRecurringBill(bill) && !bill.scheduleHistory?.length && matchesMonth(bill.dueDate)
   );
-
-  const recurring = getRecurringOccurrencesForMonth(referenceDate)
-    .filter(item =>
-      activeIds.has(getBillPaymentId(item)) &&
-      !item.archived &&
-      !item.archivedAt &&
-      !item.isArchivedHistory &&
-      String(item.status || "").trim().toLowerCase() !== "archived"
-    );
-
+  const recurring = getRecurringOccurrencesForMonth(referenceDate).filter(item =>
+    activeIds.has(getBillPaymentId(item)) && !isBillArchivedForCalendar(item)
+  );
   const seen = new Set();
-
-  return [...oneTime, ...recurring]
-    .filter(item => {
-      const key =
-        `${getBillPaymentId(item)}:${getLocalDateKey(item.dueDate)}`;
-
-      if (seen.has(key)) return false;
-
-      seen.add(key);
-      return true;
-    })
-    .sort((a, b) =>
-      new Date(a.dueDate) - new Date(b.dueDate)
-    );
+  return [...oneTime, ...recurring].filter(item => {
+    const key = `${getBillPaymentId(item)}:${getLocalDateKey(item.dueDate)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
+
+
 function getCalendarBillsForDay(dateString) { 
   const selectedDate = new Date(dateString);
 
@@ -2910,13 +2954,7 @@ function getDashboardUpcomingGroups(referenceDate = new Date()) {
     (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
   );
 
-  const overdue = unpaidBills
-    .filter((bill) => {
-      const dueDate = new Date(bill.dueDate);
-
-      return dueDate < startOfToday;
-    })
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+  const overdue = getAllOverdueBillOccurrences(referenceDate);
 
   const upcoming = unpaidBills
     .filter((bill) => {
@@ -4467,9 +4505,7 @@ function renderToday() {
     getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming"
   );
 
-  const overdueBills = summary.unpaid.filter(bill =>
-    getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
-  );
+  const overdueBills = getAllOverdueBillOccurrences(now);
 
   const upcomingGroups = getDashboardUpcomingGroups(now);
   const upcomingBills = [
@@ -5818,9 +5854,7 @@ function renderCalendar() {
     0
   );
 
-  const overdueBills = monthBills.filter(
-    (bill) => getCalendarBillStatus(bill) === "overdue"
-  );
+  const overdueBills = getAllOverdueBillOccurrences(new Date());
 
   const overdueTotal = overdueBills.reduce(
     (sum, bill) => sum + (parseFloat(bill.amount) || 0),
@@ -6476,6 +6510,13 @@ function openDashboardStatusSheet(status) {
   const now = new Date();
 
   const monthBills = getCalendarBillsForMonth(now);
+  const allOverdue = getAllOverdueBillOccurrences(now);
+  const outstandingByKey = new Map();
+  for (const bill of [...allOverdue, ...monthBills]) {
+    outstandingByKey.set(`${getBillPaymentId(bill)}:${getLocalDateKey(bill.dueDate)}`, bill);
+  }
+  const outstandingBills = [...outstandingByKey.values()];
+  const trackingReviewBills = getBillsNeedingTrackingStartReview();
 
   const getBillStatusForSheet = (bill) => {
     return getOccurrenceStatus(bill, new Date(bill.dueDate));
@@ -6510,7 +6551,7 @@ function openDashboardStatusSheet(status) {
   color = "var(--upcoming)";
   icon = svgIcon("clock", 18);
 
-  selectedBills = monthBills
+  selectedBills = outstandingBills
     .filter(bill => getBillStatusForSheet(bill) !== "paid")
     .sort((a, b) => {
       const aOverdue = getBillStatusForSheet(a) === "overdue";
@@ -6529,7 +6570,7 @@ function openDashboardStatusSheet(status) {
     color = "var(--upcoming)";
     icon = svgIcon("clock", 18);
 
-    selectedBills = monthBills
+    selectedBills = outstandingBills
       .filter((bill) => {
         const billStatus = getBillStatusForSheet(bill);
 
@@ -6555,7 +6596,7 @@ function openDashboardStatusSheet(status) {
     color = "var(--overdue)";
     icon = svgIcon("warning", 18);
 
-    selectedBills = monthBills
+    selectedBills = allOverdue
       .filter((bill) => {
         return getBillStatusForSheet(bill) === "overdue";
       })
@@ -6600,6 +6641,14 @@ function openDashboardStatusSheet(status) {
       </div>
 
       <div class="sheet-body">
+        ${trackingReviewBills.length && status !== "paid" ? `
+          <div class="card card-pad" role="status" style="margin-bottom:12px;">
+            ${trackingReviewBills.length} recurring bill(s) need a tracking start month.
+            Their unrecorded past occurrences are excluded to avoid invented overdue bills.
+            Open Bills, edit those records, and choose Track From Month:
+            ${trackingReviewBills.map(bill => escapeHtml(bill.name || "Bill")).join(", ")}.
+          </div>` : ""}
+
         <div
           class="card"
           style="margin-bottom:var(--space-4); overflow:hidden"
@@ -9189,10 +9238,7 @@ function renderInsights() {
     !isOccurrencePaid(bill, new Date(bill.dueDate))
   );
 
-  const overdueBills = unpaidBillsThisMonth.filter(
-    (bill) =>
-      getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
-  );
+  const overdueBills = getAllOverdueBillOccurrences(now);
 const startOfToday = new Date(
   now.getFullYear(),
   now.getMonth(),
@@ -12477,6 +12523,10 @@ function openBillForm(billId = null, selectedDate = null) {
     ? bill.dueDate.split("T")[0]
     : selectedDate || today;
 
+  const trackingMonth = bill
+    ? getBillTrackingStartKey(bill).slice(0, 7)
+    : dueDate.slice(0, 7);
+
   const defaultPaycheckAssignment =
     bill?.paycheckAssignment || "auto";
 
@@ -12635,6 +12685,16 @@ function openBillForm(billId = null, selectedDate = null) {
                     `;
                   }).join("")}
                 </select>
+              </div>
+              <div class="form-row" id="billTrackingStartRow">
+                <div class="form-label">Track From Month</div>
+                <input class="form-input" id="billTrackingStartMonth" type="month"
+                  value="${escapeHtml(trackingMonth)}" aria-label="First month to track recurring bills">
+              </div>
+              <div class="settings-footer" id="billTrackingStartHelp">
+                No unpaid recurring bills will be generated before this month.
+                Choose an earlier month only if you want to track older unpaid bills.
+                Existing recorded payment history is retained.
               </div>
             </div>
           </div>
@@ -12874,6 +12934,12 @@ function updateBillDueDateField() {
   }
 
   const isMonthly = recurrenceSelect.value === 'Monthly';
+  const tracksRecurring = recurrenceSelect.value !== 'None';
+  const trackingRow = document.getElementById('billTrackingStartRow');
+  const trackingHelp = document.getElementById('billTrackingStartHelp');
+  if (trackingRow) trackingRow.style.display = tracksRecurring ? '' : 'none';
+  if (trackingHelp) trackingHelp.style.display = tracksRecurring ? '' : 'none';
+
 
   dueDateInput.style.display = isMonthly ? 'none' : '';
   dueDaySelect.style.display = isMonthly ? '' : 'none';
@@ -13092,9 +13158,32 @@ function saveBill() {
     ? paycheckAssignment
     : "auto";
 
+  const existingTrackingBill = editingBillId ? Store.getBill(editingBillId) : null;
+  const trackingMonth = document.getElementById("billTrackingStartMonth")?.value || "";
+  const trackingRecurring = recurrence !== "None" || existingTrackingBill?.scheduleHistory?.length;
+  let trackingStartDate = getBillTrackingStartKey(existingTrackingBill) || null;
+  if (trackingRecurring) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(trackingMonth) ||
+        !financialDateKey(`${trackingMonth}-01`)) {
+      alert("Choose a valid Track From Month for this recurring bill.");
+      return;
+    }
+    trackingStartDate = `${trackingMonth}-01`;
+    const previousStart = getBillTrackingStartKey(existingTrackingBill);
+    if (previousStart && trackingStartDate !== previousStart &&
+        !confirm("Changing Track From Month changes which unpaid occurrences are tracked. " +
+          "Moving it earlier can add overdue bills; moving it later can hide older unpaid bills. " +
+          "Payment history is retained. Continue?")) return;
+    if (recurrence === "Monthly" && !editingBillId) {
+      const [year, month] = trackingMonth.split("-").map(Number);
+      dueDate = getMonthlyOccurrenceDate({dueDate, dueDay}, year, month - 1);
+    }
+  }
+
   const now = new Date().toISOString();
 
   const data = {
+    trackingStartDate,
     name,
     amount,
     category,
