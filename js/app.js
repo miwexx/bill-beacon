@@ -18793,6 +18793,7 @@ window.addEventListener("storage", () => {
 // BEGIN BILL BEACON EDGE-SWIPE TEST
 (() => {
   const ENABLED = true;
+  alert("Swipe-back test loaded");
   if (window.billBeaconEdgeSwipeInstalled) return;
   window.billBeaconEdgeSwipeInstalled = true;
   let gesture = null;
@@ -18810,7 +18811,7 @@ window.addEventListener("storage", () => {
     if (target.closest('input, textarea, select, [contenteditable], .tab-bar')) return;
 
     const touch = event.touches[0];
-    if (touch.clientX < 16 || touch.clientX > 48) return;
+    if (touch.clientX < 8 || touch.clientX > 110) return;
 
     const back = document.querySelector("#app .nav-bar button.nav-button");
     if (!back || back.disabled) return;
@@ -18865,7 +18866,7 @@ window.addEventListener("storage", () => {
 
     if (!finished || !finished.armed || !allowed() ||
         currentRoute !== finished.route || !finished.back.isConnected ||
-        performance.now() - finished.started > 700 || !event.cancelable) return;
+        performance.now() - finished.started > 1400 || !event.cancelable) return;
 
     const touch = [...event.changedTouches]
       .find(item => item.identifier === finished.id);
@@ -18875,7 +18876,7 @@ window.addEventListener("storage", () => {
     const dx = touch.clientX - finished.x;
     const dy = Math.abs(touch.clientY - finished.y);
 
-    if (dx < 80 || dy > 32 || dx <= dy * 2) return;
+    if (dx < 60 || dy > 32 || dx <= dy * 2) return;
 
     event.preventDefault();
     finished.back.click();
