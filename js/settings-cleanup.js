@@ -388,8 +388,8 @@
 
       roleElement.textContent =
         data.role === "owner"
-          ? "You are the household owner."
-          : "You are a household member.";
+          ? "Account Status: Owner"
+          : "Account Status: Member";
 
       ownerActions.style.display =
         data.role === "owner" ? "block" : "none";
@@ -676,13 +676,6 @@
         title: "Invite Code",
         primaryLabel: "Copy Code",
         content: `
-          <p
-            style="margin:0;color:var(--text-secondary);line-height:1.5;"
-          >
-            Give this code to the person joining your household.
-            It expires in 24 hours and works once.
-          </p>
-
           <div
             id="bbHouseholdInviteCode"
             style="
