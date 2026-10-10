@@ -18793,8 +18793,7 @@ window.addEventListener("storage", () => {
 // BEGIN BILL BEACON EDGE-SWIPE TEST
 (() => {
   const ENABLED = true;
-  alert("Swipe-back test loaded");
-  if (window.billBeaconEdgeSwipeInstalled) return;
+    if (window.billBeaconEdgeSwipeInstalled) return;
   window.billBeaconEdgeSwipeInstalled = true;
   let gesture = null;
 
