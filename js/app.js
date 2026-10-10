@@ -4350,133 +4350,110 @@ function getDashboardMonthSummary(referenceDate = new Date()) {
       : 0
   };
 }
-
 function closeDashboardPaidSheet() {
   document.getElementById("dashboardPaidContainer")?.remove();
 }
 
 function openDashboardPaidSheet() {
   closeDashboardPaidSheet();
-
-  const now = new Date();
-  const summary = getDashboardMonthSummary(now);
+  const summary = getDashboardMonthSummary(new Date());
   const activePaid = summary.paid.filter(item => !item.removed);
   const removedPaid = summary.paid.filter(item => item.removed);
 
   const renderRow = item => {
+    const bill = item.bill;
+    const category = getCategory(bill?.category || "other");
+    const hasBrand = Boolean(getBillBrand(item.name));
+    const isPlan = Boolean(bill?.installmentPlanId);
+    const visualBill = bill ? {...bill, name: item.name} : null;
+    const icon = visualBill
+      ? billOrPaymentPlanVisual(visualBill, 32)
+      : svgIcon("checkCircle", 20);
+    const tag = item.removed ? "div" : "button";
+    const action = item.removed ? "" : `
+      type="button"
+      onclick="closeDashboardPaidSheet();navigate('detail', {
+        id:'${escapeInlineString(item.billId)}',
+        occurrenceDueDate:'${escapeInlineString(item.dueDate)}',
+        returnRoute:'today'
+      })"
+      aria-label="View ${escapeHtml(item.name)} paid occurrence"
+    `;
     const paidDate = item.paidDate
-      ? formatDate(item.paidDate, "full")
-      : "Date unavailable";
+      ? formatDate(item.paidDate, "full") : "Date unavailable";
 
     return `
-      <div class="bill-row">
-        <div class="bill-icon"
-          style="background:var(--paid-bg);color:var(--paid);">
-          ${svgIcon("checkCircle", 20)}
-        </div>
-
+      <${tag} class="bill-row" ${action} style="width:100%;text-align:left;">
+        <div class="bill-icon" style="
+          width:42px;height:42px;min-width:42px;
+          display:flex;align-items:center;justify-content:center;
+          overflow:hidden;border-radius:10px;
+          background:${isPlan ? "transparent" : hasBrand ? "#fff" : `var(--${category.color})`};
+          color:${isPlan ? "var(--accent)" : hasBrand ? "#1e1e2e" : "white"};
+        ">${icon}</div>
         <div class="bill-info">
           <div class="bill-name">${escapeHtml(item.name)}</div>
-          <div class="bill-meta">
+          <div class="bill-meta" style="color:var(--paid);">
             Paid ${escapeHtml(paidDate)}
           </div>
           <div class="bill-meta">
             Due ${formatDate(item.dueDate, "short")}
-            ${item.removed
-              ? `<span style="color:var(--overdue);font-weight:800;">
-                  · Removed — payment retained
-                </span>`
-              : ""}
+            ${item.removed ? " · Payment retained" : ""}
           </div>
         </div>
-
-        <div class="bill-amount" style="color:var(--paid);">
-          ${formatCurrency(item.amount)}
-        </div>
-      </div>
+        <div class="bill-amount">${formatCurrency(item.amount)}</div>
+      </${tag}>
     `;
   };
 
   const container = document.createElement("div");
   container.id = "dashboardPaidContainer";
-
   container.innerHTML = `
-    <div class="sheet-overlay show"
+    <div class="sheet-overlay show" id="dashboardPaidOverlay"
       onclick="closeDashboardPaidSheet()"></div>
-
-    <div class="sheet show" role="dialog" aria-modal="true"
-      aria-label="Paid bills this month">
+    <div class="sheet show" id="dashboardPaidSheet" role="dialog"
+      aria-modal="true" aria-label="Paid bills this month">
       <div class="sheet-handle"></div>
-
       <div class="sheet-nav">
         <button type="button" class="nav-button"
-          onclick="closeDashboardPaidSheet()" aria-label="Close">
-          ${svgIcon("close", 22)}
+          onclick="closeDashboardPaidSheet()" aria-label="Back to dashboard"
+          style="color:var(--text);">
+          ${svgIcon("chevronLeft", 22)}
         </button>
         <div class="sheet-title">Paid Bills</div>
         <div style="width:54px;"></div>
       </div>
-
-      <div class="sheet-body content-gap">
-       <div class="card" style="overflow:hidden;">
-  <div class="form-row">
-    <div style="
-      display:flex;
-      align-items:center;
-      gap:var(--space-2);
-      color:var(--paid);
-    ">
-      ${svgIcon("checkCircle", 18)}
-
-      <span style="font-weight:700;">
-        ${summary.paidCount}
-        ${summary.paidCount === 1 ? "Bill Paid" : "Bills Paid"}
-      </span>
-    </div>
-
-    <div style="
-      margin-left:auto;
-      font-size:var(--text-lg);
-      font-weight:800;
-      color:var(--paid);
-      white-space:nowrap;
-    ">
-      ${formatCurrency(summary.paidTotal)}
-    </div>
-  </div>
-</div>
-
-        ${activePaid.length ? `
-  <div class="card">
-    ${activePaid.map(renderRow).join("")}
-  </div>
-` : ""}
-
+      <div class="sheet-body">
+        <div class="card" style="margin-bottom:var(--space-4);overflow:hidden;">
+          <div class="form-row">
+            <div style="display:flex;align-items:center;gap:var(--space-2);color:var(--paid);">
+              ${svgIcon("checkCircle", 18)}
+              <span style="font-weight:700;">
+                ${summary.paidCount} ${summary.paidCount === 1 ? "Bill" : "Bills"}
+              </span>
+            </div>
+            <div style="flex:1;"></div>
+            <div style="font-size:var(--text-lg);font-weight:800;color:var(--paid);">
+              ${formatCurrency(summary.paidTotal)}
+            </div>
+          </div>
+        </div>
+        ${activePaid.length ? `<div class="card">${activePaid.map(renderRow).join("")}</div>` : ""}
         ${removedPaid.length ? `
           <div class="section-header" style="color:var(--overdue);">
             Removed Bills — Payment Retained
           </div>
-          <div class="card">
-            ${removedPaid.map(renderRow).join("")}
-          </div>
+          <div class="card">${removedPaid.map(renderRow).join("")}</div>
         ` : ""}
-
         ${!summary.paidCount ? `
-          <div class="dashboard-empty-card">
-            ${svgIcon("tray", 22)}
-            <span>No paid bills for this month.</span>
+          <div class="empty-state">
+            <div class="empty-state-icon">${svgIcon("checkCircle", 44)}</div>
+            <div class="empty-state-title">No paid bills</div>
           </div>
         ` : ""}
-
-        <button type="button" class="bb-outline-pill"
-          style="width:100%;"
-          onclick="closeDashboardPaidSheet();navigate('history');">
-          View All Payment History
-        </button>
       </div>
     </div>
   `;
-
   document.body.appendChild(container);
 }
 function renderToday() {
@@ -12137,8 +12114,6 @@ function openBillQuickActions(billId) {
 
   document.body.appendChild(container);
 
-  lockBackgroundScroll();
-
   requestAnimationFrame(() => {
     document
       .getElementById("billQuickActionsOverlay")
@@ -12150,29 +12125,10 @@ function openBillQuickActions(billId) {
   });
 }
 function closeBillQuickActions(callback) {
-  const container = document.getElementById(
-    "billQuickActionsContainer"
-  );
+  document.getElementById("billQuickActionsContainer")?.remove();
 
-  const wasOpen = Boolean(container);
-  container?.remove();
-
-  try {
-    if (typeof callback === "function") callback();
-  } finally {
-    if (wasOpen) {
-      const anotherPopupIsOpen = [
-        ...document.querySelectorAll(".sheet")
-      ].some(sheet =>
-        !sheet.closest("[data-bb-drag-preview]") &&
-        sheet.getClientRects().length > 0 &&
-        getComputedStyle(sheet).display !== "none"
-      );
-
-      if (!anotherPopupIsOpen) {
-        unlockBackgroundScroll();
-      }
-    }
+  if (typeof callback === "function") {
+    callback();
   }
 }
 
