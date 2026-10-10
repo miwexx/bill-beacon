@@ -18813,7 +18813,7 @@ window.addEventListener("storage", () => {
     ) || null;
   }
   function popupSheets() {
-    return [...document.querySelectorAll(".sheet")].filter(visible).map((node,index) =>
+    return [...document.querySelectorAll(".sheet, #billDetailsSheet")].filter(visible).map((node,index) =>
       ({node,index,z:Number.parseInt(getComputedStyle(node).zIndex,10)||0})
     ).sort((a,b)=>a.z-b.z||a.index-b.index).map(item=>item.node);
   }
@@ -19523,7 +19523,10 @@ let goBack = Boolean(
     "billbeacon:data-changed",
     () => {
       cleanup();
-      previous = null; pageSnapshots.clear(); notificationPreview = null;
+      previous = null;
+      notificationPreview = null;
+      // Retain inert Back previews for this session. The destination
+      // is rendered from current household data when Back completes.
     }
   );
   const appRoot = document.getElementById("app");
