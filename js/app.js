@@ -19077,6 +19077,26 @@ window.addEventListener("storage", () => {
     const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;pointer-events:none;";
     const content=document.createElement("div");content.style.cssText=`width:100%;min-height:100%;transform:translateY(${-base.windowScroll}px);`;
     content.appendChild(base.copy.cloneNode(true));behind.appendChild(content);layer.appendChild(behind);
+    const dock = content.querySelector(".tab-bar");
+
+if (dock) {
+  // Keep the copied navigation outside the scrolled content.
+  behind.appendChild(dock);
+
+  for (const [property, value] of Object.entries({
+    position: "absolute",
+    top: "auto",
+    bottom: "0",
+    left: "0",
+    right: "0",
+    width: "100%",
+    height: "auto",
+    margin: "0",
+    transform: "none"
+  })) {
+    dock.style.setProperty(property, value, "important");
+  }
+}
     for (const root of state.context.sheets.slice(0,-1)) {
       const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(root)};pointer-events:none;`;
       behind.appendChild(dim);addPanel(behind,panelSnapshot(root));
