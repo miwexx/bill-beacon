@@ -166,8 +166,8 @@
       const voided = !activePayment(payment);
       const name = payment.billSnapshot?.name || payment.bill?.name || "Removed Bill";
       const shownDate = voided ? payment.voidedAt || payment.paidDate : payment.paidDate;
-      const reason = voided ? "Reversed record" : !context.dueKey ? "Occurrence date needs review" :
-        inactiveBill(context.bill) ? "Inactive or removed bill · read only" : "";
+     // const reason = voided ? "Reversed record" : !context.dueKey ? "Occurrence date needs review" :
+      //  inactiveBill(context.bill) ? "Inactive or removed bill · read only" : "" ;
       const label = context.siblings.length ? "Reverse This Payment" : "Mark as Unpaid";
       return `<div style="border-bottom:1px solid var(--border);padding:14px 16px;${voided ? 'opacity:.6;' : ''}">
         <div style="display:flex;align-items:center;gap:12px;">
@@ -188,8 +188,7 @@
       <button type="button" class="nav-button" onclick="navigate('today')" aria-label="Back to Dashboard">${svgIcon("chevronLeft", 22)}</button>
       <div class="nav-title">Payment History</div><div style="width:44px;"></div>
       </div></div><div class="main-content fade-in"><div class="content-pad content-gap">
-      <div class="settings-footer">Reversing a record updates bill tracking only. It does not refund a bank payment.</div>
-      ${rows ? `<div class="section-header">All Payments</div><div class="card">${rows}</div>` :
+        ${rows ? `<div class="section-header">All Payments</div><div class="card">${rows}</div>` :
         '<div class="empty-state"><div class="empty-state-title">No payment history yet</div></div>'}
       </div></div>`;
   };
