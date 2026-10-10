@@ -389,7 +389,7 @@
       roleElement.textContent =
         data.role === "owner"
           ? "Account Status: Owner"
-          : "Account Status: Member";
+          : "Account Status: Member.";
 
       ownerActions.style.display =
         data.role === "owner" ? "block" : "none";
@@ -676,6 +676,12 @@
         title: "Invite Code",
         primaryLabel: "Copy Code",
         content: `
+          <p
+            style="margin:0;color:var(--text-secondary);line-height:1.5;"
+          >
+            Share this code to the household member. Code Expires in 24 Hours.
+          </p>
+
           <div
             id="bbHouseholdInviteCode"
             style="
