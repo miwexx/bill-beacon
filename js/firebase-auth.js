@@ -1,3 +1,4 @@
+
 import { initializeApp, getApps, getApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 
 import {
@@ -49,6 +50,12 @@ function setMessage(message = "", isError = false) {
 }
 
 function showLogin() {
+  householdLoading = false;
+  closeCreateAccountDialog(true);
+  setLoginControlsLocked(false);
+  setupActions(false);
+  const password = getElement("password-login");
+  if (password) password.value = "";
   window.dispatchEvent(new CustomEvent("billbeacon:signed-out"));
 
   const loginScreen = getElement("login-screen");
@@ -62,25 +69,18 @@ function showLogin() {
 }
 
 function showApp() {
-  const loginScreen = getElement("login-screen");
+  householdLoading = true;
+  closeCreateAccountDialog(true);
+  getElement("login-screen")?.classList.remove("hidden");
   const app = getElement("app");
-
-  if (loginScreen) {
-    loginScreen.classList.add("hidden");
-  }
-
-  if (app) {
-    app.style.display = "";
-  }
-
-  window.dispatchEvent(
-    new CustomEvent("billbeacon:authenticated", {
-      detail: {
-        user: auth.currentUser
-      }
-    })
-  );
+  if (app) app.style.display = "none";
+  setLoginControlsLocked(true);
+  setupActions(false);
+  setMessage("Loading your account…");
+  window.dispatchEvent(new CustomEvent("billbeacon:authenticated", {detail:{user:auth.currentUser}}));
+  revealReadyHousehold();
 }
+
 
 function friendlyError(error) {
   const code = error?.code || "";
@@ -107,24 +107,165 @@ function friendlyError(error) {
   return messages[code] || error?.message || "Something went wrong. Try again.";
 }
 
-async function createAccount() {
-  const email = getElement("email-login")?.value.trim() || "";
-  const password = getElement("password-login")?.value || "";
+let signupBusy = false;
+let signupPreviousFocus = null;
+let householdLoading = false;
 
-  if (!email || !password) {
-    setMessage("Enter an email and password.", true);
-    return;
-  }
-
-  if (password.length < 6) {
-    setMessage("Use a password with at least 6 characters.", true);
-    return;
-  }
-
-  setMessage("Creating Account…");
-
-  await createUserWithEmailAndPassword(auth, email, password);
+function signupValidation(email, password, confirmation) {
+  if (!email.trim()) return "Enter your email address.";
+  if (!password) return "Enter a password.";
+  if (password.length < 6) return "Use a password with at least 6 characters.";
+  if (!confirmation) return "Confirm your password.";
+  if (password !== confirmation) return "The passwords do not match.";
+  return "";
 }
+
+function closeCreateAccountDialog(force = false) {
+  if (signupBusy && !force) return;
+  const dialog = getElement("billBeaconSignupDialog");
+  if (!dialog) return;
+  dialog.querySelectorAll('input[type="password"]').forEach(input => { input.value = ""; });
+  dialog.remove();
+  if (!force && signupPreviousFocus?.isConnected) signupPreviousFocus.focus();
+  signupPreviousFocus = null;
+}
+
+function openCreateAccountDialog() {
+  if (householdLoading || auth.currentUser) return;
+  if (getElement("billBeaconSignupDialog")) return;
+  signupPreviousFocus = document.activeElement;
+  const dialog = document.createElement("div");
+  dialog.id = "billBeaconSignupDialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "billBeaconSignupTitle");
+  dialog.style.cssText = "position:fixed;inset:0;z-index:30000;display:flex;align-items:center;justify-content:center;padding:max(20px,env(safe-area-inset-top)) 20px max(20px,env(safe-area-inset-bottom));background:rgba(0,0,0,.72);overflow-y:auto;box-sizing:border-box;";
+  dialog.innerHTML = `
+    <section style="width:min(100%,440px);max-height:calc(100dvh - 40px);overflow-y:auto;padding:24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--text);box-sizing:border-box;">
+      <header style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px;">
+        <h2 id="billBeaconSignupTitle" style="margin:0;font-size:24px;font-weight:800;">Create Account</h2>
+        <button id="signupClose" type="button" aria-label="Close Create Account" style="min-width:44px;min-height:44px;font-size:28px;color:var(--accent);">&times;</button>
+      </header>
+      <form id="billBeaconSignupForm" novalidate style="display:grid;gap:12px;">
+        <label class="login-label" for="signupEmail">Email</label>
+        <input class="login-input" id="signupEmail" name="email" type="email" autocomplete="email" autocapitalize="none" spellcheck="false" required>
+        <label class="login-label" for="signupPassword">Password</label>
+        <input class="login-input" id="signupPassword" name="password" type="password" autocomplete="new-password" minlength="6" required>
+        <label class="login-label" for="signupConfirmation">Confirm Password</label>
+        <input class="login-input" id="signupConfirmation" name="confirmation" type="password" autocomplete="new-password" minlength="6" required>
+        <div id="signupError" role="alert" aria-live="polite" style="color:var(--overdue);font-size:14px;line-height:1.4;"></div>
+        <button id="signupSubmit" type="submit" class="login-button login-button-primary">Create Account</button>
+        <button id="signupCancel" type="button" class="login-button login-button-secondary">Cancel</button>
+      </form>
+    </section>`;
+  document.body.appendChild(dialog);
+  getElement("signupEmail").value = getElement("email-login")?.value.trim() || "";
+  getElement("signupClose").addEventListener("click", () => closeCreateAccountDialog());
+  getElement("signupCancel").addEventListener("click", () => closeCreateAccountDialog());
+  dialog.addEventListener("click", event => { if (event.target === dialog) closeCreateAccountDialog(); });
+  dialog.addEventListener("keydown", event => {
+    if (event.key === "Escape") { event.preventDefault(); closeCreateAccountDialog(); }
+    if (event.key === "Tab") {
+      const focusable = [...dialog.querySelectorAll("button,input")].filter(node => !node.disabled);
+      const first = focusable[0], last = focusable[focusable.length - 1];
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
+  });
+  getElement("billBeaconSignupForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    if (signupBusy) return;
+    const emailField = getElement("signupEmail");
+    const passwordField = getElement("signupPassword");
+    const confirmationField = getElement("signupConfirmation");
+    const email = emailField.value.trim();
+    const password = passwordField.value;
+    const confirmation = confirmationField.value;
+    const errorBox = getElement("signupError");
+    const validation = signupValidation(email, password, confirmation);
+    if (validation || !emailField.validity.valid) {
+      errorBox.textContent = validation || "Enter a valid email address.";
+      return;
+    }
+    signupBusy = true;
+    errorBox.textContent = "";
+    const controls = [...dialog.querySelectorAll("button,input")];
+    controls.forEach(control => { control.disabled = true; });
+    getElement("signupSubmit").textContent = "Creating account…";
+    try {
+      const credential = await createUserWithEmailAndPassword(auth, email, password);
+      const loginEmail = getElement("email-login");
+      if (loginEmail) loginEmail.value = email;
+      const loginPassword = getElement("password-login");
+      if (loginPassword) loginPassword.value = "";
+      window.dispatchEvent(new CustomEvent("billbeacon:account-created", {detail: {uid: credential.user.uid}}));
+      closeCreateAccountDialog(true);
+    } catch (error) {
+      if (dialog.isConnected) errorBox.textContent = friendlyError(error);
+    } finally {
+      signupBusy = false;
+      if (dialog.isConnected) {
+        controls.forEach(control => { control.disabled = false; });
+        getElement("signupSubmit").textContent = "Create Account";
+      }
+    }
+  });
+  requestAnimationFrame(() => { if (dialog.isConnected) getElement("signupEmail")?.focus(); });
+}
+
+function setLoginControlsLocked(locked) {
+  for (const id of ["email-login","password-login","email-signin-button","email-create-button","forgot-password-button"]) {
+    const control = getElement(id);
+    if (control) control.disabled = locked;
+  }
+}
+
+function setupActions(show = false) {
+  let actions = getElement("billBeaconSetupActions");
+  if (!actions) {
+    const message = getElement("login-error");
+    if (!message?.parentElement) return;
+    actions = document.createElement("div");
+    actions.id = "billBeaconSetupActions";
+    actions.style.cssText = "display:none;gap:10px;margin-top:14px;";
+    actions.innerHTML = '<button id="billBeaconRetrySetup" type="button" class="login-button login-button-primary">Retry Setup</button><button id="billBeaconSetupSignOut" type="button" class="login-button login-button-secondary">Sign Out</button>';
+    message.parentElement.appendChild(actions);
+    getElement("billBeaconRetrySetup").addEventListener("click", () => {
+      if (!auth.currentUser) return;
+      setupActions(false);
+      setMessage("Loading your account…");
+      window.dispatchEvent(new CustomEvent("billbeacon:authenticated", {detail:{user:auth.currentUser}}));
+      revealReadyHousehold();
+    });
+    getElement("billBeaconSetupSignOut").addEventListener("click", async () => {
+      try { await signOut(auth); }
+      catch (error) { setMessage(friendlyError(error), true); }
+    });
+  }
+  actions.style.display = show ? "grid" : "none";
+}
+
+function revealReadyHousehold() {
+  const context = window.getBillBeaconHouseholdContext?.();
+  if (!auth.currentUser || !context?.ready || context.uid !== auth.currentUser.uid) return false;
+  householdLoading = false;
+  setLoginControlsLocked(false);
+  setupActions(false);
+  setMessage("");
+  getElement("login-screen")?.classList.add("hidden");
+  const app = getElement("app");
+  if (app) app.style.display = "";
+  return true;
+}
+
+window.addEventListener("billbeacon:household-ready", revealReadyHousehold);
+window.addEventListener("billbeacon:sync-status", event => {
+  if (!householdLoading || !auth.currentUser || event.detail?.state !== "error") return;
+  setMessage("Account setup could not finish. Retry setup or sign out.", true);
+  setupActions(true);
+});
+
 
 async function signIn() {
   const email = getElement("email-login")?.value.trim() || "";
@@ -165,7 +306,7 @@ async function resetPassword() {
 function setBusy(button, busy, busyText, normalText) {
   if (!button) return;
 
-  button.disabled = busy;
+  button.disabled = busy || householdLoading;
   button.textContent = busy ? busyText : normalText;
 }
 function getHouseholdInviteToken() {
@@ -262,28 +403,7 @@ function initFirebaseLogin() {
     }
   });
 
-  createButton.addEventListener("click", async () => {
-    try {
-      setBusy(
-        createButton,
-        true,
-        "Creating account…",
-        "Create Account"
-      );
-
-      await createAccount();
-    } catch (error) {
-      console.error("Firebase account creation failed:", error);
-      setMessage(friendlyError(error), true);
-    } finally {
-      setBusy(
-        createButton,
-        false,
-        "Creating account…",
-        "Create Account"
-      );
-    }
-  });
+  createButton.addEventListener("click", openCreateAccountDialog);
 
   forgotPasswordButton?.addEventListener("click", async () => {
     try {
