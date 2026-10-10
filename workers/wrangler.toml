@@ -13,7 +13,7 @@ PLAID_REDIRECT_URI = "https://bill-beacon.pages.dev/"
 BANK_RUN_NOW_ENABLED = "false"
 BANK_MATCHING_MODE = "preview"
 BANK_APPLY_ENABLED = "false"
-HOUSEHOLD_CODE_JOINS_ENABLED = "false"
+HOUSEHOLD_CODE_JOINS_ENABLED = "true"
 
 [observability]
 enabled = true

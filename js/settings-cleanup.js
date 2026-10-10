@@ -519,7 +519,32 @@
       }
     });
 
+        const mainContent =
+      document.querySelector(".main-content");
+
+    const savedMainScroll =
+      mainContent?.scrollTop || 0;
+
+    const savedWindowX = window.scrollX;
+    const savedWindowY = window.scrollY;
+
+    primaryButton.autofocus = true;
+
     dialog.showModal();
+
+    primaryButton.focus({
+      preventScroll: true
+    });
+
+    if (mainContent?.isConnected) {
+      mainContent.scrollTop = savedMainScroll;
+    }
+
+    window.scrollTo({
+      left: savedWindowX,
+      top: savedWindowY,
+      behavior: "auto"
+    });
 
     return dialog;
   }

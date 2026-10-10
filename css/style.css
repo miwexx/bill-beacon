@@ -3396,3 +3396,41 @@ body {
   color:var(--text-muted);
   text-align:center;
 }
+/* Household-code popup: fixed position and no motion. */
+#bbHouseholdCodeDialog {
+  position: fixed !important;
+  inset: 0 !important;
+  margin: auto !important;
+
+  height: fit-content !important;
+  max-height: calc(100dvh - 48px) !important;
+  overflow-y: auto !important;
+  box-sizing: border-box !important;
+
+  opacity: 1 !important;
+  transform: none !important;
+  translate: none !important;
+  scale: none !important;
+
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+#bbHouseholdCodeDialog *,
+#bbHouseholdCodeDialog *::before,
+#bbHouseholdCodeDialog *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+#bbHouseholdCodeDialog::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+
+  animation: none !important;
+  transition: none !important;
+}
