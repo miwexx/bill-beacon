@@ -12152,20 +12152,30 @@ function openBillQuickActions(billId) {
   });
 }
 function closeBillQuickActions(callback) {
-  const overlay = document.getElementById('billQuickActionsOverlay');
-  const sheet = document.getElementById('billQuickActionsSheet');
+  const container = document.getElementById(
+    "billQuickActionsContainer"
+  );
 
-  overlay?.classList.remove('show');
-  sheet?.classList.remove('show');
+  const wasOpen = Boolean(container);
+  container?.remove();
 
-  setTimeout(() => {
-    document.getElementById('billQuickActionsContainer')?.remove();
-    unlockBackgroundScroll();
+  try {
+    if (typeof callback === "function") callback();
+  } finally {
+    if (wasOpen) {
+      const anotherPopupIsOpen = [
+        ...document.querySelectorAll(".sheet")
+      ].some(sheet =>
+        !sheet.closest("[data-bb-drag-preview]") &&
+        sheet.getClientRects().length > 0 &&
+        getComputedStyle(sheet).display !== "none"
+      );
 
-    if (typeof callback === 'function') {
-      callback();
+      if (!anotherPopupIsOpen) {
+        unlockBackgroundScroll();
+      }
     }
-  }, 300);
+  }
 }
 
 window.openBillActionEdit = function (billId) {
