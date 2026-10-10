@@ -19136,16 +19136,20 @@ window.addEventListener("storage", () => {
 
       if (!back || back.disabled) return;
 
-      gesture = {
-        id: touch.identifier,
-        x: touch.clientX,
-        y: touch.clientY,
-        started: performance.now(),
-        route: currentRoute,
-        back,
-        armed: false,
-        pane: null
-      };
+     gesture = {
+  id: touch.identifier,
+  x: touch.clientX,
+  y: touch.clientY,
+  started: performance.now(),
+  route: currentRoute,
+  back,
+  armed: false,
+  pane: null,
+  samples: [{
+    x: touch.clientX,
+    time: performance.now()
+  }]
+};
     },
     { passive: true }
   );
@@ -19171,7 +19175,16 @@ window.addEventListener("storage", () => {
         cleanup();
         return;
       }
+      const sampleTime = performance.now();
 
+gesture.samples.push({
+  x: touch.clientX,
+  time: sampleTime
+});
+
+gesture.samples = gesture.samples
+  .filter(sample => sampleTime - sample.time <= 120)
+  .slice(-8);
       const dx =
         touch.clientX - gesture.x;
 
@@ -19267,13 +19280,39 @@ window.addEventListener("storage", () => {
         ? Math.abs(touch.clientY - state.y)
         : Infinity;
 
-      const goBack = Boolean(
-        touch &&
-        dx >= 60 &&
-        dy <= 32 &&
-        dx > dy * 2 &&
-        performance.now() - state.started <= 1400
-      );
+      const releasedAt = performance.now();
+
+const recent = (state.samples || [])
+  .filter(sample => releasedAt - sample.time <= 120);
+
+if (touch) {
+  recent.push({
+    x: touch.clientX,
+    time: releasedAt
+  });
+}
+
+const first = recent[0];
+const last = recent[recent.length - 1];
+
+const velocity =
+  first && last && last.time > first.time
+    ? (last.x - first.x) / (last.time - first.time)
+    : 0;
+
+// Initial tuning values—not WhatsApp's implementation.
+const passedDistance = dx >= window.innerWidth * 0.35;
+const pushedRight = dx >= 48 && velocity >= 0.45;
+const movingBackLeft = velocity < -0.15;
+
+const goBack = Boolean(
+  touch &&
+  state.pane?.isConnected &&
+  dy <= 32 &&
+  dx > dy * 2 &&
+  !movingBackLeft &&
+  (passedDistance || pushedRight)
+);
 
       finish(state, goBack);
     },
