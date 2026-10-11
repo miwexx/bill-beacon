@@ -414,8 +414,8 @@
 
             roleElement.textContent =
         data.role === "owner"
-          ? "Owner"
-          : "Member";
+          ? "OWNER"
+          : "MEMBER";
 
       ownerActions.style.display =
         data.role === "owner" ? "block" : "none";
