@@ -388,22 +388,14 @@ a { color: var(--accent); text-decoration: none; }
 .bill-swipe-wrapper.swipe-left .bill-swipe-background {
   background: var(--accent);
 }
+/* Bills inside a single pill/card */
 .bill-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border-radius: 18px; /* match your card and swipe background */
-
-  background: linear-gradient(
-    110deg,
-    rgba(143, 54, 255, 0.34) 0%,
-    rgba(196, 76, 255, 0.26) 40%,
-    rgba(246, 76, 174, 0.24) 72%,
-    rgba(255, 113, 56, 0.20) 100%
-  );
-
-  transition: background var(--transition);
+  background: transparent;          /* no gradient per row */
+  border-radius: 0;                 /* card owns the radius */
 }
 
 .bill-row:active {
@@ -415,9 +407,10 @@ a { color: var(--accent); text-decoration: none; }
     rgba(255, 113, 56, 0.32) 100%
   );
 }
+/* Hairline separator between rows inside the card */
 .bill-row + .bill-row {
-  border-top: none;
-  margin-top: 4px; /* small, consistent gap between rows */
+  border-top: 1px solid var(--separator);
+  margin-top: 0;
 }
 
 .bill-icon {
