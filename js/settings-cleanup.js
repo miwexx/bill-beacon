@@ -26,265 +26,174 @@
       </span></button>`;
   }
 
-  renderSettings = function() {
-    const settings = Store.getSettings();
-    const email = window.getBillBeaconUserEmail?.() || "Signed-in account";
-    const sources = Store.getIncomeSources();
-    const sourceRows = sources.map(source => `
-      <button type="button" class="form-row"
-        onclick="openIncomeSourceForm('${escapeInlineString(source.id)}')"
-        style="width:100%;text-align:left;background:transparent;border:0;color:inherit;cursor:pointer;min-height:52px;">
-        <span style="display:flex;align-items:center;gap:12px;width:100%;">
-          <span style="flex:1;min-width:0;font-weight:700;">${escapeHtml(source.name)}</span>
-          <span style="font-weight:800;">${formatCurrency(source.expectedAmount)}</span>
-          ${svgIcon("chevronRight", 18)}
-        </span>
-      </button>`).join("");
-    return `
-      <style>
-        #householdInviteStatus:empty, #notificationTestStatus:empty { display:none; }
-        #notificationPermissionStatus { display:none !important; }
-      </style>
-      <div class="nav-bar"><div class="nav-bar-content">
-        <button type="button" class="nav-button" onclick="navigate('more')" aria-label="Back to More" style="color:var(--text);">${svgIcon("chevronLeft", 22)}</button>
-        <div class="nav-title">Settings</div><div style="width:44px;"></div>
-      </div></div>
-      <div class="main-content fade-in"><div class="content-pad content-gap">
+  renderSettings = function () {
+  const settings = Store.getSettings();
+  const email =
+    window.getBillBeaconUserEmail?.() ||
+    "Signed-in account";
+
+  return `
+    <style>
+      #householdInviteStatus:empty,
+      #notificationTestStatus:empty {
+        display:none;
+      }
+
+      #notificationPermissionStatus {
+        display:none !important;
+      }
+    </style>
+
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <button
+          type="button"
+          class="nav-button"
+          onclick="navigate('more')"
+          aria-label="Back to More"
+          style="color:var(--text);"
+        >
+          ${svgIcon("chevronLeft", 22)}
+        </button>
+
+        <div class="nav-title">Settings</div>
+        <div style="width:44px;"></div>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad content-gap">
+
         <section class="settings-section">
-         <section class="settings-section">
           <div class="section-header">
-            Account & Household
+            Settings
           </div>
-
-          <div class="card">
-            <div
-              style="
-                padding:16px;
-                border-bottom:1px solid var(--border);
-              "
-            >
-              <div
-                id="bbAccountDisplayName"
-                style="
-                  font-size:17px;
-                  font-weight:850;
-                  overflow-wrap:anywhere;
-                "
-              >
-                Your Account
-              </div>
-
-              <div
-                style="
-                  margin-top:4px;
-                  font-size:13px;
-                  color:var(--text-muted);
-                  overflow-wrap:anywhere;
-                "
-              >
-                ${escapeHtml(email)}
-              </div>
-            </div>
-
-            ${settingsAction(
-              "Personal Details",
-              "user",
-              "window.bbOpenAccountSettings('name')"
-            )}
-
-            ${settingsAction(
-              "Email Address",
-              "mail",
-              "window.bbOpenAccountSettings('email')"
-            )}
-
-            ${settingsAction(
-              "Password",
-              "lock",
-              "window.bbOpenAccountSettings('password')"
-            )}
-
-                        <div
-              style="
-                padding:16px;
-                border-top:1px solid var(--border);
-              "
-            >
-              <div
-                style="
-                  display:flex;
-                  justify-content:space-between;
-                  align-items:center;
-                  margin-bottom:6px;
-                "
-              >
-                <div
-                  style="
-                    font-size:15px;
-                    font-weight:800;
-                  "
-                >
-                  Shared Household
-                </div>
-
-                <div
-                  id="bbHouseholdRole"
-                  style="
-                    font-size:13px;
-                    color:var(--text-secondary);
-                  "
-                >
-                  Loading…
-                </div>
-              </div>
-                 
-
-              <div
-                id="bbHouseholdOwnerActions"
-                style="display:none;margin-top:14px;"
-              >
-                <button
-                  id="createHouseholdInviteButton"
-                  type="button"
-                  class="bb-outline-pill"
-                  onclick="window.createHouseholdInviteCode()"
-                  style="
-                    width:100%;
-                    min-height:46px;
-                    justify-content:center;
-                  "
-                >
-                  ${svgIcon("plus", 18)}
-                  Generate Invite Code
-                </button>
-
-                <button
-                  type="button"
-                  class="bb-outline-pill"
-                  onclick="window.cancelHouseholdInviteCode()"
-                  style="
-                    width:100%;
-                    min-height:44px;
-                    margin-top:10px;
-                    justify-content:center;
-                  "
-                >
-                  Cancel Invite Code
-                </button>
-
-                <div
-                  id="householdInviteStatus"
-                  role="status"
-                  aria-live="polite"
-                  style="
-                    font-size:var(--text-sm);
-                    color:var(--text-muted);
-                    margin-top:8px;
-                    line-height:1.4;
-                  "
-                ></div>
-              </div>
-
-              <div
-                id="bbHouseholdMemberActions"
-                style="display:none;margin-top:12px;"
-              >
-                <button
-                  type="button"
-                  class="bb-outline-pill"
-                  onclick="window.openJoinHouseholdCodeDialog()"
-                  style="
-                    width:100%;
-                    min-height:46px;
-                    justify-content:center;
-                  "
-                >
-                  ${svgIcon("plus", 18)}
-                  Join a Household
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
-        <div id="bbSettingsNotificationsSlot"></div>
-        <section class="settings-section">
-          <div class="section-header">Income & Paychecks</div>
-          ${sourceRows ? `<div class="card">${sourceRows}</div>` : ""}
-          <button type="button" class="bb-outline-pill" onclick="openIncomeSourceForm()"
-            style="width:100%;min-height:46px;justify-content:center;${sourceRows ? 'margin-top:12px;' : 'margin-top:0;'}">
-            <span class="pill-icon">${svgIcon("plus", 18)}</span>
-            <span>Add Income Source</span>
-          </button>
-        </section>
-        <section class="settings-section">
-          <div class="section-header">Appearance</div>
-          <div class="card">
-            ${settingsAction("Dark", "check", "setTheme('dark')", settings.theme !== "light")}
-            ${settingsAction("Light", "check", "setTheme('light')", settings.theme === "light")}
-          </div>
-        </section>
-        <section class="settings-section">
-          <div class="section-header">Records & Transfers</div>
-          <div class="card">
-            ${settingsAction("Payment History", "checkCircle", "navigate('history')")}
-            ${settingsAction("Activity & Changes", "doc", "navigate('activity')")}
-            ${settingsAction("Export Bills CSV", "export", "exportCSV()")}
-            ${settingsAction("Import Bills CSV", "tray", "document.getElementById('billImportFile').click()")}
-          </div>
-          <input id="billImportFile" type="file" accept=".csv,text/csv" style="display:none;" onchange="importBillsCSV(event)">
-        </section>
-        <section class="settings-section">
-          <div class="section-header">About</div>
-          <div class="card card-pad"><div style="font-weight:800;">Bill Beacon</div></div>
-        </section>
-        <section class="settings-section">
-          <div class="card card-pad"><button id="signout-button" type="button" class="bb-outline-pill"
-            style="width:100%;min-height:46px;justify-content:center;">Sign Out</button></div>
-        </section>
-                        <section class="settings-section">
-          <div class="section-header">Advanced</div>
 
           <div class="card card-pad">
             <button
-              id="bbDeleteAccountButton"
               type="button"
               class="bb-outline-pill"
-              onclick="window.deleteBillBeaconAccount()"
               style="
                 width:100%;
                 min-height:46px;
                 justify-content:center;
-                color:var(--overdue);
-                border-color:var(--overdue);
               "
+              onclick="window.openSettingsSection('account')"
             >
-              Delete Account
+              Account & Household
             </button>
-
 
             <button
               type="button"
               class="bb-outline-pill"
-              onclick="clearAllAppData()"
               style="
                 width:100%;
                 min-height:46px;
-                margin-top:16px;
                 justify-content:center;
-                color:var(--overdue);
-                border-color:var(--overdue);
+                margin-top:10px;
               "
+              onclick="window.openSettingsSection('notifications')"
             >
-              Clear App Data
+              Notifications
             </button>
 
-           
+            <button
+              type="button"
+              class="bb-outline-pill"
+              style="
+                width:100%;
+                min-height:46px;
+                justify-content:center;
+                margin-top:10px;
+              "
+              onclick="window.openSettingsSection('income')"
+            >
+              Income & Paychecks
+            </button>
+
+            <button
+              type="button"
+              class="bb-outline-pill"
+              style="
+                width:100%;
+                min-height:46px;
+                justify-content:center;
+                margin-top:10px;
+              "
+              onclick="window.openSettingsSection('appearance')"
+            >
+              Appearance
+            </button>
+
+            <button
+              type="button"
+              class="bb-outline-pill"
+              style="
+                width:100%;
+                min-height:46px;
+                justify-content:center;
+                margin-top:10px;
+              "
+              onclick="window.openSettingsSection('records')"
+            >
+              Records & Transfers
+            </button>
+
+            <button
+              type="button"
+              class="bb-outline-pill"
+              style="
+                width:100%;
+                min-height:46px;
+                justify-content:center;
+                margin-top:10px;
+              "
+              onclick="window.openSettingsSection('about')"
+            >
+              About
+            </button>
+
+            <button
+              type="button"
+              class="bb-outline-pill"
+              style="
+                width:100%;
+                min-height:46px;
+                justify-content:center;
+                margin-top:10px;
+              "
+              onclick="window.openSettingsSection('advanced')"
+            >
+              Advanced
+            </button>
           </div>
         </section>
-      </div></div>`;
-  };
 
-  addBackupSettings = function() {};
+        <!-- Sign Out stays at the bottom -->
+        <section class="settings-section">
+          <div class="card card-pad">
+            <button
+              id="signout-button"
+              type="button"
+              class="bb-outline-pill"
+              style="
+                width:100%;
+                min-height:46px;
+                justify-content:center;
+              "
+            >
+              Sign Out
+            </button>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  `;
+};
+
+    addBackupSettings = function() {};
+  addNotificationSettings = function() {};
 
   renderPaymentHistory = function() {
     const allBills = [...Store.getBills(), ...getArchivedBills()];
@@ -313,19 +222,22 @@
         '<div class="empty-state"><div class="empty-state-title">No payment history yet</div></div>'}
       </div></div>`;
   };
-
-  render = function() {
+  render = function () {
     const result = previousRender.apply(this, arguments);
+
     if (currentRoute === "settings") {
-      const slot = document.getElementById("bbSettingsNotificationsSlot");
-      const notifications = document.getElementById("notificationSettingsCard");
-      if (slot && notifications && notifications.parentElement !== slot) slot.appendChild(notifications);
+      refreshHouseholdSettingsCard();
     }
+
     return result;
   };
+
   window.render = render;
   window.BillBeaconSettingsCleanup = {version: 3};
-  if (document.readyState !== "loading") render();
+
+  if (document.readyState !== "loading") {
+    render();
+  }
     const HOUSEHOLD_WORKER_URL =
     "https://bill-beacon-notifications.rodz-m-1990.workers.dev";
 
@@ -1340,4 +1252,578 @@
         }
       }
     };
+      function closeSettingsSectionSheet() {
+    const container =
+      document.getElementById(
+        "bbSettingsSectionContainer"
+      );
+
+    if (!container) return;
+
+    const overlay =
+      document.getElementById(
+        "bbSettingsSectionOverlay"
+      );
+
+    const sheet =
+      document.getElementById(
+        "bbSettingsSectionSheet"
+      );
+
+    overlay?.classList.remove("show");
+    sheet?.classList.remove("show");
+
+    setTimeout(() => {
+      container.remove();
+    }, 260);
+  }
+
+  window.openSettingsSection = function (section) {
+    document.getElementById(
+      "bbSettingsSectionContainer"
+    )?.remove();
+      function buildAccountHouseholdSection() {
+    const email =
+      window.getBillBeaconUserEmail?.() ||
+      "Signed-in account";
+
+    return `
+      <section class="settings-section">
+        <div class="card">
+          <div
+            style="
+              padding:16px;
+              border-bottom:1px solid var(--border);
+            "
+          >
+            <div
+              id="bbAccountDisplayName"
+              style="
+                font-size:17px;
+                font-weight:850;
+                overflow-wrap:anywhere;
+              "
+            >
+              Your Account
+            </div>
+
+            <div
+              style="
+                margin-top:4px;
+                font-size:13px;
+                color:var(--text-muted);
+                overflow-wrap:anywhere;
+              "
+            >
+              ${escapeHtml(email)}
+            </div>
+          </div>
+
+          ${settingsAction(
+            "Personal Details",
+            "user",
+            "window.bbOpenAccountSettings('name')"
+          )}
+
+          ${settingsAction(
+            "Email Address",
+            "mail",
+            "window.bbOpenAccountSettings('email')"
+          )}
+
+          ${settingsAction(
+            "Password",
+            "lock",
+            "window.bbOpenAccountSettings('password')"
+          )}
+
+          <div
+            style="
+              padding:16px;
+              border-top:1px solid var(--border);
+            "
+          >
+            <div
+              style="
+                display:flex;
+                justify-content:space-between;
+                align-items:center;
+                margin-bottom:6px;
+              "
+            >
+              <div
+                style="
+                  font-size:15px;
+                  font-weight:800;
+                "
+              >
+                Shared Household
+              </div>
+
+              <div
+                id="bbHouseholdRole"
+                style="
+                  font-size:13px;
+                  color:var(--text-secondary);
+                "
+              >
+                Loading…
+              </div>
+            </div>
+
+            <div
+              id="bbHouseholdOwnerActions"
+              style="display:none;margin-top:12px;"
+            >
+              <button
+                id="createHouseholdInviteButton"
+                type="button"
+                class="bb-outline-pill"
+                onclick="window.createHouseholdInviteCode()"
+                style="
+                  width:100%;
+                  min-height:46px;
+                  justify-content:center;
+                "
+              >
+                ${svgIcon("plus", 18)}
+                Generate Invite Code
+              </button>
+
+              <button
+                type="button"
+                class="bb-outline-pill"
+                onclick="window.cancelHouseholdInviteCode()"
+                style="
+                  width:100%;
+                  min-height:44px;
+                  margin-top:10px;
+                  justify-content:center;
+                "
+              >
+                Cancel Invite Code
+              </button>
+
+              <div
+                id="householdInviteStatus"
+                role="status"
+                aria-live="polite"
+                style="
+                  font-size:var(--text-sm);
+                  color:var(--text-muted);
+                  margin-top:8px;
+                  line-height:1.4;
+                "
+              ></div>
+            </div>
+
+            <div
+              id="bbHouseholdMemberActions"
+              style="display:none;margin-top:12px;"
+            >
+              <button
+                type="button"
+                class="bb-outline-pill"
+                onclick="window.openJoinHouseholdCodeDialog()"
+                style="
+                  width:100%;
+                  min-height:46px;
+                  justify-content:center;
+                "
+              >
+                ${svgIcon("plus", 18)}
+                Join a Household
+              </button>
+            </div>
+
+            <!-- Leave Household button is added by refreshHouseholdSettingsCard -->
+          </div>
+        </div>
+      </section>
+    `;
+  }
+    function buildNotificationSettingsSection() {
+    return `
+      <section class="settings-section">
+        <div class="card card-pad">
+          <p
+            id="notificationPermissionStatus"
+            style="
+              font-size:var(--text-sm);
+              color:var(--text-muted);
+              line-height:1.5;
+              margin-bottom:var(--space-3);
+            "
+          >
+            Checking notification status…
+          </p>
+
+          <button
+            id="notificationPermissionButton"
+            type="button"
+            class="bb-outline-pill"
+            style="
+              width:100%;
+              min-height:46px;
+              justify-content:center;
+            "
+            onclick="activateBillNotifications()"
+          >
+            ${svgIcon("bell", 20)} Turn On Notifications
+          </button>
+
+          <p
+            id="notificationTestStatus"
+            style="
+              font-size:var(--text-sm);
+              color:var(--text-muted);
+              line-height:1.5;
+              margin:var(--space-2) 0 0;
+            "
+            role="status"
+            aria-live="polite"
+          ></p>
+        </div>
+      </section>
+    `;
+  }
+    function buildIncomeSettingsSection() {
+    const sources = Store.getIncomeSources();
+    const sourceRows = sources
+      .map(
+        source => `
+        <button
+          type="button"
+          class="form-row"
+          onclick="openIncomeSourceForm('${escapeInlineString(
+            source.id
+          )}')"
+          style="
+            width:100%;
+            text-align:left;
+            background:transparent;
+            border:0;
+            color:inherit;
+            cursor:pointer;
+            min-height:52px;
+          "
+        >
+          <span
+            style="
+              display:flex;
+              align-items:center;
+              gap:12px;
+              width:100%;
+            "
+          >
+            <span
+              style="
+                flex:1;
+                min-width:0;
+                font-weight:700;
+              "
+            >
+              ${escapeHtml(source.name)}
+            </span>
+
+            <span
+              style="font-weight:800;"
+            >
+              ${formatCurrency(source.expectedAmount)}
+            </span>
+
+            ${svgIcon("chevronRight", 18)}
+          </span>
+        </button>`
+      )
+      .join("");
+
+    return `
+      <section class="settings-section">
+        <div class="section-header">
+          Income & Paychecks
+        </div>
+
+        ${
+          sourceRows
+            ? `<div class="card">${sourceRows}</div>`
+            : ""
+        }
+
+        <button
+          type="button"
+          class="bb-outline-pill"
+          onclick="openIncomeSourceForm()"
+          style="
+            width:100%;
+            min-height:46px;
+            justify-content:center;
+            ${
+              sourceRows
+                ? "margin-top:12px;"
+                : "margin-top:0;"
+            }
+          "
+        >
+          <span class="pill-icon">
+            ${svgIcon("plus", 18)}
+          </span>
+          <span>Add Income Source</span>
+        </button>
+      </section>
+    `;
+  }
+    function buildAppearanceSettingsSection() {
+    const settings = Store.getSettings();
+
+    return `
+      <section class="settings-section">
+        <div class="section-header">
+          Appearance
+        </div>
+
+        <div class="card">
+          ${settingsAction(
+            "Dark",
+            "check",
+            "setTheme('dark')",
+            settings.theme !== "light"
+          )}
+
+          ${settingsAction(
+            "Light",
+            "check",
+            "setTheme('light')",
+            settings.theme === "light"
+          )}
+        </div>
+      </section>
+    `;
+  }
+    function buildRecordsSettingsSection() {
+    return `
+      <section class="settings-section">
+        <div class="section-header">
+          Records & Transfers
+        </div>
+
+        <div class="card">
+          ${settingsAction(
+            "Payment History",
+            "checkCircle",
+            "navigate('history')"
+          )}
+
+          ${settingsAction(
+            "Activity & Changes",
+            "doc",
+            "navigate('activity')"
+          )}
+
+          ${settingsAction(
+            "Export Bills CSV",
+            "export",
+            "exportCSV()"
+          )}
+
+          ${settingsAction(
+            "Import Bills CSV",
+            "tray",
+            "document.getElementById('billImportFile').click()"
+          )}
+        </div>
+
+        <input
+          id="billImportFile"
+          type="file"
+          accept=".csv,text/csv"
+          style="display:none;"
+          onchange="importBillsCSV(event)"
+        >
+      </section>
+    `;
+  }
+    function buildAboutSettingsSection() {
+    return `
+      <section class="settings-section">
+        <div class="section-header">
+          About
+        </div>
+
+        <div class="card card-pad">
+          <div style="font-weight:800;">
+            Bill Beacon
+          </div>
+        </div>
+      </section>
+    `;
+  }
+    function buildAdvancedSettingsSection() {
+    return `
+      <section class="settings-section">
+        <div class="section-header">
+          Advanced
+        </div>
+
+        <div class="card card-pad">
+          <button
+            id="bbDeleteAccountButton"
+            type="button"
+            class="bb-outline-pill"
+            onclick="window.deleteBillBeaconAccount()"
+            style="
+              width:100%;
+              min-height:46px;
+              justify-content:center;
+              color:var(--overdue);
+              border-color:var(--overdue);
+            "
+          >
+            Delete Account
+          </button>
+
+          <p
+            style="
+              margin:10px 0 0;
+              font-size:13px;
+              color:var(--text-muted);
+              line-height:1.4;
+            "
+          >
+            Removes your Bill Beacon profile and
+            household membership. Shared household
+            records created with others are not deleted.
+          </p>
+
+          <button
+            type="button"
+            class="bb-outline-pill"
+            onclick="clearAllAppData()"
+            style="
+              width:100%;
+              min-height:46px;
+              margin-top:16px;
+              justify-content:center;
+              color:var(--overdue);
+              border-color:var(--overdue);
+            "
+          >
+            Clear App Data
+          </button>
+
+          <p
+            style="
+              margin:10px 0 0;
+              font-size:13px;
+              color:var(--text-muted);
+              line-height:1.4;
+            "
+          >
+            Clears app records on this device and may
+            sync the deletion to your household. Does
+            not disconnect the bank.
+          </p>
+        </div>
+      </section>
+    `;
+  }
+    const container =
+      document.createElement("div");
+
+    container.id =
+      "bbSettingsSectionContainer";
+
+    container.innerHTML = `
+      <div
+        class="sheet-overlay show"
+        id="bbSettingsSectionOverlay"
+        onclick="closeSettingsSectionSheet()"
+      ></div>
+
+      <div
+        class="sheet show"
+        id="bbSettingsSectionSheet"
+      >
+        <div class="sheet-handle"></div>
+
+        <div class="sheet-nav">
+          <button
+            type="button"
+            class="nav-button"
+            onclick="closeSettingsSectionSheet()"
+            aria-label="Close settings section"
+            style="color:var(--text);"
+          >
+            ${svgIcon("chevronLeft", 22)}
+          </button>
+
+          <div
+            id="bbSettingsSectionTitle"
+            class="nav-title"
+          >
+            Settings
+          </div>
+
+          <div style="width:44px;"></div>
+        </div>
+
+        <div
+          class="sheet-body content-gap"
+          id="bbSettingsSectionBody"
+        ></div>
+      </div>
+    `;
+
+    document.body.appendChild(container);
+
+    const titleElement =
+      document.getElementById(
+        "bbSettingsSectionTitle"
+      );
+
+    const bodyElement =
+      document.getElementById(
+        "bbSettingsSectionBody"
+      );
+
+    if (!bodyElement || !titleElement) {
+      return;
+    }
+
+    let title = "Settings";
+    let content = "";
+
+    if (section === "account") {
+      title = "Account & Household";
+      content = buildAccountHouseholdSection();
+    } else if (section === "notifications") {
+      title = "Notifications";
+      content = buildNotificationSettingsSection();
+    } else if (section === "income") {
+      title = "Income & Paychecks";
+      content = buildIncomeSettingsSection();
+    } else if (section === "appearance") {
+      title = "Appearance";
+      content = buildAppearanceSettingsSection();
+    } else if (section === "records") {
+      title = "Records & Transfers";
+      content = buildRecordsSettingsSection();
+    } else if (section === "about") {
+      title = "About";
+      content = buildAboutSettingsSection();
+    } else if (section === "advanced") {
+      title = "Advanced";
+      content = buildAdvancedSettingsSection();
+    }
+
+    titleElement.textContent = title;
+    bodyElement.innerHTML = content;
+
+    // Re-run household / notification helpers when needed.
+    if (section === "account") {
+      refreshHouseholdSettingsCard();
+    } else if (section === "notifications") {
+      refreshNotificationSettingsCard();
+    }
+  };
 })();
