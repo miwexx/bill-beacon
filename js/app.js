@@ -5731,7 +5731,7 @@ function initBillSwipeHandlers() {
     let decided = false;    // have we decided swipe vs scroll?
 
     const billId = wrapper.dataset.billId || '';
-    const threshold = 70; // pixels to trigger action
+    const threshold = 35; // pixels to trigger action
     const maxShift = 120; // clamp horizontal shift
 
     const reset = () => {
@@ -5798,30 +5798,32 @@ function initBillSwipeHandlers() {
     };
 
     const onEnd = () => {
-      if (!dragging) {
-        // Scroll gesture: nothing to do
-        reset();
-        return;
-      }
+  if (!dragging) {
+    // Scroll gesture: nothing to do
+    reset();
+    return;
+  }
 
-      const finalX = currentX;
+  // Use the classes that onMove applied instead of raw distance
+  const isRight = wrapper.classList.contains('swipe-right');
+  const isLeft = wrapper.classList.contains('swipe-left');
 
-      if (finalX > threshold) {
-        // Swipe right → delete
-        reset();
-        if (billId) {
-          confirmDeleteBill(billId);
-        }
-      } else if (finalX < -threshold) {
-        // Swipe left → edit
-        reset();
-        if (billId) {
-          openBillForm(billId);
-        }
-      } else {
-        reset();
-      }
-    };
+  if (isRight) {
+    // Swipe right → delete
+    reset();
+    if (billId) {
+      confirmDeleteBill(billId);
+    }
+  } else if (isLeft) {
+    // Swipe left → edit
+    reset();
+    if (billId) {
+      openBillForm(billId);
+    }
+  } else {
+    reset();
+  }
+};
 
     row.addEventListener('touchstart', onStart, { passive: true });
     row.addEventListener('touchmove', onMove, { passive: false });
@@ -11711,11 +11713,11 @@ function billRow(bill, clickable = false) {
       <div class="bill-swipe-background">
         <div class="bill-swipe-delete-label">
           ${svgIcon('trash', 18)}
-          <span>Delete bill</span>
+          <span>Delete Bill</span>
         </div>
 
         <div class="bill-swipe-edit-label">
-          <span>Edit bill</span>
+          <span>Edit Bill</span>
           ${svgIcon('gear', 18)}
         </div>
       </div>
