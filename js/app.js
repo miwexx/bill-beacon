@@ -5481,7 +5481,7 @@ function renderRecurring() {
         ${renderSection({
           id: 'overdue',
           title: 'Overdue',
-          subtitle: 'Past-due bills and payment plans',
+          
           bills: overdue,
           emptyMessage: '',
           showWhenEmpty: false
@@ -5490,7 +5490,7 @@ function renderRecurring() {
         ${renderSection({
           id: 'upcoming',
           title: 'Upcoming',
-          subtitle: 'Due Today & Over The Next 5 Days',
+          
           bills: upcoming,
           emptyMessage:
             'You have no unpaid bills or payment plans due in the next 5 days.'
@@ -5499,7 +5499,7 @@ function renderRecurring() {
         ${renderSection({
           id: 'later',
           title: 'Coming Up Later',
-          subtitle: 'Due In 6 To 10 Days',
+          
           bills: comingUpLater,
           emptyMessage:
             'You have no unpaid bills or payment plans due 6 to 10 days from now.'
