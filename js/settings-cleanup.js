@@ -137,25 +137,7 @@
                   Loading…
                 </div>
               </div>
-                  <button
-                id="bbDeleteAccountButton"
-                type="button"
-                class="bb-outline-pill"
-                onclick="window.deleteBillBeaconAccount()"
-                style="
-  width:100%;
-  min-height:46px;
-  margin-top:12px;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  color:var(--overdue);
-  border-color:var(--overdue);
-"
-              >
-                Delete Account
-              </button>
-              
+                 
 
               <div
                 id="bbHouseholdOwnerActions"
@@ -259,12 +241,59 @@
           <div class="card card-pad"><button id="signout-button" type="button" class="bb-outline-pill"
             style="width:100%;min-height:46px;justify-content:center;">Sign Out</button></div>
         </section>
-        <section class="settings-section">
+                <section class="settings-section">
           <div class="section-header">Advanced</div>
-          <details class="card card-pad"><summary style="cursor:pointer;font-weight:700;">Clear App Data</summary>
-            <p style="font-size:var(--text-sm);color:var(--text-muted);margin:12px 0;">Clears app records and may sync the deletion to your household. Does not disconnect the bank.</p>
-            <button type="button" class="btn-danger" onclick="clearAllAppData()" style="width:100%;">Clear All App Data</button>
-          </details>
+
+          <div class="card card-pad">
+            <button
+              id="bbDeleteAccountButton"
+              type="button"
+              class="bb-outline-pill"
+              onclick="window.deleteBillBeaconAccount()"
+              style="
+                width:100%;
+                min-height:46px;
+                margin-bottom:12px;
+                justify-content:center;
+                color:var(--overdue);
+                border-color:var(--overdue);
+              "
+            >
+              Delete Account
+            </button>
+
+            <details>
+              <summary
+                style="
+                  cursor:pointer;
+                  font-weight:700;
+                  margin-bottom:8px;
+                "
+              >
+                Clear App Data
+              </summary>
+
+              <p
+                style="
+                  font-size:var(--text-sm);
+                  color:var(--text-muted);
+                  margin:0 0 12px;
+                "
+              >
+                Clears app records and may sync the deletion
+                to your household. Does not disconnect the bank.
+              </p>
+
+              <button
+                type="button"
+                class="btn-danger"
+                onclick="clearAllAppData()"
+                style="width:100%;"
+              >
+                Clear All App Data
+              </button>
+            </details>
+          </div>
         </section>
       </div></div>`;
   };
