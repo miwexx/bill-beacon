@@ -395,7 +395,7 @@ a { color: var(--accent); text-decoration: none; }
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   background: transparent;          /* no gradient per row */
-  border-radius: 0;                 /* card owns the radius */
+  
 }
 
 .bill-row:active {
@@ -2948,8 +2948,7 @@ body {
 .main-content {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: calc(140px + var(--safe-bottom));
-}
+  padding-bottom: calc(104px + var(--bb-safe-bottom));
 
 /* Keep the installed-PWA tab bar above the Home Indicator. */
 .tab-bar {
