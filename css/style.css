@@ -3533,12 +3533,3 @@ body {
 .bill-row {
   position: relative;
 }
-.bill-swipe-background {
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.bill-swipe-wrapper.swipe-left .bill-swipe-background,
-.bill-swipe-wrapper.swipe-right .bill-swipe-background {
-  opacity: 1;
-}
