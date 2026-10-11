@@ -16155,6 +16155,37 @@ async function activateBillNotifications() {
     );
   }
 }
+async function deactivateBillNotifications() {
+  try {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      throw new Error(
+        "Push notifications are not supported in this browser."
+      );
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+    const subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      throw new Error(
+        "Notifications are already off on this device."
+      );
+    }
+
+    await subscription.unsubscribe();
+
+    await refreshNotificationSettingsCard();
+  } catch (error) {
+    console.error("Notification unsubscribe failed", error);
+
+    alert(
+      (error?.message ||
+        "Could not turn off notifications.") +
+      " Please try again."
+    );
+  }
+}
 async function getNotificationDeviceState() {
   const isSupported =
     "Notification" in window &&
@@ -16199,77 +16230,70 @@ async function getNotificationDeviceState() {
   }
 }
 async function refreshNotificationSettingsCard() {
-  const button = document.getElementById(
-    "notificationPermissionButton"
-  );
-
-  const status = document.getElementById(
-    "notificationPermissionStatus"
-  );
-
-  if (!button || !status) {
-    return;
-  }
+  const button = document.getElementById("notificationPermissionButton");
+  const status = document.getElementById("notificationPermissionStatus");
+  if (!button || !status) return;
 
   const state = await getNotificationDeviceState();
 
+  // Not supported
   if (!state.supported) {
     button.disabled = true;
-    button.style.opacity = "0.55";
+    button.style.opacity = 0.55;
     button.style.cursor = "not-allowed";
-
-    button.innerHTML = `
-      ${svgIcon("bell", 20)}
-      Notifications Unavailable
-    `;
+    button.className = "bb-outline-pill";
+    button.innerHTML = "Notifications Unavailable";
 
     status.textContent =
       "Notifications are not supported in this browser.";
-
+    button.onclick = null;
     return;
   }
 
+  // Permission denied
   if (state.permission === "denied") {
     button.disabled = true;
-    button.style.opacity = "0.55";
+    button.style.opacity = 0.55;
     button.style.cursor = "not-allowed";
-
-    button.innerHTML = `
-      ${svgIcon("bell", 20)}
-      Notifications Blocked
-    `;
+    button.className = "bb-outline-pill";
+    button.innerHTML = "Notifications Blocked";
 
     status.textContent =
       "Notifications are blocked. Enable them in your iPhone or browser settings.";
-
+    button.onclick = null;
     return;
   }
 
+  // Subscribed: show Turn Off Notifications
   if (state.subscribed) {
-    button.disabled = true;
-    button.style.opacity = "0.72";
-    button.style.cursor = "default";
+    button.disabled = false;
+    button.style.opacity = 1;
+    button.style.cursor = "pointer";
+    button.className = "bb-outline-pill";
+    button.innerHTML = "Turn Off Notifications";
 
-    button.innerHTML = `
-      ${svgIcon("checkCircle", 20)}
-      Notifications On
-    `;
+    status.textContent =
+      "Bill reminders are enabled on this device.";
 
+    button.onclick = () => {
+      deactivateBillNotifications();
+    };
 
     return;
   }
 
+  // Not subscribed but allowed: show Turn On Notifications
   button.disabled = false;
-  button.style.opacity = "1";
+  button.style.opacity = 1;
   button.style.cursor = "pointer";
+  button.className = "bb-outline-pill";
+  button.innerHTML = "Turn On Notifications";
 
-  button.innerHTML = `
-    ${svgIcon("bell", 20)}
-    Turn On Notifications
-  `;
+  status.textContent = "Receive bill reminders on this device.";
 
-  status.textContent =
-    "Receive bill reminders on this iPhone.";
+  button.onclick = () => {
+    activateBillNotifications();
+  };
 }
 async function sendBillNotificationTest() {
   const status = document.getElementById(
@@ -16547,15 +16571,19 @@ function addNotificationSettings() {
 
     <div class="card card-pad">
       <p id="notificationPermissionStatus" hidden aria-hidden="true" style="display:none;"></p>
-          <button
+                <button
         id="notificationPermissionButton"
         type="button"
-        class="btn-primary"
-        style="width:100%;"
+        class="bb-outline-pill"
+        style="
+          width:100%;
+          min-height:46px;
+          justify-content:center;
+          margin-top:14px;
+        "
         onclick="activateBillNotifications()"
       >
-        ${svgIcon("bell", 20)}
-        Turn On Notifications
+        ${svgIcon("bell", 20)} Turn On Notifications
       </button>
   
       <p
