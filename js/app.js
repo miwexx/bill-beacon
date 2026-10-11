@@ -5627,7 +5627,7 @@ function renderBills() {
         </div>
 
         <div class="card">
-          ${categoryBills.map((bill) => billRow(bill, false)).join("")}
+          ${categoryBills.map((bill) => billRow(bill, true)).join("")}
         </div>
       </div>
     `;
@@ -5636,7 +5636,7 @@ function renderBills() {
   } else if (sortedBills.length) {
     billContent = `
       <div class="card">
-        ${sortedBills.map(bill => billRow(bill, false)).join('')}
+        ${sortedBills.map(bill => billRow(bill, true)).join('')}
       </div>
     `;
   }
