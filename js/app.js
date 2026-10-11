@@ -11537,129 +11537,105 @@ function getBillScheduleLabel(bill) {
 function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const dueDate = new Date(bill.dueDate);
+  const dueDay = bill.recurrence === "Monthly"
+    ? getMonthlyDueDay(bill)
+    : dueDate.getDate();
 
-  const dueDay =
-    bill.recurrence === "Monthly"
-      ? getMonthlyDueDay(bill)
-      : dueDate.getDate();
-
-  const ordinal = (() => {
-    const value = Number(dueDay);
+  const ordinal = (value) => {
     const mod100 = value % 100;
-
-    if (mod100 >= 11 && mod100 <= 13) {
-      return `${value}th`;
-    }
-
+    if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
     switch (value % 10) {
-      case 1:
-        return `${value}st`;
-      case 2:
-        return `${value}nd`;
-      case 3:
-        return `${value}rd`;
-      default:
-        return `${value}th`;
+      case 1: return `${value}st`;
+      case 2: return `${value}nd`;
+      case 3: return `${value}rd`;
+      default: return `${value}th`;
     }
-  })();
+  };
 
   const scheduleText =
     bill.recurrence && bill.recurrence !== "None"
       ? bill.recurrence === "Monthly"
-        ? `Due on the ${ordinal} of each month`
+        ? `Due on the ${ordinal(dueDay)} of each month`
         : getBillScheduleLabel(bill)
-      : `Due on ${formatDate(bill.dueDate, "full")}`;
+      : `Due ${formatDate(bill.dueDate, "full")}`;
 
-  const detailBillId = bill.isOccurrence
-    ? bill.sourceBillId
-    : bill.id;
-
-  const detailDueDate = bill.isOccurrence
-    ? bill.dueDate
-    : "";
+  // In the Bills tab we always open the main bill details by id.
+  const detailBillId = bill.id;
 
   const rowClick = clickable
     ? `
       onclick="openBillDetailsSheet('${escapeInlineString(detailBillId)}')"
       role="button"
       tabindex="0"
-      onkeydown="
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          openBillDetailsSheet('${escapeInlineString(detailBillId)}');
-        }
-      "
+      onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openBillDetailsSheet('${escapeInlineString(detailBillId)}'); }"
     `
     : "";
 
-  const moreButtonAction = bill.isOccurrence
-    ? `
-      navigate('detail', {
-        id: '${escapeInlineString(detailBillId)}',
-        occurrenceDueDate: '${escapeInlineString(detailDueDate)}',
-        returnRoute: 'recurring'
-      })
-    `
-    : `openBillQuickActions('${escapeInlineString(detailBillId)}')`;
+  // “More” button keeps your existing quick actions sheet.
+  const moreButtonAction = `openBillQuickActions('${escapeInlineString(detailBillId)}')`;
 
   return `
-    <div class="bill-row ${clickable ? "clickable" : ""}" ${rowClick}>
-      <div
-        class="bill-icon"
-        style="
-          background:${
-            getBillBrand(bill.name)
-              ? "#fff"
-              : `var(--${cat.color})`
-          };
-          color:${getBillBrand(bill.name) ? "#1e1e2e" : "white"};
-          padding:${getBillBrand(bill.name) ? "3px" : "0"};
-          overflow:hidden;
-        "
-      >
-        ${billVisual(bill, 32)}
-      </div>
+    <div
+      class="bill-swipe-wrapper"
+      data-bill-id="${escapeInlineString(detailBillId)}"
+      data-return-route="bills"
+    >
+      <div class="bill-swipe-background">
+        <div class="bill-swipe-delete-label">
+          ${svgIcon("trash", 18)}
+          <span>Delete bill</span>
+        </div>
 
-      <div class="bill-info">
-        <div class="bill-name">${escapeHtml(bill.name)}</div>
-
-        <div class="bill-meta-row">
-          <div class="bill-meta">${scheduleText}</div>
+        <div class="bill-swipe-edit-label">
+          <span>Bill details</span>
+          ${svgIcon("clock", 18)}
         </div>
       </div>
 
-      <div
-        style="
-          display:flex;
-          align-items:center;
-          gap:6px;
-        "
-      >
+      <div class="bill-row${clickable ? " clickable" : ""}" ${rowClick}>
+        <div
+          class="bill-icon"
+          style="
+            background:${getBillBrand(bill.name) ? "#fff" : `var(--${cat.color})`};
+            color:${getBillBrand(bill.name) ? "#1e1e2e" : "#fff"};
+            padding:${getBillBrand(bill.name) ? "3px 0" : "0"};
+            overflow:hidden;
+          "
+        >
+          ${billVisual(bill, 32)}
+        </div>
+
+        <div class="bill-info">
+          <div class="bill-name">
+            ${escapeHtml(bill.name)}
+          </div>
+
+          <div class="bill-meta">
+            ${scheduleText}
+          </div>
+        </div>
+
         <div
           style="
             display:flex;
-            flex-direction:column;
-            align-items:flex-end;
-            gap:4px;
+            align-items:center;
+            gap:6px;
           "
         >
           <div class="bill-amount">
             ${formatCurrency(bill.amount)}
           </div>
-        </div>
 
-        <button
-          type="button"
-          class="bill-more-button"
-          aria-label="More options for ${escapeHtml(bill.name)}"
-          title="More options"
-          onclick="
-            event.stopPropagation();
-            ${moreButtonAction}
-          "
-        >
-          ${svgIcon("moreVertical", 22)}
-        </button>
+          <button
+            type="button"
+            class="bill-more-button"
+            aria-label="More options for ${escapeHtml(bill.name)}"
+            title="More options"
+            onclick="event.stopPropagation(); ${moreButtonAction}"
+          >
+            ${svgIcon("moreVertical", 22)}
+          </button>
+        </div>
       </div>
     </div>
   `;
