@@ -16586,33 +16586,66 @@ async function sendBillInboxTest() {
     }
   }
 }
-function addNotificationSettings() {
-  if (
-    currentRoute !== "settings" ||
-    document.getElementById("notificationSettingsCard")
-  ) {
-    return;
-  }
+function saveGlobalReminderSettings() {
+  const settings = Store.getSettings();
 
-  const container = document.querySelector(
-    ".main-content .content-pad"
+  const toggles = Array.from(
+    document.querySelectorAll('.global-reminder-toggle')
   );
 
-  if (!container) {
+  const offsets = toggles
+    .filter(input => input.checked)
+    .map(input => Number(input.dataset.days))
+    .filter(days => Number.isFinite(days))
+    .sort((a, b) => a - b);
+
+  const timeInput = document.getElementById('globalReminderTime');
+  const timeValue =
+    (timeInput && String(timeInput.value).trim()) || '09:00';
+
+  Store.saveSettings({
+    ...settings,
+    reminderOffsets: offsets.length ? offsets : [7, 3, 1],
+    reminderTimeOfDay: timeValue,
+  });
+}
+function addNotificationSettings() {
+  // Only inject on Settings screen
+  if (currentRoute !== 'settings') {
     return;
   }
 
-  const section = document.createElement("div");
+  // Avoid duplicating the section
+  if (document.getElementById('notificationSettingsCard')) {
+    return;
+  }
 
-  section.id = "notificationSettingsCard";
-  section.className = "settings-section";
+  const container = document.querySelector('.main-content .content-pad');
+  if (!container) return;
+
+  const settings = Store.getSettings();
+  const selectedOffsets = Array.isArray(settings.reminderOffsets)
+    ? settings.reminderOffsets.slice().sort((a, b) => a - b)
+    : [7, 3, 1];
+
+  const reminderTime = settings.reminderTimeOfDay || '09:00';
+
+  const section = document.createElement('div');
+  section.id = 'notificationSettingsCard';
+  section.className = 'settings-section';
 
   section.innerHTML = `
     <div class="section-header">Notifications</div>
 
     <div class="card card-pad">
-      <p id="notificationPermissionStatus" hidden aria-hidden="true" style="display:none;"></p>
-                <button
+      <p
+        id="notificationPermissionStatus"
+        hidden
+        aria-hidden="true"
+        style="display:none"
+      ></p>
+
+      <button
         id="notificationPermissionButton"
         type="button"
         class="bb-outline-pill"
@@ -16624,13 +16657,13 @@ function addNotificationSettings() {
         "
         onclick="activateBillNotifications()"
       >
-        ${svgIcon("bell", 20)} Turn On Notifications
+        ${svgIcon('bell', 20)}
+        <span>Turn On Notifications</span>
       </button>
-  
+
       <p
         id="notificationTestStatus"
         style="
-
           font-size:var(--text-sm);
           color:var(--text-muted);
           line-height:1.5;
@@ -16639,12 +16672,92 @@ function addNotificationSettings() {
         role="status"
         aria-live="polite"
       ></p>
+
+      <button
+        type="button"
+        class="bb-outline-pill"
+        style="
+          width:100%;
+          min-height:44px;
+          justify-content:center;
+          margin-top:10px;
+        "
+        onclick="sendBillNotificationTest()"
+      >
+        ${svgIcon('checkCircle', 18)}
+        <span>Send Test Notification</span>
+      </button>
+    </div>
+
+    <div class="card card-pad" style="margin-top:var(--space-3)">
+      <div class="form-row">
+        <div class="form-label">Reminder timing</div>
+        <div style="flex:1"></div>
+      </div>
+
+      ${REMINDER_OFFSETS.map(offset => {
+        const isSelected = selectedOffsets.includes(offset.days);
+        return `
+          <div class="form-row">
+            <div class="form-label">${offset.label}</div>
+            <div style="flex:1"></div>
+
+            <label class="toggle">
+              <input
+                type="checkbox"
+                class="global-reminder-toggle"
+                data-days="${escapeHtml(offset.days)}"
+                ${isSelected ? 'checked' : ''}
+              >
+
+              <div class="toggle-track">
+                <div class="toggle-thumb"></div>
+              </div>
+            </label>
+          </div>
+        `;
+      }).join('')}
+
+      <div class="form-row" style="margin-top:8px">
+        <div class="form-label">Reminder time of day</div>
+        <div style="flex:1"></div>
+
+        <input
+          id="globalReminderTime"
+          type="time"
+          class="form-input"
+          value="${escapeHtml(reminderTime)}"
+          style="
+            max-width:130px;
+            text-align:left;
+          "
+          aria-label="Time of day for bill reminders"
+        >
+      </div>
+
+      <div class="settings-footer" style="margin-top:10px">
+        Bill reminders use these offsets and time of day.
+        Enable notifications above to receive alerts on this device.
+      </div>
     </div>
   `;
 
   container.appendChild(section);
 
+  // Wire push notification UI
   refreshNotificationSettingsCard();
+
+  // Wire global reminder settings
+  document
+    .querySelectorAll('.global-reminder-toggle')
+    .forEach(input => {
+      input.addEventListener('change', saveGlobalReminderSettings);
+    });
+
+  const timeInput = document.getElementById('globalReminderTime');
+  if (timeInput) {
+    timeInput.addEventListener('change', saveGlobalReminderSettings);
+  }
 }
 
 
