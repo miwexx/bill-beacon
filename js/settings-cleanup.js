@@ -1508,10 +1508,7 @@
 
     return `
       <section class="settings-section">
-        <div class="section-header">
-          Income & Paychecks
-        </div>
-
+      
         ${
           sourceRows
             ? `<div class="card">${sourceRows}</div>`
@@ -1546,9 +1543,7 @@
 
     return `
       <section class="settings-section">
-        <div class="section-header">
-          Appearance
-        </div>
+      
 
         <div class="card">
           ${settingsAction(
@@ -1600,13 +1595,11 @@
     function buildAboutSettingsSection() {
     return `
       <section class="settings-section">
-        <div class="section-header">
-          About
-        </div>
-
-        <div class="card card-pad">
+           <div class="card card-pad">
           <div style="font-weight:800;">
-            Bill Beacon
+            App Name:Bill Beacon
+            Version: 2.1
+          
           </div>
         </div>
       </section>
@@ -1615,9 +1608,7 @@
     function buildAdvancedSettingsSection() {
     return `
       <section class="settings-section">
-        <div class="section-header">
-          Advanced
-        </div>
+        
 
         <div class="card card-pad">
           <button
