@@ -12890,38 +12890,7 @@ function openBillForm(billId = null, selectedDate = null) {
           </div>
 
           <div>
-            <div class="section-header">Reminders</div>
-
-            <div class="card">
-              ${REMINDER_OFFSETS.map(
-                (reminder) => `
-                  <div class="form-row">
-                    <div class="form-label">${reminder.label}</div>
-                    <div style="flex:1"></div>
-
-                    <label class="toggle">
-                      <input
-                        type="checkbox"
-                        class="reminder-toggle"
-                        name="billReminderOffsets"
-                        value="${escapeHtml(reminder.days)}"
-                        data-days="${escapeHtml(reminder.days)}"
-                        ${
-                          selectedReminders.includes(reminder.days)
-                            ? "checked"
-                            : ""
-                        }
-                      >
-
-                      <div class="toggle-track">
-                        <div class="toggle-thumb"></div>
-                      </div>
-                    </label>
-                  </div>
-                `
-              ).join("")}
-            </div>
-
+           
             <div class="settings-footer">
               Reminders appear when you open the app. Enable notifications
               in Safari for best results.
@@ -16759,7 +16728,6 @@ function addNotificationSettings() {
     timeInput.addEventListener('change', saveGlobalReminderSettings);
   }
 }
-
 
 /* ============================================
    Full Backup and Restore
