@@ -155,16 +155,7 @@
               >
                 Delete Account
               </button>
-              <div
-                id="bbHouseholdRole"
-                style="
-                  font-size:13px;
-                  color:var(--text-secondary);
-                  line-height:1.4;
-                "
-              >
-                Loading household…
-              </div>
+              
 
               <div
                 id="bbHouseholdOwnerActions"
