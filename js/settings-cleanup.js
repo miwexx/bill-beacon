@@ -1597,7 +1597,7 @@
       <section class="settings-section">
            <div class="card card-pad">
           <div style="font-weight:800;">
-            App Name:Bill Beacon
+            App Name:Bill Beacon,
             Version: 2.1
           
           </div>
