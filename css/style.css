@@ -317,20 +317,21 @@ a { color: var(--accent); text-decoration: none; }
    CARDS
    ============================================ */
 .card {
+  /* Simple container, no giant gradient */
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  padding: 0;
 }
-
-.card-pad { padding: var(--space-5); }
 
 /* Content Container */
 .content-pad {
   padding: var(--space-3) var(--space-4);
 }
 
-.content-gap > * + * { margin-top: var(--space-3); }
+.content-gap > * + * {
+  margin-top: var(--space-3);
+}
 
 /* Section Header */
 .section-header {
@@ -343,72 +344,88 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ============================================
-   BILL ROW
+   BILL ROW + SWIPE
    ============================================ */
 
-   .bill-swipe-wrapper {
+/* Each bill row wrapper becomes the positioning context */
+.bill-swipe-wrapper {
   position: relative;
-  overflow: hidden;
+  overflow: visible; /* let row shadow/gradient draw fully */
+  margin-bottom: var(--space-2);
 }
 
+/* Gradient + Delete/Edit labels, clipped to one row */
 .bill-swipe-background {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
+  padding: 0 var(--space-4);
+  pointer-events: none;
+  border-radius: var(--radius-lg);
+  color: #fff;
   font-size: var(--text-sm);
   font-weight: 800;
-  color: #fff;
-  pointer-events: none;
+
+  /* Rocket‑Money style pill gradient */
+  background: linear-gradient(
+    105deg,
+    #8f36ff 0%,
+    #c44cff 34%,
+    #f64cae 65%,
+    #ff7138 100%
+  );
+  opacity: 0; /* hidden until swiping */
+  transition: opacity var(--transition);
 }
 
-.bill-swipe-delete-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  color: #fff;
+/* Only show the background while swiping */
+.bill-swipe-wrapper.swipe-left .bill-swipe-background,
+.bill-swipe-wrapper.swipe-right .bill-swipe-background {
+  opacity: 1;
 }
 
+.bill-swipe-delete-label,
 .bill-swipe-edit-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: transparent;
-  color: #fff;
 }
 
-.bill-swipe-wrapper .bill-row {
+/* The foreground row sits on top and moves horizontally */
+.bill-row {
   position: relative;
   z-index: 1;
-  transition: transform 0.18s ease-out;
-}
 
-/* Color the background; we’ll tint based on direction in JS */
-.bill-swipe-wrapper.swipe-right .bill-swipe-background {
-  background: var(--overdue);
-}
-
-.bill-swipe-wrapper.swipe-left .bill-swipe-background {
-  background: var(--accent);
-}
-.bill-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: transparent;
-  transition: background var(--transition);
+
+  border-radius: var(--radius-lg);
+  background: rgba(12, 12, 18, 0.96); /* dark pill */
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+
+  transform: translateX(0);
 }
 
-.bill-row:active { background: var(--surface-2); }
+/* Row can move during swipe; JS updates transform */
+.bill-swipe-wrapper .bill-row {
+  transition: transform 0.18s ease-out;
+}
 
+/* Remove the inner “divider” line that created visual gaps */
 .bill-row + .bill-row {
-  border-top: 1px solid var(--separator);
+  border-top: none;
 }
 
+/* Optional pressed state when you tap a row */
+.bill-row:active {
+  filter: brightness(1.04);
+}
+
+/* Icon, info, and amount stay exactly as before */
 .bill-icon {
   width: 40px;
   height: 40px;
@@ -419,7 +436,10 @@ a { color: var(--accent); text-decoration: none; }
   flex-shrink: 0;
 }
 
-.bill-icon svg { width: 20px; height: 20px; }
+.bill-icon svg {
+  width: 20px;
+  height: 20px;
+}
 
 .bill-info {
   flex: 1;
@@ -434,13 +454,28 @@ a { color: var(--accent); text-decoration: none; }
   text-overflow: ellipsis;
 }
 
+.bill-meta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.bill-meta-row .bill-meta {
+  min-width: 0;
+  margin-top: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bill-meta {
   font-size: var(--text-xs);
   color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-top: 2px;
 }
 
 .bill-amount {
@@ -450,12 +485,26 @@ a { color: var(--accent); text-decoration: none; }
   flex-shrink: 0;
 }
 
-.bill-status-dot {
-  width: 8px;
-  height: 8px;
+/* More button in the row’s trailing cluster */
+.bill-more-button {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  flex-shrink: 0;
-  box-shadow: 0 0 8px currentColor;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.bill-more-button:hover,
+.bill-more-button:focus-visible {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 /* ============================================
