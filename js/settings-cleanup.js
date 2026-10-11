@@ -1252,7 +1252,7 @@
         }
       }
     };
-      function closeSettingsSectionSheet() {
+      window.closeSettingsSectionSheet = function () {
     const container =
       document.getElementById(
         "bbSettingsSectionContainer"
@@ -1277,12 +1277,7 @@
       container.remove();
     }, 260);
   }
-
-  window.openSettingsSection = function (section) {
-    document.getElementById(
-      "bbSettingsSectionContainer"
-    )?.remove();
-      function buildAccountHouseholdSection() {
+     function buildAccountHouseholdSection() {
     const email =
       window.getBillBeaconUserEmail?.() ||
       "Signed-in account";
@@ -1727,6 +1722,14 @@
       </section>
     `;
   }
+
+  window.openSettingsSection = function (section) {
+    document.getElementById(
+      "bbSettingsSectionContainer"
+    )?.remove();
+
+
+ 
     const container =
       document.createElement("div");
 
