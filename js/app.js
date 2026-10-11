@@ -5385,7 +5385,7 @@ function renderRecurring() {
         <div class="recurring-list-heading">
           <div>
             <div class="section-header">${title}</div>
-            <div class="recurring-list-subtitle">${subtitle}</div>
+            
           </div>
 
           <span class="recurring-count">${bills.length}</span>
