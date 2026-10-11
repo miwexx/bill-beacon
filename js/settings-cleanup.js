@@ -1746,7 +1746,7 @@
       title = "Appearance";
       content = buildAppearanceSettingsSection();
     } else if (section === "records") {
-      title = "Records & Transfers";
+      title = "Import & Export Data";
       content = buildRecordsSettingsSection();
     } else if (section === "about") {
       title = "About";
