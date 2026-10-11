@@ -195,33 +195,6 @@
     addBackupSettings = function() {};
   addNotificationSettings = function() {};
 
-  renderPaymentHistory = function() {
-    const allBills = [...Store.getBills(), ...getArchivedBills()];
-    const payments = Store.getPayments().map(payment => ({...payment,
-      bill: allBills.find(bill => bill.id === payment.billId)
-    })).sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
-    const rows = payments.map(payment => {
-      const voided = String(payment.status || "active").toLowerCase() === "voided";
-      const dueKey = getPaymentOccurrenceDateKey(payment);
-      const name = payment.billSnapshot?.name || payment.bill?.name || "Removed Bill";
-      const shownDate = voided ? payment.voidedAt || payment.paidDate : payment.paidDate;
-      return `<div class="bill-row" style="${voided ? 'opacity:.6;' : ''}">
-        <div class="bill-icon" style="background:${voided ? 'var(--surface-2)' : 'var(--paid-bg)'};color:${voided ? 'var(--text-muted)' : 'var(--paid)'};">${svgIcon(voided ? "close" : "checkCircle", 18)}</div>
-        <div class="bill-info">
-          <div class="bill-name">${escapeHtml(name)}${voided ? " · Reversed" : ""}</div>
-          <div class="bill-meta">${voided ? "Reversed" : "Paid"} ${escapeHtml(shownDate ? formatDate(shownDate, "full") : "Date unavailable")}</div>
-          ${dueKey ? `<div class="bill-meta">Due ${escapeHtml(dueKey)}</div>` : ""}
-        </div><div class="bill-amount">${formatCurrency(payment.amount)}</div>
-      </div>`;
-    }).join("");
-    return `<div class="nav-bar"><div class="nav-bar-content">
-      <button type="button" class="nav-button" onclick="navigate('today')" aria-label="Back to Dashboard">${svgIcon("chevronLeft", 22)}</button>
-      <div class="nav-title">Payment History</div><div style="width:44px;"></div>
-      </div></div><div class="main-content fade-in"><div class="content-pad content-gap">
-      ${rows ? `<div class="section-header">All Payments</div><div class="card">${rows}</div>` :
-        '<div class="empty-state"><div class="empty-state-title">No payment history yet</div></div>'}
-      </div></div>`;
-  };
   render = function () {
     const result = previousRender.apply(this, arguments);
 
@@ -1595,49 +1568,37 @@
       </section>
     `;
   }
-    function buildRecordsSettingsSection() {
-    return `
-      <section class="settings-section">
-        <div class="section-header">
-          Records & Transfers
-        </div>
+   function buildRecordsSettingsSection() {
+  return `
+    <section class="settings-section">
+      <div class="section-header">
+        Import & Export Data
+      </div>
 
-        <div class="card">
-          ${settingsAction(
-            "Payment History",
-            "checkCircle",
-            "navigate('history')"
-          )}
+      <div class="card">
+        ${settingsAction(
+          "Export Bills CSV",
+          "export",
+          "exportCSV()"
+        )}
 
-          ${settingsAction(
-            "Activity & Changes",
-            "doc",
-            "navigate('activity')"
-          )}
+        ${settingsAction(
+          "Import Bills CSV",
+          "tray",
+          "document.getElementById('billImportFile').click()"
+        )}
+      </div>
 
-          ${settingsAction(
-            "Export Bills CSV",
-            "export",
-            "exportCSV()"
-          )}
-
-          ${settingsAction(
-            "Import Bills CSV",
-            "tray",
-            "document.getElementById('billImportFile').click()"
-          )}
-        </div>
-
-        <input
-          id="billImportFile"
-          type="file"
-          accept=".csv,text/csv"
-          style="display:none;"
-          onchange="importBillsCSV(event)"
-        >
-      </section>
-    `;
-  }
+      <input
+        id="billImportFile"
+        type="file"
+        accept=".csv,text/csv"
+        style="display:none;"
+        onchange="importBillsCSV(event)"
+      >
+    </section>
+  `;
+}
     function buildAboutSettingsSection() {
     return `
       <section class="settings-section">
@@ -1677,18 +1638,6 @@
             Delete Account
           </button>
 
-          <p
-            style="
-              margin:10px 0 0;
-              font-size:13px;
-              color:var(--text-muted);
-              line-height:1.4;
-            "
-          >
-            Removes your Bill Beacon profile and
-            household membership. Shared household
-            records created with others are not deleted.
-          </p>
 
           <button
             type="button"
@@ -1706,18 +1655,6 @@
             Clear App Data
           </button>
 
-          <p
-            style="
-              margin:10px 0 0;
-              font-size:13px;
-              color:var(--text-muted);
-              line-height:1.4;
-            "
-          >
-            Clears app records on this device and may
-            sync the deletion to your household. Does
-            not disconnect the bank.
-          </p>
         </div>
       </section>
     `;
