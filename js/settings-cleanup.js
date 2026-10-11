@@ -136,7 +136,7 @@
               "
               onclick="window.openSettingsSection('records')"
             >
-              Records & Transfers
+              Import & Export Data
             </button>
 
             <button
@@ -1571,9 +1571,7 @@
    function buildRecordsSettingsSection() {
   return `
     <section class="settings-section">
-      <div class="section-header">
-        Import & Export Data
-      </div>
+      
 
       <div class="card">
         ${settingsAction(
