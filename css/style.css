@@ -246,12 +246,6 @@ a { color: var(--accent); text-decoration: none; }
 
 .nav-button:active { opacity: 0.5; }
 
-/* Main Content */
-.main-content {
-  flex: 1;
-  padding-bottom: calc(88px + var(--safe-bottom));
-  overflow-y: auto;
-}
 
 /* ============================================
    TAB BAR â€” Floating pill style
@@ -406,7 +400,8 @@ a { color: var(--accent); text-decoration: none; }
 .bill-row:active { background: var(--surface-2); }
 
 .bill-row + .bill-row {
-  border-top: 1px solid var(--separator);
+  border-top: none;
+  margin-top: 4px; /* small, consistent gap between rows */
 }
 
 .bill-icon {
@@ -1210,10 +1205,6 @@ a { color: var(--accent); text-decoration: none; }
     calc(var(--space-2) + var(--safe-bottom));
 }
 
-/* Space for the permanently visible navigation dock */
-.main-content {
-  padding-bottom: calc(100px + var(--safe-bottom));
-}
 
 .calendar-day-clickable {
   cursor: pointer;
@@ -2164,12 +2155,6 @@ body {
   overflow: visible;
 }
 
-.main-content {
-  flex: 1 1 auto;
-  min-height: 0;
-  padding-bottom: calc(100px + var(--safe-bottom));
-}
-
 .tab-bar {
   position: fixed;
   left: 0;
@@ -2951,11 +2936,10 @@ body {
 .nav-bar-content {
   min-height: 56px;
 }
-
-/* Normal page layout: leave room only for the bottom tab bar. */
 .main-content {
-  padding-top: 0;
-  padding-bottom: calc(88px + var(--bb-safe-bottom));
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: calc(100px + var(--safe-bottom));
 }
 
 /* Keep the installed-PWA tab bar above the Home Indicator. */
