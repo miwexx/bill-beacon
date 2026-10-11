@@ -5725,13 +5725,11 @@ function initBillSwipeHandlers() {
     if (!row) return;
 
     let startX = 0;
-    let startY = 0;
     let currentX = 0;
     let dragging = false;
 
     const billId = wrapper.dataset.billId || '';
-    const threshold = 70; // how far you must swipe to trigger
-    const activationThreshold = 10; // how far you must move horizontally to *start* a swipe
+    const threshold = 70; // pixels
 
     const reset = () => {
       dragging = false;
@@ -5743,40 +5741,18 @@ function initBillSwipeHandlers() {
     const onStart = (event) => {
       const touch = event.touches ? event.touches[0] : event;
       startX = touch.clientX;
-      startY = touch.clientY;
       currentX = 0;
-      // Do NOT set dragging = true yet; we decide later
-      dragging = false;
+      dragging = true;
     };
 
     const onMove = (event) => {
+      if (!dragging) return;
+
       const touch = event.touches ? event.touches[0] : event;
-      const dx = touch.clientX - startX;
-      const dy = touch.clientY - startY;
+      const deltaX = touch.clientX - startX;
+      currentX = deltaX;
 
-      // If we are not yet in swipe mode, decide if this gesture
-      // should become a swipe or be treated as normal scrolling.
-      if (!dragging) {
-        // Too small → treat as tap/scroll, do nothing
-        if (Math.abs(dx) < activationThreshold) {
-          return;
-        }
-
-        // Vertical movement dominates → treat as scroll, not swipe
-        if (Math.abs(dy) > Math.abs(dx)) {
-          return;
-        }
-
-        // Horizontal swipe detected
-        dragging = true;
-      }
-
-      // From here on, this gesture is a swipe: prevent scroll
-      event.preventDefault();
-
-      currentX = dx;
-
-      const limited = Math.max(Math.min(dx, 120), -120);
+      const limited = Math.max(Math.min(deltaX, 120), -120);
       row.style.transform = `translateX(${limited}px)`;
 
       if (limited > 0) {
@@ -5788,41 +5764,37 @@ function initBillSwipeHandlers() {
       } else {
         wrapper.classList.remove('swipe-left', 'swipe-right');
       }
+
+      event.preventDefault();
     };
 
     const onEnd = () => {
-      // If we never entered swipe mode, this was just a tap or scroll
-      if (!dragging) {
-        return;
-      }
+      if (!dragging) return;
 
       const finalX = currentX;
 
       if (finalX > threshold) {
-        // Swipe right → delete
+        // Swipe right → delete bill
         reset();
         if (billId) {
           confirmDeleteBill(billId);
         }
       } else if (finalX < -threshold) {
-        // Swipe left → edit
+        // Swipe left → edit bill
         reset();
         if (billId) {
           openBillForm(billId);
         }
       } else {
-        // Not far enough → snap back to center
         reset();
       }
     };
 
-    // Touch events
     row.addEventListener('touchstart', onStart, { passive: true });
     row.addEventListener('touchmove', onMove, { passive: false });
     row.addEventListener('touchend', onEnd);
     row.addEventListener('touchcancel', onEnd);
 
-    // Pointer / mouse events (for desktop)
     row.addEventListener('pointerdown', onStart);
     row.addEventListener('pointermove', onMove);
     row.addEventListener('pointerup', onEnd);
@@ -11693,6 +11665,10 @@ function billRow(bill, clickable = false) {
     `
     : '';
 
+  const moreButtonAction = bill.isOccurrence
+    ? `navigate('detail', { id: '${escapeInlineString(detailBillId)}', occurrenceDueDate: '${escapeInlineString(detailDueDate)}', returnRoute: 'recurring' })`
+    : `openBillQuickActions('${escapeInlineString(detailBillId)}')`;
+
   return `
     <div
       class="bill-swipe-wrapper"
@@ -11736,16 +11712,26 @@ function billRow(bill, clickable = false) {
           </div>
         </div>
 
-                <div
+        <div
           style="
             display:flex;
             align-items:center;
+            gap:6px;
           "
         >
           <div class="bill-amount">
             ${formatCurrency(bill.amount)}
           </div>
-        </div>
+
+          <button
+            type="button"
+            class="bill-more-button"
+            aria-label="More options for ${escapeHtml(bill.name)}"
+            title="More options"
+            onclick="event.stopPropagation(); ${moreButtonAction}"
+          >
+            ${svgIcon('moreVertical', 22)}
+          </button>
         </div>
       </div>
     </div>
