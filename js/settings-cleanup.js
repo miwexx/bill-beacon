@@ -261,18 +261,6 @@
               Delete Account
             </button>
 
-            <p
-              style="
-                margin:10px 0 0;
-                font-size:13px;
-                color:var(--text-muted);
-                line-height:1.4;
-              "
-            >
-              Removes your Bill Beacon profile and household
-              membership. Shared household records created with
-              others are not deleted.
-            </p>
 
             <button
               type="button"
@@ -290,17 +278,7 @@
               Clear App Data
             </button>
 
-            <p
-              style="
-                margin:10px 0 0;
-                font-size:13px;
-                color:var(--text-muted);
-                line-height:1.4;
-              "
-            >
-              Clears app records on this device and may sync the
-              deletion to your household. Does not disconnect the bank.
-            </p>
+           
           </div>
         </section>
       </div></div>`;
