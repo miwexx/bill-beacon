@@ -2658,7 +2658,7 @@ function initTheme() {
 // ROUTER
 // ====================================
 let currentRoute = 'today';
-let routeParams = { billSort: 'dueDate' };
+let routeParams = { billSort: 'name' };
 const DASHBOARD_RETURN_DELAY = 5 * 60 * 1000;
 
 let dashboardHiddenAt = null;
