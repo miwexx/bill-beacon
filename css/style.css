@@ -345,6 +345,55 @@ a { color: var(--accent); text-decoration: none; }
 /* ============================================
    BILL ROW
    ============================================ */
+
+   .bill-swipe-wrapper {
+  position: relative;
+  overflow: hidden;
+}
+
+.bill-swipe-background {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  font-size: var(--text-sm);
+  font-weight: 800;
+  color: #fff;
+  pointer-events: none;
+}
+
+.bill-swipe-delete-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: #fff;
+}
+
+.bill-swipe-edit-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  color: #fff;
+}
+
+.bill-swipe-wrapper .bill-row {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.18s ease-out;
+}
+
+/* Color the background; we’ll tint based on direction in JS */
+.bill-swipe-wrapper.swipe-right .bill-swipe-background {
+  background: var(--overdue);
+}
+
+.bill-swipe-wrapper.swipe-left .bill-swipe-background {
+  background: var(--accent);
+}
 .bill-row {
   display: flex;
   align-items: center;
