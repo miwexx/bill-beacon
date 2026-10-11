@@ -16089,7 +16089,22 @@ function render() {
   const view = Object.prototype.hasOwnProperty.call(views, currentRoute) ? views[currentRoute] : renderToday;
   let content = view();
   if (["today", "recurring", "bills", "more", "insights", "settings"].includes(currentRoute)) content += tabBar();
-  app.innerHTML = content;
+    app.innerHTML = content;
+
+  // Bills tab: attach swipe handlers after rows are rendered
+  if (currentRoute === 'bills') {
+    initBillSwipeHandlers();
+  }
+
+  if (currentRoute !== 'history') {
+    addNotificationSettings();
+    addBackupSettings();
+    attachSignOutButton();
+  }
+
+  if (currentRoute === 'transactions') {
+    refreshPlaidSandboxAutomatically();
+  }
   if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings(); attachSignOutButton(); }
 }
 
