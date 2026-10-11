@@ -5725,34 +5725,62 @@ function initBillSwipeHandlers() {
     if (!row) return;
 
     let startX = 0;
+    let startY = 0;
     let currentX = 0;
-    let dragging = false;
+    let dragging = false;   // true = horizontal swipe
+    let decided = false;    // have we decided swipe vs scroll?
 
     const billId = wrapper.dataset.billId || '';
-    const threshold = 70; // pixels
+    const threshold = 70; // pixels to trigger action
+    const maxShift = 120; // clamp horizontal shift
 
     const reset = () => {
       dragging = false;
+      decided = false;
       currentX = 0;
       wrapper.classList.remove('swipe-left', 'swipe-right');
       row.style.transform = 'translateX(0px)';
     };
 
+    const getPoint = (event) =>
+      event.touches ? event.touches[0] : event;
+
     const onStart = (event) => {
-      const touch = event.touches ? event.touches[0] : event;
-      startX = touch.clientX;
+      const p = getPoint(event);
+      startX = p.clientX;
+      startY = p.clientY;
       currentX = 0;
-      dragging = true;
+      dragging = false;
+      decided = false;
     };
 
     const onMove = (event) => {
-      if (!dragging) return;
+      const p = getPoint(event);
+      const deltaX = p.clientX - startX;
+      const deltaY = p.clientY - startY;
 
-      const touch = event.touches ? event.touches[0] : event;
-      const deltaX = touch.clientX - startX;
+      if (!decided) {
+        // Decide if this gesture is a swipe or a scroll
+        if (Math.abs(deltaX) > Math.abs(deltaY) + 10) {
+          dragging = true;   // horizontal swipe
+          decided = true;
+        } else if (Math.abs(deltaY) > Math.abs(deltaX) + 10) {
+          dragging = false;  // vertical scroll
+          decided = true;
+        } else {
+          // Small movement: don’t decide yet, allow scroll
+          return;
+        }
+      }
+
+      if (!dragging) {
+        // It’s a scroll: do nothing, let browser handle it
+        return;
+      }
+
+      // Only for horizontal swipe:
       currentX = deltaX;
-
-      const limited = Math.max(Math.min(deltaX, 120), -120);
+      const limited = Math.max(Math.min(deltaX, maxShift), -maxShift);
       row.style.transform = `translateX(${limited}px)`;
 
       if (limited > 0) {
@@ -5765,22 +5793,27 @@ function initBillSwipeHandlers() {
         wrapper.classList.remove('swipe-left', 'swipe-right');
       }
 
+      // Block scroll **only** when we’re actively swiping
       event.preventDefault();
     };
 
     const onEnd = () => {
-      if (!dragging) return;
+      if (!dragging) {
+        // Scroll gesture: nothing to do
+        reset();
+        return;
+      }
 
       const finalX = currentX;
 
       if (finalX > threshold) {
-        // Swipe right → delete bill
+        // Swipe right → delete
         reset();
         if (billId) {
           confirmDeleteBill(billId);
         }
       } else if (finalX < -threshold) {
-        // Swipe left → edit bill
+        // Swipe left → edit
         reset();
         if (billId) {
           openBillForm(billId);

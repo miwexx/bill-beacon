@@ -349,6 +349,7 @@ a { color: var(--accent); text-decoration: none; }
   overflow: hidden;
 }
 
+/* Hidden by default */
 .bill-swipe-background {
   position: absolute;
   inset: 0;
@@ -360,8 +361,10 @@ a { color: var(--accent); text-decoration: none; }
   font-weight: 800;
   color: #fff;
   pointer-events: none;
+  opacity: 0;
 }
 
+/* Labels stay, but only visible when opacity > 0 */
 .bill-swipe-delete-label,
 .bill-swipe-edit-label {
   display: flex;
@@ -375,13 +378,17 @@ a { color: var(--accent); text-decoration: none; }
   transition: transform 0.18s ease-out;
 }
 
+/* When swiping right → show red bar + labels */
 .bill-swipe-wrapper.swipe-right .bill-swipe-background {
-  background: var(--overdue); /* red bar for delete */
+  background: var(--overdue);
+  opacity: 1;
 }
 
+/* When swiping left → show purple bar + labels */
 .bill-swipe-wrapper.swipe-left .bill-swipe-background {
-  background: var(--accent);  /* purple bar for edit */
-}   
+  background: var(--accent);
+  opacity: 1;
+} 
 .bill-row {
   display: flex;
   align-items: center;
