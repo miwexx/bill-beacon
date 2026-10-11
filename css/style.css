@@ -333,7 +333,7 @@ a { color: var(--accent); text-decoration: none; }
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted);
-  padding: var(--space-5) var(--space-4) var(--space-2);
+  padding: var(--space-3) var(--space-4) var(--space-2);
 }
 
 /* ============================================
@@ -393,12 +393,28 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  background: transparent;
+  border-radius: 18px; /* match your card and swipe background */
+
+  background: linear-gradient(
+    110deg,
+    rgba(143, 54, 255, 0.34) 0%,
+    rgba(196, 76, 255, 0.26) 40%,
+    rgba(246, 76, 174, 0.24) 72%,
+    rgba(255, 113, 56, 0.20) 100%
+  );
+
   transition: background var(--transition);
 }
 
-.bill-row:active { background: var(--surface-2); }
-
+.bill-row:active {
+  background: linear-gradient(
+    110deg,
+    rgba(143, 54, 255, 0.50) 0%,
+    rgba(196, 76, 255, 0.42) 40%,
+    rgba(246, 76, 174, 0.38) 72%,
+    rgba(255, 113, 56, 0.32) 100%
+  );
+}
 .bill-row + .bill-row {
   border-top: none;
   margin-top: 4px; /* small, consistent gap between rows */
@@ -2939,7 +2955,7 @@ body {
 .main-content {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: calc(100px + var(--safe-bottom));
+  padding-bottom: calc(140px + var(--safe-bottom));
 }
 
 /* Keep the installed-PWA tab bar above the Home Indicator. */
