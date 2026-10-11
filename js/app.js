@@ -1718,7 +1718,7 @@ function openPostponeBillSheet(billId) {
         "
       >
         ${svgIcon('calendar', 20)}
-        Choose a New Date
+        Choose a new date
       </div>
 
       <input
@@ -2773,7 +2773,7 @@ function navigate(route, params = {}) {
     }
   }
 
-    currentRoute = route;
+  currentRoute = route;
   routeParams = params;
 
   render();
@@ -2784,10 +2784,6 @@ function navigate(route, params = {}) {
 
   if (route === "transactions") {
     refreshPlaidSandboxAutomatically();
-  }
-
-  if (route === "bills") {
-    initBillSwipeHandlers();
   }
 }
 let transactionSearchTimer = null;
@@ -5631,7 +5627,7 @@ function renderBills() {
         </div>
 
         <div class="card">
-          ${categoryBills.map((bill) => billRow(bill, true)).join("")}
+          ${categoryBills.map((bill) => billRow(bill, false)).join("")}
         </div>
       </div>
     `;
@@ -5640,7 +5636,7 @@ function renderBills() {
   } else if (sortedBills.length) {
     billContent = `
       <div class="card">
-        ${sortedBills.map(bill => billRow(bill, true)).join('')}
+        ${sortedBills.map(bill => billRow(bill, false)).join('')}
       </div>
     `;
   }
@@ -5714,127 +5710,6 @@ function renderBills() {
       }
     </div>
   `;
-}
-function initBillSwipeHandlers() {
-  const wrappers = Array.from(
-    document.querySelectorAll('.bill-swipe-wrapper')
-  );
-
-  wrappers.forEach(wrapper => {
-    const row = wrapper.querySelector('.bill-row');
-    if (!row) return;
-
-    let startX = 0;
-    let startY = 0;
-    let currentX = 0;
-    let dragging = false;   // true = horizontal swipe
-    let decided = false;    // have we decided swipe vs scroll?
-
-    const billId = wrapper.dataset.billId || '';
-    const threshold = 35; // pixels to trigger action
-    const maxShift = 120; // clamp horizontal shift
-
-    const reset = () => {
-      dragging = false;
-      decided = false;
-      currentX = 0;
-      wrapper.classList.remove('swipe-left', 'swipe-right');
-      row.style.transform = 'translateX(0px)';
-    };
-
-    const getPoint = (event) =>
-      event.touches ? event.touches[0] : event;
-
-    const onStart = (event) => {
-      const p = getPoint(event);
-      startX = p.clientX;
-      startY = p.clientY;
-      currentX = 0;
-      dragging = false;
-      decided = false;
-    };
-
-    const onMove = (event) => {
-      const p = getPoint(event);
-      const deltaX = p.clientX - startX;
-      const deltaY = p.clientY - startY;
-
-      if (!decided) {
-        // Decide if this gesture is a swipe or a scroll
-        if (Math.abs(deltaX) > Math.abs(deltaY) + 10) {
-          dragging = true;   // horizontal swipe
-          decided = true;
-        } else if (Math.abs(deltaY) > Math.abs(deltaX) + 10) {
-          dragging = false;  // vertical scroll
-          decided = true;
-        } else {
-          // Small movement: don’t decide yet, allow scroll
-          return;
-        }
-      }
-
-      if (!dragging) {
-        // It’s a scroll: do nothing, let browser handle it
-        return;
-      }
-
-      // Only for horizontal swipe:
-      currentX = deltaX;
-      const limited = Math.max(Math.min(deltaX, maxShift), -maxShift);
-      row.style.transform = `translateX(${limited}px)`;
-
-      if (limited > 0) {
-        wrapper.classList.add('swipe-right');
-        wrapper.classList.remove('swipe-left');
-      } else if (limited < 0) {
-        wrapper.classList.add('swipe-left');
-        wrapper.classList.remove('swipe-right');
-      } else {
-        wrapper.classList.remove('swipe-left', 'swipe-right');
-      }
-
-      // Block scroll **only** when we’re actively swiping
-      event.preventDefault();
-    };
-
-    const onEnd = () => {
-  if (!dragging) {
-    // Scroll gesture: nothing to do
-    reset();
-    return;
-  }
-
-  // Use the classes that onMove applied instead of raw distance
-  const isRight = wrapper.classList.contains('swipe-right');
-  const isLeft = wrapper.classList.contains('swipe-left');
-
-  if (isRight) {
-    // Swipe right → delete
-    reset();
-    if (billId) {
-      confirmDeleteBill(billId);
-    }
-  } else if (isLeft) {
-    // Swipe left → edit
-    reset();
-    if (billId) {
-      openBillForm(billId);
-    }
-  } else {
-    reset();
-  }
-};
-
-    row.addEventListener('touchstart', onStart, { passive: true });
-    row.addEventListener('touchmove', onMove, { passive: false });
-    row.addEventListener('touchend', onEnd);
-    row.addEventListener('touchcancel', onEnd);
-
-    row.addEventListener('pointerdown', onStart);
-    row.addEventListener('pointermove', onMove);
-    row.addEventListener('pointerup', onEnd);
-    row.addEventListener('pointercancel', onEnd);
-  });
 }
 function closeBillSortSheet() {
   document.getElementById('billSortContainer')?.remove();
@@ -11662,112 +11537,129 @@ function getBillScheduleLabel(bill) {
 function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const dueDate = new Date(bill.dueDate);
-  const dueDay = bill.recurrence === 'Monthly'
-    ? getMonthlyDueDay(bill)
-    : dueDate.getDate();
 
-  const ordinal = (value) => {
+  const dueDay =
+    bill.recurrence === "Monthly"
+      ? getMonthlyDueDay(bill)
+      : dueDate.getDate();
+
+  const ordinal = (() => {
+    const value = Number(dueDay);
     const mod100 = value % 100;
-    if (mod100 >= 11 && mod100 <= 13) return `${value}th`;
-    switch (value % 10) {
-      case 1: return `${value}st`;
-      case 2: return `${value}nd`;
-      case 3: return `${value}rd`;
-      default: return `${value}th`;
+
+    if (mod100 >= 11 && mod100 <= 13) {
+      return `${value}th`;
     }
-  };
+
+    switch (value % 10) {
+      case 1:
+        return `${value}st`;
+      case 2:
+        return `${value}nd`;
+      case 3:
+        return `${value}rd`;
+      default:
+        return `${value}th`;
+    }
+  })();
 
   const scheduleText =
-    bill.recurrence && bill.recurrence !== 'None'
-      ? bill.recurrence === 'Monthly'
-        ? `Due on the ${ordinal(dueDay)} of each month`
+    bill.recurrence && bill.recurrence !== "None"
+      ? bill.recurrence === "Monthly"
+        ? `Due on the ${ordinal} of each month`
         : getBillScheduleLabel(bill)
-      : `Due ${formatDate(bill.dueDate, 'full')}`;
+      : `Due on ${formatDate(bill.dueDate, "full")}`;
 
-  const detailBillId = bill.isOccurrence ? bill.sourceBillId : bill.id;
-  const detailDueDate = bill.isOccurrence ? bill.dueDate : bill.dueDate;
+  const detailBillId = bill.isOccurrence
+    ? bill.sourceBillId
+    : bill.id;
+
+  const detailDueDate = bill.isOccurrence
+    ? bill.dueDate
+    : "";
 
   const rowClick = clickable
     ? `
-      onclick="navigate('detail', {
-        id: '${escapeInlineString(detailBillId)}',
-        occurrenceDueDate: '${escapeInlineString(detailDueDate)}',
-        returnRoute: 'bills'
-      })"
+      onclick="openBillDetailsSheet('${escapeInlineString(detailBillId)}')"
       role="button"
       tabindex="0"
-      onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate('detail', { id: '${escapeInlineString(detailBillId)}', occurrenceDueDate: '${escapeInlineString(detailDueDate)}', returnRoute: 'bills' }); }"
+      onkeydown="
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openBillDetailsSheet('${escapeInlineString(detailBillId)}');
+        }
+      "
     `
-    : '';
+    : "";
 
   const moreButtonAction = bill.isOccurrence
-    ? `navigate('detail', { id: '${escapeInlineString(detailBillId)}', occurrenceDueDate: '${escapeInlineString(detailDueDate)}', returnRoute: 'recurring' })`
+    ? `
+      navigate('detail', {
+        id: '${escapeInlineString(detailBillId)}',
+        occurrenceDueDate: '${escapeInlineString(detailDueDate)}',
+        returnRoute: 'recurring'
+      })
+    `
     : `openBillQuickActions('${escapeInlineString(detailBillId)}')`;
 
   return `
-    <div
-      class="bill-swipe-wrapper"
-      data-bill-id="${escapeInlineString(detailBillId)}"
-      data-return-route="bills"
-    >
-      <div class="bill-swipe-background">
-        <div class="bill-swipe-delete-label">
-          ${svgIcon('trash', 18)}
-          <span>Delete Bill</span>
-        </div>
+    <div class="bill-row ${clickable ? "clickable" : ""}" ${rowClick}>
+      <div
+        class="bill-icon"
+        style="
+          background:${
+            getBillBrand(bill.name)
+              ? "#fff"
+              : `var(--${cat.color})`
+          };
+          color:${getBillBrand(bill.name) ? "#1e1e2e" : "white"};
+          padding:${getBillBrand(bill.name) ? "3px" : "0"};
+          overflow:hidden;
+        "
+      >
+        ${billVisual(bill, 32)}
+      </div>
 
-        <div class="bill-swipe-edit-label">
-          <span>Edit Bill</span>
-          ${svgIcon('gear', 18)}
+      <div class="bill-info">
+        <div class="bill-name">${escapeHtml(bill.name)}</div>
+
+        <div class="bill-meta-row">
+          <div class="bill-meta">${scheduleText}</div>
         </div>
       </div>
 
-      <div class="bill-row${clickable ? ' clickable' : ''}" ${rowClick}>
-        <div
-          class="bill-icon"
-          style="
-            background:${getBillBrand(bill.name) ? '#fff' : `var(--${cat.color})`};
-            color:${getBillBrand(bill.name) ? '#1e1e2e' : '#fff'};
-            padding:${getBillBrand(bill.name) ? '3px 0' : '0'};
-            overflow:hidden;
-          "
-        >
-          ${billVisual(bill, 32)}
-        </div>
-
-        <div class="bill-info">
-          <div class="bill-name">
-            ${escapeHtml(bill.name)}
-          </div>
-
-          <div class="bill-meta-row">
-            <div class="bill-meta">
-              ${scheduleText}
-            </div>
-          </div>
-        </div>
-
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          gap:6px;
+        "
+      >
         <div
           style="
             display:flex;
-            align-items:center;
-            gap:6px;
+            flex-direction:column;
+            align-items:flex-end;
+            gap:4px;
           "
         >
           <div class="bill-amount">
             ${formatCurrency(bill.amount)}
           </div>
-
-          <button
-            type="button"
-            class="bill-more-button"
-            aria-label="More options for ${escapeHtml(bill.name)}"
-            title="More options"
-            onclick="event.stopPropagation(); ${moreButtonAction}"
-          >
-            ${svgIcon('moreVertical', 22)}
-          </button>
         </div>
+
+        <button
+          type="button"
+          class="bill-more-button"
+          aria-label="More options for ${escapeHtml(bill.name)}"
+          title="More options"
+          onclick="
+            event.stopPropagation();
+            ${moreButtonAction}
+          "
+        >
+          ${svgIcon("moreVertical", 22)}
+        </button>
       </div>
     </div>
   `;
