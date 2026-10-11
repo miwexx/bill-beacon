@@ -5711,6 +5711,94 @@ function renderBills() {
     </div>
   `;
 }
+function initBillSwipeHandlers() {
+  const wrappers = Array.from(
+    document.querySelectorAll(".bill-swipe-wrapper")
+  );
+
+  wrappers.forEach(wrapper => {
+    const row = wrapper.querySelector(".bill-row");
+    if (!row) return;
+
+    let startX = 0;
+    let currentX = 0;
+    let dragging = false;
+
+    const billId = wrapper.dataset.billId || "";
+    const threshold = 70; // px needed to trigger an action
+
+    const reset = () => {
+      dragging = false;
+      currentX = 0;
+      wrapper.classList.remove("swipe-left", "swipe-right");
+      row.style.transform = "translateX(0px)";
+    };
+
+    const onStart = (event) => {
+      const touch = event.touches ? event.touches[0] : event;
+      startX = touch.clientX;
+      currentX = 0;
+      dragging = true;
+    };
+
+    const onMove = (event) => {
+      if (!dragging) return;
+
+      const touch = event.touches ? event.touches[0] : event;
+      const deltaX = touch.clientX - startX;
+      currentX = deltaX;
+
+      const limited = Math.max(Math.min(deltaX, 120), -120);
+      row.style.transform = `translateX(${limited}px)`;
+
+      if (limited > 0) {
+        wrapper.classList.add("swipe-right");
+        wrapper.classList.remove("swipe-left");
+      } else if (limited < 0) {
+        wrapper.classList.add("swipe-left");
+        wrapper.classList.remove("swipe-right");
+      } else {
+        wrapper.classList.remove("swipe-left", "swipe-right");
+      }
+
+      event.preventDefault();
+    };
+
+    const onEnd = () => {
+      if (!dragging) return;
+
+      const finalX = currentX;
+
+      if (finalX > threshold) {
+        // Swipe right → delete bill
+        reset();
+        if (billId) {
+          confirmDeleteBill(billId);
+        }
+      } else if (finalX < -threshold) {
+        // Swipe left → open bill details
+        reset();
+        if (billId) {
+          openBillDetailsSheet(billId);
+        }
+      } else {
+        reset();
+      }
+    };
+
+    // Touch events (iOS/Android)
+    row.addEventListener("touchstart", onStart, { passive: true });
+    row.addEventListener("touchmove", onMove, { passive: false });
+    row.addEventListener("touchend", onEnd);
+    row.addEventListener("touchcancel", onEnd);
+
+    // Pointer events (mouse/pen)
+    row.addEventListener("pointerdown", onStart);
+    row.addEventListener("pointermove", onMove);
+    row.addEventListener("pointerup", onEnd);
+    row.addEventListener("pointercancel", onEnd);
+  });
+}
 function closeBillSortSheet() {
   document.getElementById('billSortContainer')?.remove();
 }
