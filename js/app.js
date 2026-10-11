@@ -5725,11 +5725,13 @@ function initBillSwipeHandlers() {
     if (!row) return;
 
     let startX = 0;
+    let startY = 0;
     let currentX = 0;
     let dragging = false;
 
     const billId = wrapper.dataset.billId || '';
-    const threshold = 70; // pixels
+    const threshold = 70; // how far you must swipe to trigger
+    const activationThreshold = 10; // how far you must move horizontally to *start* a swipe
 
     const reset = () => {
       dragging = false;
@@ -5741,18 +5743,40 @@ function initBillSwipeHandlers() {
     const onStart = (event) => {
       const touch = event.touches ? event.touches[0] : event;
       startX = touch.clientX;
+      startY = touch.clientY;
       currentX = 0;
-      dragging = true;
+      // Do NOT set dragging = true yet; we decide later
+      dragging = false;
     };
 
     const onMove = (event) => {
-      if (!dragging) return;
-
       const touch = event.touches ? event.touches[0] : event;
-      const deltaX = touch.clientX - startX;
-      currentX = deltaX;
+      const dx = touch.clientX - startX;
+      const dy = touch.clientY - startY;
 
-      const limited = Math.max(Math.min(deltaX, 120), -120);
+      // If we are not yet in swipe mode, decide if this gesture
+      // should become a swipe or be treated as normal scrolling.
+      if (!dragging) {
+        // Too small → treat as tap/scroll, do nothing
+        if (Math.abs(dx) < activationThreshold) {
+          return;
+        }
+
+        // Vertical movement dominates → treat as scroll, not swipe
+        if (Math.abs(dy) > Math.abs(dx)) {
+          return;
+        }
+
+        // Horizontal swipe detected
+        dragging = true;
+      }
+
+      // From here on, this gesture is a swipe: prevent scroll
+      event.preventDefault();
+
+      currentX = dx;
+
+      const limited = Math.max(Math.min(dx, 120), -120);
       row.style.transform = `translateX(${limited}px)`;
 
       if (limited > 0) {
@@ -5764,37 +5788,41 @@ function initBillSwipeHandlers() {
       } else {
         wrapper.classList.remove('swipe-left', 'swipe-right');
       }
-
-      event.preventDefault();
     };
 
     const onEnd = () => {
-      if (!dragging) return;
+      // If we never entered swipe mode, this was just a tap or scroll
+      if (!dragging) {
+        return;
+      }
 
       const finalX = currentX;
 
       if (finalX > threshold) {
-        // Swipe right → delete bill
+        // Swipe right → delete
         reset();
         if (billId) {
           confirmDeleteBill(billId);
         }
       } else if (finalX < -threshold) {
-        // Swipe left → edit bill
+        // Swipe left → edit
         reset();
         if (billId) {
           openBillForm(billId);
         }
       } else {
+        // Not far enough → snap back to center
         reset();
       }
     };
 
+    // Touch events
     row.addEventListener('touchstart', onStart, { passive: true });
     row.addEventListener('touchmove', onMove, { passive: false });
     row.addEventListener('touchend', onEnd);
     row.addEventListener('touchcancel', onEnd);
 
+    // Pointer / mouse events (for desktop)
     row.addEventListener('pointerdown', onStart);
     row.addEventListener('pointermove', onMove);
     row.addEventListener('pointerup', onEnd);
