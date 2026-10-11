@@ -3515,3 +3515,30 @@ body {
   align-items: center;
   gap: 6px;
 }
+/* Each bill row wrapper becomes the positioning context */
+.bill-swipe-wrapper {
+  position: relative;
+  overflow: hidden;      /* keeps the gradient and swipe motion clipped */
+}
+
+/* Gradient + Delete/Edit labels, only behind one row */
+.bill-swipe-background {
+  position: absolute;
+  inset: 0;              /* top/right/bottom/left: 0 within the wrapper */
+  pointer-events: none;
+  border-radius: 18px;   /* match your .bill-row radius */
+}
+
+/* Row stays on top of the gradient */
+.bill-row {
+  position: relative;
+}
+.bill-swipe-background {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.bill-swipe-wrapper.swipe-left .bill-swipe-background,
+.bill-swipe-wrapper.swipe-right .bill-swipe-background {
+  opacity: 1;
+}
