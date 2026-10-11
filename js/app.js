@@ -16105,7 +16105,7 @@ function render() {
   if (currentRoute === 'transactions') {
     refreshPlaidSandboxAutomatically();
   }
-  if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings(); attachSignOutButton(); }
+ 
 }
 
 
