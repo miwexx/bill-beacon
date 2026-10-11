@@ -5721,11 +5721,12 @@ function initBillSwipeHandlers() {
     if (!row) return;
 
     let startX = 0;
+    let startY = 0;
     let currentX = 0;
     let dragging = false;
 
     const billId = wrapper.dataset.billId || "";
-    const threshold = 70; // px needed to trigger an action
+    const threshold = 70; // pixels needed to trigger an action
 
     const reset = () => {
       dragging = false;
@@ -5737,6 +5738,7 @@ function initBillSwipeHandlers() {
     const onStart = (event) => {
       const touch = event.touches ? event.touches[0] : event;
       startX = touch.clientX;
+      startY = touch.clientY;
       currentX = 0;
       dragging = true;
     };
@@ -5746,6 +5748,16 @@ function initBillSwipeHandlers() {
 
       const touch = event.touches ? event.touches[0] : event;
       const deltaX = touch.clientX - startX;
+      const deltaY = touch.clientY - startY;
+
+      // If the gesture is mostly vertical, let the page scroll.
+      if (Math.abs(deltaY) > Math.abs(deltaX)) {
+        wrapper.classList.remove("swipe-left", "swipe-right");
+        row.style.transform = "translateX(0px)";
+        dragging = false;
+        return;
+      }
+
       currentX = deltaX;
 
       const limited = Math.max(Math.min(deltaX, 120), -120);
@@ -5761,6 +5773,7 @@ function initBillSwipeHandlers() {
         wrapper.classList.remove("swipe-left", "swipe-right");
       }
 
+      // Only block default behaviour when we’re handling a horizontal swipe.
       event.preventDefault();
     };
 
@@ -5776,7 +5789,7 @@ function initBillSwipeHandlers() {
           confirmDeleteBill(billId);
         }
       } else if (finalX < -threshold) {
-        // Swipe left → open bill details
+        // Swipe left → edit bill
         reset();
         if (billId) {
           openBillForm(billId);
@@ -5786,7 +5799,7 @@ function initBillSwipeHandlers() {
       }
     };
 
-    // Touch events (iOS/Android)
+    // Touch events (phones/tablets)
     row.addEventListener("touchstart", onStart, { passive: true });
     row.addEventListener("touchmove", onMove, { passive: false });
     row.addEventListener("touchend", onEnd);
