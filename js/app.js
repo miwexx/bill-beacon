@@ -13145,15 +13145,6 @@ function saveBill() {
   const notes =
     document.getElementById("billNotes")?.value.trim() || "";
 
-  const reminderOffsets = Array.from(
-    document.querySelectorAll(
-      'input[name="billReminderOffsets"]:checked'
-    )
-  )
-    .map((input) => Number(input.value))
-    .filter((value) => !Number.isNaN(value))
-    .sort((a, b) => a - b);
-
   if (!name) {
     alert("Please enter a bill name.");
     return;
@@ -13246,7 +13237,7 @@ function saveBill() {
     paymentUrl,
     autopay,
     notes,
-    reminderOffsets,
+    
   };
 
   const buildBillSnapshot = (bill) => ({
