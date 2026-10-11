@@ -16728,7 +16728,6 @@ function addNotificationSettings() {
     timeInput.addEventListener('change', saveGlobalReminderSettings);
   }
 }
-
 /* ============================================
    Full Backup and Restore
 ============================================ */
