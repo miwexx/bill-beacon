@@ -3483,3 +3483,35 @@ body {
   animation: none !important;
   transition: none !important;
 }
+/* Swipe container and background */
+.bill-swipe-wrapper {
+  position: relative;
+  overflow: hidden; /* keep background inside card radius */
+}
+
+.bill-swipe-background {
+  position: absolute;
+  inset: 0; /* top:0; right:0; bottom:0; left:0 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  pointer-events: none; /* background is not clickable */
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  opacity: 0;                 /* hidden by default */
+  transition: opacity var(--transition);
+}
+
+/* Only show the background labels while swiping */
+.bill-swipe-wrapper.swipe-left .bill-swipe-background,
+.bill-swipe-wrapper.swipe-right .bill-swipe-background {
+  opacity: 1;
+}
+
+.bill-swipe-delete-label,
+.bill-swipe-edit-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

@@ -11693,10 +11693,6 @@ function billRow(bill, clickable = false) {
     `
     : '';
 
-  const moreButtonAction = bill.isOccurrence
-    ? `navigate('detail', { id: '${escapeInlineString(detailBillId)}', occurrenceDueDate: '${escapeInlineString(detailDueDate)}', returnRoute: 'recurring' })`
-    : `openBillQuickActions('${escapeInlineString(detailBillId)}')`;
-
   return `
     <div
       class="bill-swipe-wrapper"
@@ -11740,26 +11736,16 @@ function billRow(bill, clickable = false) {
           </div>
         </div>
 
-        <div
+                <div
           style="
             display:flex;
             align-items:center;
-            gap:6px;
           "
         >
           <div class="bill-amount">
             ${formatCurrency(bill.amount)}
           </div>
-
-          <button
-            type="button"
-            class="bill-more-button"
-            aria-label="More options for ${escapeHtml(bill.name)}"
-            title="More options"
-            onclick="event.stopPropagation(); ${moreButtonAction}"
-          >
-            ${svgIcon('moreVertical', 22)}
-          </button>
+        </div>
         </div>
       </div>
     </div>
