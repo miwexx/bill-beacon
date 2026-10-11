@@ -119,7 +119,52 @@
               >
                 Shared Household
               </div>
+    <div
+      style="
+        padding:16px;
+        border-top:1px solid var(--border);
+      "
+    >
+      <div
+        style="
+          font-size:15px;
+          font-weight:800;
+          margin-bottom:6px;
+        "
+      >
+        Account Actions
+      </div>
 
+      <p
+        style="
+          margin:0 0 10px;
+          font-size:13px;
+          color:var(--text-muted);
+          line-height:1.5;
+        "
+      >
+        Leaving a household keeps your login and
+        creates a new, empty personal household.
+        Deleting your account removes your profile
+        from Bill Beacon.
+      </p>
+
+      <button
+        id="bbDeleteAccountButton"
+        type="button"
+        class="bb-outline-pill"
+        onclick="window.deleteBillBeaconAccount()"
+        style="
+          width:100%;
+          min-height:46px;
+          justify-content:center;
+          color:var(--overdue);
+          border-color:var(--overdue);
+        "
+      >
+        Delete Account
+      </button>
+    </div>
               <div
                 id="bbHouseholdRole"
                 style="
@@ -1177,4 +1222,126 @@
       }
     }
   };
+    window.deleteBillBeaconAccount =
+    async function () {
+      const user =
+        window.getBillBeaconFirebaseUser?.();
+
+      if (!user) {
+        alert("Please sign in first.");
+        return;
+      }
+
+      const first = String(
+        user.displayName || ""
+      ).trim() || "your";
+
+      const confirmed = confirm(
+        `Permanently delete ${first} account?\n\n` +
+          "This removes your Bill Beacon profile " +
+          "and household membership. Shared " +
+          "household records created with others " +
+          "are not deleted.\n\n" +
+          "This cannot be undone."
+      );
+
+      if (!confirmed) return;
+
+      const button = document.getElementById(
+        "bbDeleteAccountButton"
+      );
+
+      const app = document.getElementById("app");
+      const previousInert =
+        app?.inert || false;
+
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Deleting…";
+      }
+
+      if (app) app.inert = true;
+
+      let sync;
+      let stopped = false;
+
+      try {
+        const prepared =
+          await window.billBeaconPrepareDataTransfer();
+
+        sync = await import("./firebase-sync.js");
+
+        const status =
+          window.billBeaconSyncStatus?.();
+
+        const context =
+          window.getBillBeaconHouseholdContext?.();
+
+        if (
+          !status?.ready ||
+          status.pending ||
+          status.conflict ||
+          context?.householdId !==
+            prepared.householdId ||
+          window.getBillBeaconFirebaseUser?.()?.uid !==
+            user.uid
+        ) {
+          throw new Error(
+            "Finish syncing before deleting " +
+              "this account."
+          );
+        }
+
+        sync.stopHouseholdSync();
+        stopped = true;
+
+        await householdWorkerRequest(
+          "/accounts/delete",
+          {
+            confirm: true
+          }
+        );
+
+        // Best-effort sign-out; household profile is gone.
+        try {
+          await window.firebaseAuth?.signOut?.();
+        } catch {}
+
+        alert(
+          "Your account was deleted. " +
+            "You can close Bill Beacon now."
+        );
+
+        window.location.reload();
+      } catch (error) {
+        if (
+          stopped &&
+          window.getBillBeaconFirebaseUser?.()?.uid ===
+            user.uid
+        ) {
+          await sync
+            .startHouseholdSync(user)
+            .catch(() => {});
+        }
+
+        alert(
+          (
+            error?.message ||
+            "The delete request did not finish."
+          ) +
+            "\n\nRefresh and check your account " +
+            "status before retrying."
+        );
+      } finally {
+        if (app) {
+          app.inert = previousInert;
+        }
+
+        if (button?.isConnected) {
+          button.disabled = false;
+          button.textContent =
+            "Delete Account";
+        }
+      }
+    };
 })();

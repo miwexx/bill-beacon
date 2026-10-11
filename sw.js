@@ -1,5 +1,5 @@
 const CACHE_VERSION =
-  "bill-beacon-v2.1-device-notification-receipts";
+  "bill-beacon-v2.2-notification-badge";
 const CACHE_NAME = CACHE_VERSION;
 
 const APP_SHELL = [
@@ -72,17 +72,84 @@ async function setHomeScreenBadge(count) {
 const BADGE_STATE_CACHE = "bill-beacon-badge-state";
 const BADGE_STATE_URL = new URL("__badge_state__", self.registration.scope).href;
 let badgeTask = Promise.resolve();
+
 function reconcileBadge(message) {
-  badgeTask = badgeTask.catch(() => {}).then(async () => {
-    if (!Number.isInteger(message.count) || message.count < 0 || !Number.isFinite(message.observedAt)) return;
-    const cache = await caches.open(BADGE_STATE_CACHE);
-    const saved = await cache.match(BADGE_STATE_URL);
-    const state = saved ? await saved.json() : null;
-    if (!message.foreground && state && state.householdId !== message.householdId) return;
-    if (state && message.observedAt < state.observedAt) return;
-    await cache.put(BADGE_STATE_URL, new Response(JSON.stringify(message), {headers: {"content-type": "application/json"}}));
-    await setHomeScreenBadge(message.count);
-  });
+  badgeTask =
+    badgeTask.catch(() => {}).then(async () => {
+      const cache = await caches.open(
+        BADGESTATECACHE
+      );
+
+      const saved = await cache.match(
+        BADGESTATEURL
+      );
+
+      const state = saved ? await saved.json() : null;
+
+      const householdId =
+        message.householdId || null;
+
+      const now = Date.now();
+
+      let nextCount;
+      let observedAt =
+        Number.isFinite(message.observedAt)
+          ? message.observedAt
+          : now;
+
+      // Background pushes increment locally.
+      if (typeof message.increment === "number") {
+        const base =
+          state &&
+          state.householdId === householdId
+            ? state.count || 0
+            : 0;
+
+        nextCount = Math.max(
+          0,
+          base + message.increment
+        );
+      } else {
+        if (
+          !Number.isInteger(message.count) ||
+          message.count < 0
+        ) {
+          return;
+        }
+
+        nextCount = message.count;
+      }
+
+      if (
+        !message.foreground &&
+        state &&
+        state.householdId !== householdId
+      ) {
+        return;
+      }
+
+      const nextState = {
+        householdId,
+        count: nextCount,
+        observedAt
+      };
+
+      await cache.put(
+        BADGESTATEURL,
+        new Response(
+          JSON.stringify(nextState),
+          {
+            headers: {
+              "content-type":
+                "application/json"
+            }
+          }
+        )
+      );
+
+      await setHomeScreenBadge(nextCount);
+    });
+
   return badgeTask;
 }
 self.addEventListener("push", (event) => {
@@ -151,7 +218,15 @@ self.addEventListener("push", (event) => {
       }
     });
 
-  const badgePromise = Promise.resolve();
+  const badgePromise =
+  payload.badgeIncrement
+    ? reconcileBadge({
+        householdId: payload.householdId || null,
+        increment: 1,
+        observedAt: Date.now(),
+        foreground: false
+      })
+    : Promise.resolve();
 
   event.waitUntil(
     Promise.all([

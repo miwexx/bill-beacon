@@ -1761,9 +1761,13 @@ async function prepareInboxPush(
     accessToken
   );
 
-  // A household total is not a device unread count.
-  delete notification.unreadCount;
-  delete notification.badgeObservedAt;
+  /*
+   * Background badge updates are per-device.
+   * The service worker keeps a local count and
+   * reconciles it with the exact inbox count when
+   * the app is open.
+   */
+  notification.badgeIncrement = 1;
 
   return notification;
 }
@@ -5672,13 +5676,13 @@ const exchanged = await plaidRequest(
 }
 };
 const BC_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-
 const BC_PATHS = new Set([
   "/household-codes",
   "/household-codes/preview",
   "/household-codes/join",
   "/household-codes/revoke",
-  "/households/leave"
+  "/households/leave",
+  "/accounts/delete"
 ]);
 
 function bcNormalize(value) {
@@ -6488,6 +6492,132 @@ export class HouseholdCodeCoordinator {
           200,
           origin
         );
+      }
+            if (path === "/accounts/delete") {
+        if (body?.confirm !== true) {
+          throw new Error(
+            "Account deletion was not confirmed."
+          );
+        }
+
+        // Block deletion if this UID owns a bank connection.
+        const bankRecord =
+          await env.NOTIFICATIONSKV.get(
+            plaidConnectionKey(user.uid)
+          );
+
+        if (bankRecord) {
+          throw new Error(
+            "Disconnect the bank connection " +
+            "before deleting this account."
+          );
+        }
+
+        const result = await bcTransaction(
+          token,
+          async tx => {
+            const profile = await tx.get(
+              bcUserPath(user.uid)
+            );
+
+            if (!profile) {
+              throw new Error(
+                "Account profile is unavailable."
+              );
+            }
+
+            const householdId =
+              String(profile.householdId || "")
+                .trim();
+
+            if (!householdId) {
+              throw new Error(
+                "Account household is unavailable."
+              );
+            }
+
+            const memberPath = bcMemberPath(
+              householdId,
+              user.uid
+            );
+
+            const membership = await tx.get(
+              memberPath
+            );
+
+            if (!membership) {
+              throw new Error(
+                "Household membership is missing."
+              );
+            }
+
+            const members =
+              await tx.members(householdId);
+
+            const others = members.filter(
+              row =>
+                row.documentUid !== user.uid
+            );
+
+            const now =
+              new Date().toISOString();
+
+            if (membership.role === "owner") {
+              if (others.length > 0) {
+                throw new Error(
+                  "Transfer ownership to another " +
+                  "member before deleting this account."
+                );
+              }
+
+              // Personal owner: retire the household,
+              // remove membership and profile.
+              tx.patch(
+                bcHomePath(householdId),
+                {
+                  retiredAt: now
+                }
+              );
+
+              tx.remove(memberPath);
+              tx.remove(bcUserPath(user.uid));
+            } else {
+              // Shared member: remove membership and profile.
+              tx.remove(memberPath);
+              tx.remove(bcUserPath(user.uid));
+            }
+
+            return {
+              ok: true,
+              deletedUid: user.uid,
+              householdId,
+              role: membership.role
+            };
+          }
+        );
+
+        // Optional: clean up subscriptions for this UID.
+        try {
+          const subscriptions =
+            await getUserSubscriptions(env, user.uid);
+
+          await Promise.all(
+            subscriptions.map(item =>
+              env.NOTIFICATIONSKV.delete(
+                item.key
+              )
+            )
+          );
+        } catch (error) {
+          console.warn(
+            "Subscription cleanup failed " +
+              "during account deletion.",
+            user.uid,
+            error?.message || String(error)
+          );
+        }
+
+        return json(result, 200, origin);
       }
       const hash = await bcHash(
         env,
