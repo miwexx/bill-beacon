@@ -104,7 +104,7 @@
               "window.bbOpenAccountSettings('password')"
             )}
 
-            <div
+                        <div
               style="
                 padding:16px;
                 border-top:1px solid var(--border);
@@ -112,59 +112,49 @@
             >
               <div
                 style="
-                  font-size:15px;
-                  font-weight:800;
+                  display:flex;
+                  justify-content:space-between;
+                  align-items:center;
                   margin-bottom:6px;
                 "
               >
-                Shared Household
+                <div
+                  style="
+                    font-size:15px;
+                    font-weight:800;
+                  "
+                >
+                  Shared Household
+                </div>
+
+                <div
+                  id="bbHouseholdRole"
+                  style="
+                    font-size:13px;
+                    color:var(--text-secondary);
+                  "
+                >
+                  Loading…
+                </div>
               </div>
-    <div
-      style="
-        padding:16px;
-        border-top:1px solid var(--border);
-      "
-    >
-      <div
-        style="
-          font-size:15px;
-          font-weight:800;
-          margin-bottom:6px;
-        "
-      >
-        Account Actions
-      </div>
-
-      <p
-        style="
-          margin:0 0 10px;
-          font-size:13px;
-          color:var(--text-muted);
-          line-height:1.5;
-        "
-      >
-        Leaving a household keeps your login and
-        creates a new, empty personal household.
-        Deleting your account removes your profile
-        from Bill Beacon.
-      </p>
-
-      <button
-        id="bbDeleteAccountButton"
-        type="button"
-        class="bb-outline-pill"
-        onclick="window.deleteBillBeaconAccount()"
-        style="
-          width:100%;
-          min-height:46px;
-          justify-content:center;
-          color:var(--overdue);
-          border-color:var(--overdue);
-        "
-      >
-        Delete Account
-      </button>
-    </div>
+                  <button
+                id="bbDeleteAccountButton"
+                type="button"
+                class="bb-outline-pill"
+                onclick="window.deleteBillBeaconAccount()"
+                style="
+  width:100%;
+  min-height:46px;
+  margin-top:12px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  color:var(--overdue);
+  border-color:var(--overdue);
+"
+              >
+                Delete Account
+              </button>
               <div
                 id="bbHouseholdRole"
                 style="
@@ -431,10 +421,10 @@
         displayName.textContent = data.name;
       }
 
-      roleElement.textContent =
+            roleElement.textContent =
         data.role === "owner"
-          ? "Account Status: Owner"
-          : "Account Status: Member.";
+          ? "Owner"
+          : "Member";
 
       ownerActions.style.display =
         data.role === "owner" ? "block" : "none";
