@@ -1,5 +1,5 @@
 /* ============================================
-   Bill Tracker PWA â€” Rocket Money Style
+   Bill Tracker PWA — Rocket Money Style
    Dark, vibrant, gradient-driven fintech aesthetic
    ============================================ */
 
@@ -43,7 +43,7 @@
 }
 
 /* ============================================
-   DARK MODE (Default â€” Rocket Money style)
+   DARK MODE (Default — Rocket Money style)
    ============================================ */
 :root,
 [data-theme="dark"] {
@@ -74,7 +74,7 @@
   --sunset-soft: linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(236, 72, 153, 0.15) 50%, rgba(249, 115, 22, 0.15) 100%);
   --sunset-text: linear-gradient(135deg, #A78BFA 0%, #F472B6 50%, #FB923C 100%);
 
-  /* Status colors â€” vibrant on dark */
+  /* Status colors — vibrant on dark */
   --paid: #00D4AA;
   --paid-bg: rgba(0, 212, 170, 0.12);
   --upcoming: #FBBF24;
@@ -87,7 +87,7 @@
   --nav-bg: rgba(8, 8, 11, 0.85);
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
 
-  /* Category colors â€” vibrant for dark mode */
+  /* Category colors — vibrant for dark mode */
   --cat-housing: #8B5CF6;
   --cat-utilities: #F59E0B;
   --cat-internet: #3B82F6;
@@ -246,9 +246,15 @@ a { color: var(--accent); text-decoration: none; }
 
 .nav-button:active { opacity: 0.5; }
 
+/* Main Content */
+.main-content {
+  flex: 1;
+  padding-bottom: calc(88px + var(--safe-bottom));
+  overflow-y: auto;
+}
 
 /* ============================================
-   TAB BAR â€” Floating pill style
+   TAB BAR — Floating pill style
    ============================================ */
 .tab-bar {
   position: fixed;
@@ -333,91 +339,25 @@ a { color: var(--accent); text-decoration: none; }
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted);
-  padding: var(--space-3) var(--space-4) var(--space-2);
+  padding: var(--space-5) var(--space-4) var(--space-2);
 }
 
 /* ============================================
    BILL ROW
    ============================================ */
-
-   .bill-swipe-wrapper {
-  position: relative;
-  overflow: hidden;
-}
-
-.bill-swipe-background {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  font-size: var(--text-sm);
-  font-weight: 800;
-  color: #fff;
-  pointer-events: none;
-}
-
-.bill-swipe-delete-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  color: #fff;
-}
-
-.bill-swipe-edit-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  color: #fff;
-}
-
-.bill-swipe-wrapper .bill-row {
-  position: relative;
-  z-index: 1;
-  transition: transform 0.18s ease-out;
-}
-
-/* Color the background; weâ€™ll tint based on direction in JS */
-.bill-swipe-wrapper.swipe-right .bill-swipe-background {
-  background: var(--overdue);
-}
-
-.bill-swipe-wrapper.swipe-left .bill-swipe-background {
-  background: var(--accent);
-}
 .bill-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
-  border-radius: 18px; /* match your card and swipe background */
-
-  background: linear-gradient(
-    110deg,
-    rgba(143, 54, 255, 0.34) 0%,
-    rgba(196, 76, 255, 0.26) 40%,
-    rgba(246, 76, 174, 0.24) 72%,
-    rgba(255, 113, 56, 0.20) 100%
-  );
-
+  background: transparent;
   transition: background var(--transition);
 }
 
-.bill-row:active {
-  background: linear-gradient(
-    110deg,
-    rgba(143, 54, 255, 0.50) 0%,
-    rgba(196, 76, 255, 0.42) 40%,
-    rgba(246, 76, 174, 0.38) 72%,
-    rgba(255, 113, 56, 0.32) 100%
-  );
-}
+.bill-row:active { background: var(--surface-2); }
+
 .bill-row + .bill-row {
-  border-top: none;
-  margin-top: 4px; /* small, consistent gap between rows */
+  border-top: 1px solid var(--separator);
 }
 
 .bill-icon {
@@ -470,7 +410,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ============================================
-   SUMMARY CARD â€” Hero card with gradient
+   SUMMARY CARD — Hero card with gradient
    ============================================ */
 .summary-card {
   background: var(--card);
@@ -671,7 +611,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ============================================
-   BUTTONS â€” Gradient style
+   BUTTONS — Gradient style
    ============================================ */
 .btn-primary {
   display: flex;
@@ -732,7 +672,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 /* ============================================
-   FAB â€” Gradient floating button
+   FAB — Gradient floating button
    ============================================ */
 .fab {
   position: fixed;
@@ -1201,7 +1141,7 @@ a { color: var(--accent); text-decoration: none; }
 .mt-2 { margin-top: var(--space-2); }
 .mt-4 { margin-top: var(--space-4); }
 
-/* Solid bottom navigation dock â€” prevents content showing behind tabs */
+/* Solid bottom navigation dock — prevents content showing behind tabs */
 .tab-bar {
   left: 0;
   right: 0;
@@ -1221,6 +1161,10 @@ a { color: var(--accent); text-decoration: none; }
     calc(var(--space-2) + var(--safe-bottom));
 }
 
+/* Space for the permanently visible navigation dock */
+.main-content {
+  padding-bottom: calc(100px + var(--safe-bottom));
+}
 
 .calendar-day-clickable {
   cursor: pointer;
@@ -2171,6 +2115,12 @@ body {
   overflow: visible;
 }
 
+.main-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding-bottom: calc(100px + var(--safe-bottom));
+}
+
 .tab-bar {
   position: fixed;
   left: 0;
@@ -2463,7 +2413,7 @@ body {
   max-height: none !important;
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0 !important;
 }
-/* Firebase household login â€” follows the existing Bill Beacon theme */
+/* Firebase household login — follows the existing Bill Beacon theme */
 
 .login-screen {
   position: fixed;
@@ -2866,7 +2816,7 @@ body {
   background: var(--surface);
 }
 
-/* Match the app's primary purple â†’ pink â†’ orange action gradient. */
+/* Match the app's primary purple → pink → orange action gradient. */
 .login-title {
   display: inline-block;
   width: 100%;
@@ -2952,10 +2902,11 @@ body {
 .nav-bar-content {
   min-height: 56px;
 }
+
+/* Normal page layout: leave room only for the bottom tab bar. */
 .main-content {
-  flex: 1;
-  overflow-y: auto;
-  padding-bottom: calc(140px + var(--safe-bottom));
+  padding-top: 0;
+  padding-bottom: calc(88px + var(--bb-safe-bottom));
 }
 
 /* Keep the installed-PWA tab bar above the Home Indicator. */
@@ -3228,7 +3179,7 @@ body {
   border-radius: 12px;
   overflow: hidden;
 }
-/* BILL BEACON â€” MORE THEME PREVIEW: START */
+/* BILL BEACON — MORE THEME PREVIEW: START */
 
 /* Shared brand colors and component styling */
 :root {
@@ -3419,9 +3370,9 @@ body {
   outline-offset: 3px;
 }
 
-/* BILL BEACON â€” MORE THEME PREVIEW: END */
+/* BILL BEACON — MORE THEME PREVIEW: END */
 
-/* Calendar Upcoming â€” caught-up appearance */
+/* Calendar Upcoming — caught-up appearance */
 .calendar-caught-up {
   padding:30px 16px;
   gap:12px;
@@ -3482,54 +3433,4 @@ body {
 
   animation: none !important;
   transition: none !important;
-}
-/* Swipe container and background */
-.bill-swipe-wrapper {
-  position: relative;
-  overflow: hidden; /* keep background inside card radius */
-}
-
-.bill-swipe-background {
-  position: absolute;
-  inset: 0; /* top:0; right:0; bottom:0; left:0 */
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 var(--space-4);
-  pointer-events: none; /* background is not clickable */
-  color: var(--text-muted);
-  font-size: var(--text-sm);
-  opacity: 0;                 /* hidden by default */
-  transition: opacity var(--transition);
-}
-
-/* Only show the background labels while swiping */
-.bill-swipe-wrapper.swipe-left .bill-swipe-background,
-.bill-swipe-wrapper.swipe-right .bill-swipe-background {
-  opacity: 1;
-}
-
-.bill-swipe-delete-label,
-.bill-swipe-edit-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-/* Each bill row wrapper becomes the positioning context */
-.bill-swipe-wrapper {
-  position: relative;
-  overflow: hidden;      /* keeps the gradient and swipe motion clipped */
-}
-
-/* Gradient + Delete/Edit labels, only behind one row */
-.bill-swipe-background {
-  position: absolute;
-  inset: 0;              /* top/right/bottom/left: 0 within the wrapper */
-  pointer-events: none;
-  border-radius: 18px;   /* match your .bill-row radius */
-}
-
-/* Row stays on top of the gradient */
-.bill-row {
-  position: relative;
 }
