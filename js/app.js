@@ -5779,7 +5779,7 @@ function initBillSwipeHandlers() {
         // Swipe left → open bill details
         reset();
         if (billId) {
-          openBillDetailsSheet(billId);
+          openBillForm(billId);
         }
       } else {
         reset();
@@ -11671,11 +11671,11 @@ function billRow(bill, clickable = false) {
       <div class="bill-swipe-background">
         <div class="bill-swipe-delete-label">
           ${svgIcon("trash", 18)}
-          <span>Delete bill</span>
+          <span>Delete</span>
         </div>
 
         <div class="bill-swipe-edit-label">
-          <span>Bill details</span>
+          <span>Edit Bill</span>
           ${svgIcon("clock", 18)}
         </div>
       </div>
