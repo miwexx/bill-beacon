@@ -5515,7 +5515,7 @@ function renderBills() {
   // independent due dates and payment history, but do not appear in Bills.
   const bills = allBills.filter(bill => !bill.installmentPlanId);
 
-  const billSort = routeParams.billSort || 'dueDate';
+  const billSort = routeParams.billSort || 'name';
 
   const sortOptions = {
     dueDate: 'Due Date',
