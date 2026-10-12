@@ -9161,26 +9161,11 @@ function closeCategorySpendingSheet() {
     ?.classList.remove("show");
 
   setTimeout(() => {
-    document
-      .getElementById("categorySpendingContainer")
-      ?.remove();
-
-    // Match openCategorySpendingSheet: unlock the global background scroll.
-    unlockBackgroundScroll();
+    document.getElementById("categorySpendingContainer")?.remove();
+   unlockMainScroll();  
   }, 300);
 }
-function closeCategorySpendingIfOpen() {
-  const container = document.getElementById('categorySpendingContainer');
-  if (!container) return;
 
-  document.getElementById('categorySpendingOverlay')?.classList.remove('show');
-  document.getElementById('categorySpendingSheet')?.classList.remove('show');
-
-  setTimeout(() => {
-    container.remove();
-    unlockMainScroll();
-  }, 300);
-}
 function getCategorySpendingItems(categoryId) {
   const now = new Date();
 
@@ -9204,65 +9189,57 @@ function getCategorySpendingItems(categoryId) {
     );
 }
 function openCategorySpendingSheet(categoryId) {
-  const now = new Date();
-  const categoryPayments = getMonthlyCategoryPayments(now);
+  // Remove any existing category sheet first
+  document.getElementById("categorySpendingContainer")?.remove();
+
   const category = getCategory(categoryId);
 
-  const items = categoryPayments.filter(
-    (item) => item.categoryId === categoryId
+  const items = getMonthlyCategoryPayments(new Date()).filter(
+    item => item.categoryId === categoryId
   );
 
-  const total = items.reduce(
-    (sum, item) => sum + (Number(item.amount) || 0),
-    0
-  );
+  const total = dashboardMoneyTotal(items.map(item => item.amount));
 
-  const rows = items
-    .map((item) => {
-      const paidDate = item.paidDate
-        ? formatDate(item.paidDate, "full")
-        : "Date unavailable";
+  const rows = items.map(item => {
+    const paidDate = item.paidDate
+      ? formatDate(item.paidDate, "full")
+      : "Date unavailable";
 
-      return `
-        <div class="bill-row">
-          <div class="bill-icon" style="
-            background:var(--paid-bg);
-            color:var(--paid);
-          ">
-            ${svgIcon("checkCircle", 20)}
-          </div>
-
-          <div class="bill-info">
-            <div class="bill-name">
-              ${escapeHtml(item.name)}
-            </div>
-
-            <div class="bill-meta" style="color:var(--paid);">
-              Paid ${escapeHtml(paidDate)}
-            </div>
-
-            <div class="bill-meta">
-              Due ${formatDate(item.dueDate, "short")}
-            </div>
-
-            ${
-              item.removed
-                ? `
-                  <div class="bill-meta" style="color:var(--overdue);">
-                    Removed — payment retained
-                  </div>
-                `
-                : ""
-            }
-          </div>
-
-          <div class="bill-amount" style="color:var(--paid);">
-            ${formatCurrency(item.amount)}
-          </div>
+    return `
+      <div class="bill-row">
+        <div class="bill-icon" style="
+          background:var(--paid-bg);
+          color:var(--paid);
+        ">
+          ${svgIcon("checkCircle", 20)}
         </div>
-      `;
-    })
-    .join("");
+
+        <div class="bill-info">
+          <div class="bill-name">
+            ${escapeHtml(item.name)}
+          </div>
+
+          <div class="bill-meta" style="color:var(--paid);">
+            Paid ${escapeHtml(paidDate)}
+          </div>
+
+          <div class="bill-meta">
+            Due ${formatDate(item.dueDate, "short")}
+          </div>
+
+          ${item.removed ? `
+            <div class="bill-meta" style="color:var(--overdue);">
+              Removed — payment retained
+            </div>
+          ` : ""}
+        </div>
+
+        <div class="bill-amount" style="color:var(--paid);">
+          ${formatCurrency(item.amount)}
+        </div>
+      </div>
+    `;
+  }).join("");
 
   const container = document.createElement("div");
   container.id = "categorySpendingContainer";
@@ -9320,34 +9297,26 @@ function openCategorySpendingSheet(categoryId) {
           </div>
         </div>
 
-        ${
-          items.length
-            ? `
-              <div class="card">${rows}</div>
-            `
-            : `
-              <div class="dashboard-empty-card">
-                ${svgIcon("tray", 22)}
-                <span>No paid bills in this category for this month.</span>
-              </div>
-            `
-        }
+        ${items.length ? `
+          <div class="card">${rows}</div>
+        ` : `
+          <div class="dashboard-empty-card">
+            ${svgIcon("tray", 22)}
+            <span>No paid bills in this category for this month.</span>
+          </div>
+        `}
       </div>
     </div>
   `;
 
   document.body.appendChild(container);
-
-  // Use the global background scroll lock so this behaves like your other sheets.
-  lockBackgroundScroll();
+  lockMainScroll();
 
   requestAnimationFrame(() => {
-    document
-      .getElementById("categorySpendingOverlay")
+    document.getElementById("categorySpendingOverlay")
       ?.classList.add("show");
 
-    document
-      .getElementById("categorySpendingSheet")
+    document.getElementById("categorySpendingSheet")
       ?.classList.add("show");
   });
 }
