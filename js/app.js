@@ -16340,9 +16340,425 @@ async function refreshNotificationSettingsCard() {
   status.textContent =
     "Receive bill reminders on this device.";
 }
+async function sendBillNotificationTest() {
+  const status = document.getElementById(
+    "notificationTestStatus"
+  );
+
+  try {
+    if (
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
+      throw new Error(
+        "Push notifications are not supported in this browser."
+      );
+    }
+
+    if (Notification.permission !== "granted") {
+      throw new Error(
+        "Notifications are not allowed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    if (
+      typeof window.getBillBeaconFirebaseToken !==
+      "function"
+    ) {
+      throw new Error(
+        "Please sign in again before testing notifications."
+      );
+    }
+
+    const firebaseToken =
+      await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error(
+        "Please sign in before testing notifications."
+      );
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+
+    const subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      throw new Error(
+        "This device is not subscribed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    if (status) {
+      status.textContent = "Sending test notification…";
+    }
+
+    const response = await fetch(
+      `${NOTIFICATION_WORKER_URL}/test`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${firebaseToken}`
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON()
+        })
+      }
+    );
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      throw new Error(
+        result?.error ||
+          "The test notification could not be sent."
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        "Test request sent. Lock your iPhone and check the Lock Screen or Notification Center.";
+    }
+  } catch (error) {
+    console.error("Test notification failed:", error);
+
+    const message =
+      error?.message ||
+      "Test notification failed. Check the Cloudflare Worker logs.";
+
+    if (status) {
+      status.textContent = message;
+    } else {
+      alert(message);
+    }
+  }
+}
+async function sendBillInboxTest() {
+  const status = document.getElementById(
+    "notificationTestStatus"
+  );
+
+  try {
+    if (
+      !("serviceWorker" in navigator) ||
+      !("PushManager" in window)
+    ) {
+      throw new Error(
+        "Push notifications are not supported in this browser."
+      );
+    }
+
+    if (Notification.permission !== "granted") {
+      throw new Error(
+        "Notifications are not allowed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    if (
+      typeof window.getBillBeaconFirebaseToken !== "function"
+    ) {
+      throw new Error(
+        "Please sign in again before testing notifications."
+      );
+    }
+
+    const firebaseToken =
+      await window.getBillBeaconFirebaseToken();
+
+    if (!firebaseToken) {
+      throw new Error(
+        "Please sign in before testing notifications."
+      );
+    }
+
+    const registration = await navigator.serviceWorker.ready;
+
+    const subscription =
+      await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+      throw new Error(
+        "This device is not subscribed yet. Tap Turn On Notifications first."
+      );
+    }
+
+    const activeBills = Store.getBills().filter(
+      (bill) => !bill.archivedAt
+    );
+
+    const selectedBill = activeBills[0];
+
+    if (!selectedBill) {
+      throw new Error(
+        "Add an active bill before sending an inbox test."
+      );
+    }
+
+    const billForTest = {
+      id: String(selectedBill?.id || ""),
+      name: String(
+        selectedBill?.name ||
+          selectedBill?.title ||
+          ""
+      ),
+      amount: Number(
+        selectedBill?.amount ??
+          selectedBill?.monthlyAmount ??
+          selectedBill?.amountDue ??
+          selectedBill?.paymentAmount ??
+          0
+      ),
+      dueDate: String(
+        selectedBill?.dueDate ??
+          selectedBill?.nextDueDate ??
+          selectedBill?.date ??
+          ""
+      ),
+      installmentPlanId:
+        selectedBill?.installmentPlanId || null,
+    };
+
+    if (
+      !billForTest.id ||
+      !billForTest.name ||
+      !Number.isFinite(billForTest.amount) ||
+      billForTest.amount <= 0 ||
+      !billForTest.dueDate
+    ) {
+      console.log(
+        "Bill Beacon inbox test bill:",
+        selectedBill
+      );
+
+      console.log(
+        "Bill Beacon normalized test bill:",
+        billForTest
+      );
+
+      throw new Error(
+        "The selected bill is missing a name, amount, or due date. Check the browser console for the bill fields."
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        "Sending inbox test notification…";
+    }
+
+    const response = await fetch(
+      `${NOTIFICATION_WORKER_URL}/test-bill-reminder`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${firebaseToken}`,
+        },
+        body: JSON.stringify({
+          subscription: subscription.toJSON(),
+          bill: billForTest,
+          message: `Test reminder for ${billForTest.name}.`,
+        }),
+      }
+    );
+
+    const result = await response.json().catch(() => null);
+
+    if (!response.ok || !result?.ok) {
+      throw new Error(
+        result?.error ||
+          "The inbox test notification could not be sent."
+      );
+    }
+
+    if (status) {
+      status.textContent =
+        "Inbox test sent. Open the bell to confirm the test item appears.";
+    }
+  } catch (error) {
+    console.error("Inbox test notification failed:", error);
+
+    const message =
+      error?.message ||
+      "Inbox test failed. Check the Cloudflare Worker logs.";
+
+    if (status) {
+      status.textContent = message;
+    } else {
+      alert(message);
+    }
+  }
+}
+function saveGlobalReminderSettings() {
+  const settings = Store.getSettings();
+
+  const toggles = Array.from(
+    document.querySelectorAll('.global-reminder-toggle')
+  );
+
+  const offsets = toggles
+    .filter(input => input.checked)
+    .map(input => Number(input.dataset.days))
+    .filter(days => Number.isFinite(days))
+    .sort((a, b) => a - b);
+
+  const timeInput = document.getElementById('globalReminderTime');
+  const timeValue =
+    timeInput && typeof timeInput.value === 'string'
+      ? timeInput.value.trim()
+      : '09:00';
+
+  Store.saveSettings({
+    ...settings,
+    reminderOffsets: offsets.length ? offsets : [7, 3, 1],
+    reminderTimeOfDay: timeValue,
+  });
+}
 
 
+function addNotificationSettings() {
+  // Only show this on More → Settings
+  if (currentRoute !== 'settings') return;
 
+  // Avoid duplicating the section if render() runs again
+  if (document.getElementById('notificationSettingsCard')) {
+    return;
+  }
+
+  // This is the main content area of the Settings screen
+  const container = document.querySelector('.main-content .content-pad');
+  if (!container) return;
+
+  const settings = Store.getSettings();
+  const selectedOffsets = Array.isArray(settings.reminderOffsets)
+    ? settings.reminderOffsets.slice().sort((a, b) => a - b)
+    : [7, 3, 1];
+
+  const reminderTime = settings.reminderTimeOfDay || '09:00';
+
+  const section = document.createElement('section');
+  section.id = 'notificationSettingsCard';
+  section.className = 'settings-section';
+
+ section.innerHTML = `
+  <div class="section-header">Notifications</div>
+
+  <div class="card card-pad">
+    <p
+      id="notificationPermissionStatus"
+      hidden
+      aria-hidden="true"
+      style="display:none"
+    ></p>
+
+    <button
+      id="notificationPermissionButton"
+      type="button"
+      class="bb-outline-pill"
+      style="width:100%;min-height:46px;justify-content:center;margin-top:14px"
+      onclick="activateBillNotifications()"
+    >
+      ${svgIcon('bell', 20)}
+      <span>Turn On Notifications</span>
+    </button>
+    
+    <button
+      id="notificationPermissionButton"
+      type="button"
+      class="bb-outline-pill"
+      style="width:100%;min-height:46px;justify-content:center;margin-top:14px"
+      onclick="activateBillNotifications()"
+    >
+      ${svgIcon('bell', 20)}
+      <span>Test</span>
+    </button>
+
+    <p
+      id="notificationTestStatus"
+      style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:var(--space-2) 0 0"
+      role="status"
+      aria-live="polite"
+    ></p>
+
+    <button
+      type="button"
+      class="bb-outline-pill"
+      style="width:100%;min-height:44px;justify-content:center;margin-top:10px"
+      onclick="sendBillNotificationTest()"
+    >
+      ${svgIcon('checkCircle', 18)}
+      <span>Send Test Notification</span>
+    </button>
+  </div>
+
+  <!-- NEW: global reminders card -->
+  <div class="card card-pad" style="margin-top:var(--space-3)">
+    <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
+      Reminders for all bills
+    </div>
+
+    ${REMINDER_OFFSETS.map(offset => {
+      const isSelected = selectedOffsets.includes(offset.days);
+      return `
+        <div class="form-row">
+          <div class="form-label">${escapeHtml(offset.label)}</div>
+          <div class="form-input-row">
+            <label class="toggle">
+              <input
+                type="checkbox"
+                class="global-reminder-toggle"
+                data-days="${escapeHtml(String(offset.days))}"
+                ${isSelected ? 'checked' : ''}
+              >
+              <div class="toggle-track">
+                <div class="toggle-thumb"></div>
+              </div>
+            </label>
+          </div>
+        </div>
+      `;
+    }).join('')}
+
+    <div class="form-row" style="margin-top:var(--space-3)">
+      <div class="form-label">Time of day</div>
+      <div class="form-input-row">
+        <input
+          id="globalReminderTime"
+          type="time"
+          class="form-input"
+          value="${escapeHtml(reminderTime)}"
+          style="max-width:130px;text-align:left"
+          aria-label="Time of day for bill reminders"
+        >
+      </div>
+    </div>
+
+    <div class="settings-footer" style="margin-top:10px">
+      Bill reminders use these offsets and time of day.
+      Enable notifications above to receive alerts on this device.
+    </div>
+  </div>
+`;
+
+  container.appendChild(section);
+
+  // Make the Turn On Notifications button reflect current device state
+  refreshNotificationSettingsCard();
+
+  // Wire up saving of global reminder offsets + time of day
+  document
+    .querySelectorAll('.global-reminder-toggle')
+    .forEach(input => {
+      input.addEventListener('change', saveGlobalReminderSettings);
+    });
+
+  const timeInput = document.getElementById('globalReminderTime');
+  if (timeInput) {
+    timeInput.addEventListener('change', saveGlobalReminderSettings);
+  }
+}
+  
 /* ============================================
    Full Backup and Restore
 ============================================ */
