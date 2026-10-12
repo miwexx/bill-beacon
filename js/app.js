@@ -19925,13 +19925,43 @@ if (event.cancelable) event.preventDefault();
         ? Math.abs(touch.clientY - state.y)
         : Infinity;
 // Release completes Back unless dragged back to the start.
-const returnedToStart = dx <= 6;
+// Complete Back only after a deliberate drag or rightward flick.
+const releaseTime = performance.now();
+
+const recentSamples = state.samples.filter(
+  sample => releaseTime - sample.time <= 100
+);
+
+const firstSample = recentSamples[0];
+
+const velocityX =
+  touch && firstSample
+    ? (touch.clientX - firstSample.x) /
+      Math.max(1, releaseTime - firstSample.time)
+    : 0;
+
+// Long drag: roughly 30% of the screen, capped at 140px.
+const distanceThreshold = Math.min(
+  window.innerWidth * 0.30,
+  140
+);
+
+const passedDistance = dx >= distanceThreshold;
+
+// Shorter movement counts only if released as a quick rightward flick.
+const passedFlick = dx >= 45 && velocityX >= 0.55;
+
+// A leftward release means the user is pulling the view back.
+const reversing = velocityX < -0.15;
 
 let goBack = Boolean(
   touch &&
   state.armed &&
   state.pane?.isConnected &&
-  !returnedToStart
+  dx > 6 &&
+  dx > dy &&
+  !reversing &&
+  (passedDistance || passedFlick)
 );
       if (goBack && state.context.mode !== "page" && formChanged(state.context.root)) {
         goBack = confirm("Discard unsaved changes and close this form?");
