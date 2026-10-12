@@ -8427,14 +8427,62 @@ function closeCompletedPlansHistory() {
 
 window.openCompletedPlansHistory = openCompletedPlansHistory;
 window.closeCompletedPlansHistory = closeCompletedPlansHistory;
-function closePaymentPlanDetails() {
-  document.getElementById("paymentPlanDetailsOverlay")?.classList.remove("show");
-  document.getElementById("paymentPlanDetailsSheet")?.classList.remove("show");
+const installmentPopupIds = [
+  "paymentPlanDetailsContainer",
+  "paymentPlanActionsContainer",
+  "installmentPlanContainer"
+];
 
-  setTimeout(() => {
-    document.getElementById("paymentPlanDetailsContainer")?.remove();
-    unlockBackgroundScroll();
-  }, 300);
+let installmentPopupScrollLock = null;
+
+function lockInstallmentPopupScroll() {
+  if (installmentPopupScrollLock) return;
+
+  const main = document.querySelector("#app .main-content");
+
+  if (!main) return;
+
+  installmentPopupScrollLock = {
+    main,
+    scrollTop: main.scrollTop,
+    overflowY: main.style.getPropertyValue("overflow-y"),
+    overflowPriority:
+      main.style.getPropertyPriority("overflow-y")
+  };
+
+  main.style.setProperty("overflow-y", "hidden");
+}
+
+function unlockInstallmentPopupScrollIfClosed() {
+  const anotherInstallmentPopup = installmentPopupIds.some(
+    id => document.getElementById(id)
+  );
+
+  if (anotherInstallmentPopup) return;
+
+  const saved = installmentPopupScrollLock;
+  installmentPopupScrollLock = null;
+
+  if (!saved || !saved.main.isConnected) return;
+
+  if (saved.overflowY) {
+    saved.main.style.setProperty(
+      "overflow-y",
+      saved.overflowY,
+      saved.overflowPriority
+    );
+  } else {
+    saved.main.style.removeProperty("overflow-y");
+  }
+
+  saved.main.scrollTop = saved.scrollTop;
+}
+function closePaymentPlanDetails() {
+  document.getElementById(
+    "paymentPlanDetailsContainer"
+  )?.remove();
+
+  unlockInstallmentPopupScrollIfClosed();
 }
 function openPaymentPlanDetails(planId) {
   const installments = Store.getBills()
@@ -8775,7 +8823,7 @@ function openPaymentPlanDetails(planId) {
 
   document.body.appendChild(container);
 
-  lockBackgroundScroll();
+  lockInstallmentPopupScroll();
 
   requestAnimationFrame(() => {
     document
@@ -8946,7 +8994,7 @@ function openPaymentPlanActions(planId) {
   `;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
+  lockInstallmentPopupScroll();
 
   requestAnimationFrame(() => {
     document
@@ -8992,18 +9040,11 @@ window.setTimeout(() => {
 }, 320);
 }
 function closePaymentPlanActions() {
-  document
-    .getElementById("paymentPlanActionsOverlay")
-    ?.classList.remove("show");
+  document.getElementById(
+    "paymentPlanActionsContainer"
+  )?.remove();
 
-  document
-    .getElementById("paymentPlanActionsSheet")
-    ?.classList.remove("show");
-
-  setTimeout(() => {
-    document.getElementById("paymentPlanActionsContainer")?.remove();
-    unlockBackgroundScroll();
-  }, 300);
+  unlockInstallmentPopupScrollIfClosed();
 }
 function archivePaymentPlan(planId) {
   const installments = Store.getBills().filter(
@@ -17177,9 +17218,12 @@ function renderPaymentHistory() {
 ============================================ */
 
 function closeInstallmentPlanForm() {
-  document.getElementById('installmentPlanContainer')?.remove();
-}
+  document.getElementById(
+    "installmentPlanContainer"
+  )?.remove();
 
+  unlockInstallmentPopupScrollIfClosed();
+}
 function updateInstallmentFirstPaymentLabel() {
   const status = document.getElementById("installmentFirstPaymentStatus");
   const label = document.getElementById("installmentFirstPaymentDateLabel");
@@ -17381,6 +17425,7 @@ function openInstallmentPlanForm() {
   `;
 
   document.body.appendChild(container);
+  lockInstallmentPopupScroll();
 }
 
 function getNextInstallmentDate(date, frequencyDays, installmentIndex = 1) {
