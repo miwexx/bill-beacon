@@ -9673,7 +9673,7 @@ for (let i = 5; i >= 0; i -= 1) {
               ${
                 estimatedMonthlyIncome > 0
                   ? `Est. ${formatCurrency(estimatedRemaining)} After Bills`
-                  : "Add income to see your estimate"
+                  : "Add income in settings to see your estimate"
               }
             </span>
           </div>
