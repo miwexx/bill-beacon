@@ -18988,6 +18988,8 @@ async function openNotificationCenter(restore = false) {
     container.querySelector("#notificationCenterContent")
       .scrollTop = notificationPopupReturn?.scroll || 0;
   }
+    // Inject the notifications settings card into the Notifications sheet
+  addNotificationSettings();
 }
 let backgroundScrollY = 0;
 
