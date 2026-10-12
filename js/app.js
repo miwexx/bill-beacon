@@ -460,31 +460,20 @@ updatePayment(paymentId, updates) {
   getPaymentsForBill(billId) {
     return this.getPayments().filter(p => p.billId === billId).sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
   },
-  // In Store.getSettings()
-getSettings() {
-  try {
-    const s = JSON.parse(localStorage.getItem('settings') || '{}');
-    return {
-      currency: 'USD',
-      biometricLock: false,
-      theme: 'dark',
-      currentPayCycle: 'auto',
-      // NEW: global reminder defaults
-      reminderOffsets: Array.isArray(s.reminderOffsets) ? s.reminderOffsets : [7, 3, 1],
-      reminderTimeOfDay: typeof s.reminderTimeOfDay === 'string' ? s.reminderTimeOfDay : '09:00',
-      ...s,
-    };
-  } catch {
-    return {
-      currency: 'USD',
-      biometricLock: false,
-      theme: 'dark',
-      currentPayCycle: 'auto',
-      reminderOffsets: [7, 3, 1],
-      reminderTimeOfDay: '09:00',
-    };
-  }
-},
+  getSettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem('settings') || '{}');
+      return {
+  currency: 'USD',
+  biometricLock: false,
+  theme: 'dark',
+  currentPayCycle: 'auto',
+  ...s
+};
+    } catch {
+      return { currency: 'USD', biometricLock: false, theme: 'dark' };
+    }
+  },
   saveSettings(settings) {
     localStorage.setItem('settings', JSON.stringify(settings));
     window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
@@ -1729,7 +1718,7 @@ function openPostponeBillSheet(billId) {
         "
       >
         ${svgIcon('calendar', 20)}
-        Choose a new date
+        Choose a New Date
       </div>
 
       <input
@@ -2669,7 +2658,7 @@ function initTheme() {
 // ROUTER
 // ====================================
 let currentRoute = 'today';
-let routeParams = { billSort: 'name' };
+let routeParams = { billSort: 'dueDate' };
 const DASHBOARD_RETURN_DELAY = 5 * 60 * 1000;
 
 let dashboardHiddenAt = null;
@@ -2784,7 +2773,7 @@ function navigate(route, params = {}) {
     }
   }
 
-  currentRoute = route;
+    currentRoute = route;
   routeParams = params;
 
   render();
@@ -2795,6 +2784,10 @@ function navigate(route, params = {}) {
 
   if (route === "transactions") {
     refreshPlaidSandboxAutomatically();
+  }
+
+  if (route === "bills") {
+    initBillSwipeHandlers();
   }
 }
 let transactionSearchTimer = null;
@@ -5526,7 +5519,7 @@ function renderBills() {
   // independent due dates and payment history, but do not appear in Bills.
   const bills = allBills.filter(bill => !bill.installmentPlanId);
 
-  const billSort = routeParams.billSort || 'name';
+  const billSort = routeParams.billSort || 'dueDate';
 
   const sortOptions = {
     dueDate: 'Due Date',
@@ -5724,103 +5717,123 @@ function renderBills() {
 }
 function initBillSwipeHandlers() {
   const wrappers = Array.from(
-    document.querySelectorAll(".bill-swipe-wrapper")
+    document.querySelectorAll('.bill-swipe-wrapper')
   );
 
   wrappers.forEach(wrapper => {
-    const row = wrapper.querySelector(".bill-row");
+    const row = wrapper.querySelector('.bill-row');
     if (!row) return;
 
     let startX = 0;
     let startY = 0;
     let currentX = 0;
-    let dragging = false;
+    let dragging = false;   // true = horizontal swipe
+    let decided = false;    // have we decided swipe vs scroll?
 
-    const billId = wrapper.dataset.billId || "";
-    const threshold = 70; // pixels needed to trigger an action
+    const billId = wrapper.dataset.billId || '';
+    const threshold = 35; // pixels to trigger action
+    const maxShift = 120; // clamp horizontal shift
 
     const reset = () => {
       dragging = false;
+      decided = false;
       currentX = 0;
-      wrapper.classList.remove("swipe-left", "swipe-right");
-      row.style.transform = "translateX(0px)";
+      wrapper.classList.remove('swipe-left', 'swipe-right');
+      row.style.transform = 'translateX(0px)';
     };
 
+    const getPoint = (event) =>
+      event.touches ? event.touches[0] : event;
+
     const onStart = (event) => {
-      const touch = event.touches ? event.touches[0] : event;
-      startX = touch.clientX;
-      startY = touch.clientY;
+      const p = getPoint(event);
+      startX = p.clientX;
+      startY = p.clientY;
       currentX = 0;
-      dragging = true;
+      dragging = false;
+      decided = false;
     };
 
     const onMove = (event) => {
-      if (!dragging) return;
+      const p = getPoint(event);
+      const deltaX = p.clientX - startX;
+      const deltaY = p.clientY - startY;
 
-      const touch = event.touches ? event.touches[0] : event;
-      const deltaX = touch.clientX - startX;
-      const deltaY = touch.clientY - startY;
+      if (!decided) {
+        // Decide if this gesture is a swipe or a scroll
+        if (Math.abs(deltaX) > Math.abs(deltaY) + 10) {
+          dragging = true;   // horizontal swipe
+          decided = true;
+        } else if (Math.abs(deltaY) > Math.abs(deltaX) + 10) {
+          dragging = false;  // vertical scroll
+          decided = true;
+        } else {
+          // Small movement: don’t decide yet, allow scroll
+          return;
+        }
+      }
 
-      // If the gesture is mostly vertical, let the page scroll.
-      if (Math.abs(deltaY) > Math.abs(deltaX)) {
-        wrapper.classList.remove("swipe-left", "swipe-right");
-        row.style.transform = "translateX(0px)";
-        dragging = false;
+      if (!dragging) {
+        // It’s a scroll: do nothing, let browser handle it
         return;
       }
 
+      // Only for horizontal swipe:
       currentX = deltaX;
-
-      const limited = Math.max(Math.min(deltaX, 120), -120);
+      const limited = Math.max(Math.min(deltaX, maxShift), -maxShift);
       row.style.transform = `translateX(${limited}px)`;
 
       if (limited > 0) {
-        wrapper.classList.add("swipe-right");
-        wrapper.classList.remove("swipe-left");
+        wrapper.classList.add('swipe-right');
+        wrapper.classList.remove('swipe-left');
       } else if (limited < 0) {
-        wrapper.classList.add("swipe-left");
-        wrapper.classList.remove("swipe-right");
+        wrapper.classList.add('swipe-left');
+        wrapper.classList.remove('swipe-right');
       } else {
-        wrapper.classList.remove("swipe-left", "swipe-right");
+        wrapper.classList.remove('swipe-left', 'swipe-right');
       }
 
-      // Only block default behaviour when we’re handling a horizontal swipe.
+      // Block scroll **only** when we’re actively swiping
       event.preventDefault();
     };
 
     const onEnd = () => {
-      if (!dragging) return;
+  if (!dragging) {
+    // Scroll gesture: nothing to do
+    reset();
+    return;
+  }
 
-      const finalX = currentX;
+  // Use the classes that onMove applied instead of raw distance
+  const isRight = wrapper.classList.contains('swipe-right');
+  const isLeft = wrapper.classList.contains('swipe-left');
 
-      if (finalX > threshold) {
-        // Swipe right → delete bill
-        reset();
-        if (billId) {
-          confirmDeleteBill(billId);
-        }
-      } else if (finalX < -threshold) {
-        // Swipe left → edit bill
-        reset();
-        if (billId) {
-          openBillForm(billId);
-        }
-      } else {
-        reset();
-      }
-    };
+  if (isRight) {
+    // Swipe right → delete
+    reset();
+    if (billId) {
+      confirmDeleteBill(billId);
+    }
+  } else if (isLeft) {
+    // Swipe left → edit
+    reset();
+    if (billId) {
+      openBillForm(billId);
+    }
+  } else {
+    reset();
+  }
+};
 
-    // Touch events (phones/tablets)
-    row.addEventListener("touchstart", onStart, { passive: true });
-    row.addEventListener("touchmove", onMove, { passive: false });
-    row.addEventListener("touchend", onEnd);
-    row.addEventListener("touchcancel", onEnd);
+    row.addEventListener('touchstart', onStart, { passive: true });
+    row.addEventListener('touchmove', onMove, { passive: false });
+    row.addEventListener('touchend', onEnd);
+    row.addEventListener('touchcancel', onEnd);
 
-    // Pointer events (mouse/pen)
-    row.addEventListener("pointerdown", onStart);
-    row.addEventListener("pointermove", onMove);
-    row.addEventListener("pointerup", onEnd);
-    row.addEventListener("pointercancel", onEnd);
+    row.addEventListener('pointerdown', onStart);
+    row.addEventListener('pointermove', onMove);
+    row.addEventListener('pointerup', onEnd);
+    row.addEventListener('pointercancel', onEnd);
   });
 }
 function closeBillSortSheet() {
@@ -5828,7 +5841,7 @@ function closeBillSortSheet() {
 }
 
 function openBillSortSheet() {
-  const currentSort = routeParams.billSort || 'name';
+  const currentSort = routeParams.billSort || 'dueDate';
 
   const options = [
     { id: 'dueDate', label: 'Due Date', icon: 'calendar' },
@@ -9177,17 +9190,7 @@ function getCategorySpendingItems(categoryId) {
 }
 function openCategorySpendingSheet(categoryId) {
   document.getElementById("categorySpendingContainer")?.remove();
-  const sheet = container.querySelector("#categorySpendingSheet");
-if (sheet) {
-  sheet.style.position = "fixed";
-  sheet.style.left = "12px";
-  sheet.style.right = "12px";
-  sheet.style.top = "calc(env(safe-area-inset-top, 0px) + 12px)";
-  sheet.style.bottom = "calc(88px + env(safe-area-inset-bottom, 0px))"; // same vertical gap as notificationCenterSheet
-  sheet.style.maxHeight = "none";
-  sheet.style.display = "flex";
-  sheet.style.flexDirection = "column";
-}
+
   const category = getCategory(categoryId);
 
   const items = getMonthlyCategoryPayments(new Date()).filter(
@@ -9304,6 +9307,11 @@ if (sheet) {
           </div>
         `}
 
+        <button type="button" class="bb-outline-pill"
+          style="width:100%;"
+          onclick="closeCategorySpendingSheet();navigate('history');">
+          View All Payment History
+        </button>
       </div>
     </div>
   `;
@@ -11654,7 +11662,7 @@ function getBillScheduleLabel(bill) {
 function billRow(bill, clickable = false) {
   const cat = getCategory(bill.category);
   const dueDate = new Date(bill.dueDate);
-  const dueDay = bill.recurrence === "Monthly"
+  const dueDay = bill.recurrence === 'Monthly'
     ? getMonthlyDueDay(bill)
     : dueDate.getDate();
 
@@ -11670,26 +11678,31 @@ function billRow(bill, clickable = false) {
   };
 
   const scheduleText =
-    bill.recurrence && bill.recurrence !== "None"
-      ? bill.recurrence === "Monthly"
+    bill.recurrence && bill.recurrence !== 'None'
+      ? bill.recurrence === 'Monthly'
         ? `Due on the ${ordinal(dueDay)} of each month`
         : getBillScheduleLabel(bill)
-      : `Due ${formatDate(bill.dueDate, "full")}`;
+      : `Due ${formatDate(bill.dueDate, 'full')}`;
 
-  // In the Bills tab we always open the main bill details by id.
-  const detailBillId = bill.id;
+  const detailBillId = bill.isOccurrence ? bill.sourceBillId : bill.id;
+  const detailDueDate = bill.isOccurrence ? bill.dueDate : bill.dueDate;
 
   const rowClick = clickable
     ? `
-      onclick="openBillDetailsSheet('${escapeInlineString(detailBillId)}')"
+      onclick="navigate('detail', {
+        id: '${escapeInlineString(detailBillId)}',
+        occurrenceDueDate: '${escapeInlineString(detailDueDate)}',
+        returnRoute: 'bills'
+      })"
       role="button"
       tabindex="0"
-      onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openBillDetailsSheet('${escapeInlineString(detailBillId)}'); }"
+      onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); navigate('detail', { id: '${escapeInlineString(detailBillId)}', occurrenceDueDate: '${escapeInlineString(detailDueDate)}', returnRoute: 'bills' }); }"
     `
-    : "";
+    : '';
 
-  // “More” button keeps your existing quick actions sheet.
-  const moreButtonAction = `openBillQuickActions('${escapeInlineString(detailBillId)}')`;
+  const moreButtonAction = bill.isOccurrence
+    ? `navigate('detail', { id: '${escapeInlineString(detailBillId)}', occurrenceDueDate: '${escapeInlineString(detailDueDate)}', returnRoute: 'recurring' })`
+    : `openBillQuickActions('${escapeInlineString(detailBillId)}')`;
 
   return `
     <div
@@ -11699,23 +11712,23 @@ function billRow(bill, clickable = false) {
     >
       <div class="bill-swipe-background">
         <div class="bill-swipe-delete-label">
-          ${svgIcon("trash", 18)}
-          <span>Delete</span>
+          ${svgIcon('trash', 18)}
+          <span>Delete Bill</span>
         </div>
 
         <div class="bill-swipe-edit-label">
           <span>Edit Bill</span>
-          ${svgIcon("clock", 18)}
+          ${svgIcon('gear', 18)}
         </div>
       </div>
 
-      <div class="bill-row${clickable ? " clickable" : ""}" ${rowClick}>
+      <div class="bill-row${clickable ? ' clickable' : ''}" ${rowClick}>
         <div
           class="bill-icon"
           style="
-            background:${getBillBrand(bill.name) ? "#fff" : `var(--${cat.color})`};
-            color:${getBillBrand(bill.name) ? "#1e1e2e" : "#fff"};
-            padding:${getBillBrand(bill.name) ? "3px 0" : "0"};
+            background:${getBillBrand(bill.name) ? '#fff' : `var(--${cat.color})`};
+            color:${getBillBrand(bill.name) ? '#1e1e2e' : '#fff'};
+            padding:${getBillBrand(bill.name) ? '3px 0' : '0'};
             overflow:hidden;
           "
         >
@@ -11727,8 +11740,10 @@ function billRow(bill, clickable = false) {
             ${escapeHtml(bill.name)}
           </div>
 
-          <div class="bill-meta">
-            ${scheduleText}
+          <div class="bill-meta-row">
+            <div class="bill-meta">
+              ${scheduleText}
+            </div>
           </div>
         </div>
 
@@ -11750,7 +11765,7 @@ function billRow(bill, clickable = false) {
             title="More options"
             onclick="event.stopPropagation(); ${moreButtonAction}"
           >
-            ${svgIcon("moreVertical", 22)}
+            ${svgIcon('moreVertical', 22)}
           </button>
         </div>
       </div>
@@ -12885,7 +12900,7 @@ function openBillForm(billId = null, selectedDate = null) {
                 <div class="form-label">Pay automatically</div>
                 <div style="flex:1"></div>
 
-                <l<label class="toggle">
+                <label class="toggle">
                   <input
                     type="checkbox"
                     id="billAutopay"
@@ -12906,7 +12921,38 @@ function openBillForm(billId = null, selectedDate = null) {
           </div>
 
           <div>
-           
+            <div class="section-header">Reminders</div>
+
+            <div class="card">
+              ${REMINDER_OFFSETS.map(
+                (reminder) => `
+                  <div class="form-row">
+                    <div class="form-label">${reminder.label}</div>
+                    <div style="flex:1"></div>
+
+                    <label class="toggle">
+                      <input
+                        type="checkbox"
+                        class="reminder-toggle"
+                        name="billReminderOffsets"
+                        value="${escapeHtml(reminder.days)}"
+                        data-days="${escapeHtml(reminder.days)}"
+                        ${
+                          selectedReminders.includes(reminder.days)
+                            ? "checked"
+                            : ""
+                        }
+                      >
+
+                      <div class="toggle-track">
+                        <div class="toggle-thumb"></div>
+                      </div>
+                    </label>
+                  </div>
+                `
+              ).join("")}
+            </div>
+
             <div class="settings-footer">
               Reminders appear when you open the app. Enable notifications
               in Safari for best results.
@@ -13130,6 +13176,15 @@ function saveBill() {
   const notes =
     document.getElementById("billNotes")?.value.trim() || "";
 
+  const reminderOffsets = Array.from(
+    document.querySelectorAll(
+      'input[name="billReminderOffsets"]:checked'
+    )
+  )
+    .map((input) => Number(input.value))
+    .filter((value) => !Number.isNaN(value))
+    .sort((a, b) => a - b);
+
   if (!name) {
     alert("Please enter a bill name.");
     return;
@@ -13222,7 +13277,7 @@ function saveBill() {
     paymentUrl,
     autopay,
     notes,
-    
+    reminderOffsets,
   };
 
   const buildBillSnapshot = (bill) => ({
@@ -16071,54 +16126,15 @@ const accountSelector = accounts.length
   `;
 }
 function render() {
-  const app = document.getElementById("app");
-  if (!app) return;
-
-  const views = {
-    today: renderToday,
-    recurring: renderRecurring,
-    bills: renderBills,
-    more: renderMore,
-    calendar: renderCalendar,
-    insights: renderInsights,
-    activity: renderActivity,
-    "payment-plans": renderPaymentPlans,
-    settings: renderSettings,
-    transactions: renderTransactions,
-    detail: renderBillDetail,
-    history: renderPaymentHistory
-  };
-
-  const view = Object.prototype.hasOwnProperty.call(views, currentRoute)
-    ? views[currentRoute]
-    : renderToday;
-
+  const app = document.getElementById("app"); if (!app) return;
+  const views = {today: renderToday, recurring: renderRecurring, bills: renderBills, more: renderMore,
+    calendar: renderCalendar, insights: renderInsights, activity: renderActivity, "payment-plans": renderPaymentPlans,
+    settings: renderSettings, transactions: renderTransactions, detail: renderBillDetail, history: renderPaymentHistory};
+  const view = Object.prototype.hasOwnProperty.call(views, currentRoute) ? views[currentRoute] : renderToday;
   let content = view();
-
-  if (["today", "recurring", "bills", "more", "insights", "settings"].includes(currentRoute)) {
-    content += tabBar();
-  }
-
+  if (["today", "recurring", "bills", "more", "insights", "settings"].includes(currentRoute)) content += tabBar();
   app.innerHTML = content;
-
-  // NEW: inject Notifications + reminders card on Settings
-  if (currentRoute === "settings") {
-    addNotificationSettings();
-  }
-
-  // Bills tab: attach swipe handlers after rows are rendered
-  if (currentRoute === "bills") {
-    initBillSwipeHandlers();
-  }
-
-  if (currentRoute !== "history") {
-    addBackupSettings();
-    attachSignOutButton();
-  }
-
-  if (currentRoute === "transactions") {
-    refreshPlaidSandboxAutomatically();
-  }
+  if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings(); attachSignOutButton(); }
 }
 
 
@@ -16329,7 +16345,7 @@ async function refreshNotificationSettingsCard() {
     button.style.cursor = "default";
     button.className = "bb-outline-pill";
     button.innerHTML = `${svgIcon("checkCircle", 20)} Notifications On`;
-   
+
     status.textContent =
       "Bill reminders are enabled on this device.";
     return;
@@ -16595,179 +16611,68 @@ async function sendBillInboxTest() {
     }
   }
 }
-function saveGlobalReminderSettings() {
-  const settings = Store.getSettings();
-
-  const toggles = Array.from(
-    document.querySelectorAll('.global-reminder-toggle')
-  );
-
-  const offsets = toggles
-    .filter(input => input.checked)
-    .map(input => Number(input.dataset.days))
-    .filter(days => Number.isFinite(days))
-    .sort((a, b) => a - b);
-
-  const timeInput = document.getElementById('globalReminderTime');
-  const timeValue =
-    timeInput && typeof timeInput.value === 'string'
-      ? timeInput.value.trim()
-      : '09:00';
-
-  Store.saveSettings({
-    ...settings,
-    reminderOffsets: offsets.length ? offsets : [7, 3, 1],
-    reminderTimeOfDay: timeValue,
-  });
-}
-
-
 function addNotificationSettings() {
-  // Only show this on More → Settings
-  if (currentRoute !== 'settings') return;
-
-  // Avoid duplicating the section if render() runs again
-  if (document.getElementById('notificationSettingsCard')) {
+  if (
+    currentRoute !== "settings" ||
+    document.getElementById("notificationSettingsCard")
+  ) {
     return;
   }
 
-  // This is the main content area of the Settings screen
-  const container = document.querySelector('.main-content .content-pad');
-  if (!container) return;
+  const container = document.querySelector(
+    ".main-content .content-pad"
+  );
 
-  const settings = Store.getSettings();
-  const selectedOffsets = Array.isArray(settings.reminderOffsets)
-    ? settings.reminderOffsets.slice().sort((a, b) => a - b)
-    : [7, 3, 1];
+  if (!container) {
+    return;
+  }
 
-  const reminderTime = settings.reminderTimeOfDay || '09:00';
+  const section = document.createElement("div");
 
-  const section = document.createElement('section');
-  section.id = 'notificationSettingsCard';
-  section.className = 'settings-section';
+  section.id = "notificationSettingsCard";
+  section.className = "settings-section";
 
- section.innerHTML = `
-  <div class="section-header">Notifications</div>
+  section.innerHTML = `
+    <div class="section-header">Notifications</div>
 
-  <div class="card card-pad">
-    <p
-      id="notificationPermissionStatus"
-      hidden
-      aria-hidden="true"
-      style="display:none"
-    ></p>
+    <div class="card card-pad">
+      <p id="notificationPermissionStatus" hidden aria-hidden="true" style="display:none;"></p>
+                <button
+        id="notificationPermissionButton"
+        type="button"
+        class="bb-outline-pill"
+        style="
+          width:100%;
+          min-height:46px;
+          justify-content:center;
+          margin-top:14px;
+        "
+        onclick="activateBillNotifications()"
+      >
+        ${svgIcon("bell", 20)} Turn On Notifications
+      </button>
+  
+      <p
+        id="notificationTestStatus"
+        style="
 
-    <button
-      id="notificationPermissionButton"
-      type="button"
-      class="bb-outline-pill"
-      style="width:100%;min-height:46px;justify-content:center;margin-top:14px"
-      onclick="activateBillNotifications()"
-    >
-      ${svgIcon('bell', 20)}
-      <span>Turn On Notifications</span>
-    </button>
-     <button
-      type="button"
-      class="bb-outline-pill"
-      style="
-        width:100%;
-        min-height:40px;
-        justify-content:center;
-        margin-top:10px;
-        background:#ff00ff;
-        color:#ffffff;
-      "
-    >
-      ${svgIcon('checkCircle', 18)}
-      <span>TEST PILL – YOU ARE IN THE RIGHT PLACE</span>
-    </button>
-
-    <p
-      id="notificationTestStatus"
-      style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:var(--space-2) 0 0"
-      role="status"
-      aria-live="polite"
-    ></p>
-
-    <button
-      type="button"
-      class="bb-outline-pill"
-      style="width:100%;min-height:44px;justify-content:center;margin-top:10px"
-      onclick="sendBillNotificationTest()"
-    >
-      ${svgIcon('checkCircle', 18)}
-      <span>Send Test Notification</span>
-    </button>
-  </div>
-
-  <!-- NEW: global reminders card -->
-  <div class="card card-pad" style="margin-top:var(--space-3)">
-    <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
-      Reminders for all bills
+          font-size:var(--text-sm);
+          color:var(--text-muted);
+          line-height:1.5;
+          margin:var(--space-2) 0 0;
+        "
+        role="status"
+        aria-live="polite"
+      ></p>
     </div>
-
-    ${REMINDER_OFFSETS.map(offset => {
-      const isSelected = selectedOffsets.includes(offset.days);
-      return `
-        <div class="form-row">
-          <div class="form-label">${escapeHtml(offset.label)}</div>
-          <div class="form-input-row">
-            <l<label class="toggle">
-              <input
-                type="checkbox"
-                class="global-reminder-toggle"
-                data-days="${escapeHtml(String(offset.days))}"
-                ${isSelected ? 'checked' : ''}
-              >
-              <div class="toggle-track">
-                <div class="toggle-thumb"></div>
-              </div>
-            </label>
-          </div>
-        </div>
-      `;
-    }).join('')}
-
-    <div class="form-row" style="margin-top:var(--space-3)">
-      <div class="form-label">Time of day</div>
-      <div class="form-input-row">
-        <input
-          id="globalReminderTime"
-          type="time"
-          class="form-input"
-          value="${escapeHtml(reminderTime)}"
-          style="max-width:130px;text-align:left"
-          aria-label="Time of day for bill reminders"
-        >
-      </div>
-    </div>
-
-    <div class="settings-footer" style="margin-top:10px">
-      Bill reminders use these offsets and time of day.
-      Enable notifications above to receive alerts on this device.
-    </div>
-  </div>
-`;
+  `;
 
   container.appendChild(section);
 
-  // Make the Turn On Notifications button reflect current device state
   refreshNotificationSettingsCard();
-
-  // Wire up saving of global reminder offsets + time of day
-  document
-    .querySelectorAll('.global-reminder-toggle')
-    .forEach(input => {
-      input.addEventListener('change', saveGlobalReminderSettings);
-    });
-
-  const timeInput = document.getElementById('globalReminderTime');
-  if (timeInput) {
-    timeInput.addEventListener('change', saveGlobalReminderSettings);
-  }
 }
-  
+
+
 /* ============================================
    Full Backup and Restore
 ============================================ */
@@ -17514,7 +17419,7 @@ function openInstallmentPlanForm() {
             <div class="form-row">
               <div class="form-label">Autopay</div>
 
-              <l<label class="toggle">
+              <label class="toggle">
                 <input
                   id="installmentAutopay"
                   type="checkbox"
@@ -19028,8 +18933,6 @@ async function openNotificationCenter(restore = false) {
     container.querySelector("#notificationCenterContent")
       .scrollTop = notificationPopupReturn?.scroll || 0;
   }
-  
-  addNotificationSettings();
 }
 let backgroundScrollY = 0;
 
