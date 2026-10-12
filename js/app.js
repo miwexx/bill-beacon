@@ -19218,6 +19218,7 @@ window.addEventListener("storage", () => {
   };
   window.render = render;
 
+
   const reducedMotion = () =>
     Boolean(
       window.matchMedia?.(
@@ -19231,90 +19232,60 @@ window.addEventListener("storage", () => {
     return style.display !== "none" && style.visibility !== "hidden" &&
       node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0;
   }
-
   function isCloseControl(button) {
     const action = (button.getAttribute("onclick") || "").trim();
     return !button.disabled && (button.id === "notificationCenterCloseButton" ||
       /^(?:window\.)?close[A-Za-z0-9_]+\(\s*\)\s*;?$/.test(action));
   }
-
   function pageBackButton() {
     return [...document.querySelectorAll("#app .nav-bar button.nav-button")].find(button =>
       visible(button) && !button.disabled &&
       /^\s*(?:navigate|returnToNotificationCenter)\s*\(/.test(button.getAttribute("onclick") || "")
     ) || null;
   }
-
   function popupSheets() {
-    return [...document.querySelectorAll(".sheet, #billDetailsSheet")]
-      .filter(visible)
-      .map((node, index) => ({
-        node,
-        index,
-        z: Number.parseInt(getComputedStyle(node).zIndex, 10) || 0
-      }))
-      .sort((a, b) => a.z - b.z || a.index - b.index)
-      .map(item => item.node);
+    return [...document.querySelectorAll(".sheet, #billDetailsSheet")].filter(visible).map((node,index) =>
+      ({node,index,z:Number.parseInt(getComputedStyle(node).zIndex,10)||0})
+    ).sort((a,b)=>a.z-b.z||a.index-b.index).map(item=>item.node);
   }
-
   function dismissContext(target = null) {
     const sheets = popupSheets();
     if (sheets.length) {
-      const root = sheets[sheets.length - 1];
+      const root = sheets[sheets.length-1];
       const back = [...root.querySelectorAll("button")].find(isCloseControl);
-      return back ? { mode: "popup", root, back, sheets } : null;
+      return back ? {mode:"popup",root,back,sheets} : null;
     }
     const inline = target?.closest?.(".recurring-calendar-selected-day");
     if (inline && visible(inline)) {
       const back = inline.querySelector('button[aria-label="Close selected day"]');
-      if (back && !back.disabled) return { mode: "inline", root: inline, back, sheets: [] };
+      if (back && !back.disabled) return {mode:"inline",root:inline,back,sheets:[]};
     }
     const back = pageBackButton();
     return back && !dashboardHasOpenFormOrPopup()
-      ? { mode: "page", root: document.getElementById("app"), back, sheets: [] }
-      : null;
+      ? {mode:"page",root:document.getElementById("app"),back,sheets:[]} : null;
   }
-
   function contextMatches(state) {
     const now = dismissContext(state.context.root);
-    return (
-      ENABLED &&
-      currentRoute === state.route &&
-      now &&
-      now.mode === state.context.mode &&
-      now.root === state.context.root &&
-      now.back === state.back &&
-      state.back.isConnected
-    );
+    return ENABLED && currentRoute === state.route && now &&
+      now.mode === state.context.mode && now.root === state.context.root &&
+      now.back === state.back && state.back.isConnected;
   }
-
   function fieldSignature(root) {
-    return JSON.stringify(
-      [...root.querySelectorAll("input,textarea,select")]
-        .filter(field => !field.disabled && field.type !== "hidden")
-        .map(field => [field.name || field.id, field.type, field.value, field.checked])
-    );
+    return JSON.stringify([...root.querySelectorAll("input,textarea,select")]
+      .filter(field=>!field.disabled && field.type!=="hidden")
+      .map(field=>[field.name||field.id,field.type,field.value,field.checked]));
   }
-
   function formChanged(root) {
-    const formIds = [
-      "sheetContainer",
-      "incomeSourceContainer",
-      "installmentPlanContainer",
-      "postponeBillContainer",
-      "postponeRecurringOccurrenceContainer",
-      "paymentLinkPopupContainer"
-    ];
-    const isForm = formIds.some(id => root.closest(`[id="${id}"]`));
-    return isForm && formBaselines.has(root) && formBaselines.get(root) !== fieldSignature(root);
+    const formIds = ["sheetContainer","incomeSourceContainer","installmentPlanContainer",
+      "postponeBillContainer","postponeRecurringOccurrenceContainer","paymentLinkPopupContainer"];
+    const isForm = formIds.some(id=>root.closest(`[id="${id}"]`));
+    return isForm && formBaselines.has(root) && formBaselines.get(root)!==fieldSignature(root);
   }
-
   function rememberForms() {
     for (const root of popupSheets()) {
-      if (!formBaselines.has(root)) formBaselines.set(root, fieldSignature(root));
+      if (!formBaselines.has(root)) formBaselines.set(root,fieldSignature(root));
     }
   }
-
   const allowed = () => ENABLED && Boolean(dismissContext(gesture?.context?.root));
 
   function cleanup() {
@@ -19349,90 +19320,90 @@ window.addEventListener("storage", () => {
   }
 
   function snapshot() {
-    const root = document.getElementById("app");
-    if (!root) return null;
+  const root = document.getElementById("app");
+  if (!root) return null;
 
-    const copy = root.cloneNode(true);
-    const originals = [root, ...root.querySelectorAll("*")];
-    const copies = [copy, ...copy.querySelectorAll("*")];
-    const rootRect = root.getBoundingClientRect();
-    const mainScroll =
-      root.querySelector(".main-content")?.scrollTop || 0;
+  const copy = root.cloneNode(true);
+  const originals = [root, ...root.querySelectorAll("*")];
+  const copies = [copy, ...copy.querySelectorAll("*")];
+  const rootRect = root.getBoundingClientRect();
+  const mainScroll =
+    root.querySelector(".main-content")?.scrollTop || 0;
 
-    for (let index = 0; index < copies.length; index++) {
-      const node = copies[index];
-      const original = originals[index];
+  for (let index = 0; index < copies.length; index++) {
+    const node = copies[index];
+    const original = originals[index];
 
-      if (node.id) node.setAttribute("data-bb-copy-id", node.id);
-      if (original.scrollTop) node.setAttribute("data-bb-scroll-top", String(original.scrollTop));
-      if (original.scrollLeft) node.setAttribute("data-bb-scroll-left", String(original.scrollLeft));
-      node.removeAttribute("id");
+    if (node.id) node.setAttribute("data-bb-copy-id", node.id);
+    if (original.scrollTop) node.setAttribute("data-bb-scroll-top", String(original.scrollTop));
+    if (original.scrollLeft) node.setAttribute("data-bb-scroll-left", String(original.scrollLeft));
+    node.removeAttribute("id");
 
-      for (const attribute of [...node.attributes]) {
-        if (/^on/i.test(attribute.name) ||
-            attribute.name === "autofocus") {
-          node.removeAttribute(attribute.name);
-        }
-      }
-
-      node.style.setProperty("animation", "none", "important");
-
-      const position = getComputedStyle(original).position;
-
-      if (
-        original !== root &&
-        (position === "fixed" || position === "sticky")
-      ) {
-        const rect = original.getBoundingClientRect();
-
-        if (position === "sticky") {
-          const spacer = document.createElement("div");
-
-          spacer.style.cssText =
-            `height:${rect.height}px;` +
-            `min-height:${rect.height}px;` +
-            "flex-shrink:0;pointer-events:none;";
-
-          node.parentNode.insertBefore(spacer, node);
-        }
-
-        for (const [property, value] of Object.entries({
-          position: "absolute",
-          top: `${rect.top - rootRect.top}px`,
-          left: `${rect.left - rootRect.left}px`,
-          right: "auto",
-          bottom: "auto",
-          width: `${rect.width}px`,
-          height: `${rect.height}px`
-        })) {
-          node.style.setProperty(property, value, "important");
-        }
+    for (const attribute of [...node.attributes]) {
+      if (/^on/i.test(attribute.name) ||
+          attribute.name === "autofocus") {
+        node.removeAttribute(attribute.name);
       }
     }
 
-    copy.querySelectorAll("script,iframe,object,embed")
-      .forEach(node => node.remove());
+    node.style.setProperty("animation", "none", "important");
 
-    copy.inert = true;
-    copy.setAttribute("aria-hidden", "true");
+    const position = getComputedStyle(original).position;
 
-    Object.assign(copy.style, {
-      display: "flex",
-      flexDirection: "column",
-      position: "relative",
-      width: "100%",
-      minHeight: "100dvh",
-      margin: "0",
-      pointerEvents: "none"
-    });
+    if (
+      original !== root &&
+      (position === "fixed" || position === "sticky")
+    ) {
+      const rect = original.getBoundingClientRect();
 
-    return {
-      copy,
-      mainScroll,
-      windowScroll: window.scrollY,
-      route: currentRoute
-    };
+      if (position === "sticky") {
+        const spacer = document.createElement("div");
+
+        spacer.style.cssText =
+          `height:${rect.height}px;` +
+          `min-height:${rect.height}px;` +
+          "flex-shrink:0;pointer-events:none;";
+
+        node.parentNode.insertBefore(spacer, node);
+      }
+
+      for (const [property, value] of Object.entries({
+        position: "absolute",
+        top: `${rect.top - rootRect.top}px`,
+        left: `${rect.left - rootRect.left}px`,
+        right: "auto",
+        bottom: "auto",
+        width: `${rect.width}px`,
+        height: `${rect.height}px`
+      })) {
+        node.style.setProperty(property, value, "important");
+      }
+    }
   }
+
+  copy.querySelectorAll("script,iframe,object,embed")
+    .forEach(node => node.remove());
+
+  copy.inert = true;
+  copy.setAttribute("aria-hidden", "true");
+
+  Object.assign(copy.style, {
+    display: "flex",
+    flexDirection: "column",
+    position: "relative",
+    width: "100%",
+    minHeight: "100dvh",
+    margin: "0",
+    pointerEvents: "none"
+  });
+
+  return {
+    copy,
+    mainScroll,
+    windowScroll: window.scrollY,
+    route: currentRoute
+  };
+}
 
   navigate = function(route, params = {}) {
     cleanup();
@@ -19441,181 +19412,121 @@ window.addEventListener("storage", () => {
       try { captured = snapshot(); }
       catch (error) { console.warn("Back preview skipped", error); }
     }
-    if (captured) pageSnapshots.set(captured.route, captured);
+    if (captured) pageSnapshots.set(captured.route,captured);
     const result = originalNavigate.apply(this, arguments);
     previous = captured && currentRoute === route ? captured : null;
     return result;
   };
 
   function panelSnapshot(root) {
-    const copy = root.cloneNode(true);
-    const originals = [root, ...root.querySelectorAll("*")];
-    const copies = [copy, ...copy.querySelectorAll("*")];
-    const ids = new Set(originals.map(node => node.id).filter(Boolean));
-
-    originals.forEach((original, index) => {
-      const node = copies[index];
-      if (original.id) node.setAttribute("data-bb-copy-id", original.id);
+    const copy=root.cloneNode(true);
+    const originals=[root,...root.querySelectorAll("*")];
+    const copies=[copy,...copy.querySelectorAll("*")];
+    const ids=new Set(originals.map(node=>node.id).filter(Boolean));
+    originals.forEach((original,index)=>{
+      const node=copies[index];
+      if (original.id) node.setAttribute("data-bb-copy-id",original.id);
       node.removeAttribute("id");
       for (const attribute of [...node.attributes]) {
-        if (/^on/i.test(attribute.name) || attribute.name === "autofocus") {
-          node.removeAttribute(attribute.name);
-        }
+        if (/^on/i.test(attribute.name)||attribute.name==="autofocus") node.removeAttribute(attribute.name);
       }
-      node.style.setProperty("animation", "none", "important");
-      if (original.scrollTop) node.setAttribute("data-bb-scroll-top", String(original.scrollTop));
-      if (original.scrollLeft) node.setAttribute("data-bb-scroll-left", String(original.scrollLeft));
-      if (original instanceof HTMLInputElement) {
-        node.value = original.value;
-        node.checked = original.checked;
-      }
-      if (original instanceof HTMLTextAreaElement || original instanceof HTMLSelectElement) {
-        node.value = original.value;
-      }
+      node.style.setProperty("animation","none","important");
+      if (original.scrollTop) node.setAttribute("data-bb-scroll-top",String(original.scrollTop));
+      if (original.scrollLeft) node.setAttribute("data-bb-scroll-left",String(original.scrollLeft));
+      if (original instanceof HTMLInputElement) {node.value=original.value;node.checked=original.checked;}
+      if (original instanceof HTMLTextAreaElement || original instanceof HTMLSelectElement) node.value=original.value;
     });
-
-    copy.querySelectorAll("script,iframe,object,embed").forEach(node => node.remove());
-
-    const rect = root.getBoundingClientRect();
-    for (const [property, value] of Object.entries({
-      position: "absolute",
-      top: `${rect.top}px`,
-      left: `${rect.left}px`,
-      right: "auto",
-      bottom: "auto",
-      width: `${rect.width}px`,
-      height: `${rect.height}px`,
-      maxHeight: "none",
-      minHeight: "0",
-      margin: "0",
-      transform: "none",
-      display: getComputedStyle(root).display,
-      opacity: "1"
-    })) {
-      copy.style.setProperty(property, value, "important");
-    }
-
-    copy.inert = true;
-    copy.setAttribute("aria-hidden", "true");
-
-    const styleTexts = [...root.parentElement.querySelectorAll("style")].map(style => style.textContent);
-    const css = styleTexts.join("\n").replace(/#([A-Za-z_][\w-]*)/g, (match, id) =>
-      ids.has(id) ? `[data-bb-copy-id="${id}"]` : match
-    );
-
-    return { copy, css, mainScroll: 0, windowScroll: 0, route: currentRoute };
+    copy.querySelectorAll("script,iframe,object,embed").forEach(node=>node.remove());
+    const rect=root.getBoundingClientRect();
+    for (const [property,value] of Object.entries({position:"absolute",top:`${rect.top}px`,left:`${rect.left}px`,
+      right:"auto",bottom:"auto",width:`${rect.width}px`,height:`${rect.height}px`,maxHeight:"none",minHeight:"0",margin:"0",
+      transform:"none",display:getComputedStyle(root).display,opacity:"1"})) copy.style.setProperty(property,value,"important");
+    copy.inert=true;copy.setAttribute("aria-hidden","true");
+    const styleTexts=[...root.parentElement.querySelectorAll("style")].map(style=>style.textContent);
+    const css=styleTexts.join("\n").replace(/#([A-Za-z_][\w-]*)/g,(match,id)=>
+      ids.has(id)?`[data-bb-copy-id="${id}"]`:match);
+    return {copy,css,mainScroll:0,windowScroll:0,route:currentRoute};
   }
-
   function restoreCloneScroll(pane) {
     for (const node of pane.querySelectorAll("[data-bb-scroll-top],[data-bb-scroll-left]")) {
-      if (node.hasAttribute("data-bb-scroll-top")) node.scrollTop = Number(node.getAttribute("data-bb-scroll-top"));
-      if (node.hasAttribute("data-bb-scroll-left")) node.scrollLeft = Number(node.getAttribute("data-bb-scroll-left"));
+      if (node.hasAttribute("data-bb-scroll-top")) node.scrollTop=Number(node.getAttribute("data-bb-scroll-top"));
+      if (node.hasAttribute("data-bb-scroll-left")) node.scrollLeft=Number(node.getAttribute("data-bb-scroll-left"));
     }
   }
-
   function shadeFor(root) {
-    const shade = root.parentElement.querySelector(".sheet-overlay");
+    const shade=root.parentElement.querySelector(".sheet-overlay");
     return shade ? getComputedStyle(shade).backgroundColor : "rgba(0,0,0,.6)";
   }
-
-  function addPanel(pane, snap) {
-    if (snap.css) {
-      const style = document.createElement("style");
-      style.textContent = snap.css;
-      pane.appendChild(style);
-    }
+  function addPanel(pane,snap) {
+    if (snap.css) {const style=document.createElement("style");style.textContent=snap.css;pane.appendChild(style);}
     pane.appendChild(snap.copy.cloneNode(true));
   }
-
   function createModalPreview(state) {
-    const base = snapshot();
+    const base=snapshot();
     if (!base) return;
-    base.windowScroll = Math.max(0, -document.getElementById("app").getBoundingClientRect().top);
-    if (state.context.mode === "inline") base.copy.querySelector(".recurring-calendar-selected-day")?.remove();
-
-    const layer = document.createElement("div");
-    layer.setAttribute("data-bb-drag-preview", "");
-    layer.setAttribute("aria-hidden", "true");
-    layer.inert = true;
-    layer.style.cssText = "position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
-
-    const behind = document.createElement("div");
-    behind.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;";
-    const content = document.createElement("div");
-    content.style.cssText = `width:100%;min-height:100%;transform:translateY(${-base.windowScroll}px);`;
-    content.appendChild(base.copy.cloneNode(true));
-    behind.appendChild(content);
-    layer.appendChild(behind);
-
+    base.windowScroll=Math.max(0,-document.getElementById("app").getBoundingClientRect().top);
+    if (state.context.mode==="inline") base.copy.querySelector(".recurring-calendar-selected-day")?.remove();
+    const layer=document.createElement("div");
+    layer.setAttribute("data-bb-drag-preview","");layer.setAttribute("aria-hidden","true");layer.inert=true;
+    layer.style.cssText="position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
+    const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;pointer-events:none;";
+    const content=document.createElement("div");content.style.cssText=`width:100%;min-height:100%;transform:translateY(${-base.windowScroll}px);`;
+    content.appendChild(base.copy.cloneNode(true));behind.appendChild(content);layer.appendChild(behind);
     const dock = content.querySelector(".tab-bar");
-    if (dock) {
-      // Keep the copied navigation outside the scrolled content.
-      behind.appendChild(dock);
 
-      for (const [property, value] of Object.entries({
-        position: "absolute",
-        top: "auto",
-        bottom: "0",
-        left: "0",
-        right: "0",
-        width: "100%",
-        height: "auto",
-        margin: "0",
-        transform: "none"
-      })) {
-        dock.style.setProperty(property, value, "important");
-      }
-    }
+if (dock) {
+  // Keep the copied navigation outside the scrolled content.
+  behind.appendChild(dock);
 
-    for (const root of state.context.sheets.slice(0, -1)) {
-      const dim = document.createElement("div");
-      dim.style.cssText = `position:absolute;inset:0;background:${shadeFor(root)};pointer-events:none;`;
-      behind.appendChild(dim);
-      addPanel(behind, panelSnapshot(root));
-    }
-
-    if (state.context.mode === "popup") {
-      const dim = document.createElement("div");
-      dim.style.cssText = `position:absolute;inset:0;background:${shadeFor(state.context.root)};pointer-events:none;`;
-      layer.appendChild(dim);
-      state.dim = dim;
-    }
-
-    const pane = document.createElement("div");
-    pane.style.cssText = "position:absolute;inset:0;overflow:hidden;pointer-events:none;will-change:transform;";
-    addPanel(pane, panelSnapshot(state.context.root));
-    layer.appendChild(pane);
-
-    overlay = layer;
-    document.body.appendChild(layer);
-    restoreCloneScroll(layer);
-    state.pane = pane;
+  for (const [property, value] of Object.entries({
+    position: "absolute",
+    top: "auto",
+    bottom: "0",
+    left: "0",
+    right: "0",
+    width: "100%",
+    height: "auto",
+    margin: "0",
+    transform: "none"
+  })) {
+    dock.style.setProperty(property, value, "important");
   }
-
+}
+    for (const root of state.context.sheets.slice(0,-1)) {
+      const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(root)};pointer-events:none;`;
+      behind.appendChild(dim);addPanel(behind,panelSnapshot(root));
+    }
+    if (state.context.mode==="popup") {
+      const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(state.context.root)};pointer-events:none;`;
+      layer.appendChild(dim);state.dim=dim;
+    }
+    const pane=document.createElement("div");pane.style.cssText="position:absolute;inset:0;overflow:hidden;pointer-events:none;will-change:transform;";
+    addPanel(pane,panelSnapshot(state.context.root));layer.appendChild(pane);
+    overlay=layer;document.body.appendChild(layer);
+    restoreCloneScroll(layer);state.pane=pane;
+  }
   function rememberNotificationPreview() {
-    const root = document.getElementById("notificationCenterSheet");
+    const root=document.getElementById("notificationCenterSheet");
     if (!root) return;
-    const base = snapshot();
+    const base=snapshot();
     if (!base) return;
-    base.windowScroll = Math.max(0, -document.getElementById("app").getBoundingClientRect().top);
-    notificationPreview = { base, panel: panelSnapshot(root), shade: shadeFor(root) };
+    base.windowScroll=Math.max(0,-document.getElementById("app").getBoundingClientRect().top);
+    notificationPreview={base,panel:panelSnapshot(root),shade:shadeFor(root)};
   }
-
-  const notificationCloseBeforeDrag = closeNotificationCenter;
-  closeNotificationCenter = function() {
-    if (ENABLED && arguments[0] === true) {
-      try { rememberNotificationPreview(); } catch (error) { notificationPreview = null; }
+  const notificationCloseBeforeDrag=closeNotificationCenter;
+  closeNotificationCenter=function() {
+    if (ENABLED && arguments[0]===true) {
+      try {rememberNotificationPreview();} catch(error) {notificationPreview=null;}
     }
-    return notificationCloseBeforeDrag.apply(this, arguments);
+    return notificationCloseBeforeDrag.apply(this,arguments);
   };
-  window.closeNotificationCenter = closeNotificationCenter;
+  window.closeNotificationCenter=closeNotificationCenter;
 
   function createPreview(state) {
     if (state.context.mode !== "page") {
       createModalPreview(state);
       return;
     }
-
     const handler = state.back.getAttribute("onclick") || "";
 
     const destination = handler.match(
@@ -19623,45 +19534,23 @@ window.addEventListener("storage", () => {
     );
 
     if (/^\s*returnToNotificationCenter\(/.test(handler) && notificationPreview) {
-      const saved = notificationPreview;
-      const layer = document.createElement("div");
-      layer.setAttribute("data-bb-drag-preview", "");
-      layer.inert = true;
-      layer.setAttribute("aria-hidden", "true");
-      layer.style.cssText = "position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
-
-      const behind = document.createElement("div");
-      behind.style.cssText = "position:absolute;inset:0;overflow:hidden;";
-      const content = document.createElement("div");
-      content.style.transform = `translateY(${-saved.base.windowScroll}px)`;
-      content.appendChild(saved.base.copy.cloneNode(true));
-      behind.appendChild(content);
-      const shade = document.createElement("div");
-      shade.style.cssText = `position:absolute;inset:0;background:${saved.shade};`;
-      behind.appendChild(shade);
-      addPanel(behind, saved.panel);
-      layer.appendChild(behind);
-
-      const ahead = document.createElement("div");
-      ahead.style.cssText = "position:absolute;inset:0;overflow:hidden;background:var(--bg);";
-      const current = snapshot();
-      if (!current) return;
-      const frontContent = document.createElement("div");
-      frontContent.style.transform = `translateY(${-current.windowScroll}px)`;
-      frontContent.appendChild(current.copy);
-      ahead.appendChild(frontContent);
-      layer.appendChild(ahead);
-
-      overlay = layer;
-      document.body.appendChild(layer);
-      restoreCloneScroll(layer);
-      state.pane = ahead;
-      return;
+      const saved=notificationPreview;
+      const layer=document.createElement("div");
+      layer.setAttribute("data-bb-drag-preview","");layer.inert=true;layer.setAttribute("aria-hidden","true");
+      layer.style.cssText="position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
+      const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;";
+      const content=document.createElement("div");content.style.transform=`translateY(${-saved.base.windowScroll}px)`;
+      content.appendChild(saved.base.copy.cloneNode(true));behind.appendChild(content);
+      const shade=document.createElement("div");shade.style.cssText=`position:absolute;inset:0;background:${saved.shade};`;
+      behind.appendChild(shade);addPanel(behind,saved.panel);layer.appendChild(behind);
+      const ahead=document.createElement("div");ahead.style.cssText="position:absolute;inset:0;overflow:hidden;background:var(--bg);";
+      const current=snapshot();if(!current)return;
+      const frontContent=document.createElement("div");frontContent.style.transform=`translateY(${-current.windowScroll}px)`;
+      frontContent.appendChild(current.copy);ahead.appendChild(frontContent);layer.appendChild(ahead);
+      overlay=layer;document.body.appendChild(layer);restoreCloneScroll(layer);state.pane=ahead;return;
     }
-
     const destinationSnapshot = destination && pageSnapshots.get(destination[1]);
     if (destinationSnapshot) previous = destinationSnapshot;
-
     if (
       !previous ||
       !destination ||
@@ -19675,6 +19564,7 @@ window.addEventListener("storage", () => {
     if (!current) return;
 
     const layer = document.createElement("div");
+
     layer.inert = true;
     layer.setAttribute("aria-hidden", "true");
 
@@ -19707,7 +19597,8 @@ window.addEventListener("storage", () => {
       Object.assign(content.style, {
         width: "100%",
         minHeight: "100%",
-        transform: `translateY(${-snap.windowScroll}px)`
+        transform:
+          `translateY(${-snap.windowScroll}px)`
       });
 
       content.appendChild(
@@ -19757,30 +19648,24 @@ window.addEventListener("storage", () => {
       const valid = contextMatches(state);
 
       if (
-        goBack &&
-        valid &&
-        state.pane?.isConnected &&
-        overlay?.isConnected
-      ) {
+  goBack &&
+  valid &&
+  state.pane?.isConnected &&
+  overlay?.isConnected
+) {
         if (state.context.mode !== "page") {
-          try { state.back.click(); } catch (error) { cleanup(); throw error; }
-          const started = performance.now();
-          const waitForClose = () => {
+          try {state.back.click();} catch(error) {cleanup();throw error;}
+          const started=performance.now();
+          const waitForClose=()=>{
             if (!settling || !overlay) return;
-            if (
-              !state.context.root.isConnected ||
-              getComputedStyle(state.context.root).display === "none" ||
-              performance.now() - started > 800
-            ) {
-              cleanup();
-              return;
-            }
-            timer = setTimeout(waitForClose, 16);
+            if (!state.context.root.isConnected ||
+                getComputedStyle(state.context.root).display === "none" ||
+                performance.now()-started>800) {cleanup();return;}
+            timer=setTimeout(waitForClose,16);
           };
           waitForClose();
           return;
         }
-
         const scroll = state.returnScroll;
 
         cleanup();
@@ -19814,10 +19699,10 @@ window.addEventListener("storage", () => {
     }
 
     state.pane.style.setProperty(
-      "transition",
-      "transform 180ms ease-out",
-      "important"
-    );
+  "transition",
+  "transform 180ms ease-out",
+  "important"
+);
 
     state.pane.style.transform =
       `translateX(${goBack ? window.innerWidth : 0}px)`;
@@ -19830,73 +19715,68 @@ window.addEventListener("storage", () => {
   }
 
   document.addEventListener(
-  "touchstart",
-  event => {
-    // If ANY sheet/popup is visible, do not start drag-back.
-    // This relies on the existing popupSheets() helper above.
-    if (popupSheets().length > 0) {
-      return;
-    }
+    "touchstart",
+    event => {
+      if (settling) return;
 
-    if (settling) return;
+      cleanup();
 
-    cleanup();
+      if (
+        !ENABLED ||
+        event.touches.length !== 1
+      ) {
+        return;
+      }
 
-    if (
-      !ENABLED ||
-      event.touches.length !== 1
-    ) {
-      return;
-    }
+      const target = event.target;
 
-    const target = event.target;
+      if (
+        !(target instanceof Element) ||
+        !dismissContext(target)?.root.contains(target) ||
+        target.closest(
+          "input,textarea,select,[contenteditable],.tab-bar"
+        )
+      ) {
+        return;
+      }
 
-    if (
-      !(target instanceof Element) ||
-      !dismissContext(target)?.root.contains(target) ||
-      target.closest(
-        "input,textarea,select,[contenteditable],.tab-bar"
-      )
-    ) {
-      return;
-    }
+      const touch = event.touches[0];
 
-    const touch = event.touches[0];
+      if (
+        touch.clientX < 8 ||
+        touch.clientX > 110
+      ) {
+        return;
+      }
 
-    if (
-      touch.clientX < 8 ||
-      touch.clientX > 110
-    ) {
-      return;
-    }
+      const context = dismissContext(target);
+      const back = context?.back;
 
-    const context = dismissContext(target);
-    const back = context?.back;
+      if (!back || back.disabled) return;
 
-    if (!back || back.disabled) return;
+      gestureTarget = target;
+      target.addEventListener("touchend", handleDragEnd, {passive: false});
+      target.addEventListener("touchcancel", cleanup, {passive: true});
 
-    gestureTarget = target;
-    target.addEventListener("touchend", handleDragEnd, { passive: false });
-    target.addEventListener("touchcancel", cleanup, { passive: true });
 
-    gesture = {
-      context,
-      id: touch.identifier,
-      x: touch.clientX,
-      y: touch.clientY,
-      started: performance.now(),
-      route: currentRoute,
-      back,
-      armed: false,
-      pane: null,
-      samples: [{
-        x: touch.clientX,
-        time: performance.now()
-      }]
-    };
-  },
-  { passive: true }
-);
+     gesture = {
+  context,
+  id: touch.identifier,
+  x: touch.clientX,
+  y: touch.clientY,
+  started: performance.now(),
+  route: currentRoute,
+  back,
+  armed: false,
+  pane: null,
+  samples: [{
+    x: touch.clientX,
+    time: performance.now()
+  }]
+};
+    },
+    { passive: true }
+  );
 
   document.addEventListener(
     "touchmove",
@@ -19917,49 +19797,43 @@ window.addEventListener("storage", () => {
         cleanup();
         return;
       }
-
       const sampleTime = performance.now();
 
-      gesture.samples.push({
-        x: touch.clientX,
-        time: sampleTime
-      });
+gesture.samples.push({
+  x: touch.clientX,
+  time: sampleTime
+});
 
-      gesture.samples = gesture.samples
-        .filter(sample => sampleTime - sample.time <= 120)
-        .slice(-8);
-
+gesture.samples = gesture.samples
+  .filter(sample => sampleTime - sample.time <= 120)
+  .slice(-8);
       const dx =
         touch.clientX - gesture.x;
-      if (gesture.dim) {
-        gesture.dim.style.opacity = String(
-          1 - Math.min(1, Math.max(0, dx) / window.innerWidth)
-        );
-      }
+      if (gesture.dim) gesture.dim.style.opacity = String(1-Math.min(1,Math.max(0,dx)/window.innerWidth));
 
       const dy = Math.abs(
         touch.clientY - gesture.y
       );
 
       if (
-        !gesture.armed &&
-        (
-          dx < -10 ||
-          dy > 32 ||
-          (dy > 10 && dy > Math.abs(dx))
-        )
-      ) {
-        cleanup();
-        return;
-      }
+  !gesture.armed &&
+  (
+    dx < -10 ||
+    dy > 32 ||
+    (dy > 10 && dy > Math.abs(dx))
+  )
+) {
+  cleanup();
+  return;
+}
 
       if (dx > 16 && dx > dy * 2) {
-        if (!gesture.armed && !event.cancelable) {
-          cleanup();
-          return;
-        }
+      if (!gesture.armed && !event.cancelable) {
+  cleanup();
+  return;
+}
 
-        if (event.cancelable) event.preventDefault();
+if (event.cancelable) event.preventDefault();
 
         if (!gesture.armed) {
           gesture.armed = true;
@@ -20003,45 +19877,43 @@ window.addEventListener("storage", () => {
   );
 
   function handleDragEnd(event) {
-    if (!gesture || settling) return;
+      if (!gesture || settling) return;
 
-    const state = gesture;
+      const state = gesture;
 
-    if (!state.armed) {
-      cleanup();
-      return;
-    }
+      if (!state.armed) {
+  cleanup();
+  return;
+}
 
-    if (event.cancelable) event.preventDefault();
+if (event.cancelable) event.preventDefault();
 
-    const touch = [...event.changedTouches]
-      .find(item =>
-        item.identifier === state.id
-      );
+      const touch = [...event.changedTouches]
+        .find(item =>
+          item.identifier === state.id
+        );
 
-    const dx = touch
-      ? touch.clientX - state.x
-      : 0;
+      const dx = touch
+        ? touch.clientX - state.x
+        : 0;
 
-    const dy = touch
-      ? Math.abs(touch.clientY - state.y)
-      : Infinity;
+      const dy = touch
+        ? Math.abs(touch.clientY - state.y)
+        : Infinity;
+// Release completes Back unless dragged back to the start.
+const returnedToStart = dx <= 6;
 
-    // Release completes Back unless dragged back to the start.
-    const returnedToStart = dx <= 6;
+let goBack = Boolean(
+  touch &&
+  state.armed &&
+  state.pane?.isConnected &&
+  !returnedToStart
+);
+      if (goBack && state.context.mode !== "page" && formChanged(state.context.root)) {
+        goBack = confirm("Discard unsaved changes and close this form?");
+      }
+      finish(state, goBack);
 
-    let goBack = Boolean(
-      touch &&
-      state.armed &&
-      state.pane?.isConnected &&
-      !returnedToStart
-    );
-
-    if (goBack && state.context.mode !== "page" && formChanged(state.context.root)) {
-      goBack = confirm("Discard unsaved changes and close this form?");
-    }
-
-    finish(state, goBack);
   }
 
   document.addEventListener("touchend", handleDragEnd, {
@@ -20057,9 +19929,7 @@ window.addEventListener("storage", () => {
 
   window.addEventListener("resize", () => {
     cleanup();
-    previous = null;
-    pageSnapshots.clear();
-    notificationPreview = null;
+    previous = null; pageSnapshots.clear(); notificationPreview = null;
   });
 
   document.addEventListener(
@@ -20067,9 +19937,7 @@ window.addEventListener("storage", () => {
     () => {
       if (document.visibilityState === "hidden") {
         cleanup();
-        previous = null;
-        pageSnapshots.clear();
-        notificationPreview = null;
+        previous = null; pageSnapshots.clear(); notificationPreview = null;
       }
     }
   );
@@ -20078,9 +19946,7 @@ window.addEventListener("storage", () => {
     "billbeacon:signed-out",
     () => {
       cleanup();
-      previous = null;
-      pageSnapshots.clear();
-      notificationPreview = null;
+      previous = null; pageSnapshots.clear(); notificationPreview = null;
     }
   );
 
@@ -20094,46 +19960,32 @@ window.addEventListener("storage", () => {
       // is rendered from current household data when Back completes.
     }
   );
-
   const appRoot = document.getElementById("app");
 
-  if (appRoot) {
-    const viewObserver = new MutationObserver(() => {
-      if (!gesture) return;
-      const context = dismissContext(gesture.context.root);
-      const same = context &&
-        context.mode === gesture.context.mode &&
-        context.root === gesture.context.root &&
-        context.back.getAttribute("onclick") === gesture.back.getAttribute("onclick");
-      if (!same || currentRoute !== gesture.route) {
-        cleanup();
-        return;
-      }
-      gesture.back = context.back;
-    });
+if (appRoot) {
+const viewObserver = new MutationObserver(() => {
+  if (!gesture) return;
+  const context = dismissContext(gesture.context.root);
+  const same = context && context.mode === gesture.context.mode &&
+    context.root === gesture.context.root &&
+    context.back.getAttribute("onclick") === gesture.back.getAttribute("onclick");
+  if (!same || currentRoute !== gesture.route) {cleanup();return;}
+  gesture.back = context.back;
+});
 
-    viewObserver.observe(appRoot, {
-      childList: true,
-      subtree: true
-    });
-  }
-
-  const formObserver = new MutationObserver(rememberForms);
-  formObserver.observe(document.body, { childList: true, subtree: true });
-  rememberForms();
-
-  window.addEventListener("billbeacon:authenticated", () => {
-    cleanup();
-    previous = null;
-    pageSnapshots.clear();
-    notificationPreview = null;
+  viewObserver.observe(appRoot, {
+    childList: true,
+    subtree: true
   });
-
-  window.addEventListener("billbeacon:household-ready", () => {
-    cleanup();
-    previous = null;
-    pageSnapshots.clear();
-    notificationPreview = null;
+}
+  const formObserver = new MutationObserver(rememberForms);
+  formObserver.observe(document.body,{childList:true,subtree:true});
+  rememberForms();
+  window.addEventListener("billbeacon:authenticated",()=>{
+    cleanup();previous=null;pageSnapshots.clear();notificationPreview=null;
+  });
+  window.addEventListener("billbeacon:household-ready",()=>{
+    cleanup();previous=null;pageSnapshots.clear();notificationPreview=null;
   });
 })();
 // END BILL BEACON DRAG-BACK
