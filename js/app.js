@@ -10516,7 +10516,7 @@ function renderActivity() {
     item => item.month === selectedMonth
   );
 
-  const pills = months.map(key => `
+    const pills = months.map(key => `
     <button
       type="button"
       class="bb-outline-pill activity-month-pill ${
@@ -10527,14 +10527,9 @@ function renderActivity() {
         activityMonth: '${key}'
       })"
       aria-pressed="${key === selectedMonth}"
-      aria-label="${escapeHtml(monthLabel(key))}: ${
-        counts.get(key) || 0
-      } changes"
+      aria-label="Show activity for ${escapeHtml(monthLabel(key))}"
     >
       <span>${escapeHtml(monthLabel(key))}</span>
-      <span class="activity-month-count">
-        ${counts.get(key) || 0}
-      </span>
     </button>
   `).join("");
 
@@ -10615,11 +10610,6 @@ function renderActivity() {
         ${pills}
       </div>
 
-      <div class="activity-selected-summary" role="status">
-        ${escapeHtml(monthLabel(selectedMonth))}
-        · ${selectedEntries.length}
-        ${selectedEntries.length === 1 ? "change" : "changes"}
-      </div>
 
       <div class="activity-list-frame">
         <div

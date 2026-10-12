@@ -3897,3 +3897,7 @@ body {
     82px + env(safe-area-inset-bottom, 0px)
   );
 }
+/* Space between the month pills and the activity box. */
+.activity-page-content .activity-months {
+  margin-bottom: 6px;
+}
