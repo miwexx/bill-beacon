@@ -1448,7 +1448,7 @@
       <!-- NEW global reminders card inside Notifications sheet -->
       <div class="card card-pad" id="notificationSettingsCard" style="margin-top:var(--space-3)">
         <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
-          Reminders for all bills
+          Bills Notifications
         </div>
         ${REMINDER_OFFSETS.map(offset => {
           const isSelected = selectedOffsets.includes(offset.days);
@@ -1484,12 +1484,7 @@
   />
 </div>
         </div>
-        <div
-          class="settings-footer"
-          style="margin-top:10px"
-        >
-          Bill reminders use these offsets and time of day. Enable notifications above to receive alerts on this device.
-        </div>
+        
       </div>
     </section>
   `;
