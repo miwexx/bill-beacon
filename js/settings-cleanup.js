@@ -1411,50 +1411,97 @@
     `;
   }
     function buildNotificationSettingsSection() {
-    return `
-      <section class="settings-section">
-        <div class="card card-pad">
-          <p
-            id="notificationPermissionStatus"
-            style="
-              font-size:var(--text-sm);
-              color:var(--text-muted);
-              line-height:1.5;
-              margin-bottom:var(--space-3);
-            "
-          >
-            Checking notification status…
-          </p>
+  const settings = Store.getSettings();
+  const selectedOffsets = Array.isArray(settings.reminderOffsets)
+    ? settings.reminderOffsets.slice().sort((a, b) => a - b)
+    : [7, 3, 1];
+  const reminderTime = settings.reminderTimeOfDay || "09:00";
 
-          <button
-            id="notificationPermissionButton"
-            type="button"
-            class="bb-outline-pill"
-            style="
-              width:100%;
-              min-height:46px;
-              justify-content:center;
-            "
-            onclick="activateBillNotifications()"
-          >
-            ${svgIcon("bell", 20)} Turn On Notifications
-          </button>
+  return `
+    <section class="settings-section">
+      <div class="card card-pad">
+        <p
+          id="notificationPermissionStatus"
+          style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin-bottom:var(--space-3)"
+        >
+          Checking notification status…
+        </p>
+        <button
+          id="notificationPermissionButton"
+          type="button"
+          class="bb-outline-pill"
+          style="width:100%;min-height:46px;justify-content:center"
+          onclick="activateBillNotifications()"
+        >
+          ${svgIcon("bell", 20)}
+          <span>Turn On Notifications</span>
+        </button>
+        <p
+          id="notificationTestStatus"
+          style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:var(--space-2) 0 0"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <button
+          type="button"
+          class="bb-outline-pill"
+          style="width:100%;min-height:44px;justify-content:center;margin-top:10px"
+          onclick="sendBillNotificationTest()"
+        >
+          ${svgIcon("checkCircle", 18)}
+          <span>Send Test Notifications</span>
+        </button>
+      </div>
 
-          <p
-            id="notificationTestStatus"
-            style="
-              font-size:var(--text-sm);
-              color:var(--text-muted);
-              line-height:1.5;
-              margin:var(--space-2) 0 0;
-            "
-            role="status"
-            aria-live="polite"
-          ></p>
+      <!-- NEW global reminders card inside Notifications sheet -->
+      <div class="card card-pad" id="notificationSettingsCard" style="margin-top:var(--space-3)">
+        <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
+          Reminders for all bills
         </div>
-      </section>
-    `;
-  }
+        ${REMINDER_OFFSETS.map(offset => {
+          const isSelected = selectedOffsets.includes(offset.days);
+          return `
+            <div class="form-row">
+              <div class="form-label">${escapeHtml(offset.label)}</div>
+              <div class="form-input-row">
+                <label class="toggle">
+                  <input
+                    type="checkbox"
+                    class="global-reminder-toggle"
+                    data-days="${escapeHtml(String(offset.days))}"
+                    ${isSelected ? "checked" : ""}
+                  />
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </label>
+              </div>
+            </div>
+          `;
+        }).join("")}
+        <div class="form-row" style="margin-top:var(--space-3)">
+          <div class="form-label">Time of day</div>
+          <div class="form-input-row">
+            <input
+              id="globalReminderTime"
+              type="time"
+              class="form-input"
+              value="${escapeHtml(reminderTime)}"
+              style="max-width:130px;text-align:left"
+              aria-label="Time of day for bill reminders"
+            />
+          </div>
+        </div>
+        <div
+          class="settings-footer"
+          style="margin-top:10px"
+        >
+          Bill reminders use these offsets and time of day. Enable notifications above to receive alerts on this device.
+        </div>
+      </div>
+    </section>
+  `;
+}
     function buildIncomeSettingsSection() {
     const sources = Store.getIncomeSources();
     const sourceRows = sources
@@ -1746,13 +1793,25 @@
     }
 
     titleElement.textContent = title;
-    bodyElement.innerHTML = content;
+bodyElement.innerHTML = content;
 
-    // Re-run household / notification helpers when needed.
-    if (section === "account") {
-      refreshHouseholdSettingsCard();
-    } else if (section === "notifications") {
-      refreshNotificationSettingsCard();
-    }
+// Re-run household / notification helpers when needed.
+if (section === "account") {
+  refreshHouseholdSettingsCard();
+} else if (section === "notifications") {
+  refreshNotificationSettingsCard();
+
+  // Attach handlers for the global reminder options
+  document
+    .querySelectorAll(".global-reminder-toggle")
+    .forEach(input => {
+      input.addEventListener("change", saveGlobalReminderSettings);
+    });
+
+  const timeInput = document.getElementById("globalReminderTime");
+  if (timeInput) {
+    timeInput.addEventListener("change", saveGlobalReminderSettings);
+  }
+}
   };
 })();
