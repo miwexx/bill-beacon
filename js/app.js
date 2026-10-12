@@ -16324,8 +16324,7 @@ async function refreshNotificationSettingsCard() {
     button.style.cursor = "default";
     button.className = "bb-outline-pill";
     button.innerHTML = `${svgIcon("checkCircle", 20)} Notifications On`;
-    button.innerHTML = `${svgIcon("checkCircle", 20)} Test`;
-
+   
     status.textContent =
       "Bill reminders are enabled on this device.";
     return;
@@ -16662,6 +16661,15 @@ function addNotificationSettings() {
     >
       ${svgIcon('bell', 20)}
       <span>Turn On Notifications</span>
+    </button><button
+      id="notificationPermissionButton"
+      type="button"
+      class="bb-outline-pill"
+      style="width:100%;min-height:46px;justify-content:center;margin-top:14px"
+      onclick="activateBillNotifications()"
+    >
+      ${svgIcon('bell', 20)}
+      <span>Test</span>
     </button>
 
     <p
