@@ -9310,7 +9310,19 @@ function openCategorySpendingSheet(categoryId) {
         </div>
     </div>
   `;
-
+          const sheet = container.querySelector("#categorySpendingSheet");
+if (sheet) {
+  sheet.style.position = "fixed";
+  sheet.style.left = "12px";
+  sheet.style.right = "12px";
+  sheet.style.top = "calc(env(safe-area-inset-top, 0px) + 12px)";
+  // Match the nav dock height so the sheet sits just above the tab bar
+  sheet.style.bottom = "calc(76px + env(safe-area-inset-bottom, 0px))";
+  sheet.style.maxHeight = "none";
+  sheet.style.display = "flex";
+  sheet.style.flexDirection = "column";
+  sheet.style.boxSizing = "border-box";
+}
   document.body.appendChild(container);
   lockBackgroundScroll();
 
