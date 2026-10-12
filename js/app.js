@@ -16580,8 +16580,7 @@ function saveGlobalReminderSettings() {
 }
 function addNotificationSettings() {
   // Only inject on Settings screen
-  if (currentRoute !== 'settings') {
-    return;
+  
   }
 
   // Avoid duplicating the section
