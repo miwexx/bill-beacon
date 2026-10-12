@@ -16579,10 +16579,7 @@ function saveGlobalReminderSettings() {
   });
 }
 function addNotificationSettings() {
-  // Only inject on Settings screen
   
-  }
-
   // Avoid duplicating the section
   if (document.getElementById('notificationSettingsCard')) {
     return;
