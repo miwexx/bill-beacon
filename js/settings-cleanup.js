@@ -1410,11 +1410,11 @@
       </section>
     `;
   }
-    function buildNotificationSettingsSection() {
+function buildNotificationSettingsSection() {
   const settings = Store.getSettings();
   const selectedOffsets = Array.isArray(settings.reminderOffsets)
     ? settings.reminderOffsets.slice().sort((a, b) => a - b)
-    : [7, 3, 1];
+    : [1, 3, 7, 14];
   const reminderTime = settings.reminderTimeOfDay || "09:00";
 
   return `
@@ -1442,49 +1442,81 @@
           role="status"
           aria-live="polite"
         ></p>
-       
       </div>
 
-      <!-- NEW global reminders card inside Notifications sheet -->
       <div class="card card-pad" id="notificationSettingsCard" style="margin-top:var(--space-3)">
         <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
           Bills Notifications
         </div>
+
+        <!-- optional master toggle row -->
+        <div class="form-row" style="margin-bottom:var(--space-3)">
+          <div class="form-label">Bill alerts</div>
+          <div
+            class="form-input-row"
+            style="flex:1;display:flex;justify-content:flex-end;align-items:center;"
+          >
+            abel class="toggle">
+              <input
+                type="checkbox"
+                id="globalBillAlertsToggle"
+                checked
+              />
+              <div class="toggle-track">
+                <div class="toggle-thumb"></div>
+              </div>
+            </label>
+          </div>
+        </div>
+
         ${REMINDER_OFFSETS.map(offset => {
           const isSelected = selectedOffsets.includes(offset.days);
           return `
-            <div class="form-input-row"
-     style="flex:1;display:flex;justify-content:flex-end;align-items:center;">
-  <label class="toggle">
-    <input
-      type="checkbox"
-      class="global-reminder-toggle"
-      data-days="${escapeHtml(String(offset.days))}"
-      ${isSelected ? "checked" : ""}
-    />
-    <div class="toggle-track">
-      <div class="toggle-thumb"></div>
-    </div>
-  </label>
-</div>
+            <div class="form-row">
+              <div class="form-label">${escapeHtml(offset.label)}</div>
+              <div
+                class="form-input-row"
+                style="flex:1;display:flex;justify-content:flex-end;align-items:center;"
+              >
+                abel class="toggle">
+                  <input
+                    type="checkbox"
+                    class="global-reminder-toggle"
+                    data-days="${escapeHtml(String(offset.days))}"
+                    ${isSelected ? "checked" : ""}
+                  />
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </label>
+              </div>
             </div>
           `;
         }).join("")}
+
         <div class="form-row" style="margin-top:var(--space-3)">
           <div class="form-label">Time</div>
-          <div class="form-input-row"
-     style="flex:1;display:flex;justify-content:flex-end;align-items:center;">
-  <input
-    id="globalReminderTime"
-    type="time"
-    class="form-input"
-    value="${escapeHtml(reminderTime)}"
-    style="max-width:130px;text-align:left"
-    aria-label="Time of day for bill reminders"
-  />
-</div>
+          <div
+            class="form-input-row"
+            style="flex:1;display:flex;justify-content:flex-end;align-items:center;"
+          >
+            <input
+              id="globalReminderTime"
+              type="time"
+              class="form-input"
+              value="${escapeHtml(reminderTime)}"
+              style="max-width:130px;text-align:left"
+              aria-label="Time of day for bill reminders"
+            />
+          </div>
         </div>
-        
+
+        <div
+          class="settings-footer"
+          style="margin-top:10px"
+        >
+          Bill reminders use these offsets and time of day. Enable notifications above to receive alerts on this device.
+        </div>
       </div>
     </section>
   `;
