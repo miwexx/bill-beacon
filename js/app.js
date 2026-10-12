@@ -10479,7 +10479,7 @@ function renderActivity() {
         .filter(item => item.month !== "undated")
         .map(item => item.month)
     ])
-  ].sort((a, b) => b.localeCompare(a));
+  ].sort((a, b) => a.localeCompare(b));
 
   if (entries.some(item => item.month === "undated")) {
     months.push("undated");
@@ -10586,7 +10586,28 @@ function renderActivity() {
       </div>
     `;
   }).join("");
+  // Position the month row without scrolling the page itself.
+  requestAnimationFrame(() => {
+    if (currentRoute !== "activity") return;
 
+    const rail = document.querySelector(
+      "#app .activity-months"
+    );
+
+    const selectedPill = rail?.querySelector(
+      '.activity-month-pill[aria-pressed="true"]'
+    );
+
+    if (!rail || !selectedPill) return;
+
+    const railRect = rail.getBoundingClientRect();
+    const pillRect = selectedPill.getBoundingClientRect();
+
+    rail.scrollLeft +=
+      pillRect.left -
+      railRect.left -
+      (rail.clientWidth - pillRect.width) / 2;
+  });
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
@@ -20031,8 +20052,8 @@ if (dock) {
         !(target instanceof Element) ||
         !dismissContext(target)?.root.contains(target) ||
         target.closest(
-          "input,textarea,select,[contenteditable],.tab-bar"
-        )
+  "input,textarea,select,[contenteditable],.tab-bar,.activity-months"
+)
       ) {
         return;
       }

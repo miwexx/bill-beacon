@@ -3880,3 +3880,20 @@ body {
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
+/* Activity without a taskbar: use the available bottom space. */
+:is(#app, [data-bb-copy-id="app"]):has(
+  > .activity-page-content
+) {
+  padding-bottom: calc(
+    12px + env(safe-area-inset-bottom, 0px)
+  );
+}
+
+/* If a taskbar is present, keep the list safely above it. */
+:is(#app, [data-bb-copy-id="app"]):has(
+  > .activity-page-content
+):has(> .tab-bar) {
+  padding-bottom: calc(
+    82px + env(safe-area-inset-bottom, 0px)
+  );
+}
