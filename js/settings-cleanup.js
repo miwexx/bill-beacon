@@ -1449,25 +1449,6 @@ function buildNotificationSettingsSection() {
           Bills Notifications
         </div>
 
-        <!-- optional master toggle row -->
-        <div class="form-row" style="margin-bottom:var(--space-1)">
-          <div class="form-label">Bill alerts</div>
-          <div
-            class="form-input-row"
-            style="flex:1;display:flex;justify-content:flex-end;align-items:center;"
-          >
-            <label class="toggle">
-              <input
-                type="checkbox"
-                id="globalBillAlertsToggle"
-                checked
-              />
-              <div class="toggle-track">
-                <div class="toggle-thumb"></div>
-              </div>
-            </label>
-          </div>
-        </div>
 
         ${REMINDER_OFFSETS.map(offset => {
           const isSelected = selectedOffsets.includes(offset.days);
