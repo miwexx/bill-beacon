@@ -16324,6 +16324,7 @@ async function refreshNotificationSettingsCard() {
     button.style.cursor = "default";
     button.className = "bb-outline-pill";
     button.innerHTML = `${svgIcon("checkCircle", 20)} Notifications On`;
+    button.innerHTML = `${svgIcon("checkCircle", 20)} Test`;
 
     status.textContent =
       "Bill reminders are enabled on this device.";
