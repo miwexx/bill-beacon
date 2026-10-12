@@ -19578,11 +19578,15 @@ if (dock) {
       layer.setAttribute("data-bb-drag-preview","");layer.inert=true;layer.setAttribute("aria-hidden","true");
       layer.style.cssText="position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
       const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;";
+              behind.style.zIndex = "0";
+              behind.style.isolation = "isolate";
       const content=document.createElement("div");content.style.transform=`translateY(${-saved.base.windowScroll}px)`;
       content.appendChild(saved.base.copy.cloneNode(true));behind.appendChild(content);
       const shade=document.createElement("div");shade.style.cssText=`position:absolute;inset:0;background:${saved.shade};`;
       behind.appendChild(shade);addPanel(behind,saved.panel);layer.appendChild(behind);
       const ahead=document.createElement("div");ahead.style.cssText="position:absolute;inset:0;overflow:hidden;background:var(--bg);";
+              ahead.style.zIndex = "1";
+              ahead.style.isolation = "isolate";
       const current=snapshot();if(!current)return;
       const frontContent=document.createElement("div");frontContent.style.transform=`translateY(${-current.windowScroll}px)`;
       frontContent.appendChild(current.copy);ahead.appendChild(frontContent);layer.appendChild(ahead);
