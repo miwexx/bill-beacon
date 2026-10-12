@@ -9162,7 +9162,7 @@ function closeCategorySpendingSheet() {
 
   setTimeout(() => {
     document.getElementById("categorySpendingContainer")?.remove();
-    unlockBackgroundScroll();
+    
   }, 300);
 }
 
@@ -9310,7 +9310,7 @@ function openCategorySpendingSheet(categoryId) {
   `;
 
   document.body.appendChild(container);
-  lockBackgroundScroll();
+
 
   requestAnimationFrame(() => {
     document.getElementById("categorySpendingOverlay")
