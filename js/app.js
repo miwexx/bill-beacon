@@ -19830,72 +19830,73 @@ window.addEventListener("storage", () => {
   }
 
   document.addEventListener(
-    "touchstart",
-    event => {
-      // New guard: do not arm drag-back while a popup/sheet has locked background scroll.
-      if (document.body.classList.contains("popup-open")) {
-        return;
-      }
+  "touchstart",
+  event => {
+    // If ANY sheet/popup is visible, do not start drag-back.
+    // This relies on the existing popupSheets() helper above.
+    if (popupSheets().length > 0) {
+      return;
+    }
 
-      if (settling) return;
+    if (settling) return;
 
-      cleanup();
+    cleanup();
 
-      if (
-        !ENABLED ||
-        event.touches.length !== 1
-      ) {
-        return;
-      }
+    if (
+      !ENABLED ||
+      event.touches.length !== 1
+    ) {
+      return;
+    }
 
-      const target = event.target;
+    const target = event.target;
 
-      if (
-        !(target instanceof Element) ||
-        !dismissContext(target)?.root.contains(target) ||
-        target.closest(
-          "input,textarea,select,[contenteditable],.tab-bar"
-        )
-      ) {
-        return;
-      }
+    if (
+      !(target instanceof Element) ||
+      !dismissContext(target)?.root.contains(target) ||
+      target.closest(
+        "input,textarea,select,[contenteditable],.tab-bar"
+      )
+    ) {
+      return;
+    }
 
-      const touch = event.touches[0];
+    const touch = event.touches[0];
 
-      if (
-        touch.clientX < 8 ||
-        touch.clientX > 110
-      ) {
-        return;
-      }
+    if (
+      touch.clientX < 8 ||
+      touch.clientX > 110
+    ) {
+      return;
+    }
 
-      const context = dismissContext(target);
-      const back = context?.back;
+    const context = dismissContext(target);
+    const back = context?.back;
 
-      if (!back || back.disabled) return;
+    if (!back || back.disabled) return;
 
-      gestureTarget = target;
-      target.addEventListener("touchend", handleDragEnd, { passive: false });
-      target.addEventListener("touchcancel", cleanup, { passive: true });
+    gestureTarget = target;
+    target.addEventListener("touchend", handleDragEnd, { passive: false });
+    target.addEventListener("touchcancel", cleanup, { passive: true });
 
-      gesture = {
-        context,
-        id: touch.identifier,
+    gesture = {
+      context,
+      id: touch.identifier,
+      x: touch.clientX,
+      y: touch.clientY,
+      started: performance.now(),
+      route: currentRoute,
+      back,
+      armed: false,
+      pane: null,
+      samples: [{
         x: touch.clientX,
-        y: touch.clientY,
-        started: performance.now(),
-        route: currentRoute,
-        back,
-        armed: false,
-        pane: null,
-        samples: [{
-          x: touch.clientX,
-          time: performance.now()
-        }]
-      };
-    },
-    { passive: true }
-  );
+        time: performance.now()
+      }]
+    };
+  },
+  { passive: true }
+);
 
   document.addEventListener(
     "touchmove",
