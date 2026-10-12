@@ -7023,6 +7023,15 @@ function paymentPlanVisual(provider, size = 42) {
   `;
 }
 function renderPaymentPlans() {
+    const installmentsBackRoute =
+    routeParams.returnRoute === "insights"
+      ? "insights"
+      : "more";
+
+  const installmentsBackLabel =
+    installmentsBackRoute === "insights"
+      ? "Insights"
+      : "More";
   const installmentBills = Store.getBills().filter((bill) =>
     Boolean(bill.installmentPlanId)
   );
@@ -7416,9 +7425,9 @@ function renderPaymentPlans() {
     <button
       type="button"
       class="nav-button"
-      onclick="navigate('more')"
-      aria-label="Back to More"
-      title="Back to More"
+            onclick="navigate('${installmentsBackRoute}')"
+      aria-label="Back to ${installmentsBackLabel}"
+      title="Back to ${installmentsBackLabel}"
       style="
         width:44px;
         height:44px;
@@ -9702,7 +9711,7 @@ for (let i = 5; i >= 0; i -= 1) {
               <button
                 type="button"
                 class="card card-pad"
-                onclick="navigate('payment-plans')"
+                onclick="navigate('payment-plans', { returnRoute: 'insights' })"
                 style="
                   width:100%;
                   text-align:left;
