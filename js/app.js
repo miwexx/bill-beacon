@@ -9165,7 +9165,18 @@ function closeCategorySpendingSheet() {
    unlockMainScroll();  
   }, 300);
 }
+function closeCategorySpendingIfOpen() {
+  const container = document.getElementById('categorySpendingContainer');
+  if (!container) return;
 
+  document.getElementById('categorySpendingOverlay')?.classList.remove('show');
+  document.getElementById('categorySpendingSheet')?.classList.remove('show');
+
+  setTimeout(() => {
+    container.remove();
+    unlockMainScroll();
+  }, 300);
+}
 function getCategorySpendingItems(categoryId) {
   const now = new Date();
 
