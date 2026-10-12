@@ -27,6 +27,11 @@
   }
 
   renderSettings = function () {
+      const settingsBackRoute =
+    routeParams.returnRoute === "today" ? "today" : "more";
+
+  const settingsBackLabel =
+    settingsBackRoute === "today" ? "Dashboard" : "More";
   const settings = Store.getSettings();
   const email =
     window.getBillBeaconUserEmail?.() ||
@@ -49,8 +54,8 @@
         <button
           type="button"
           class="nav-button"
-          onclick="navigate('more')"
-          aria-label="Back to More"
+                    onclick="navigate('${settingsBackRoute}')"
+          aria-label="Back to ${settingsBackLabel}"
           style="color:var(--text);"
         >
           ${svgIcon("chevronLeft", 22)}
