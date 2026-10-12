@@ -2190,12 +2190,55 @@ body {
   color: #a855f7 !important;
 }
 
+/* TEMPORARY: disable all motion to diagnose iPhone PWA bottom-bar jump */
+*,
+*::before,
+*::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+/* TEMPORARY PWA FIX: show every modal immediately, with no slide behavior */
+.sheet,
+.sheet.show {
+  transform: translate3d(0, 0, 0) !important;
+  -webkit-transform: translate3d(0, 0, 0) !important;
+  transition: none !important;
+  animation: none !important;
+}
+
+.sheet-overlay,
+.sheet-overlay.show {
+  opacity: 1 !important;
+  transition: none !important;
+  animation: none !important;
+}
 .sheet-overlay {
   position: fixed !important;
   inset: 0 !important;
   z-index: 200 !important;
 }
+/* Global no-motion mode: disable every UI animation and transition */
+*,
+*::before,
+*::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
 
+/* Ensure every sheet is immediately visible and stays at screen bottom */
+.sheet,
+.sheet.show {
+  transform: translate3d(0, 0, 0) !important;
+  -webkit-transform: translate3d(0, 0, 0) !important;
+}
+
+.sheet-overlay,
+.sheet-overlay.show {
+  opacity: 1 !important;
+}
 .dashboard-status-row {
   align-items:stretch;
 }
@@ -3449,17 +3492,4 @@ body {
 
 #notificationSettingsCard .form-label {
   font-size: var(--text-sm);      /* slightly smaller label text */
-}
-#paymentPlanDetailsSheet,
-#paymentPlanActionsSheet,
-#categorySpendingSheet {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  top: calc(env(safe-area-inset-top, 0px) + 12px);
-  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-radius: 24px;
 }
