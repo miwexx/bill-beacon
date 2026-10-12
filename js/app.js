@@ -16070,7 +16070,7 @@ function render() {
   }
 
   if (currentRoute !== 'history') {
-    addNotificationSettings();
+    
     addBackupSettings();
     attachSignOutButton();
   }
@@ -16589,7 +16589,7 @@ function addNotificationSettings() {
     return;
   }
 
-  const container = document.querySelector('.main-content .content-pad');
+  const container = document.getElementById('notificationCenterContent');
   if (!container) return;
 
   const settings = Store.getSettings();
