@@ -9177,7 +9177,17 @@ function getCategorySpendingItems(categoryId) {
 }
 function openCategorySpendingSheet(categoryId) {
   document.getElementById("categorySpendingContainer")?.remove();
-
+  const sheet = container.querySelector("#categorySpendingSheet");
+if (sheet) {
+  sheet.style.position = "fixed";
+  sheet.style.left = "12px";
+  sheet.style.right = "12px";
+  sheet.style.top = "calc(env(safe-area-inset-top, 0px) + 12px)";
+  sheet.style.bottom = "calc(88px + env(safe-area-inset-bottom, 0px))"; // same vertical gap as notificationCenterSheet
+  sheet.style.maxHeight = "none";
+  sheet.style.display = "flex";
+  sheet.style.flexDirection = "column";
+}
   const category = getCategory(categoryId);
 
   const items = getMonthlyCategoryPayments(new Date()).filter(
@@ -9294,11 +9304,6 @@ function openCategorySpendingSheet(categoryId) {
           </div>
         `}
 
-        <button type="button" class="bb-outline-pill"
-          style="width:100%;"
-          onclick="closeCategorySpendingSheet();navigate('history');">
-          View All Payment History
-        </button>
       </div>
     </div>
   `;
