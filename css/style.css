@@ -3493,3 +3493,17 @@ body {
 #notificationSettingsCard .form-label {
   font-size: var(--text-sm);      /* slightly smaller label text */
 }
+/* Floating sheets that sit between status bar and bottom dock */
+#paymentPlanDetailsSheet,
+#paymentPlanActionsSheet,
+#categorySpendingSheet {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 24px;
+}

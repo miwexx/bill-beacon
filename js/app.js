@@ -18930,36 +18930,37 @@ async function openNotificationCenter(restore = false) {
 let backgroundScrollY = 0;
 
 function lockBackgroundScroll() {
-  if (document.body.classList.contains('popup-open')) return;
+  if (document.body.classList.contains("popup-open")) return;
 
   backgroundScrollY = window.scrollY;
 
-  document.body.classList.add('popup-open');
-  document.body.style.position = 'fixed';
+  document.body.classList.add("popup-open");
+  document.body.style.position = "fixed";
   document.body.style.top = `-${backgroundScrollY}px`;
-  document.body.style.left = '0';
-  document.body.style.right = '0';
-  document.body.style.width = '100%';
+  document.body.style.left = "0";
+  document.body.style.right = "0";
+  document.body.style.width = "100%";
 }
 
-function unlockBackgroundScroll() {
+function unlockBackgroundScroll(options = {}) {
+  const { resetMainScroll = true } = options;
   const scrollY = backgroundScrollY || 0;
 
-  document.body.classList.remove('popup-open');
-  document.body.style.position = '';
-  document.body.style.top = '';
-  document.body.style.left = '';
-  document.body.style.right = '';
-  document.body.style.width = '';
+  document.body.classList.remove("popup-open");
+  document.body.style.position = "";
+  document.body.style.top = "";
+  document.body.style.left = "";
+  document.body.style.right = "";
+  document.body.style.width = "";
 
   backgroundScrollY = 0;
 
   requestAnimationFrame(() => {
     window.scrollTo(0, scrollY);
 
-    const main = document.querySelector('.main-content');
-    if (main) {
-      main.scrollTop = 0;
+    if (resetMainScroll) {
+      const main = document.querySelector(".main-content");
+      if (main) main.scrollTop = 0;
     }
   });
 }
