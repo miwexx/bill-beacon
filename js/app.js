@@ -5594,7 +5594,7 @@ function renderBills() {
       </div>
     </div>
 
-    <div class="main-content fade-in">
+        <div class="main-content fade-in bills-page-content">
       ${
         bills.length === 0
           ? `
@@ -5641,8 +5641,15 @@ function renderBills() {
               </button>
             </div>
 
-            <div class="content-pad content-gap">
-              ${billContent}
+                        <div class="bills-list-frame">
+              <div
+                class="bills-list-scroll content-gap"
+                role="region"
+                aria-label="Bills List"
+                tabindex="0"
+              >
+                ${billContent}
+              </div>
             </div>
           `
       }

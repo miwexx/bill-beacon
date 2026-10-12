@@ -3617,3 +3617,77 @@ body {
   visibility: hidden;
   pointer-events: none;
 }
+/* Bills tab: fixed header and Sort control, internal list scrolling. */
+#app:has(> .bills-page-content) {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+
+  /* Leave room for the fixed taskbar and a small gap above it. */
+  padding-bottom: calc(
+    88px + env(safe-area-inset-bottom, 0px)
+  );
+
+  box-sizing: border-box;
+}
+
+#app:has(> .bills-page-content) > .nav-bar {
+  flex: 0 0 auto;
+}
+
+#app > .bills-page-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  padding: 0 16px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* The Sort control stays outside the scrolling list. */
+.bills-page-content > div:not(.bills-list-frame) {
+  flex-shrink: 0;
+}
+
+.bills-page-content .bills-list-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  overflow: hidden;
+  border: 1px solid var(--bb-brand-border-strong);
+  border-radius: 22px;
+  background: var(--bb-brand-glow), var(--card);
+}
+
+.bills-page-content .bills-list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+
+  padding: 0 0 12px;
+}
+
+/* The outer frame supplies the card appearance. */
+.bills-page-content .bills-list-scroll > .card {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Category sort retains its headings within the same scroll area. */
+.bills-page-content .bills-list-scroll > div > .card {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
