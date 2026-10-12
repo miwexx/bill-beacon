@@ -16579,12 +16579,12 @@ function saveGlobalReminderSettings() {
   });
 }
 function addNotificationSettings() {
-  
-  // Avoid duplicating the section
+  // Don’t add it twice
   if (document.getElementById('notificationSettingsCard')) {
     return;
   }
 
+  // Add the card into the Notifications popup content area
   const container = document.getElementById('notificationCenterContent');
   if (!container) return;
 
@@ -16614,12 +16614,7 @@ function addNotificationSettings() {
         id="notificationPermissionButton"
         type="button"
         class="bb-outline-pill"
-        style="
-          width:100%;
-          min-height:46px;
-          justify-content:center;
-          margin-top:14px;
-        "
+        style="width:100%;min-height:46px;justify-content:center;margin-top:14px"
         onclick="activateBillNotifications()"
       >
         ${svgIcon('bell', 20)}
@@ -16628,12 +16623,7 @@ function addNotificationSettings() {
 
       <p
         id="notificationTestStatus"
-        style="
-          font-size:var(--text-sm);
-          color:var(--text-muted);
-          line-height:1.5;
-          margin:var(--space-2) 0 0;
-        "
+        style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:var(--space-2) 0 0"
         role="status"
         aria-live="polite"
       ></p>
@@ -16641,12 +16631,7 @@ function addNotificationSettings() {
       <button
         type="button"
         class="bb-outline-pill"
-        style="
-          width:100%;
-          min-height:44px;
-          justify-content:center;
-          margin-top:10px;
-        "
+        style="width:100%;min-height:44px;justify-content:center;margin-top:10px"
         onclick="sendBillNotificationTest()"
       >
         ${svgIcon('checkCircle', 18)}
@@ -16664,55 +16649,50 @@ function addNotificationSettings() {
         const isSelected = selectedOffsets.includes(offset.days);
         return `
           <div class="form-row">
-            <div class="form-label">${offset.label}</div>
-            <div style="flex:1"></div>
-
-            <label class="toggle">
-              <input
-                type="checkbox"
-                class="global-reminder-toggle"
-                data-days="${escapeHtml(offset.days)}"
-                ${isSelected ? 'checked' : ''}
-              >
-
-              <div class="toggle-track">
-                <div class="toggle-thumb"></div>
-              </div>
-            </label>
+            <div class="form-label">${escapeHtml(offset.label)}</div>
+            <div style="flex:1">
+              <label class="toggle">
+                <input
+                  type="checkbox"
+                  class="global-reminder-toggle"
+                  data-days="${escapeHtml(offset.days)}"
+                  ${isSelected ? 'checked' : ''}
+                >
+                <span class="toggle-track"></span>
+                <span class="toggle-thumb"></span>
+              </label>
+            </div>
           </div>
         `;
       }).join('')}
+    </div>
 
-      <div class="form-row" style="margin-top:8px">
+    <div class="card card-pad" style="margin-top:8px">
+      <div class="form-row">
         <div class="form-label">Reminder time of day</div>
-        <div style="flex:1"></div>
-
-        <input
-          id="globalReminderTime"
-          type="time"
-          class="form-input"
-          value="${escapeHtml(reminderTime)}"
-          style="
-            max-width:130px;
-            text-align:left;
-          "
-          aria-label="Time of day for bill reminders"
-        >
+        <div style="flex:1">
+          <input
+            id="globalReminderTime"
+            type="time"
+            class="form-input"
+            value="${escapeHtml(reminderTime)}"
+            style="max-width:130px;text-align:left"
+            aria-label="Time of day for bill reminders"
+          >
+        </div>
       </div>
-
       <div class="settings-footer" style="margin-top:10px">
-        Bill reminders use these offsets and time of day.
-        Enable notifications above to receive alerts on this device.
+        Bill reminders use these offsets and time of day. Enable notifications above to receive alerts on this device.
       </div>
     </div>
   `;
 
   container.appendChild(section);
 
-  // Wire push notification UI
+  // Update the Turn On Notifications button state
   refreshNotificationSettingsCard();
 
-  // Wire global reminder settings
+  // Save global reminder offsets + time when the user changes them
   document
     .querySelectorAll('.global-reminder-toggle')
     .forEach(input => {
@@ -18984,7 +18964,7 @@ async function openNotificationCenter(restore = false) {
     container.querySelector("#notificationCenterContent")
       .scrollTop = notificationPopupReturn?.scroll || 0;
   }
-    // Inject the notifications settings card into the Notifications sheet
+  
   addNotificationSettings();
 }
 let backgroundScrollY = 0;
