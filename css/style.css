@@ -3618,12 +3618,12 @@ body {
   pointer-events: none;
 }
 /* Bills tab: fixed header and Sort control, internal list scrolling. */
-#app:has(> .bills-page-content) {
+/* Match the live Bills screen and its swipe-preview copy. */
+:is(#app, [data-bb-copy-id="app"]):has(> .bills-page-content) {
   height: 100dvh;
-  min-height: 0;
+  min-height: 0 !important;
   overflow: hidden;
 
-  /* Leave room for the fixed taskbar and a small gap above it. */
   padding-bottom: calc(
     88px + env(safe-area-inset-bottom, 0px)
   );
@@ -3631,10 +3631,20 @@ body {
   box-sizing: border-box;
 }
 
-#app:has(> .bills-page-content) > .nav-bar {
+:is(#app, [data-bb-copy-id="app"]):has(> .bills-page-content) > .nav-bar {
   flex: 0 0 auto;
 }
 
+:is(#app, [data-bb-copy-id="app"]) > .bills-page-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+
+  padding: 0 16px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
 #app > .bills-page-content {
   display: flex;
   flex-direction: column;
