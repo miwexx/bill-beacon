@@ -3592,18 +3592,10 @@ body {
   margin-bottom: 0;
   overflow: hidden;
 
-  border: 1.5px solid transparent;
+  border: 1px solid var(--bb-brand-border-strong);
   border-radius: 22px;
 
-  background:
-    linear-gradient(var(--surface), var(--surface)) padding-box,
-    linear-gradient(
-      135deg,
-      #8f36ff,
-      #c44cff,
-      #f64cae,
-      #ff7138
-    ) border-box;
+  background: var(--bb-brand-glow), var(--card);
 }
 
 .paycheck-plan-sheet .paycheck-bills-scroll {
