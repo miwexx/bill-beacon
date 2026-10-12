@@ -12880,7 +12880,7 @@ function openBillForm(billId = null, selectedDate = null) {
                 <div class="form-label">Pay automatically</div>
                 <div style="flex:1"></div>
 
-                <label class="toggle">
+                <l<label class="toggle">
                   <input
                     type="checkbox"
                     id="billAutopay"
@@ -16708,7 +16708,7 @@ function addNotificationSettings() {
         <div class="form-row">
           <div class="form-label">${escapeHtml(offset.label)}</div>
           <div class="form-input-row">
-            <label class="toggle">
+            <l<label class="toggle">
               <input
                 type="checkbox"
                 class="global-reminder-toggle"
@@ -17509,7 +17509,7 @@ function openInstallmentPlanForm() {
             <div class="form-row">
               <div class="form-label">Autopay</div>
 
-              <label class="toggle">
+              <l<label class="toggle">
                 <input
                   id="installmentAutopay"
                   type="checkbox"
