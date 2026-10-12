@@ -362,7 +362,72 @@ function utcMiddayFromDateKey(dateKey) {
 
   return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
 }
+function parseReminderTimeOfDay(raw) {
+  const value = String(raw || "").trim();
 
+  // Support "HHMM" (0900) and "HH:MM" (09:00)
+  let hour = 9;
+  let minute = 0;
+
+  if (/^\d{4}$/.test(value)) {
+    hour = Number(value.slice(0, 2));
+    minute = Number(value.slice(2));
+  } else if (/^\d{2}:\d{2}$/.test(value)) {
+    const [h, m] = value.split(":");
+    hour = Number(h);
+    minute = Number(m);
+  }
+
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    hour = 9;
+  }
+  if (!Number.isInteger(minute) || minute < 0 || minute > 59) {
+    minute = 0;
+  }
+
+  return { hour, minute };
+}
+
+function getTimePartsInTimeZone(date, timeZone) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const values = Object.fromEntries(
+    parts.filter((p) => p.type !== "literal").map((p) => [p.type, p.value])
+  );
+
+  return {
+    hour: Number(values.hour),
+    minute: Number(values.minute),
+  };
+}
+
+/**
+ * Return true only in the first few minutes after the scheduled time.
+ * This ensures we send once per day at the user’s chosen time.
+ */
+function isWithinReminderWindow(now, timeZone, reminderTimeOfDay) {
+  const { hour: targetHour, minute: targetMinute } =
+    parseReminderTimeOfDay(reminderTimeOfDay);
+
+  const { hour: currentHour, minute: currentMinute } =
+    getTimePartsInTimeZone(now, timeZone);
+
+  const targetMinutes = targetHour * 60 + targetMinute;
+  const currentMinutes = currentHour * 60 + currentMinute;
+
+  // minutes since scheduled time, modulo 24h
+  const diff =
+    (currentMinutes - targetMinutes + 24 * 60) % (24 * 60);
+
+  // Allow sends in the first 5 minutes after the scheduled time
+  return diff >= 0 && diff < 5;
+}
 function addDaysToDateKey(dateKey, days) {
   const date = utcMiddayFromDateKey(dateKey);
 
@@ -2025,75 +2090,120 @@ async function processUserReminders(env, uid, accessToken, now) {
   }
 
   const settings =
-    snapshot.settings && typeof snapshot.settings === "object"
-      ? snapshot.settings
-      : {};
+  snapshot.settings && typeof snapshot.settings === "object"
+    ? snapshot.settings
+    : {};
 
-  const timeZone = validatedReminderTimeZone(settings.timeZone);
+const timeZone = validatedReminderTimeZone(settings.timeZone);
 
-  const todayKey = dateKeyInTimeZone(now, timeZone);
+// Time-of-day gate: only send when we’re in the chosen window
+const reminderTimeOfDay =
+  typeof settings.reminderTimeOfDay === "string"
+    ? settings.reminderTimeOfDay
+    : null;
 
-  const bills = Array.isArray(snapshot.bills)
-    ? snapshot.bills
-    : [];
-
-  const payments = Array.isArray(snapshot.payments)
-    ? snapshot.payments
-    : [];
-
-  const outcomes = {
+if (!isWithinReminderWindow(now, timeZone, reminderTimeOfDay)) {
+  return {
     uid,
-    status: "processed",
-    reviewRequired: 0,
+    householdId,
+    status: "outside-reminder-window",
     eligible: 0,
     sent: 0,
     skipped: 0,
-    noSubscriptions: 0,
     removed: 0,
-    failures: 0
+    failures: 0,
   };
+}
+
+const todayKey = dateKeyInTimeZone(now, timeZone);
+
+const bills = Array.isArray(snapshot.bills)
+  ? snapshot.bills
+  : [];
+
+const payments = Array.isArray(snapshot.payments)
+  ? snapshot.payments
+  : [];
+
+// Global defaults from Settings “Reminders for all bills”
+const globalOffsets = normalizeReminderOffsets(settings.reminderOffsets);
+
+const outcomes = {
+  uid,
+  status: "processed",
+  reviewRequired: 0,
+  eligible: 0,
+  sent: 0,
+  skipped: 0,
+  noSubscriptions: 0,
+  removed: 0,
+  failures: 0
+};
 
   for (const bill of bills) {
-        
-    if (!isActiveBill(bill) || !bill.id || !bill.name) {
-      continue;
-    }
 
-    const reminderOffsets = allReminderOffsets(bill);
+  if (!isActiveBill(bill) || !bill.id || !bill.name) {
+    continue;
+  }
 
-    if (!reminderOffsets.length) {
-      continue;
-    }
+  // Existing per‑bill offsets (from bill + scheduleHistory + overrides)
+  const billOffsets = allReminderOffsets(bill);
 
-    for (const offsetDays of reminderOffsets) {
-      const dueDateKey = addDaysToDateKey(
-        todayKey,
-        offsetDays
-      );
+  // If the bill has custom offsets, use those.
+  // Otherwise, use the household global defaults from Settings.
+  const baseOffsets =
+    billOffsets.length
+      ? billOffsets
+      : globalOffsets.length
+        ? globalOffsets
+        : [];
+
+  const reminderOffsets = normalizeReminderOffsets(baseOffsets);
+
+  if (!reminderOffsets.length) {
+    continue;
+  }
+
+  for (const offsetDays of reminderOffsets) {
+    const dueDateKey = addDaysToDateKey(
+      todayKey,
+      offsetDays
+    );
 
       const occurrence = getOccurrenceForDueDateKey(
-        bill,
-        dueDateKey,
-        timeZone,
-        payments
-      );
+  bill,
+  dueDateKey,
+  timeZone,
+  payments
+);
 
-      if (!occurrence || !isActiveBill(occurrence.bill) ||
-          !normalizeReminderOffsets(occurrence.bill.reminderOffsets).includes(offsetDays)) {
-        continue;
-      }
+if (!occurrence || !isActiveBill(occurrence.bill)) {
+  continue;
+}
 
-      if (
-        isOccurrencePaid(
-          bill,
-          occurrence,
-          payments,
-          timeZone
-        )
-      ) {
-        continue;
-      }
+// Only enforce occurrence-level offsets if they exist.
+// If there are none, allow the global/bill defaults through.
+const occurrenceOffsets = normalizeReminderOffsets(
+  occurrence.bill.reminderOffsets
+);
 
+if (
+  occurrenceOffsets.length &&
+  !occurrenceOffsets.includes(offsetDays)
+) {
+  continue;
+}
+
+if (
+  isOccurrencePaid(
+    bill,
+    occurrence,
+    payments,
+    timeZone
+  )
+) {
+  continue;
+}
       if (hasUnlinkedPaymentForReminderMonth(bill, occurrence, payments, timeZone)) {
         outcomes.reviewRequired += 1;
         continue;

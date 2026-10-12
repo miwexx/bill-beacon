@@ -1446,7 +1446,7 @@ function buildNotificationSettingsSection() {
 
       <div class="card card-pad" id="notificationSettingsCard" style="margin-top:var(--space-3)">
         <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
-          Bills Notifications
+          Bills Reminders
         </div>
 
 
