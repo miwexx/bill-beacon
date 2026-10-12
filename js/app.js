@@ -10587,26 +10587,6 @@ function renderActivity() {
     `;
   }).join("");
 
-    if (currentRoute !== "activity") return;
-
-    const rail = document.querySelector(
-      "#app .activity-months"
-    );
-
-    const selectedPill = rail?.querySelector(
-      '.activity-month-pill[aria-pressed="true"]'
-    );
-
-    if (!rail || !selectedPill) return;
-
-    const railRect = rail.getBoundingClientRect();
-    const pillRect = selectedPill.getBoundingClientRect();
-
-    rail.scrollLeft +=
-      pillRect.left -
-      railRect.left -
-      (rail.clientWidth - pillRect.width) / 2;
-  });
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
