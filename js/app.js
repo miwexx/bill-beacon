@@ -3803,9 +3803,9 @@ function openPaycheckPlanSheet(paycheckKey) {
     </div>
   `;
 
-  document.body.appendChild(container);
+    document.body.appendChild(container);
 
-  lockBackgroundScroll();
+  lockMainScroll();
 
   requestAnimationFrame(() => {
     document
@@ -3819,18 +3819,14 @@ function openPaycheckPlanSheet(paycheckKey) {
 }
 
 function closePaycheckPlanSheet() {
-  document
-    .getElementById("paycheckPlanOverlay")
-    ?.classList.remove("show");
+  const container = document.getElementById(
+    "paycheckPlanContainer"
+  );
 
-  document
-    .getElementById("paycheckPlanSheet")
-    ?.classList.remove("show");
+  if (!container) return;
 
-  setTimeout(() => {
-    document.getElementById("paycheckPlanContainer")?.remove();
-    unlockBackgroundScroll();
-  }, 300);
+  container.remove();
+  unlockMainScroll();
 }
 function renderMore() {
   const activePlans = new Set(
