@@ -4531,7 +4531,8 @@ function renderToday() {
       <div class="nav-bar-content">
         <button type="button"
           class="nav-button dashboard-icon-button"
-          onclick="navigate('settings')" aria-label="Open settings"
+          onclick="navigate('settings', { returnRoute: 'today' })"
+aria-label="Open settings"
           style="color:var(--text-muted);">
           ${svgIcon("gear", 22)}
         </button>
@@ -10740,6 +10741,11 @@ function handleHouseholdInviteFromUrl() {
   return true;
 }
 function renderSettings() {
+    const settingsBackRoute =
+    routeParams.returnRoute === "today" ? "today" : "more";
+
+  const settingsBackLabel =
+    settingsBackRoute === "today" ? "Dashboard" : "More";
   const settings = Store.getSettings();
   const activeBills = Store.getBills();
 
@@ -10792,9 +10798,9 @@ const dataSummary =
     <button
       type="button"
       class="nav-button"
-      onclick="navigate('more')"
-      aria-label="Back to More"
-      title="Back to More"
+            onclick="navigate('${settingsBackRoute}')"
+      aria-label="Back to ${settingsBackLabel}"
+      title="Back to ${settingsBackLabel}"
       style="color:var(--text)"
     >
       ${svgIcon("chevronLeft", 22)}
