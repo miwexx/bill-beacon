@@ -9162,7 +9162,7 @@ function closeCategorySpendingSheet() {
 
   setTimeout(() => {
     document.getElementById("categorySpendingContainer")?.remove();
-    
+   unlockMainScroll();  
   }, 300);
 }
 
@@ -9310,7 +9310,7 @@ function openCategorySpendingSheet(categoryId) {
   `;
 
   document.body.appendChild(container);
-
+  lockMainScroll();
 
   requestAnimationFrame(() => {
     document.getElementById("categorySpendingOverlay")
@@ -18963,6 +18963,24 @@ function unlockBackgroundScroll(options = {}) {
       if (main) main.scrollTop = 0;
     }
   });
+}
+function lockMainScroll() {
+  const main = document.querySelector('.main-content');
+  if (!main) return;
+
+  // Remember current scroll so we can restore it
+  main.dataset.scrollY = String(main.scrollTop || 0);
+  main.style.overflowY = 'hidden';
+}
+
+function unlockMainScroll() {
+  const main = document.querySelector('.main-content');
+  if (!main) return;
+
+  const scrollY = Number(main.dataset.scrollY || 0);
+  main.style.overflowY = '';
+  main.dataset.scrollY = '';
+  main.scrollTop = scrollY;
 }
 document.addEventListener('DOMContentLoaded', () => {
   let attempts = 0;
