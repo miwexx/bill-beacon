@@ -460,20 +460,31 @@ updatePayment(paymentId, updates) {
   getPaymentsForBill(billId) {
     return this.getPayments().filter(p => p.billId === billId).sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
   },
-  getSettings() {
-    try {
-      const s = JSON.parse(localStorage.getItem('settings') || '{}');
-      return {
-  currency: 'USD',
-  biometricLock: false,
-  theme: 'dark',
-  currentPayCycle: 'auto',
-  ...s
-};
-    } catch {
-      return { currency: 'USD', biometricLock: false, theme: 'dark' };
-    }
-  },
+  // In Store.getSettings()
+getSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem('settings') || '{}');
+    return {
+      currency: 'USD',
+      biometricLock: false,
+      theme: 'dark',
+      currentPayCycle: 'auto',
+      // NEW: global reminder defaults
+      reminderOffsets: Array.isArray(s.reminderOffsets) ? s.reminderOffsets : [7, 3, 1],
+      reminderTimeOfDay: typeof s.reminderTimeOfDay === 'string' ? s.reminderTimeOfDay : '09:00',
+      ...s,
+    };
+  } catch {
+    return {
+      currency: 'USD',
+      biometricLock: false,
+      theme: 'dark',
+      currentPayCycle: 'auto',
+      reminderOffsets: [7, 3, 1],
+      reminderTimeOfDay: '09:00',
+    };
+  }
+},
   saveSettings(settings) {
     localStorage.setItem('settings', JSON.stringify(settings));
     window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
@@ -16646,52 +16657,7 @@ function addNotificationSettings() {
       </button>
     </div>
 
-    <div class="card card-pad" style="margin-top:var(--space-3)">
-      <div class="form-row">
-        <div class="form-label">Reminder timing</div>
-        <div style="flex:1"></div>
-      </div>
-
-      ${REMINDER_OFFSETS.map(offset => {
-        const isSelected = selectedOffsets.includes(offset.days);
-        return `
-          <div class="form-row">
-            <div class="form-label">${escapeHtml(offset.label)}</div>
-            <div style="flex:1">
-              abel class="toggle">
-                <input
-                  type="checkbox"
-                  class="global-reminder-toggle"
-                  data-days="${escapeHtml(offset.days)}"
-                  ${isSelected ? 'checked' : ''}
-                >
-                <span class="toggle-track"></span>
-                <span class="toggle-thumb"></span>
-              </label>
-            </div>
-          </div>
-        `;
-      }).join('')}
-    </div>
-
-    <div class="card card-pad" style="margin-top:8px">
-      <div class="form-row">
-        <div class="form-label">Reminder time of day</div>
-        <div style="flex:1">
-          <input
-            id="globalReminderTime"
-            type="time"
-            class="form-input"
-            value="${escapeHtml(reminderTime)}"
-            style="max-width:130px;text-align:left"
-            aria-label="Time of day for bill reminders"
-          >
-        </div>
-      </div>
-      <div class="settings-footer" style="margin-top:10px">
-        Bill reminders use these offsets and time of day. Enable notifications above to receive alerts on this device.
-      </div>
-    </div>
+   
   `;
 
   container.appendChild(section);
