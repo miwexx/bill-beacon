@@ -1450,7 +1450,7 @@ function buildNotificationSettingsSection() {
         </div>
 
         <!-- optional master toggle row -->
-        <div class="form-row" style="margin-bottom:var(--space-3)">
+        <div class="form-row" style="margin-bottom:var(--space-1)">
           <div class="form-label">Bill alerts</div>
           <div
             class="form-input-row"
@@ -1494,7 +1494,7 @@ function buildNotificationSettingsSection() {
           `;
         }).join("")}
 
-        <div class="form-row" style="margin-top:var(--space-3)">
+        <div class="form-row" style="margin-top:var(--space-1)">
           <div class="form-label">Time</div>
           <div
             class="form-input-row"
