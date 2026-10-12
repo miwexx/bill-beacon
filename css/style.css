@@ -3451,7 +3451,8 @@ body {
   font-size: var(--text-sm);      /* slightly smaller label text */
 }
 #paymentPlanDetailsSheet,
-#paymentPlanActionsSheet {
+#paymentPlanActionsSheet,
+#categorySpendingSheet {
   position: fixed;
   left: 12px;
   right: 12px;
