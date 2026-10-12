@@ -10360,9 +10360,92 @@ function renderActivity() {
       date.getMonth() + 1
     ).padStart(2, "0")}`;
 
-  const currentMonth = monthKey(new Date());
+    // TEMPORARY VISUAL PREVIEW — eight months, never saved to Store.
+  const mockActivity = [];
 
-  const entries = Store.getActivityLog()
+  const mockTemplates = [
+    {
+      action: "bill_paid",
+      title: "Electricity marked as paid",
+      detail: "$95.00 payment recorded."
+    },
+    {
+      action: "bill_amount_changed",
+      title: "Internet amount changed",
+      detail: "Monthly amount changed from $65.00 to $70.00."
+    },
+    {
+      action: "bill_postponed",
+      title: "Credit card payment postponed",
+      detail: "Due date moved from the 15th to the 20th."
+    },
+    {
+      action: "payment_plan_created",
+      title: "Store purchase installment plan added",
+      detail: "4 payments of $30.00."
+    },
+    {
+      action: "bill_created",
+      title: "Phone bill added",
+      detail: "$45.00 monthly bill."
+    },
+    {
+      action: "payment_voided",
+      title: "Payment reversed",
+      detail: "A $30.00 payment was marked unpaid."
+    },
+    {
+      action: "bill_reminders_changed",
+      title: "Rent reminders updated",
+      detail: "Reminders set for 7 days and 1 day before the due date."
+    },
+    {
+      action: "bill_paid",
+      title: "Car insurance marked as paid",
+      detail: "$120.00 payment recorded."
+    }
+  ];
+
+  const previewAnchor = new Date();
+
+  // Different counts let you test short and scrollable months.
+  const mockMonthCounts = [5, 12, 8, 20, 4, 16, 10, 24];
+
+  for (let monthsAgo = 1; monthsAgo <= 8; monthsAgo++) {
+    const monthDate = new Date(
+      previewAnchor.getFullYear(),
+      previewAnchor.getMonth() - monthsAgo,
+      1,
+      12
+    );
+
+    const count = mockMonthCounts[monthsAgo - 1];
+
+    for (let index = 0; index < count; index++) {
+      const template =
+        mockTemplates[index % mockTemplates.length];
+
+      const timestamp = new Date(
+        monthDate.getFullYear(),
+        monthDate.getMonth(),
+        1 + index,
+        9 + (index % 9),
+        (index * 7) % 60
+      ).toISOString();
+
+      mockActivity.push({
+        action: template.action,
+        title: `[Preview] ${template.title}`,
+        detail: template.detail,
+        timestamp
+      });
+    }
+  }
+
+  const entries = [
+  ...Store.getActivityLog(),
+  ...mockActivity
+]
     .filter(entry =>
       entry &&
       entry.action &&
