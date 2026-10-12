@@ -77,11 +77,11 @@ function reconcileBadge(message) {
   badgeTask =
     badgeTask.catch(() => {}).then(async () => {
       const cache = await caches.open(
-        BADGESTATECACHE
+        BADGE_STATE_CACHE      // FIXED
       );
 
       const saved = await cache.match(
-        BADGESTATEURL
+        BADGE_STATE_URL        // FIXED
       );
 
       const state = saved ? await saved.json() : null;
@@ -135,7 +135,7 @@ function reconcileBadge(message) {
       };
 
       await cache.put(
-        BADGESTATEURL,
+        BADGE_STATE_URL,        // FIXED
         new Response(
           JSON.stringify(nextState),
           {
