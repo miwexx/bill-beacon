@@ -16066,30 +16066,54 @@ const accountSelector = accounts.length
   `;
 }
 function render() {
-  const app = document.getElementById("app"); if (!app) return;
-  const views = {today: renderToday, recurring: renderRecurring, bills: renderBills, more: renderMore,
-    calendar: renderCalendar, insights: renderInsights, activity: renderActivity, "payment-plans": renderPaymentPlans,
-    settings: renderSettings, transactions: renderTransactions, detail: renderBillDetail, history: renderPaymentHistory};
-  const view = Object.prototype.hasOwnProperty.call(views, currentRoute) ? views[currentRoute] : renderToday;
+  const app = document.getElementById("app");
+  if (!app) return;
+
+  const views = {
+    today: renderToday,
+    recurring: renderRecurring,
+    bills: renderBills,
+    more: renderMore,
+    calendar: renderCalendar,
+    insights: renderInsights,
+    activity: renderActivity,
+    "payment-plans": renderPaymentPlans,
+    settings: renderSettings,
+    transactions: renderTransactions,
+    detail: renderBillDetail,
+    history: renderPaymentHistory
+  };
+
+  const view = Object.prototype.hasOwnProperty.call(views, currentRoute)
+    ? views[currentRoute]
+    : renderToday;
+
   let content = view();
-  if (["today", "recurring", "bills", "more", "insights", "settings"].includes(currentRoute)) content += tabBar();
-    app.innerHTML = content;
+
+  if (["today", "recurring", "bills", "more", "insights", "settings"].includes(currentRoute)) {
+    content += tabBar();
+  }
+
+  app.innerHTML = content;
+
+  // NEW: inject Notifications + reminders card on Settings
+  if (currentRoute === "settings") {
+    addNotificationSettings();
+  }
 
   // Bills tab: attach swipe handlers after rows are rendered
-  if (currentRoute === 'bills') {
+  if (currentRoute === "bills") {
     initBillSwipeHandlers();
   }
 
-  if (currentRoute !== 'history') {
-    
+  if (currentRoute !== "history") {
     addBackupSettings();
     attachSignOutButton();
   }
 
-  if (currentRoute === 'transactions') {
+  if (currentRoute === "transactions") {
     refreshPlaidSandboxAutomatically();
   }
- 
 }
 
 
@@ -16617,48 +16641,94 @@ function addNotificationSettings() {
   section.id = 'notificationSettingsCard';
   section.className = 'settings-section';
 
-  section.innerHTML = `
-    <div class="section-header">Notifications</div>
+ section.innerHTML = `
+  <div class="section-header">Notifications</div>
 
-    <div class="card card-pad">
-      <p
-        id="notificationPermissionStatus"
-        hidden
-        aria-hidden="true"
-        style="display:none"
-      ></p>
+  <div class="card card-pad">
+    <p
+      id="notificationPermissionStatus"
+      hidden
+      aria-hidden="true"
+      style="display:none"
+    ></p>
 
-      <button
-        id="notificationPermissionButton"
-        type="button"
-        class="bb-outline-pill"
-        style="width:100%;min-height:46px;justify-content:center;margin-top:14px"
-        onclick="activateBillNotifications()"
-      >
-        ${svgIcon('bell', 20)}
-        <span>Turn On Notifications</span>
-      </button>
+    <button
+      id="notificationPermissionButton"
+      type="button"
+      class="bb-outline-pill"
+      style="width:100%;min-height:46px;justify-content:center;margin-top:14px"
+      onclick="activateBillNotifications()"
+    >
+      ${svgIcon('bell', 20)}
+      <span>Turn On Notifications</span>
+    </button>
 
-      <p
-        id="notificationTestStatus"
-        style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:var(--space-2) 0 0"
-        role="status"
-        aria-live="polite"
-      ></p>
+    <p
+      id="notificationTestStatus"
+      style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:var(--space-2) 0 0"
+      role="status"
+      aria-live="polite"
+    ></p>
 
-      <button
-        type="button"
-        class="bb-outline-pill"
-        style="width:100%;min-height:44px;justify-content:center;margin-top:10px"
-        onclick="sendBillNotificationTest()"
-      >
-        ${svgIcon('checkCircle', 18)}
-        <span>Send Test Notification</span>
-      </button>
+    <button
+      type="button"
+      class="bb-outline-pill"
+      style="width:100%;min-height:44px;justify-content:center;margin-top:10px"
+      onclick="sendBillNotificationTest()"
+    >
+      ${svgIcon('checkCircle', 18)}
+      <span>Send Test Notification</span>
+    </button>
+  </div>
+
+  <!-- NEW: global reminders card -->
+  <div class="card card-pad" style="margin-top:var(--space-3)">
+    <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
+      Reminders for all bills
     </div>
 
-   
-  `;
+    ${REMINDER_OFFSETS.map(offset => {
+      const isSelected = selectedOffsets.includes(offset.days);
+      return `
+        <div class="form-row">
+          <div class="form-label">${escapeHtml(offset.label)}</div>
+          <div class="form-input-row">
+            <label class="toggle">
+              <input
+                type="checkbox"
+                class="global-reminder-toggle"
+                data-days="${escapeHtml(String(offset.days))}"
+                ${isSelected ? 'checked' : ''}
+              >
+              <div class="toggle-track">
+                <div class="toggle-thumb"></div>
+              </div>
+            </label>
+          </div>
+        </div>
+      `;
+    }).join('')}
+
+    <div class="form-row" style="margin-top:var(--space-3)">
+      <div class="form-label">Time of day</div>
+      <div class="form-input-row">
+        <input
+          id="globalReminderTime"
+          type="time"
+          class="form-input"
+          value="${escapeHtml(reminderTime)}"
+          style="max-width:130px;text-align:left"
+          aria-label="Time of day for bill reminders"
+        >
+      </div>
+    </div>
+
+    <div class="settings-footer" style="margin-top:10px">
+      Bill reminders use these offsets and time of day.
+      Enable notifications above to receive alerts on this device.
+    </div>
+  </div>
+`;
 
   container.appendChild(section);
 
