@@ -3612,3 +3612,8 @@ body {
   box-sizing: border-box;
   width: 100%;
 }
+/* Hide the taskbar on Settings, including its outgoing swipe copy. */
+:is(#app, [data-bb-copy-id="app"]):has(.settings-page-header) .tab-bar {
+  visibility: hidden;
+  pointer-events: none;
+}

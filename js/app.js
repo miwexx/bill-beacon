@@ -19258,10 +19258,21 @@ window.addEventListener("storage", () => {
     return !button.disabled && (button.id === "notificationCenterCloseButton" ||
       /^(?:window\.)?close[A-Za-z0-9_]+\(\s*\)\s*;?$/.test(action));
   }
-  function pageBackButton() {
-    return [...document.querySelectorAll("#app .nav-bar button.nav-button")].find(button =>
-      visible(button) && !button.disabled &&
-      /^\s*(?:navigate|returnToNotificationCenter)\s*\(/.test(button.getAttribute("onclick") || "")
+    function pageBackButton() {
+    // Dashboard is a root screen, not a page with a Back action.
+    if (currentRoute === "today") return null;
+
+    return [
+      ...document.querySelectorAll(
+        "#app .nav-bar button.nav-button"
+      )
+    ].find(button =>
+      visible(button) &&
+      !button.disabled &&
+      !button.classList.contains("dashboard-icon-button") &&
+      /^\s*(?:navigate|returnToNotificationCenter)\s*\(/.test(
+        button.getAttribute("onclick") || ""
+      )
     ) || null;
   }
   function popupSheets() {

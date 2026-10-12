@@ -49,7 +49,7 @@
       }
     </style>
 
-    <div class="nav-bar">
+        <div class="nav-bar settings-page-header">
       <div class="nav-bar-content">
         <button
           type="button"
