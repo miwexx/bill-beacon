@@ -18937,51 +18937,134 @@ document.addEventListener('DOMContentLoaded', () => {
   startWhenFirebaseIsReady();
 });
 
-document.addEventListener(
-  "touchmove",
-  function (event) {
-    if (!document.body.classList.contains("popup-open")) {
-      return;
+// Shared popup touch-scroll guard.
+// Does not reposition the body or change the taskbar.
+(() => {
+  const popupSelector =
+    '.sheet, #billDetailsSheet, [role="dialog"][aria-modal="true"]';
+
+  let lastTouch = null;
+
+  function isVisiblePopup(node) {
+    if (
+      !node.isConnected ||
+      node.closest("[data-bb-drag-preview]")
+    ) {
+      return false;
     }
 
-    const target = event.target;
+    const style = getComputedStyle(node);
 
-    if (!(target instanceof Element)) {
-      return;
-    }
+    return (
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      node.getClientRects().length > 0
+    );
+  }
 
-    const sheet = target.closest(".sheet");
+  function visiblePopups() {
+    return [...document.querySelectorAll(popupSelector)]
+      .filter(isVisiblePopup);
+  }
 
-    if (!sheet) {
-      event.preventDefault();
-      return;
-    }
+  document.addEventListener(
+    "touchstart",
+    event => {
+      const touch = event.touches.length === 1
+        ? event.touches[0]
+        : null;
 
-    let element = target;
+      lastTouch = touch
+        ? {
+            id: touch.identifier,
+            x: touch.clientX,
+            y: touch.clientY
+          }
+        : null;
+    },
+    { passive: true }
+  );
 
-    while (element && sheet.contains(element)) {
-      const overflowY =
-        getComputedStyle(element).overflowY;
-
-      const canScroll =
-        /^(auto|scroll)$/.test(overflowY) &&
-        element.scrollHeight > element.clientHeight;
-
-      if (canScroll) {
+  document.addEventListener(
+    "touchmove",
+    event => {
+      if (event.touches.length !== 1 || !lastTouch) {
         return;
       }
 
-      if (element === sheet) {
-        break;
+      const touch = event.touches[0];
+
+      if (touch.identifier !== lastTouch.id) return;
+
+      const dx = touch.clientX - lastTouch.x;
+      const dy = touch.clientY - lastTouch.y;
+
+      lastTouch.x = touch.clientX;
+      lastTouch.y = touch.clientY;
+
+      const popups = visiblePopups();
+
+      if (!popups.length) return;
+
+      const target = event.target;
+      const popup = target instanceof Element
+        ? target.closest(popupSelector)
+        : null;
+
+      // Touches outside a visible popup cannot scroll the background.
+      if (!popup || !popups.includes(popup)) {
+        if (event.cancelable) event.preventDefault();
+        return;
       }
 
-      element = element.parentElement;
-    }
+      // Let the existing swipe-back handler manage horizontal motion.
+      if (Math.abs(dx) > Math.abs(dy)) return;
+      if (dy === 0) return;
 
-    event.preventDefault();
-  },
-  { passive: false }
-);
+      // Allow vertical scrolling only if a popup scroll area
+      // can still move in the requested direction.
+      let element = target;
+
+      while (element && popup.contains(element)) {
+        const style = getComputedStyle(element);
+        const maxScroll =
+          element.scrollHeight - element.clientHeight;
+
+        if (
+          /^(auto|scroll|overlay)$/.test(style.overflowY) &&
+          maxScroll > 1
+        ) {
+          const canMoveUp =
+            dy > 0 && element.scrollTop > 1;
+
+          const canMoveDown =
+            dy < 0 && element.scrollTop < maxScroll - 1;
+
+          if (canMoveUp || canMoveDown) return;
+        }
+
+        if (element === popup) break;
+        element = element.parentElement;
+      }
+
+      // Prevent scroll from leaking to the page at popup boundaries.
+      if (event.cancelable) event.preventDefault();
+    },
+    { passive: false }
+  );
+
+  document.addEventListener(
+    "touchend",
+    () => { lastTouch = null; },
+    { passive: true }
+  );
+
+  document.addEventListener(
+    "touchcancel",
+    () => { lastTouch = null; },
+    { passive: true }
+  );
+})();
 // ====================================
 // INIT
 // ====================================
