@@ -8985,7 +8985,7 @@ function openPaymentPlanActions(planId) {
           onclick="openExistingPaymentPlanEditor('${escapeInlineString(planId)}')"
         >
           ${svgIcon("gear", 20)}
-          Edit Plan
+          Edit NExt Unpaid Payment
         </button>
 
         
@@ -9119,19 +9119,54 @@ function payPaymentPlanInFull(planId) {
 }
 function openExistingPaymentPlanEditor(planId) {
   const installments = Store.getBills()
-    .filter((bill) => bill.installmentPlanId === planId)
-    .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+    .filter(bill =>
+      bill.installmentPlanId === planId
+    )
+    .sort((a, b) =>
+      new Date(a.dueDate) - new Date(b.dueDate)
+    );
 
   if (!installments.length) {
     alert("Payment plan not found.");
     return;
   }
 
-  closePaymentPlanActions();
+  const editableInstallment = installments.find(bill =>
+    !bill.archived &&
+    !bill.archivedAt &&
+    !bill.cancelled &&
+    !bill.cancelledAt &&
+    !bill.paidInFullAt &&
+    ![
+      "cancelled",
+      "canceled",
+      "paid-in-full",
+      "paidInFull"
+    ].includes(bill.status) &&
+    !isOccurrencePaid(bill, new Date(bill.dueDate))
+  );
 
-  // Opens the normal existing Bill/Recurring edit form
-  // using the first installment as the representative record.
-  openBillForm(installments[0].id);
+  if (!editableInstallment) {
+    alert(
+      "This plan has no unpaid installment available to edit. " +
+      "Paid and completed records were left unchanged."
+    );
+    return;
+  }
+
+  const confirmed = confirm(
+    `Edit Payment ${editableInstallment.installmentNumber || ""} ` +
+    `for ${editableInstallment.name}?\n\n` +
+    "This changes only this unpaid installment, " +
+    "not the entire plan."
+  );
+
+  if (!confirmed) return;
+
+  closePaymentPlanActions();
+  closePaymentPlanDetails();
+
+  openBillForm(editableInstallment.id);
 }
 function closeCategorySpendingSheet() {
   document
@@ -17575,7 +17610,7 @@ function saveInstallmentPlan() {
     const payment = {
       id: uid(),
       billId: firstInstallment.id,
-      paidDate: createdAt,
+      paidDate: firstPaymentDate,
       amount: Number(firstInstallment.amount || 0),
       paidForDueDate: firstInstallment.dueDate,
       status: "active",
