@@ -10479,7 +10479,7 @@ function renderActivity() {
         .filter(item => item.month !== "undated")
         .map(item => item.month)
     ])
-  ].sort((a, b) => a.localeCompare(b));
+  ].sort((a, b) => b.localeCompare(a));
 
   if (entries.some(item => item.month === "undated")) {
     months.push("undated");
@@ -10586,8 +10586,7 @@ function renderActivity() {
       </div>
     `;
   }).join("");
-  // Position the month row without scrolling the page itself.
-  requestAnimationFrame(() => {
+
     if (currentRoute !== "activity") return;
 
     const rail = document.querySelector(
