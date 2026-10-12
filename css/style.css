@@ -3484,3 +3484,12 @@ body {
 #notificationSettingsCard .toggle input:checked + .toggle-track .toggle-thumb {
   background: var(--paid);
 }
+/* More compact reminder rows inside Bills Notifications card */
+#notificationSettingsCard .form-row {
+  min-height: 44px;               /* was 52px globally */
+  padding: var(--space-2) var(--space-4);
+}
+
+#notificationSettingsCard .form-label {
+  font-size: var(--text-sm);      /* slightly smaller label text */
+}
