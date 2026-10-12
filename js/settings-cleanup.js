@@ -1492,12 +1492,7 @@ function buildNotificationSettingsSection() {
           </div>
         </div>
 
-        <div
-          class="settings-footer"
-          style="margin-top:10px"
-        >
-          Bill reminders use these offsets and time of day. Enable notifications above to receive alerts on this device.
-        </div>
+       
       </div>
     </section>
   `;
