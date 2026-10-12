@@ -10359,6 +10359,7 @@ function renderActivity() {
     `${date.getFullYear()}-${String(
       date.getMonth() + 1
     ).padStart(2, "0")}`;
+    const currentMonth = monthKey(new Date());
 
     // TEMPORARY VISUAL PREVIEW — eight months, never saved to Store.
   const mockActivity = [];
