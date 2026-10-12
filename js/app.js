@@ -19438,6 +19438,30 @@ window.addEventListener("storage", () => {
     });
     copy.querySelectorAll("script,iframe,object,embed").forEach(node=>node.remove());
     const rect=root.getBoundingClientRect();
+        // Preserve the root layout after its ID is removed from the preview.
+    const rootStyle = getComputedStyle(root);
+
+    for (const property of [
+      "flex-direction",
+      "flex-wrap",
+      "align-items",
+      "justify-content",
+      "gap",
+      "box-sizing",
+      "overflow-x",
+      "overflow-y",
+      "padding-top",
+      "padding-right",
+      "padding-bottom",
+      "padding-left",
+      "border-radius"
+    ]) {
+      copy.style.setProperty(
+        property,
+        rootStyle.getPropertyValue(property),
+        "important"
+      );
+    }
     for (const [property,value] of Object.entries({position:"absolute",top:`${rect.top}px`,left:`${rect.left}px`,
       right:"auto",bottom:"auto",width:`${rect.width}px`,height:`${rect.height}px`,maxHeight:"none",minHeight:"0",margin:"0",
       transform:"none",display:getComputedStyle(root).display,opacity:"1"})) copy.style.setProperty(property,value,"important");
@@ -19495,6 +19519,50 @@ if (dock) {
     for (const root of state.context.sheets.slice(0,-1)) {
       const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(root)};pointer-events:none;`;
       behind.appendChild(dim);addPanel(behind,panelSnapshot(root));
+    }
+        // Category drilldown uses a full-screen outgoing preview.
+    if (
+      state.context.mode === "popup" &&
+      state.context.root.id === "categorySpendingSheet"
+    ) {
+      const pane = document.createElement("div");
+
+      pane.style.cssText =
+        "position:absolute;" +
+        "inset:0;" +
+        "overflow:hidden;" +
+        "pointer-events:none;" +
+        "will-change:transform;" +
+        "background:var(--bg);" +
+        "box-shadow:-8px 0 24px rgba(0,0,0,.25);";
+
+      // Copy the underlying view into the outgoing screen too.
+      // The original 'behind' layer stays stationary underneath.
+      const outgoingBackground = behind.cloneNode(true);
+      pane.appendChild(outgoingBackground);
+
+      const outgoingShade = document.createElement("div");
+
+      outgoingShade.style.cssText =
+        "position:absolute;" +
+        "inset:0;" +
+        `background:${shadeFor(state.context.root)};` +
+        "pointer-events:none;";
+
+      pane.appendChild(outgoingShade);
+
+      // Header, X, total and payment rows all move in this same pane.
+      addPanel(pane, panelSnapshot(state.context.root));
+      layer.appendChild(pane);
+
+      overlay = layer;
+      document.body.appendChild(layer);
+
+      restoreCloneScroll(layer);
+      state.pane = pane;
+
+      // Skip the normal popup-only preview construction below.
+      return;
     }
     if (state.context.mode==="popup") {
       const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(state.context.root)};pointer-events:none;`;
