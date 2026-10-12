@@ -3863,61 +3863,6 @@ function renderMore() {
         style="padding-bottom:calc(104px + env(safe-area-inset-bottom))"
       >
 
-        <section
-          style="
-            margin-top:4px;
-            padding:20px;
-            border:1px solid rgba(192,151,255,.20);
-            border-radius:22px;
-            background:
-              radial-gradient(
-                circle at 92% 10%,
-                rgba(246,76,174,.22),
-                transparent 37%
-              ),
-              radial-gradient(
-                circle at 8% 100%,
-                rgba(143,54,255,.20),
-                transparent 42%
-              ),
-              var(--surface);
-            overflow:hidden;
-          "
-        >
-          <div
-            style="
-              display:flex;
-              align-items:center;
-              justify-content:space-between;
-              gap:16px;
-            "
-          >
-            <div style="min-width:0">
-              <div
-                style="
-                  font-size:20px;
-                  font-weight:900;
-                  letter-spacing:-.02em;
-                "
-              >
-                Your Money Tools
-              </div>
-
-              <div
-                style="
-                  margin-top:6px;
-                  color:var(--text-muted);
-                  font-size:14px;
-                  line-height:1.45;
-                "
-              >
-                Manage plans, bank activity, and Bill Beacon settings.
-              </div>
-            </div>
-
-            
-          </div>
-        </section>
 
         <section class="settings-section">
           <div
