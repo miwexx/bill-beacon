@@ -2666,20 +2666,26 @@ let dashboardRouteWhenHidden = null;
 let dashboardParamsWhenHidden = null;
 
 function dashboardHasOpenFormOrPopup() {
-  return Boolean(
-    document.querySelector(`
-      #sheetContainer,
-      #installmentPlanContainer,
-      #incomeSourceContainer,
-      #postponeBillContainer,
-      #postponeRecurringOccurrenceContainer,
-      #paymentLinkPopupContainer,
-      .sheet-overlay,
-      [role="dialog"][aria-modal="true"]
-    `)
-  ) || document.body.classList.contains("popup-open");
-}
+  const candidates = document.querySelectorAll(`
+    #sheetContainer,
+    #installmentPlanContainer,
+    #incomeSourceContainer,
+    #postponeBillContainer,
+    #postponeRecurringOccurrenceContainer,
+    #paymentLinkPopupContainer,
+    .sheet-overlay,
+    [role="dialog"][aria-modal="true"]
+  `);
 
+  const hasRealPopup = [...candidates].some(
+    node => !node.closest("[data-bb-drag-preview]")
+  );
+
+  return (
+    hasRealPopup ||
+    document.body.classList.contains("popup-open")
+  );
+}
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") {
     dashboardHiddenAt = Date.now();
