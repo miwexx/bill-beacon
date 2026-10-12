@@ -3693,7 +3693,7 @@ function openPaycheckPlanSheet(paycheckKey) {
       onclick="closePaycheckPlanSheet()"
     ></div>
 
-    <div class="sheet" id="paycheckPlanSheet">
+    <div class="sheet paycheck-plan-sheet" id="paycheckPlanSheet">
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
@@ -3788,15 +3788,22 @@ function openPaycheckPlanSheet(paycheckKey) {
           </div>
         </div>
 
-        <div>
+                <div class="paycheck-bills-section">
           <div class="section-header">
             ${selected.bills.length} bill${
               selected.bills.length === 1 ? "" : "s"
             }
           </div>
 
-          <div class="card">
-            ${billsHtml}
+          <div
+            class="card paycheck-bills-box"
+            role="region"
+            aria-label="Bills for this paycheck"
+            tabindex="0"
+          >
+            <div class="paycheck-bills-scroll">
+              ${billsHtml}
+            </div>
           </div>
         </div>
       </div>
