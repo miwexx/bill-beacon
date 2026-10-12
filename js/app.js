@@ -14041,7 +14041,7 @@ function closeNotificationCenter(keepReturn = false) {
   if (!container) return;
 
   container.remove();
-  unlockBackgroundScroll();
+  unlockMainScroll();
 }
 window.closeNotificationCenter = closeNotificationCenter;
 let billBeaconPlaidScriptPromise = null;
@@ -18818,9 +18818,8 @@ async function openNotificationCenter(restore = false) {
     </section>
   `;
 
-  document.body.appendChild(container);
-  lockBackgroundScroll();
-
+    document.body.appendChild(container);
+  lockMainScroll();
   container.querySelector("#notificationCenterCloseButton")
     .addEventListener("click", () => closeNotificationCenter());
 
