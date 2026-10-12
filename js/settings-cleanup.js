@@ -1456,7 +1456,7 @@ function buildNotificationSettingsSection() {
             class="form-input-row"
             style="flex:1;display:flex;justify-content:flex-end;align-items:center;"
           >
-            abel class="toggle">
+            <label class="toggle">
               <input
                 type="checkbox"
                 id="globalBillAlertsToggle"
@@ -1478,7 +1478,7 @@ function buildNotificationSettingsSection() {
                 class="form-input-row"
                 style="flex:1;display:flex;justify-content:flex-end;align-items:center;"
               >
-                abel class="toggle">
+                <label class="toggle">
                   <input
                     type="checkbox"
                     class="global-reminder-toggle"
