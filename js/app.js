@@ -16570,7 +16570,9 @@ function saveGlobalReminderSettings() {
 
   const timeInput = document.getElementById('globalReminderTime');
   const timeValue =
-    (timeInput && String(timeInput.value).trim()) || '09:00';
+    timeInput && typeof timeInput.value === 'string'
+      ? timeInput.value.trim()
+      : '09:00';
 
   Store.saveSettings({
     ...settings,
@@ -16578,14 +16580,19 @@ function saveGlobalReminderSettings() {
     reminderTimeOfDay: timeValue,
   });
 }
+
+
 function addNotificationSettings() {
-  // Don’t add it twice
+  // Only show this on More → Settings
+  if (currentRoute !== 'settings') return;
+
+  // Avoid duplicating the section if render() runs again
   if (document.getElementById('notificationSettingsCard')) {
     return;
   }
 
-  // Add the card into the Notifications popup content area
-  const container = document.getElementById('notificationCenterContent');
+  // This is the main content area of the Settings screen
+  const container = document.querySelector('.main-content .content-pad');
   if (!container) return;
 
   const settings = Store.getSettings();
@@ -16595,7 +16602,7 @@ function addNotificationSettings() {
 
   const reminderTime = settings.reminderTimeOfDay || '09:00';
 
-  const section = document.createElement('div');
+  const section = document.createElement('section');
   section.id = 'notificationSettingsCard';
   section.className = 'settings-section';
 
@@ -16651,7 +16658,7 @@ function addNotificationSettings() {
           <div class="form-row">
             <div class="form-label">${escapeHtml(offset.label)}</div>
             <div style="flex:1">
-              <label class="toggle">
+              abel class="toggle">
                 <input
                   type="checkbox"
                   class="global-reminder-toggle"
@@ -16689,10 +16696,10 @@ function addNotificationSettings() {
 
   container.appendChild(section);
 
-  // Update the Turn On Notifications button state
+  // Make the Turn On Notifications button reflect current device state
   refreshNotificationSettingsCard();
 
-  // Save global reminder offsets + time when the user changes them
+  // Wire up saving of global reminder offsets + time of day
   document
     .querySelectorAll('.global-reminder-toggle')
     .forEach(input => {
