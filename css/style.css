@@ -3701,3 +3701,43 @@ body {
   border-radius: 0;
   background: transparent;
 }
+/* Payment Plan details: consistent rounded shell and scrolling body. */
+:is(
+  #paymentPlanDetailsSheet,
+  [data-bb-copy-id="paymentPlanDetailsSheet"]
+) {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+
+  overflow: hidden;
+  padding-bottom: 0 !important;
+  border-radius: 24px !important;
+}
+
+:is(
+  #paymentPlanDetailsSheet,
+  [data-bb-copy-id="paymentPlanDetailsSheet"]
+) > .sheet-handle,
+:is(
+  #paymentPlanDetailsSheet,
+  [data-bb-copy-id="paymentPlanDetailsSheet"]
+) > .sheet-nav {
+  flex: 0 0 auto;
+}
+
+:is(
+  #paymentPlanDetailsSheet,
+  [data-bb-copy-id="paymentPlanDetailsSheet"]
+) > .sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  box-sizing: border-box;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+
+  padding-bottom: 16px;
+  background: transparent;
+}

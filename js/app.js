@@ -8985,7 +8985,7 @@ function openPaymentPlanActions(planId) {
           onclick="openExistingPaymentPlanEditor('${escapeInlineString(planId)}')"
         >
           ${svgIcon("gear", 20)}
-          Edit NExt Unpaid Payment
+          Edit Next Payment
         </button>
 
         
