@@ -9307,12 +9307,7 @@ function openCategorySpendingSheet(categoryId) {
           </div>
         `}
 
-        <button type="button" class="bb-outline-pill"
-          style="width:100%;"
-          onclick="closeCategorySpendingSheet();navigate('history');">
-          View All Payment History
-        </button>
-      </div>
+        </div>
     </div>
   `;
 
