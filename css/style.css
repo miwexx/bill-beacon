@@ -3467,3 +3467,20 @@ body {
   animation: none !important;
   transition: none !important;
 }
+/* Global reminder toggles inside Notifications sheet */
+#notificationSettingsCard .toggle-track {
+  background: var(--surface-3);
+}
+
+#notificationSettingsCard .toggle-thumb {
+  background: var(--overdue); /* redish when OFF */
+}
+
+/* When ON: green track + green thumb */
+#notificationSettingsCard .toggle input:checked + .toggle-track {
+  background: var(--paid-bg);
+}
+
+#notificationSettingsCard .toggle input:checked + .toggle-track .toggle-thumb {
+  background: var(--paid);
+}

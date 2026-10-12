@@ -1442,15 +1442,7 @@
           role="status"
           aria-live="polite"
         ></p>
-        <button
-          type="button"
-          class="bb-outline-pill"
-          style="width:100%;min-height:44px;justify-content:center;margin-top:10px"
-          onclick="sendBillNotificationTest()"
-        >
-          ${svgIcon("checkCircle", 18)}
-          <span>Send Test Notifications</span>
-        </button>
+       
       </div>
 
       <!-- NEW global reminders card inside Notifications sheet -->
@@ -1461,36 +1453,36 @@
         ${REMINDER_OFFSETS.map(offset => {
           const isSelected = selectedOffsets.includes(offset.days);
           return `
-            <div class="form-row">
-              <div class="form-label">${escapeHtml(offset.label)}</div>
-              <div class="form-input-row">
-                <label class="toggle">
-                  <input
-                    type="checkbox"
-                    class="global-reminder-toggle"
-                    data-days="${escapeHtml(String(offset.days))}"
-                    ${isSelected ? "checked" : ""}
-                  />
-                  <div class="toggle-track">
-                    <div class="toggle-thumb"></div>
-                  </div>
-                </label>
-              </div>
+            <div class="form-input-row"
+     style="flex:1;display:flex;justify-content:flex-end;align-items:center;">
+  <label class="toggle">
+    <input
+      type="checkbox"
+      class="global-reminder-toggle"
+      data-days="${escapeHtml(String(offset.days))}"
+      ${isSelected ? "checked" : ""}
+    />
+    <div class="toggle-track">
+      <div class="toggle-thumb"></div>
+    </div>
+  </label>
+</div>
             </div>
           `;
         }).join("")}
         <div class="form-row" style="margin-top:var(--space-3)">
-          <div class="form-label">Time of day</div>
-          <div class="form-input-row">
-            <input
-              id="globalReminderTime"
-              type="time"
-              class="form-input"
-              value="${escapeHtml(reminderTime)}"
-              style="max-width:130px;text-align:left"
-              aria-label="Time of day for bill reminders"
-            />
-          </div>
+          <div class="form-label">Time</div>
+          <div class="form-input-row"
+     style="flex:1;display:flex;justify-content:flex-end;align-items:center;">
+  <input
+    id="globalReminderTime"
+    type="time"
+    class="form-input"
+    value="${escapeHtml(reminderTime)}"
+    style="max-width:130px;text-align:left"
+    aria-label="Time of day for bill reminders"
+  />
+</div>
         </div>
         <div
           class="settings-footer"
