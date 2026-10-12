@@ -16232,7 +16232,12 @@ function render() {
     settings: renderSettings, transactions: renderTransactions, detail: renderBillDetail, history: renderPaymentHistory};
   const view = Object.prototype.hasOwnProperty.call(views, currentRoute) ? views[currentRoute] : renderToday;
   let content = view();
-  if (["today", "recurring", "bills", "more", "insights", "settings"].includes(currentRoute)) content += tabBar();
+    if (
+    ["today", "recurring", "bills", "more", "insights"]
+      .includes(currentRoute)
+  ) {
+    content += tabBar();
+  }
   app.innerHTML = content;
   if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings(); attachSignOutButton(); }
 }
@@ -19584,7 +19589,28 @@ window.addEventListener("storage", () => {
       }
     }
   }
+    // Do not bring hidden navigation back into a swipe preview.
+  const liveDock = root.querySelector(".tab-bar");
+  const copiedDock = copy.querySelector(".tab-bar");
 
+  if (copiedDock) {
+    const dockStyle = liveDock
+      ? getComputedStyle(liveDock)
+      : null;
+
+    const hideDock =
+      currentRoute === "settings" ||
+      !liveDock ||
+      dockStyle.display === "none" ||
+      dockStyle.visibility === "hidden" ||
+      dockStyle.visibility === "collapse" ||
+      Number(dockStyle.opacity) === 0 ||
+      liveDock.getClientRects().length === 0;
+
+    if (hideDock) {
+      copiedDock.remove();
+    }
+  }
   copy.querySelectorAll("script,iframe,object,embed")
     .forEach(node => node.remove());
 
