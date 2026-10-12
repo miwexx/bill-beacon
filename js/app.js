@@ -16662,16 +16662,20 @@ function addNotificationSettings() {
       ${svgIcon('bell', 20)}
       <span>Turn On Notifications</span>
     </button>
-    
-    <button
-      id="notificationPermissionButton"
+     <button
       type="button"
       class="bb-outline-pill"
-      style="width:100%;min-height:46px;justify-content:center;margin-top:14px"
-      onclick="activateBillNotifications()"
+      style="
+        width:100%;
+        min-height:40px;
+        justify-content:center;
+        margin-top:10px;
+        background:#ff00ff;
+        color:#ffffff;
+      "
     >
-      ${svgIcon('bell', 20)}
-      <span>Test</span>
+      ${svgIcon('checkCircle', 18)}
+      <span>TEST PILL – YOU ARE IN THE RIGHT PLACE</span>
     </button>
 
     <p
