@@ -3740,4 +3740,143 @@ body {
 
   padding-bottom: 16px;
   background: transparent;
+}/* Activity: fixed month controls and an internally scrolling list. */
+:is(#app, [data-bb-copy-id="app"]):has(
+  > .activity-page-content
+) {
+  height: 100dvh;
+  min-height: 0 !important;
+  overflow: hidden;
+  box-sizing: border-box;
+
+  padding-bottom: calc(
+    88px + env(safe-area-inset-bottom, 0px)
+  );
+}
+
+:is(#app, [data-bb-copy-id="app"]):has(
+  > .activity-page-content
+) > .nav-bar {
+  flex: 0 0 auto;
+}
+
+:is(#app, [data-bb-copy-id="app"]) > .activity-page-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 12px 16px 0;
+}
+
+.activity-page-content .activity-months {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 2px 10px;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+}
+
+.activity-page-content .activity-month-pill {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.activity-page-content .activity-month-pill.is-selected {
+  box-shadow:
+    0 0 0 2px var(--bb-brand-border-strong),
+    0 4px 14px rgba(143, 54, 255, 0.16);
+}
+
+.activity-page-content .activity-month-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+
+  background: var(--bb-brand-soft);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.activity-page-content .activity-selected-summary {
+  flex: 0 0 auto;
+  padding: 2px 4px 12px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.activity-page-content .activity-list-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+
+  border: 1px solid var(--bb-brand-border-strong);
+  border-radius: 22px;
+  background: var(--bb-brand-glow), var(--card);
+}
+
+.activity-page-content .activity-list-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  padding-bottom: 12px;
+}
+
+.activity-page-content .activity-log-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.activity-page-content .activity-log-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+
+  width: 40px;
+  height: 40px;
+  margin-top: 2px;
+  border-radius: 12px;
+}
+
+.activity-page-content .activity-log-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-top: 1px;
+}
+
+.activity-page-content .activity-log-title {
+  font-size: var(--text-sm);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.activity-page-content .activity-log-detail,
+.activity-page-content .activity-log-date {
+  margin-top: 4px;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
 }

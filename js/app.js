@@ -10355,160 +10355,217 @@ function getActivityLabel(action) {
 }
 
 function renderActivity() {
+  const monthKey = date =>
+    `${date.getFullYear()}-${String(
+      date.getMonth() + 1
+    ).padStart(2, "0")}`;
+
+  const currentMonth = monthKey(new Date());
+
   const entries = Store.getActivityLog()
-    .filter(
-      (entry) => entry && entry.action && (entry.title || entry.detail)
+    .filter(entry =>
+      entry &&
+      entry.action &&
+      (entry.title || entry.detail)
     )
-    .slice()
-    .sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() -
-        new Date(a.timestamp).getTime()
+    .map(entry => {
+      const date = entry.timestamp
+        ? new Date(entry.timestamp)
+        : null;
+
+      const validDate =
+        date && Number.isFinite(date.getTime());
+
+      return {
+        entry,
+        date: validDate ? date : null,
+        month: validDate ? monthKey(date) : "undated"
+      };
+    })
+    .sort((a, b) =>
+      (b.date?.getTime() ?? -Infinity) -
+      (a.date?.getTime() ?? -Infinity)
     );
+
+  // Include this month even when it has no activity.
+  const months = [
+    ...new Set([
+      currentMonth,
+      ...entries
+        .filter(item => item.month !== "undated")
+        .map(item => item.month)
+    ])
+  ].sort((a, b) => b.localeCompare(a));
+
+  if (entries.some(item => item.month === "undated")) {
+    months.push("undated");
+  }
+
+  const requestedMonth = routeParams.activityMonth;
+
+  const selectedMonth = months.includes(requestedMonth)
+    ? requestedMonth
+    : currentMonth;
+
+  const monthLabel = key => {
+    if (key === "undated") return "Date unavailable";
+
+    const [year, month] = key.split("-").map(Number);
+
+    return new Date(year, month - 1, 1, 12)
+      .toLocaleDateString(undefined, {
+        month: "short",
+        year: "numeric"
+      });
+  };
+
+  const counts = new Map();
+
+  for (const item of entries) {
+    counts.set(
+      item.month,
+      (counts.get(item.month) || 0) + 1
+    );
+  }
+
+  const selectedEntries = entries.filter(
+    item => item.month === selectedMonth
+  );
+
+  const pills = months.map(key => `
+    <button
+      type="button"
+      class="bb-outline-pill activity-month-pill ${
+        key === selectedMonth ? "is-selected" : ""
+      }"
+      onclick="navigate('activity', {
+        ...routeParams,
+        activityMonth: '${key}'
+      })"
+      aria-pressed="${key === selectedMonth}"
+      aria-label="${escapeHtml(monthLabel(key))}: ${
+        counts.get(key) || 0
+      } changes"
+    >
+      <span>${escapeHtml(monthLabel(key))}</span>
+      <span class="activity-month-count">
+        ${counts.get(key) || 0}
+      </span>
+    </button>
+  `).join("");
+
+  const rows = selectedEntries.map(({ entry, date }) => {
+    const appearance = getActivityActionIcon(entry.action);
+
+    const dateLabel = date
+      ? `${formatDate(date.toISOString(), "short")} · ${
+          date.toLocaleTimeString([], {
+            hour: "numeric",
+            minute: "2-digit"
+          })
+        }`
+      : "Date unavailable";
+
+    return `
+      <div class="form-row activity-log-row">
+        <div
+          class="activity-log-icon"
+          style="
+            color:${appearance.color};
+            background:color-mix(
+              in srgb,
+              ${appearance.color} 14%,
+              transparent
+            );
+          "
+        >
+          ${svgIcon(appearance.icon, 18)}
+        </div>
+
+        <div class="activity-log-copy">
+          <div class="activity-log-title">
+            ${escapeHtml(
+              entry.title || getActivityLabel(entry.action)
+            )}
+          </div>
+
+          ${entry.detail ? `
+            <div class="activity-log-detail">
+              ${escapeHtml(entry.detail)}
+            </div>
+          ` : ""}
+
+          <div class="activity-log-date">
+            ${escapeHtml(dateLabel)}
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
 
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
         <button
-  type="button"
-  class="nav-button"
-  onclick="navigate('more')"
-  aria-label="Back to More"
-  title="Back to More"
-  style="color:var(--text)"
->
-  ${svgIcon("chevronLeft", 22)}
-</button>
-        <div class="nav-title">Activity & Changes</div>
+          type="button"
+          class="nav-button"
+          onclick="navigate('more')"
+          aria-label="Back to More"
+          title="Back to More"
+          style="color:var(--text)"
+        >
+          ${svgIcon("chevronLeft", 22)}
+        </button>
 
+        <div class="nav-title">Activity & Changes</div>
         <div style="width:44px"></div>
       </div>
     </div>
 
-    <div class="main-content fade-in">
-      <div class="content-pad content-gap">
-        <div class="settings-footer" style="padding:0">
-          Your recent payment and bill changes are stored on this device.
+    <div class="main-content fade-in activity-page-content">
+      <div
+        class="activity-months"
+        role="group"
+        aria-label="Filter activity by month"
+      >
+        ${pills}
+      </div>
+
+      <div class="activity-selected-summary" role="status">
+        ${escapeHtml(monthLabel(selectedMonth))}
+        · ${selectedEntries.length}
+        ${selectedEntries.length === 1 ? "change" : "changes"}
+      </div>
+
+      <div class="activity-list-frame">
+        <div
+          class="activity-list-scroll"
+          role="region"
+          aria-label="${escapeHtml(
+            monthLabel(selectedMonth)
+          )} activity"
+          tabindex="0"
+        >
+          ${selectedEntries.length ? rows : `
+            <div class="empty-state">
+              <div class="empty-state-icon">
+                ${svgIcon("doc", 44)}
+              </div>
+
+              <div class="empty-state-title">
+                No activity ${
+                  selectedMonth === currentMonth
+                    ? "this month"
+                    : "for this month"
+                }
+              </div>
+
+              <div class="empty-state-text">
+                Payment and bill changes will appear here.
+              </div>
+            </div>
+          `}
         </div>
-
-        ${
-          entries.length
-            ? `
-              <div class="card">
-                ${entries
-                  .map((entry) => {
-                    const appearance = getActivityActionIcon(entry.action);
-                    const timestamp = new Date(entry.timestamp);
-
-                    return `
-                      <div
-                        class="form-row"
-                        style="
-                          align-items:flex-start;
-                          padding-top:14px;
-                          padding-bottom:14px;
-                        "
-                      >
-                        <div
-                          style="
-                            display:flex;
-                            align-items:flex-start;
-                            gap:14px;
-                            width:100%;
-                          "
-                        >
-                          <div
-                            style="
-                              width:40px;
-                              height:40px;
-                              min-width:40px;
-                              display:flex;
-                              align-items:center;
-                              justify-content:center;
-                              border-radius:12px;
-                              margin-top:2px;
-                              color:${appearance.color};
-                              background:color-mix(
-                                in srgb,
-                                ${appearance.color} 14%,
-                                transparent
-                              );
-                            "
-                          >
-                            ${svgIcon(appearance.icon, 18)}
-                          </div>
-
-                          <div style="min-width:0; flex:1; padding-top:1px;">
-                            <div
-                              style="
-                                font-size:var(--text-sm);
-                                font-weight:800;
-                                overflow:hidden;
-                                text-overflow:ellipsis;
-                                white-space:nowrap;
-                              "
-                            >
-                              ${escapeHtml(
-                                entry.title || getActivityLabel(entry.action)
-                              )}
-                            </div>
-
-                            ${
-                              entry.detail
-                                ? `
-                                  <div
-                                    style="
-                                      margin-top:4px;
-                                      font-size:var(--text-xs);
-                                      color:var(--text-muted);
-                                      overflow:hidden;
-                                      text-overflow:ellipsis;
-                                      white-space:nowrap;
-                                    "
-                                  >
-                                    ${escapeHtml(entry.detail)}
-                                  </div>
-                                `
-                                : ""
-                            }
-
-                            <div
-                              style="
-                                margin-top:4px;
-                                font-size:var(--text-xs);
-                                color:var(--text-muted);
-                              "
-                            >
-                              ${formatDate(
-                                timestamp.toISOString(),
-                                "short"
-                              )} · ${timestamp.toLocaleTimeString([], {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    `;
-                  })
-                  .join("")}
-              </div>
-            `
-            : `
-              <div class="empty-state">
-                <div class="empty-state-icon">
-                  ${svgIcon("doc", 44)}
-                </div>
-
-                <div class="empty-state-title">No activity yet</div>
-
-                <div class="empty-state-text">
-                  Payment, reversal, and postponement changes will appear here.
-                </div>
-              </div>
-            `
-        }
       </div>
     </div>
   `;
