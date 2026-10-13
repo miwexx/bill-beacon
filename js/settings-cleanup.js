@@ -1618,9 +1618,7 @@ function buildNotificationSettingsSection() {
         ${settingsAction("Light", "check", "setTheme('light')", preference.mode === "light")}
         ${settingsAction("Automatic", "check", "setTheme('system')", automatic)}
       </div>
-      <p class="settings-footer" style="margin-top:12px;">
-        Appearance is saved on this device/browser only, not shared with your household.
-      </p>
+      
       ${automatic ? `
         <div class="section-header">Automatic appearance</div>
         <div class="card">
@@ -1645,7 +1643,7 @@ function buildNotificationSettingsSection() {
             </div>
           </div>
           <p class="settings-footer" style="margin-top:12px;">
-            Uses this device's local time. Rechecks when you return to the app.
+            Uses this device's local time. 
           </p>
         ` : ""}
       ` : ""}
