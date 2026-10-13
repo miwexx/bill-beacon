@@ -3741,6 +3741,14 @@ function openPaycheckPlanSheet(paycheckKey) {
   `;
 
     document.body.appendChild(container);
+  const paycheckBody = container.querySelector(".sheet-body");
+  const paycheckSection = paycheckBody?.querySelector(".paycheck-bills-section");
+  if (paycheckSection) {
+    while (paycheckSection.firstChild) paycheckBody.appendChild(paycheckSection.firstChild);
+    paycheckSection.remove();
+  }
+  fitBillListSheet("paycheckPlanSheet", 1);
+
 
   lockMainScroll();
 
@@ -4273,7 +4281,34 @@ function getDashboardMonthSummary(referenceDate = new Date()) {
 function closeDashboardPaidSheet() {
   document.getElementById("dashboardPaidContainer")?.remove();
 }
-
+function fitBillListSheet(sheetId, fixedChildren = 1) {
+  const sheet = document.getElementById(sheetId);
+  const body = sheet?.querySelector(":scope > .sheet-body");
+  if (!sheet || !body || body.querySelector(".bb-contained-frame")) return;
+  sheet.classList.add("bb-contained-list-sheet");
+  body.classList.add("bb-contained-list-body");
+  const children = [...body.children];
+  const frame = document.createElement("div");
+  frame.className = "card bb-contained-frame";
+  const scroll = document.createElement("div");
+  scroll.className = "bb-contained-scroll";
+  scroll.tabIndex = 0;
+  scroll.setAttribute("role", "region");
+  scroll.setAttribute("aria-label", (sheet.querySelector(".sheet-title")?.textContent.trim() || "Bills") + " list");
+  children.slice(0, fixedChildren).forEach(node => node.classList.add("bb-contained-fixed"));
+  children.slice(fixedChildren).forEach(node => {
+    if (node.classList.contains("card")) {
+      const existingScroll = node.querySelector(":scope > .paycheck-bills-scroll");
+      const source = existingScroll || node;
+      while (source.firstChild) scroll.appendChild(source.firstChild);
+      node.remove();
+    } else {
+      scroll.appendChild(node);
+    }
+  });
+  frame.appendChild(scroll);
+  body.appendChild(frame);
+}
 function openDashboardPaidSheet() {
   closeDashboardPaidSheet();
   const summary = getDashboardMonthSummary(new Date());
@@ -4375,7 +4410,10 @@ function openDashboardPaidSheet() {
     </div>
   `;
   document.body.appendChild(container);
+  fitBillListSheet("dashboardPaidSheet", 1);
+
 }
+
 function renderToday() {
   const now = new Date();
   const summary = getDashboardMonthSummary(now);
@@ -6815,8 +6853,9 @@ function openDashboardStatusSheet(status) {
   `;
 
   document.body.appendChild(container);
-}
+  fitBillListSheet("dashboardStatusSheet", trackingReviewBills.length && status !== "paid" ? 2 : 1);
 
+}
 
 function getMonthlySpendingLimit() {
   const settings = Store.getSettings();
@@ -9281,6 +9320,8 @@ function openCategorySpendingSheet(categoryId) {
   `;
 
   document.body.appendChild(container);
+  fitBillListSheet("categorySpendingSheet", 1);
+
   lockMainScroll();
 
   requestAnimationFrame(() => {
@@ -9291,6 +9332,7 @@ function openCategorySpendingSheet(categoryId) {
       ?.classList.add("show");
   });
 }
+
 function getMonthlyCategoryPayments(referenceDate = new Date()) {
   const validCategoryIds = new Set(
     CATEGORIES.map(category => category.id)
@@ -17247,14 +17289,15 @@ function renderPaymentHistory() {
       </div>
     </div>
 
-    <div class="main-content fade-in">
-      <div class="content-pad content-gap">
+    <div class="main-content fade-in bb-payment-history-page">
+      <div class="content-pad content-gap bb-payment-history-content">
         ${
           payments.length
             ? `
               <div class="section-header">All Payments</div>
 
-              <div class="card">
+              <div class="card bb-contained-frame">
+                <div class="bb-contained-scroll" role="region" aria-label="Payment history" tabindex="0">
                 ${payments.map(payment => {
                   const isVoided = payment.status === 'voided';
 
@@ -17316,6 +17359,7 @@ function renderPaymentHistory() {
                     </div>
                   `;
                 }).join('')}
+                </div>
               </div>
             `
             : `
@@ -17336,7 +17380,6 @@ function renderPaymentHistory() {
     </div>
   `;
 }
-
 
 /* ============================================
    Installment / Pay-in-4 Plan Form

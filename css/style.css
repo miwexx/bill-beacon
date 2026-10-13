@@ -4097,3 +4097,106 @@ body {
 [data-bb-copy-id="bbSettingsSectionSheet"] > .sheet-nav {
   border-bottom-color: rgba(192, 151, 255, 0.16);
 }
+/* Contained bill lists: scoped to the patched list views only. */
+.sheet.bb-contained-list-sheet {
+  top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px) !important;
+  left: calc(env(safe-area-inset-left, 0px) + 12px) !important;
+  right: calc(env(safe-area-inset-right, 0px) + 12px) !important;
+  width: auto;
+  max-width: none;
+  max-height: none !important;
+  margin: 0 !important;
+  padding-bottom: 0 !important;
+  box-sizing: border-box;
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+  border-radius: 24px !important;
+}
+.bb-contained-list-sheet > .sheet-handle,
+.bb-contained-list-sheet > .sheet-nav {
+  flex-shrink: 0;
+}
+.bb-contained-list-sheet > .sheet-nav {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 8px;
+}
+.bb-contained-list-sheet .sheet-title {
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.bb-contained-list-sheet > .sheet-body.bb-contained-list-body {
+  display: flex !important;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 16px;
+  overflow: hidden !important;
+  box-sizing: border-box;
+}
+.bb-contained-fixed {
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+.bb-contained-fixed[role="status"] {
+  max-height: 20dvh;
+  overflow-y: auto;
+}
+.card.bb-contained-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box;
+  isolation: isolate;
+}
+.bb-contained-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent;
+}
+.bb-contained-scroll > .section-header {
+  margin: 0;
+  padding: 16px;
+}
+.bb-contained-scroll > .bill-row:last-child { border-bottom: 0; }
+.bb-contained-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+.main-content.bb-payment-history-page {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden !important;
+}
+.bb-payment-history-page > .bb-payment-history-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 16px;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.bb-payment-history-content > .section-header { flex-shrink: 0; margin: 0; }
