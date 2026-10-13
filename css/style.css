@@ -4568,4 +4568,36 @@ body *::-webkit-scrollbar {
   border-color: var(--border-strong);
   box-shadow: 0 14px 38px rgba(32, 48, 70, 0.18);
 }
+/* More: distinct, readable icons and cleaner card surfaces. */
+:root[data-theme="light"] {
+  /* Deep icon colors, not pastel foregrounds. */
+  --bb-more-bank-icon: #6538a5;
+  --bb-more-plan-icon: #a12d61;
+  --bb-more-credit-icon: #12687d;
+  --bb-more-activity-icon: #8b570e;
+  --bb-more-settings-icon: #55418c;
+
+  /* Muted colored tiles behind the stronger icons. */
+  --bb-more-bank-bg: #e6dcf3;
+  --bb-more-plan-bg: #f1dce5;
+  --bb-more-credit-bg: #d6e9ee;
+  --bb-more-activity-bg: #eee2cf;
+  --bb-more-settings-bg: #e2ddef;
+
+  --bb-more-link: #6538a5;
+  --bb-more-soon: #12687d;
+
+  /* Neutral structure instead of lavender outlines. */
+  --bb-more-card-border: rgba(49, 65, 88, 0.20);
+  --bb-more-card-shadow:
+    0 3px 10px rgba(32, 48, 70, 0.06);
+
+  /* A quiet pearl surface, with no pink/purple haze. */
+  --bb-more-tile-background:
+    linear-gradient(
+      145deg,
+      #f5f7fa,
+      #edf1f6
+    );
+}
 /* BILL BEACON LIGHT POLISH — END */
