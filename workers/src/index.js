@@ -2126,7 +2126,11 @@ const payments = Array.isArray(snapshot.payments)
   : [];
 
 // Global defaults from Settings “Reminders for all bills”
-const globalOffsets = normalizeReminderOffsets(settings.reminderOffsets);
+const globalOffsets = normalizeReminderOffsets(
+  Array.isArray(settings.reminderOffsets)
+    ? settings.reminderOffsets
+    : [1, 3, 7, 14]
+);
 
 const outcomes = {
   uid,
@@ -2146,19 +2150,9 @@ const outcomes = {
     continue;
   }
 
-  // Existing per‑bill offsets (from bill + scheduleHistory + overrides)
-  const billOffsets = allReminderOffsets(bill);
-
-  // If the bill has custom offsets, use those.
-  // Otherwise, use the household global defaults from Settings.
-  const baseOffsets =
-    billOffsets.length
-      ? billOffsets
-      : globalOffsets.length
-        ? globalOffsets
-        : [];
-
-  const reminderOffsets = normalizeReminderOffsets(baseOffsets);
+  // Global settings are authoritative for existing and new records.
+  // Ignore legacy bill, schedule-history and occurrence reminder offsets.
+  const reminderOffsets = globalOffsets;
 
   if (!reminderOffsets.length) {
     continue;
@@ -2178,19 +2172,6 @@ const outcomes = {
 );
 
 if (!occurrence || !isActiveBill(occurrence.bill)) {
-  continue;
-}
-
-// Only enforce occurrence-level offsets if they exist.
-// If there are none, allow the global/bill defaults through.
-const occurrenceOffsets = normalizeReminderOffsets(
-  occurrence.bill.reminderOffsets
-);
-
-if (
-  occurrenceOffsets.length &&
-  !occurrenceOffsets.includes(offsetDays)
-) {
   continue;
 }
 
@@ -2294,7 +2275,6 @@ if (
 
   return outcomes;
 }
-
 async function runScheduledBillReminders(env) {
   const startedAt = new Date();
 

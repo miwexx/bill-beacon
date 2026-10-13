@@ -12763,10 +12763,6 @@ function openBillForm(billId = null, selectedDate = null) {
   const defaultPaycheckAssignment =
     bill?.paycheckAssignment || "auto";
 
-  const selectedReminders = bill
-    ? bill.reminderOffsets || [7, 1]
-    : [7, 1];
-
   const currentDueDay = bill?.dueDay
     ? Number(bill.dueDay)
     : new Date(`${dueDate}T12:00:00`).getDate();
@@ -13063,45 +13059,6 @@ function openBillForm(billId = null, selectedDate = null) {
           </div>
 
           <div>
-            <div class="section-header">Reminders</div>
-
-            <div class="card">
-              ${REMINDER_OFFSETS.map(
-                (reminder) => `
-                  <div class="form-row">
-                    <div class="form-label">${reminder.label}</div>
-                    <div style="flex:1"></div>
-
-                    <label class="toggle">
-                      <input
-                        type="checkbox"
-                        class="reminder-toggle"
-                        name="billReminderOffsets"
-                        value="${escapeHtml(reminder.days)}"
-                        data-days="${escapeHtml(reminder.days)}"
-                        ${
-                          selectedReminders.includes(reminder.days)
-                            ? "checked"
-                            : ""
-                        }
-                      >
-
-                      <div class="toggle-track">
-                        <div class="toggle-thumb"></div>
-                      </div>
-                    </label>
-                  </div>
-                `
-              ).join("")}
-            </div>
-
-            <div class="settings-footer">
-              Reminders appear when you open the app. Enable notifications
-              in Safari for best results.
-            </div>
-          </div>
-
-          <div>
             <div class="section-header">Notes</div>
 
             <div class="card">
@@ -13318,14 +13275,8 @@ function saveBill() {
   const notes =
     document.getElementById("billNotes")?.value.trim() || "";
 
-  const reminderOffsets = Array.from(
-    document.querySelectorAll(
-      'input[name="billReminderOffsets"]:checked'
-    )
-  )
-    .map((input) => Number(input.value))
-    .filter((value) => !Number.isNaN(value))
-    .sort((a, b) => a - b);
+  // Scheduled reminders inherit Settings > Notifications.
+  const reminderOffsets = [];
 
   if (!name) {
     alert("Please enter a bill name.");
@@ -17718,7 +17669,7 @@ function saveInstallmentPlan() {
         paymentUrl,
         autopay,
         notes,
-        reminderOffsets: [7, 1],
+        reminderOffsets: [],
         createdAt,
         updatedAt: createdAt,
         postponementHistory: [],
@@ -17798,24 +17749,6 @@ function saveInstallmentPlan() {
   closeInstallmentPlanForm();
   render();
 }
-document.addEventListener(
-  'click',
-  (event) => {
-    const bellButton = event.target.closest('[data-notification-bell]');
-
-    if (!bellButton) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    if (typeof openNotificationCenter === 'function') {
-      openNotificationCenter();
-    }
-  },
-  true
-);
 
 /* ============================================
    Real Push Notification Inbox

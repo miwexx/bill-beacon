@@ -3,87 +3,41 @@
   "use strict";
   if (window.BillBeaconSettingsCleanup) return;
   const previousOpenBillForm = openBillForm;
-  const previousRender = render;
-
-    openBillForm = function (
-    billId = null,
-    selectedDate = null
-  ) {
-    const result = previousOpenBillForm.apply(
-      this,
-      arguments
-    );
-
-    const bill = billId
-      ? Store.getBill(billId)
-      : null;
-
-    const sheet = document.getElementById("billSheet");
-
-    if (!sheet) return result;
-
-    const isPaymentPlan = Boolean(
-      bill?.installmentPlanId
-    );
-
-    const title = sheet.querySelector(".sheet-title");
-
+  openBillForm = function (billId = null, selectedDate = null) {
+    const result = previousOpenBillForm.apply(this, arguments);
+    const bill = billId ? Store.getBill(billId) : null;
+    const title = document.querySelector("#billSheet .sheet-title");
     if (title) {
       title.textContent = bill
-        ? isPaymentPlan
-          ? "Edit Payment Plan"
-          : "Edit Bill"
+        ? bill.installmentPlanId ? "Edit Payment Plan" : "Edit Bill"
         : "New Bill";
     }
-
-    // Preserve the existing default-selection behavior.
-    if (
-      !billId ||
-      (bill && !Array.isArray(bill.reminderOffsets))
-    ) {
-      sheet
-        .querySelectorAll(
-          'input[name="billReminderOffsets"]'
-        )
-        .forEach(input => {
-          input.checked = [1, 3].includes(
-            Number(input.value)
-          );
-        });
-    }
-
-    // Hide the complete Reminders section, but retain
-    // its inputs so saving does not erase their values.
-    const reminderInput = sheet.querySelector(
-      'input[name="billReminderOffsets"]'
-    );
-
-    if (reminderInput) {
-      const reminderCard = reminderInput.closest(
-        ".card"
-      );
-
-      const reminderSection = reminderCard
-        ?.parentElement;
-
-      const heading = reminderSection
-        ?.querySelector(":scope > .section-header");
-
-      if (
-        heading?.textContent.trim() === "Reminders"
-      ) {
-        reminderSection.hidden = true;
-
-        reminderSection.style.setProperty(
-          "display",
-          "none",
-          "important"
-        );
-      }
-    }
-
     return result;
   };
+
+function saveGlobalReminderSettings() {
+  const sheet = document.getElementById("bbSettingsSectionBody");
+  if (!sheet) return;
+  const toggles = [...sheet.querySelectorAll(".global-reminder-toggle")];
+  const timeInput = sheet.querySelector("#globalReminderTime");
+  if (!toggles.length || !timeInput) return;
+  const time = String(timeInput.value || "");
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    alert("Choose a valid reminder time.");
+    return;
+  }
+  const offsets = [...new Set(toggles.filter(input => input.checked)
+    .map(input => Number(input.dataset.days))
+    .filter(value => Number.isInteger(value) && value >= 0 && value <= 365))]
+    .sort((a, b) => a - b);
+  Store.saveSettings({
+    ...Store.getSettings(),
+    reminderOffsets: offsets,
+    reminderTimeOfDay: time
+  });
+}
+
+
 
   function settingsAction(label, icon, action, selected = false) {
     return `<button type="button" class="form-row" onclick="${action}"
@@ -1520,10 +1474,15 @@ function buildNotificationSettingsSection() {
 
       <div class="card card-pad" id="notificationSettingsCard" style="margin-top:var(--space-3)">
         <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
-          Bills Reminders
+          Global Bill &amp; Installment Reminders
         </div>
 
 
+        <p style="font-size:13px;line-height:1.5;color:var(--text-muted);margin-bottom:12px;">
+          These days and the time below apply to all household bills and installments,
+          including existing records. Turn every day off to stop scheduled due-date reminders.
+          Device notification permission is separate.
+        </p>
         ${REMINDER_OFFSETS.map(offset => {
           const isSelected = selectedOffsets.includes(offset.days);
           return `
