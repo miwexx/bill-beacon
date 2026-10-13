@@ -2275,6 +2275,120 @@ if (
 
   return outcomes;
 }
+// Only enforce occurrence-level offsets if they exist.
+// If there are none, allow the global/bill defaults through.
+const occurrenceOffsets = normalizeReminderOffsets(
+  occurrence.bill.reminderOffsets
+);
+
+if (
+  occurrenceOffsets.length &&
+  !occurrenceOffsets.includes(offsetDays)
+) {
+  continue;
+}
+
+if (
+  isOccurrencePaid(
+    bill,
+    occurrence,
+    payments,
+    timeZone
+  )
+) {
+  continue;
+}
+      if (hasUnlinkedPaymentForReminderMonth(bill, occurrence, payments, timeZone)) {
+        outcomes.reviewRequired += 1;
+        continue;
+      }
+      outcomes.eligible += 1;
+
+      const notification = buildReminderPresentation(
+        occurrence.bill,
+        occurrence.dueDateKey,
+        offsetDays,
+        settings,
+        uid
+      );
+
+      const priorSend = await env.NOTIFICATIONSKV.get(
+        notification.notificationId,
+        "json"
+      );
+
+      if (priorSend?.sentAt) {
+        outcomes.skipped += 1;
+        continue;
+      }
+
+      await prepareInboxPush(householdId, notification, accessToken);
+      const delivery = await sendReminderToUserSubscriptions(
+        env,
+        uid,
+        notification
+      );
+
+      outcomes.sent += delivery.sent;
+      outcomes.removed += delivery.removed;
+      outcomes.failures += delivery.failures;
+            if (delivery.subscriptionCount === 0) {
+        outcomes.noSubscriptions += 1;
+      }
+
+      if (delivery.sent > 0) {
+        await env.NOTIFICATIONSKV.put(
+          notification.notificationId,
+          JSON.stringify({
+            uid,
+            billId: bill.id,
+            dueDate: occurrence.dueDateKey,
+            originalDueDate:
+              occurrence.originalDueDateKey,
+            offsetDays,
+            sentAt: new Date().toISOString(),
+            deliveryCount: delivery.sent
+          }),
+          {
+            expirationTtl: 60 * 60 * 24 * 400
+          }
+        );
+
+        try {
+          await markInboxDelivered(householdId, notification.notificationId, accessToken);
+        } catch (error) {
+          console.error(
+            "Push was delivered, but notification inbox history could not be written.",
+            {
+              uid,
+              billId: bill.id,
+              error: error?.message || String(error)
+            }
+          );
+        }
+      }
+
+      if (
+        delivery.sent === 0 &&
+        delivery.subscriptionCount > 0 &&
+        delivery.failures > 0
+      ) {
+        console.warn(
+          "Reminder was not marked sent because delivery had temporary failures.",
+          {
+            uid,
+            billId: bill.id,
+            dueDate: occurrence.dueDateKey,
+            offsetDays
+          }
+        );
+      }
+    }
+  }
+
+  return outcomes;
+}
+
 async function runScheduledBillReminders(env) {
   const startedAt = new Date();
 
