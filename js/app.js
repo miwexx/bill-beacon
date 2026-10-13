@@ -13692,26 +13692,6 @@ window.toggleMonthBills = function() {
     : `Show all ${document.querySelectorAll('#moreMonthBills .bill-row').length + 5} bills ${svgIcon('chevronRight', 18)}`;
 
   button.classList.toggle('is-open', isOpen);
-}
-
-// ====================================
-// ACTIONS
-// ====================================
-
-let currentFilter = 'all';
-window.toggleMonthBills = function() {
-  const extraBills = document.getElementById('moreMonthBills');
-  const button = document.getElementById('toggleMonthBills');
-
-  if (!extraBills || !button) return;
-
-  const isOpen = extraBills.classList.toggle('is-open');
-
-  button.innerHTML = isOpen
-    ? `Show Less ${svgIcon('chevronRight', 18)}`
-    : `Show all ${document.querySelectorAll('#moreMonthBills .bill-row').length + 5} bills ${svgIcon('chevronRight', 18)}`;
-
-  button.classList.toggle('is-open', isOpen);
 };
 
 function setCycleFilter(cycle) {
