@@ -19169,7 +19169,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // Shared popup touch-scroll guard.
-// Does not reposition the body or change the taskbar.
+// Allow native elastic scrolling inside scrollable popup areas.
+// Prevent touches outside a popup from scrolling the background.
 (() => {
   const popupSelector =
     '.sheet, #billDetailsSheet, [role="dialog"][aria-modal="true"]';
@@ -19196,6 +19197,32 @@ document.addEventListener('DOMContentLoaded', () => {
   function visiblePopups() {
     return [...document.querySelectorAll(popupSelector)]
       .filter(isVisiblePopup);
+  }
+
+  function hasScrollableAncestor(target, popup) {
+    let element = target;
+
+    while (element && popup.contains(element)) {
+      const style = getComputedStyle(element);
+
+      const allowsVerticalScroll =
+        /^(auto|scroll|overlay)$/.test(style.overflowY);
+
+      const hasOverflow =
+        element.scrollHeight > element.clientHeight + 1;
+
+      // Allow native scrolling even at the top or bottom.
+      // Do not block the browser's elastic boundary effect.
+      if (allowsVerticalScroll && hasOverflow) {
+        return true;
+      }
+
+      if (element === popup) break;
+
+      element = element.parentElement;
+    }
+
+    return false;
   }
 
   document.addEventListener(
@@ -19238,47 +19265,28 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!popups.length) return;
 
       const target = event.target;
+
       const popup = target instanceof Element
         ? target.closest(popupSelector)
         : null;
 
-      // Touches outside a visible popup cannot scroll the background.
+      // Keep the background still when touching outside a popup.
       if (!popup || !popups.includes(popup)) {
         if (event.cancelable) event.preventDefault();
         return;
       }
 
-      // Let the existing swipe-back handler manage horizontal motion.
+      // Leave horizontal motion to the existing swipe handlers.
       if (Math.abs(dx) > Math.abs(dy)) return;
       if (dy === 0) return;
 
-      // Allow vertical scrolling only if a popup scroll area
-      // can still move in the requested direction.
-      let element = target;
-
-      while (element && popup.contains(element)) {
-        const style = getComputedStyle(element);
-        const maxScroll =
-          element.scrollHeight - element.clientHeight;
-
-        if (
-          /^(auto|scroll|overlay)$/.test(style.overflowY) &&
-          maxScroll > 1
-        ) {
-          const canMoveUp =
-            dy > 0 && element.scrollTop > 1;
-
-          const canMoveDown =
-            dy < 0 && element.scrollTop < maxScroll - 1;
-
-          if (canMoveUp || canMoveDown) return;
-        }
-
-        if (element === popup) break;
-        element = element.parentElement;
+      // Let any overflowing popup scroll area handle vertical
+      // scrolling and native bounce, including at its boundaries.
+      if (hasScrollableAncestor(target, popup)) {
+        return;
       }
 
-      // Prevent scroll from leaking to the page at popup boundaries.
+      // A non-scrollable part of a popup should not move the page.
       if (event.cancelable) event.preventDefault();
     },
     { passive: false }
@@ -19286,13 +19294,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener(
     "touchend",
-    () => { lastTouch = null; },
+    () => {
+      lastTouch = null;
+    },
     { passive: true }
   );
 
   document.addEventListener(
     "touchcancel",
-    () => { lastTouch = null; },
+    () => {
+      lastTouch = null;
+    },
     { passive: true }
   );
 })();

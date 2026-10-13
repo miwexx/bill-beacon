@@ -4275,3 +4275,39 @@ body {
 
   box-sizing: border-box;
 }
+/* Native vertical elasticity in app scrolling regions.
+   Do not change overflow or sizing here. */
+:is(
+  .main-content,
+  .sheet,
+  .sheet-body,
+  [role="dialog"],
+  [role="region"],
+  textarea,
+  .bills-list-scroll,
+  .activity-list-scroll,
+  .bb-contained-scroll,
+  .bb-about-document-scroll,
+  .paycheck-bills-scroll,
+  #notificationCenterContent,
+  [data-bb-copy-id="notificationCenterContent"]
+) {
+  overscroll-behavior-y: contain !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scroll indicators without disabling scrolling. */
+html,
+body,
+body * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none;
+}
+
+html::-webkit-scrollbar,
+body::-webkit-scrollbar,
+body *::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
