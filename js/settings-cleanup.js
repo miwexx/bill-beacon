@@ -1475,15 +1475,9 @@ function buildNotificationSettingsSection() {
 
       <div class="card card-pad" id="notificationSettingsCard" style="margin-top:var(--space-3)">
         <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
-          Global Bill &amp; Installment Reminders
+          Bill & Installment Reminders
         </div>
 
-
-        <p style="font-size:13px;line-height:1.5;color:var(--text-muted);margin-bottom:12px;">
-          These days and the time below apply to all household bills and installments,
-          including existing records. Turn every day off to stop scheduled due-date reminders.
-          Device notification permission is separate.
-        </p>
         ${REMINDER_OFFSETS.map(offset => {
           const isSelected = selectedOffsets.includes(offset.days);
           return `
