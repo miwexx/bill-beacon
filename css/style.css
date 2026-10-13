@@ -3970,3 +3970,88 @@ body {
   outline: 2px solid var(--accent);
   outline-offset: -4px;
 }
+/* Settings popups: keep the entire outer frame
+   visibly inside the screen. */
+#bbSettingsSectionSheet,
+[data-bb-copy-id="bbSettingsSectionSheet"] {
+  position: fixed;
+
+  top: calc(
+    env(safe-area-inset-top, 0px) + 12px
+  ) !important;
+
+  bottom: calc(
+    env(safe-area-inset-bottom, 0px) + 12px
+  ) !important;
+
+  left: calc(
+    env(safe-area-inset-left, 0px) + 12px
+  ) !important;
+
+  right: calc(
+    env(safe-area-inset-right, 0px) + 12px
+  ) !important;
+
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  max-height: none !important;
+
+  margin: 0 !important;
+  padding-bottom: 0 !important;
+  box-sizing: border-box;
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+
+  border: 1px solid var(--border-strong);
+  border-radius: 24px !important;
+  background: var(--bg);
+}
+
+/* Keep the handle and title row stationary. */
+#bbSettingsSectionSheet > .sheet-handle,
+[data-bb-copy-id="bbSettingsSectionSheet"] > .sheet-handle,
+#bbSettingsSectionSheet > .sheet-nav,
+[data-bb-copy-id="bbSettingsSectionSheet"] > .sheet-nav {
+  flex-shrink: 0;
+}
+
+/* Balanced header: Back | Title | Spacer. */
+#bbSettingsSectionSheet > .sheet-nav,
+[data-bb-copy-id="bbSettingsSectionSheet"] > .sheet-nav {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+}
+
+#bbSettingsSectionTitle,
+[data-bb-copy-id="bbSettingsSectionTitle"] {
+  min-width: 0;
+  text-align: center;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Regular Settings sections scroll below the header. */
+#bbSettingsSectionBody,
+[data-bb-copy-id="bbSettingsSectionBody"] {
+  flex: 1 1 0;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+/* Legal/contact pages keep their inner-card scrolling. */
+#bbSettingsSectionSheet.bb-about-document-sheet
+  > .sheet-body,
+[data-bb-copy-id="bbSettingsSectionSheet"].bb-about-document-sheet
+  > .sheet-body {
+  overflow: hidden !important;
+}
