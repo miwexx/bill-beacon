@@ -3,6 +3,7 @@
   "use strict";
   if (window.BillBeaconSettingsCleanup) return;
   const previousOpenBillForm = openBillForm;
+    const previousRender = render;
   openBillForm = function (billId = null, selectedDate = null) {
     const result = previousOpenBillForm.apply(this, arguments);
     const bill = billId ? Store.getBill(billId) : null;
