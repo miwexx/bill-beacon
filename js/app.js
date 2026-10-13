@@ -19486,7 +19486,28 @@ window.addEventListener("storage", () => {
     return renderBeforeDragBack.apply(this, arguments);
   };
   window.render = render;
+    // Keep live inbox updates from replacing the touched row mid-swipe.
+  let notificationContentPending = false;
 
+  const notificationContentBeforeDrag =
+    renderNotificationCenterContent;
+
+  renderNotificationCenterContent = function () {
+    if (gesture || settling || overlay) {
+      notificationContentPending = true;
+      return;
+    }
+
+    notificationContentPending = false;
+
+    return notificationContentBeforeDrag.apply(
+      this,
+      arguments
+    );
+  };
+
+  window.renderNotificationCenterContent =
+    renderNotificationCenterContent;
 
   const reducedMotion = () =>
     Boolean(
@@ -19578,6 +19599,20 @@ window.addEventListener("storage", () => {
     overlay = null;
     gesture = null;
     settling = false;
+
+        if (notificationContentPending) {
+      notificationContentPending = false;
+
+      queueMicrotask(() => {
+        // A new gesture may have started before this update runs.
+        if (gesture || settling || overlay) {
+          notificationContentPending = true;
+          return;
+        }
+
+        renderNotificationCenterContent();
+      });
+    }
 
     if (renderPending) {
       renderPending = false;
