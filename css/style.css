@@ -4328,3 +4328,70 @@ body *::-webkit-scrollbar {
 
   box-sizing: border-box;
 }
+/* Add/Edit Bill and Payment Plan:
+   show the entire rounded frame within the screen. */
+:is(
+  #billSheet,
+  #installmentPlanSheet,
+  [data-bb-copy-id="billSheet"],
+  [data-bb-copy-id="installmentPlanSheet"]
+) {
+  top: calc(
+    env(safe-area-inset-top, 0px) + 12px
+  ) !important;
+
+  bottom: calc(
+    env(safe-area-inset-bottom, 0px) + 8px
+  ) !important;
+
+  left: env(safe-area-inset-left, 0px) !important;
+  right: env(safe-area-inset-right, 0px) !important;
+
+  width: auto !important;
+  max-width: none !important;
+  max-height: none !important;
+  min-height: 0;
+
+  margin: 0 !important;
+  padding-bottom: 0 !important;
+  box-sizing: border-box;
+
+  display: flex !important;
+  flex-direction: column;
+  overflow: hidden !important;
+
+  border: 1px solid var(--border-strong);
+  border-radius: 24px !important;
+}
+
+/* Header and handle stay inside the stationary frame. */
+:is(
+  #billSheet,
+  #installmentPlanSheet,
+  [data-bb-copy-id="billSheet"],
+  [data-bb-copy-id="installmentPlanSheet"]
+) > .sheet-handle,
+:is(
+  #billSheet,
+  #installmentPlanSheet,
+  [data-bb-copy-id="billSheet"],
+  [data-bb-copy-id="installmentPlanSheet"]
+) > .sheet-nav {
+  flex-shrink: 0;
+}
+
+/* Bill form: scroll the form contents, not the frame. */
+:is(
+  #billSheet,
+  [data-bb-copy-id="billSheet"]
+) > .sheet-body {
+  flex: 1 1 0;
+  min-height: 0;
+
+  overflow-y: auto !important;
+  overflow-x: hidden;
+
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+
+  padding-bo
