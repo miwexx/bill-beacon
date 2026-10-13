@@ -3900,8 +3900,8 @@ function renderMore() {
                   align-items:center;
                   justify-content:center;
                   border-radius:14px;
-                  color:#d9ccff;
-                  background:rgba(143,54,255,.20);
+                  color:var(--bb-more-bank-icon, #d9ccff);
+                  background:var(--bb-more-bank-bg, rgba(143,54,255,.20));
                 "
               >
                 ${svgIcon("internaldrive", 22)}
@@ -3922,7 +3922,7 @@ function renderMore() {
 
               <div
                 style="
-                  color:#c47cff;
+                  color:var(--bb-more-link, #c47cff);
                   font-size:12px;
                   font-weight:800;
                 "
@@ -3944,8 +3944,8 @@ function renderMore() {
                   align-items:center;
                   justify-content:center;
                   border-radius:14px;
-                  color:#ffdce9;
-                  background:rgba(246,76,174,.18);
+                  color:var(--bb-more-plan-icon, #ffdce9);
+                  background:var(--bb-more-plan-bg, rgba(246,76,174,.18));
                 "
               >
                 ${svgIcon("creditcard", 22)}
@@ -3994,8 +3994,8 @@ function renderMore() {
                 align-items:center;
                 justify-content:center;
                 border-radius:15px;
-                color:#b8efff;
-                background:rgba(63,196,235,.16);
+                color:var(--bb-more-credit-icon, #b8efff);
+                background:var(--bb-more-credit-bg, rgba(63,196,235,.16));
               "
             >
               ${svgIcon("creditcard", 23)}
@@ -4015,7 +4015,7 @@ function renderMore() {
 
             <div
               style="
-                color:#69d4f3;
+                color:var(--bb-more-soon, #69d4f3);
                 font-size:12px;
                 font-weight:800;
                 white-space:nowrap;
@@ -4047,8 +4047,8 @@ function renderMore() {
         align-items:center;
         justify-content:center;
         border-radius:15px;
-        color:#ffe2b5;
-        background:rgba(255,174,74,.14);
+        color:var(--bb-more-activity-icon, #ffe2b5);
+        background:var(--bb-more-activity-bg, rgba(255,174,74,.14));
       "
     >
       ${svgIcon("doc", 23)}
@@ -4095,8 +4095,8 @@ function renderMore() {
         align-items:center;
         justify-content:center;
         border-radius:15px;
-        color:#d8d0ff;
-        background:rgba(143,54,255,.16);
+        color:var(--bb-more-settings-icon, #d8d0ff);
+        background:var(--bb-more-settings-bg, rgba(143,54,255,.16));
       "
     >
       ${svgIcon("gear", 23)}
