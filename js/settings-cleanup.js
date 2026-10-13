@@ -1609,30 +1609,57 @@ function buildNotificationSettingsSection() {
     `;
   }
     function buildAppearanceSettingsSection() {
-    const settings = Store.getSettings();
-
-    return `
-      <section class="settings-section">
-      
-
+  const preference = getDeviceAppearance();
+  const automatic = preference.mode === "system";
+  return `
+    <section class="settings-section" data-bb-device-appearance>
+      <div class="card">
+        ${settingsAction("Dark", "check", "setTheme('dark')", preference.mode === "dark")}
+        ${settingsAction("Light", "check", "setTheme('light')", preference.mode === "light")}
+        ${settingsAction("Automatic", "check", "setTheme('system')", automatic)}
+      </div>
+      <p class="settings-footer" style="margin-top:12px;">
+        Appearance is saved on this device/browser only, not shared with your household.
+      </p>
+      ${automatic ? `
+        <div class="section-header">Automatic appearance</div>
         <div class="card">
-          ${settingsAction(
-            "Dark",
-            "check",
-            "setTheme('dark')",
-            settings.theme !== "light"
-          )}
-
-          ${settingsAction(
-            "Light",
-            "check",
-            "setTheme('light')",
-            settings.theme === "light"
-          )}
+          ${settingsAction("Follow device", "check",
+            "updateDeviceAppearance({source:'device'})", preference.source === "device")}
+          ${settingsAction("Custom schedule", "check",
+            "updateDeviceAppearance({source:'schedule'})", preference.source === "schedule")}
         </div>
-      </section>
-    `;
-  }
+        ${preference.source === "schedule" ? `
+          <div class="card" style="margin-top:12px;">
+            <div class="form-row">
+              <label class="form-label" for="bbAppearanceLightAt">Light starts</label>
+              <input class="form-input" id="bbAppearanceLightAt" type="time"
+                value="${preference.lightAt}"
+                onchange="updateDeviceAppearance({lightAt:this.value})">
+            </div>
+            <div class="form-row">
+              <label class="form-label" for="bbAppearanceDarkAt">Dark starts</label>
+              <input class="form-input" id="bbAppearanceDarkAt" type="time"
+                value="${preference.darkAt}"
+                onchange="updateDeviceAppearance({darkAt:this.value})">
+            </div>
+          </div>
+          <p class="settings-footer" style="margin-top:12px;">
+            Uses this device's local time. Rechecks when you return to the app.
+          </p>
+        ` : ""}
+      ` : ""}
+    </section>
+  `;
+}
+
+window.addEventListener("bb-device-appearance-changed", () => {
+  const body = document.getElementById("bbSettingsSectionBody");
+  if (!body?.querySelector("[data-bb-device-appearance]")) return;
+  const scroll = body.scrollTop;
+  body.innerHTML = buildAppearanceSettingsSection();
+  body.scrollTop = scroll;
+});
    function buildRecordsSettingsSection() {
   return `
     <section class="settings-section">

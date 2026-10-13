@@ -2643,15 +2643,99 @@ function openPaymentPage(billId) {
 // THEME
 // ====================================
 
-function initTheme() {
-  const settings = Store.getSettings();
-  if (settings.theme === 'light') {
-    document.documentElement.setAttribute('data-theme', 'light');
-  } else if (settings.theme === 'dark') {
-    document.documentElement.setAttribute('data-theme', 'dark');
-  } else {
-        document.documentElement.setAttribute('data-theme', 'dark');
+function getDeviceAppearance() {
+  const key = "billbeacon:device-appearance:v1";
+  let saved = window.bbDeviceAppearanceMemory;
+  if (!saved) {
+    try { saved = JSON.parse(localStorage.getItem(key) || "null"); }
+    catch { saved = null; }
   }
+  if (!saved || !["light", "dark", "system"].includes(saved.mode)) {
+    const legacy = Store.getSettings().theme;
+    saved = {
+      mode: legacy === "light" ? "light" : "dark",
+      source: "device", lightAt: "07:00", darkAt: "19:00"
+    };
+    try { localStorage.setItem(key, JSON.stringify(saved)); } catch {}
+  }
+  const validTime = value => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+  saved = {
+    mode: saved.mode,
+    source: saved.source === "schedule" ? "schedule" : "device",
+    lightAt: validTime(saved.lightAt) ? saved.lightAt : "07:00",
+    darkAt: validTime(saved.darkAt) ? saved.darkAt : "19:00"
+  };
+  window.bbDeviceAppearanceMemory = saved;
+  return {...saved};
+}
+
+function resolveDeviceTheme(preference, now = new Date()) {
+  if (preference.mode !== "system") return preference.mode;
+  if (preference.source !== "schedule") {
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches
+      ? "dark" : "light";
+  }
+  const minutes = value => {
+    const [hour, minute] = value.split(":").map(Number);
+    return hour * 60 + minute;
+  };
+  const light = minutes(preference.lightAt);
+  const dark = minutes(preference.darkAt);
+  const current = now.getHours() * 60 + now.getMinutes();
+  if (light === dark) return "dark";
+  const isLight = light < dark
+    ? current >= light && current < dark
+    : current >= light || current < dark;
+  return isLight ? "light" : "dark";
+}
+
+function initTheme() {
+  const theme = resolveDeviceTheme(getDeviceAppearance());
+  document.documentElement.setAttribute("data-theme", theme);
+  document.documentElement.style.colorScheme = theme;
+  if (window.bbDeviceAppearanceListenersInstalled) return;
+  window.bbDeviceAppearanceListenersInstalled = true;
+  const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+  if (media?.addEventListener) media.addEventListener("change", initTheme);
+  else if (media?.addListener) media.addListener(initTheme);
+  window.addEventListener("focus", initTheme);
+  window.addEventListener("pageshow", initTheme);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") initTheme();
+  });
+  window.addEventListener("storage", event => {
+    if (event.key !== "billbeacon:device-appearance:v1") return;
+    window.bbDeviceAppearanceMemory = null;
+    initTheme();
+    window.dispatchEvent(new Event("bb-device-appearance-changed"));
+  });
+  window.setInterval(() => {
+    if (document.visibilityState === "visible") initTheme();
+  }, 30000);
+}
+
+function updateDeviceAppearance(changes) {
+  const preference = {...getDeviceAppearance(), ...changes};
+  if (!["light", "dark", "system"].includes(preference.mode) ||
+      !["device", "schedule"].includes(preference.source)) return;
+  const validTime = value => /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
+  if (!validTime(preference.lightAt) || !validTime(preference.darkAt)) {
+    alert("Choose valid Light and Dark start times."); return;
+  }
+  if (preference.source === "schedule" &&
+      preference.lightAt === preference.darkAt) {
+    alert("Light and Dark must start at different times."); return;
+  }
+  try {
+    localStorage.setItem("billbeacon:device-appearance:v1",
+      JSON.stringify(preference));
+  } catch {
+    alert("Appearance could not be saved on this browser. Your selection was not changed.");
+    return;
+  }
+  window.bbDeviceAppearanceMemory = preference;
+  initTheme();
+  window.dispatchEvent(new Event("bb-device-appearance-changed"));
 }
 
 // ====================================
@@ -13729,11 +13813,7 @@ function debouncedSearch(value) {
 }
 
 function setTheme(theme) {
-  const settings = Store.getSettings();
-  settings.theme = theme;
-  Store.saveSettings(settings);
-  initTheme();
-  render();
+  updateDeviceAppearance({mode: theme});
 }
 function openBankingComingSoon() {
   alert("Banking & Transactions is coming soon.");
