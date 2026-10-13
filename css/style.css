@@ -3901,3 +3901,72 @@ body {
 .activity-page-content .activity-months {
   margin-bottom: 6px;
 }
+/* About documents: stationary popup and card,
+   with scrolling only inside the card. */
+.sheet.bb-about-document-sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden !important;
+  box-sizing: border-box;
+
+  top: calc(
+    env(safe-area-inset-top, 0px) + 12px
+  ) !important;
+
+  bottom: 0 !important;
+  max-height: none !important;
+
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.bb-about-document-sheet > .sheet-handle,
+.bb-about-document-sheet > .sheet-nav {
+  flex-shrink: 0;
+}
+
+.bb-about-document-sheet > .sheet-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  overflow: hidden !important;
+  box-sizing: border-box;
+  padding: 16px;
+}
+
+.bb-about-document-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  box-sizing: border-box;
+  isolation: isolate;
+}
+
+.bb-about-document-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  padding: 18px;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+  box-sizing: border-box;
+
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-muted) transparent;
+}
+
+.bb-about-document-scroll:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}

@@ -130,13 +130,21 @@
       }
     }
 
-    activeDocument = key;
+        activeDocument = key;
+
+    document.getElementById("bbSettingsSectionSheet")
+      ?.classList.add("bb-about-document-sheet");
+
     title.textContent = doc.title;
     title.style.fontSize = "16px";
     back.setAttribute("aria-label", "Back to About");
     back.setAttribute("title", "Back to About");
     // Retain the existing close handler so the swipe gesture recognizes it.
-    body.innerHTML = '<article class="card card-pad" style="line-height:1.65;overflow-wrap:anywhere">' +
+        body.innerHTML =
+      '<article class="card bb-about-document-frame">' +
+      '<div class="bb-about-document-scroll" ' +
+      'role="region" tabindex="0" ' +
+      'aria-label="' + esc(doc.title) + '">' +
       '<p style="margin:0 0 18px;color:var(--text-muted);font-size:12px">' +
       (key === "contact" ? "" : "Draft &middot; ") + "Last updated: " + revision + "</p>" +
       doc.sections.map(([heading, text]) =>
@@ -144,7 +152,9 @@
         esc(heading) + '</h2><p style="margin:0;color:var(--text-muted);font-size:14px">' +
         esc(text) + "</p></section>").join("") +
       '<a class="bb-outline-pill" style="display:flex;width:100%;min-height:46px;justify-content:center;text-decoration:none;box-sizing:border-box" href="mailto:' +
-      email + '?subject=Bill%20Beacon%20' + (key === "privacy" ? "Privacy%20Request" : "Support") + '">Email Support</a></article>';
+            email + '?subject=Bill%20Beacon%20' +
+      (key === "privacy" ? "Privacy%20Request" : "Support") +
+      '">Email Support</a></div></article>';
     body.scrollTop = 0;
     back.focus({preventScroll:true});
   };
