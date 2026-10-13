@@ -4222,16 +4222,30 @@ body {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
 }
-/* Width experiment: shared list and Settings popups.
-   Remove this block to restore the previous width. */
+/* Wider popup experiment.
+   Remove this block to return to the previous layout. */
+
+/* Let the outer popup reach the screen's safe-area edges. */
 .sheet.bb-contained-list-sheet,
 #bbSettingsSectionSheet,
 [data-bb-copy-id="bbSettingsSectionSheet"] {
-  left: calc(
-    env(safe-area-inset-left, 0px) + 4px
-  ) !important;
+  left: env(safe-area-inset-left, 0px) !important;
+  right: env(safe-area-inset-right, 0px) !important;
 
-  right: calc(
-    env(safe-area-inset-right, 0px) + 4px
-  ) !important;
+  width: auto !important;
+  max-width: none !important;
+}
+
+/* Reduce the space around list cards from 16px to 8px. */
+.sheet.bb-contained-list-sheet
+  > .sheet-body.bb-contained-list-body {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
+}
+
+/* Give Settings content the same wider treatment. */
+#bbSettingsSectionSheet > .sheet-body,
+[data-bb-copy-id="bbSettingsSectionSheet"] > .sheet-body {
+  padding-left: 8px !important;
+  padding-right: 8px !important;
 }
