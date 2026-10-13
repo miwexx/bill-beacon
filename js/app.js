@@ -19750,6 +19750,32 @@ if (dock) {
       const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(root)};pointer-events:none;`;
       behind.appendChild(dim);addPanel(behind,panelSnapshot(root));
     }
+        // Some sheets have an internal Back destination,
+    // such as Privacy Policy -> About.
+    if (
+      state.context.mode === "popup" &&
+      typeof window.bbGetPopupBackPreview === "function"
+    ) {
+      const destination =
+        window.bbGetPopupBackPreview(
+          state.context.root
+        );
+
+      if (destination) {
+        // Keep the live sheet's measured size and layout,
+        // but preview the saved destination's contents.
+        const destinationSnapshot = panelSnapshot(
+          state.context.root
+        );
+
+        destinationSnapshot.copy.replaceChildren(
+          ...Array.from(destination.childNodes)
+            .map(node => node.cloneNode(true))
+        );
+
+        addPanel(behind, destinationSnapshot);
+      }
+    }
     if (state.context.mode==="popup") {
       const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(state.context.root)};pointer-events:none;`;
       layer.appendChild(dim);state.dim=dim;
