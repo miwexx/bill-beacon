@@ -4200,3 +4200,25 @@ body {
   box-sizing: border-box;
 }
 .bb-payment-history-content > .section-header { flex-shrink: 0; margin: 0; }
+/* Paycheck popup: override the older non-shrinking card rule. */
+.paycheck-plan-sheet.bb-contained-list-sheet
+  > .sheet-body.bb-contained-list-body
+  > .card.bb-contained-frame {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none;
+  overflow: hidden !important;
+}
+
+/* Give the inner list the available height, not its content height. */
+.paycheck-plan-sheet.bb-contained-list-sheet
+  .bb-contained-frame
+  > .bb-contained-scroll {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
