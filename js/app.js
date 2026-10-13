@@ -20039,10 +20039,8 @@ if (dock) {
 
       const touch = event.touches[0];
 
-      if (
-        touch.clientX < 8 ||
-        touch.clientX > 110
-      ) {
+            // Accept starts from the left edge through the start zone.
+      if (touch.clientX > 110) {
         return;
       }
 
@@ -20124,7 +20122,7 @@ gesture.samples = gesture.samples
   return;
 }
 
-      if (dx > 16 && dx > dy * 2) {
+            if (dx > 8 && dx > dy * 1.5) {
       if (!gesture.armed && !event.cancelable) {
   cleanup();
   return;
