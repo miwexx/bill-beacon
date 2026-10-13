@@ -4055,3 +4055,45 @@ body {
   > .sheet-body {
   overflow: hidden !important;
 }
+/* Settings popup: subtle purple/pink gradient.
+   Also applies to the copied swipe preview. */
+#bbSettingsSectionSheet,
+[data-bb-copy-id="bbSettingsSectionSheet"] {
+  background:
+    radial-gradient(
+      ellipse at 100% 0%,
+      rgba(246, 76, 174, 0.18) 0%,
+      transparent 48%
+    ),
+    radial-gradient(
+      ellipse at 0% 100%,
+      rgba(143, 54, 255, 0.20) 0%,
+      transparent 52%
+    ),
+    linear-gradient(
+      145deg,
+      rgba(192, 151, 255, 0.06),
+      transparent 55%
+    ),
+    var(--bg);
+
+  border-color: rgba(192, 151, 255, 0.28);
+
+  box-shadow:
+    0 18px 50px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* Let the popup gradient show through the header
+   and around the inner cards. */
+#bbSettingsSectionSheet > .sheet-nav,
+[data-bb-copy-id="bbSettingsSectionSheet"] > .sheet-nav,
+#bbSettingsSectionSheet > .sheet-body,
+[data-bb-copy-id="bbSettingsSectionSheet"] > .sheet-body {
+  background: transparent;
+}
+
+#bbSettingsSectionSheet > .sheet-nav,
+[data-bb-copy-id="bbSettingsSectionSheet"] > .sheet-nav {
+  border-bottom-color: rgba(192, 151, 255, 0.16);
+}
