@@ -19723,7 +19723,14 @@ window.addEventListener("storage", () => {
     const layer=document.createElement("div");
     layer.setAttribute("data-bb-drag-preview","");layer.setAttribute("aria-hidden","true");layer.inert=true;
     layer.style.cssText="position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
-    const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;pointer-events:none;";
+        const behind = document.createElement("div");
+
+    behind.style.cssText =
+      "position:absolute;" +
+      "inset:0;" +
+      "overflow:hidden;" +
+      "pointer-events:none;" +
+      "z-index:0;";
     const content=document.createElement("div");content.style.cssText=`width:100%;min-height:100%;transform:translateY(${-base.windowScroll}px);`;
     content.appendChild(base.copy.cloneNode(true));behind.appendChild(content);layer.appendChild(behind);
     const dock = content.querySelector(".tab-bar");
@@ -19776,11 +19783,28 @@ if (dock) {
         addPanel(behind, destinationSnapshot);
       }
     }
-    if (state.context.mode==="popup") {
-      const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(state.context.root)};pointer-events:none;`;
-      layer.appendChild(dim);state.dim=dim;
+        if (state.context.mode === "popup") {
+      const dim = document.createElement("div");
+
+      dim.style.cssText =
+        "position:absolute;" +
+        "inset:0;" +
+        `background:${shadeFor(state.context.root)};` +
+        "pointer-events:none;" +
+        "z-index:1;";
+
+      layer.appendChild(dim);
+      state.dim = dim;
     }
-    const pane=document.createElement("div");pane.style.cssText="position:absolute;inset:0;overflow:hidden;pointer-events:none;will-change:transform;";
+        const pane = document.createElement("div");
+
+    pane.style.cssText =
+      "position:absolute;" +
+      "inset:0;" +
+      "overflow:hidden;" +
+      "pointer-events:none;" +
+      "will-change:transform;" +
+      "z-index:2;";
     addPanel(pane,panelSnapshot(state.context.root));layer.appendChild(pane);
     overlay=layer;document.body.appendChild(layer);
     restoreCloneScroll(layer);state.pane=pane;
