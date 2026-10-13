@@ -4222,3 +4222,16 @@ body {
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
 }
+/* Width experiment: shared list and Settings popups.
+   Remove this block to restore the previous width. */
+.sheet.bb-contained-list-sheet,
+#bbSettingsSectionSheet,
+[data-bb-copy-id="bbSettingsSectionSheet"] {
+  left: calc(
+    env(safe-area-inset-left, 0px) + 4px
+  ) !important;
+
+  right: calc(
+    env(safe-area-inset-right, 0px) + 4px
+  ) !important;
+}
