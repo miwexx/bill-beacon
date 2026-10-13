@@ -17389,7 +17389,10 @@ function openInstallmentPlanForm() {
         </button>
       </div>
 
-      <div style="padding: var(--space-4);">
+            <div
+        class="sheet-body"
+        style="padding: var(--space-4);"
+      >
         <div class="content-gap">
 
           <div class="section-header">Payment App</div>
@@ -19847,15 +19850,13 @@ if (dock) {
     }
     const destinationSnapshot = destination && pageSnapshots.get(destination[1]);
     if (destinationSnapshot) previous = destinationSnapshot;
-    if (
+       if (
       !previous ||
       !destination ||
-      destination[1] !== previous.route ||
-      reducedMotion()
+      destination[1] !== previous.route
     ) {
       return;
     }
-
     const current = snapshot();
     if (!current) return;
 
