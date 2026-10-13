@@ -4422,63 +4422,69 @@ body *::-webkit-scrollbar {
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --bg: #f6f3fa;
+  --bg: #dde3eb;
   --bg-gradient:
-    radial-gradient(
-      ellipse at top,
-      #ffffff 0%,
-      #f6f3fa 65%
+    linear-gradient(
+      160deg,
+      #e5eaf1 0%,
+      #dce2eb 100%
     );
 
-  --surface: #ffffff;
-  --surface-2: #f0eaf7;
-  --surface-3: #e6deef;
-  --card: #ffffff;
-  --card-2: #faf7fd;
+  --surface: #f1f4f8;
+  --surface-2: #e4eaf2;
+  --surface-3: #d3dce8;
+  --surface-hover: #e4eaf2;
 
-  --text: #241b32;
-  --text-secondary: #51465f;
-  --text-muted: #6f627e;
-  --text-faint: #82748f;
+  --card: #f5f7fa;
+  --card-2: #eaf0f6;
 
-  --separator: rgba(66, 39, 92, 0.10);
-  --border: rgba(97, 55, 139, 0.16);
-  --border-strong: rgba(97, 55, 139, 0.25);
+  --text: #202b3d;
+  --text-primary: #202b3d;
+  --text-secondary: #4c5c70;
+  --text-muted: #59697d;
+  --text-faint: #68788c;
 
-  --accent: #7931bd;
-  --accent-dim: rgba(121, 49, 189, 0.10);
-  --accent-glow: rgba(121, 49, 189, 0.16);
+  --separator: rgba(42, 61, 86, 0.13);
+  --border: rgba(42, 61, 86, 0.18);
+  --border-strong: rgba(42, 61, 86, 0.26);
 
-  --paid: #087b62;
-  --paid-bg: rgba(8, 123, 98, 0.09);
-  --upcoming: #965400;
-  --upcoming-bg: rgba(150, 84, 0, 0.09);
-  --overdue: #bd2248;
-  --overdue-bg: rgba(189, 34, 72, 0.09);
+  --accent: #7043ac;
+  --accent-dim: rgba(112, 67, 172, 0.10);
+  --accent-glow: rgba(112, 67, 172, 0.14);
 
-  --nav-bg: rgba(255, 255, 255, 0.96);
-  --tab-bg: #ffffff;
-  --shadow: 0 4px 16px rgba(49, 25, 74, 0.07);
+  --paid: #08765e;
+  --paid-bg: rgba(8, 118, 94, 0.10);
 
-  --bb-brand-border: rgba(121, 49, 189, 0.18);
-  --bb-brand-border-strong: rgba(121, 49, 189, 0.28);
-  --bb-brand-soft: rgba(121, 49, 189, 0.06);
-  --bb-brand-icon: #7931bd;
+  --upcoming: #915600;
+  --upcoming-bg: rgba(145, 86, 0, 0.10);
+
+  --overdue: #b42549;
+  --overdue-bg: rgba(180, 37, 73, 0.10);
+
+  --nav-bg: #eef2f7;
+  --tab-bg: #eef2f7;
+  --shadow:
+    0 5px 16px rgba(32, 48, 70, 0.09);
+
+  --bb-brand-border: rgba(92, 76, 125, 0.20);
+  --bb-brand-border-strong: rgba(92, 76, 125, 0.30);
+  --bb-brand-soft: rgba(112, 67, 172, 0.055);
+  --bb-brand-icon: #7043ac;
 
   --bb-brand-glow:
     radial-gradient(
       circle at top right,
-      rgba(246, 76, 174, 0.055),
-      transparent 58%
+      rgba(112, 67, 172, 0.045),
+      transparent 60%
     ),
     radial-gradient(
       circle at bottom left,
-      rgba(143, 54, 255, 0.055),
-      transparent 58%
+      rgba(51, 105, 145, 0.045),
+      transparent 60%
     );
 
   --bb-brand-shadow:
-    0 5px 16px rgba(85, 39, 125, 0.07);
+    0 5px 16px rgba(32, 48, 70, 0.08);
 }
 
 /* Override the existing hard-coded dark dock colors. */
@@ -4497,9 +4503,9 @@ body *::-webkit-scrollbar {
 
   background:
     linear-gradient(
-      #f8f1ff,
-      #f8f1ff
-    ) padding-box,
+  #e7e0f0,
+  #e7e0f0
+) padding-box,
     var(--bb-brand-gradient) border-box;
 
   box-shadow:
@@ -4545,5 +4551,21 @@ body *::-webkit-scrollbar {
 :root[data-theme="light"] .status-pill {
   border-color: var(--border-strong);
 }
+/* Cool-gray popup shell, pearl cards inside. */
+:root[data-theme="light"] .sheet {
+  background: #e8edf3;
+  border-color: var(--border-strong);
+  box-shadow: 0 14px 38px rgba(32, 48, 70, 0.18);
+}
 
+/* Override the Settings popup's existing pink/purple glow.
+   Match its copied swipe-preview root too. */
+:root[data-theme="light"] :is(
+  #bbSettingsSectionSheet,
+  [data-bb-copy-id="bbSettingsSectionSheet"]
+) {
+  background: #e8edf3;
+  border-color: var(--border-strong);
+  box-shadow: 0 14px 38px rgba(32, 48, 70, 0.18);
+}
 /* BILL BEACON LIGHT POLISH — END */
