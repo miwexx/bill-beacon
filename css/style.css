@@ -4416,3 +4416,134 @@ body *::-webkit-scrollbar {
   padding-bottom: 20px !important;
   box-sizing: border-box;
 }
+/* BILL BEACON LIGHT POLISH — START
+   Colors only: no sizing, scrolling, or gesture changes. */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --bg: #f6f3fa;
+  --bg-gradient:
+    radial-gradient(
+      ellipse at top,
+      #ffffff 0%,
+      #f6f3fa 65%
+    );
+
+  --surface: #ffffff;
+  --surface-2: #f0eaf7;
+  --surface-3: #e6deef;
+  --card: #ffffff;
+  --card-2: #faf7fd;
+
+  --text: #241b32;
+  --text-secondary: #51465f;
+  --text-muted: #6f627e;
+  --text-faint: #82748f;
+
+  --separator: rgba(66, 39, 92, 0.10);
+  --border: rgba(97, 55, 139, 0.16);
+  --border-strong: rgba(97, 55, 139, 0.25);
+
+  --accent: #7931bd;
+  --accent-dim: rgba(121, 49, 189, 0.10);
+  --accent-glow: rgba(121, 49, 189, 0.16);
+
+  --paid: #087b62;
+  --paid-bg: rgba(8, 123, 98, 0.09);
+  --upcoming: #965400;
+  --upcoming-bg: rgba(150, 84, 0, 0.09);
+  --overdue: #bd2248;
+  --overdue-bg: rgba(189, 34, 72, 0.09);
+
+  --nav-bg: rgba(255, 255, 255, 0.96);
+  --tab-bg: #ffffff;
+  --shadow: 0 4px 16px rgba(49, 25, 74, 0.07);
+
+  --bb-brand-border: rgba(121, 49, 189, 0.18);
+  --bb-brand-border-strong: rgba(121, 49, 189, 0.28);
+  --bb-brand-soft: rgba(121, 49, 189, 0.06);
+  --bb-brand-icon: #7931bd;
+
+  --bb-brand-glow:
+    radial-gradient(
+      circle at top right,
+      rgba(246, 76, 174, 0.055),
+      transparent 58%
+    ),
+    radial-gradient(
+      circle at bottom left,
+      rgba(143, 54, 255, 0.055),
+      transparent 58%
+    );
+
+  --bb-brand-shadow:
+    0 5px 16px rgba(85, 39, 125, 0.07);
+}
+
+/* Override the existing hard-coded dark dock colors. */
+:root[data-theme="light"] .tab-bar {
+  background: var(--tab-bg);
+  border-top-color: var(--bb-brand-border);
+  box-shadow: 0 -6px 22px rgba(49, 25, 74, 0.08);
+}
+
+:root[data-theme="light"] .tab-item {
+  color: var(--text-muted);
+}
+
+:root[data-theme="light"] .tab-item.active {
+  color: var(--accent);
+
+  background:
+    linear-gradient(
+      #f8f1ff,
+      #f8f1ff
+    ) padding-box,
+    var(--bb-brand-gradient) border-box;
+
+  box-shadow:
+    0 3px 12px rgba(121, 49, 189, 0.10);
+}
+
+:root[data-theme="light"] .tab-item.active .tab-icon {
+  color: var(--accent);
+  filter: none;
+}
+
+:root[data-theme="light"] .tab-item.active span {
+  color: var(--accent);
+}
+
+:root[data-theme="light"] .tab-item:focus-visible {
+  outline-color: var(--accent);
+}
+
+/* Clear selected filters without the dark-mode glow. */
+:root[data-theme="light"] .filter-pill.active {
+  background: var(--accent);
+  color: #ffffff;
+  border-color: var(--accent);
+  box-shadow: 0 3px 10px rgba(121, 49, 189, 0.12);
+}
+
+/* Softer featured-card gradients on light surfaces. */
+:root[data-theme="light"] :is(
+  .dashboard-month-card,
+  .summary-card,
+  .recurring-calendar-card
+) {
+  background:
+    var(--bb-brand-glow),
+    var(--card);
+
+  border-color: var(--bb-brand-border-strong);
+  box-shadow: var(--bb-brand-shadow);
+}
+
+/* Keep ordinary status-pill outlines visible. */
+:root[data-theme="light"] .status-pill {
+  border-color: var(--border-strong);
+}
+
+/* BILL BEACON LIGHT POLISH — END */
