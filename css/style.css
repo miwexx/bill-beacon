@@ -4249,19 +4249,29 @@ body {
   padding-left: 8px !important;
   padding-right: 8px !important;
 }
-/* Activity & Changes: match the wider list spacing. */
-.activity-page-content > .content-pad {
-  padding-left: 8px !important;
-  padding-right: 8px !important;
+/* Activity & Changes: wider layout on the page
+   and its copied back-swipe preview. */
+:is(#app, [data-bb-copy-id="app"])
+  > .main-content.activity-page-content {
+  padding-left: calc(
+    env(safe-area-inset-left, 0px) + 8px
+  ) !important;
+
+  padding-right: calc(
+    env(safe-area-inset-right, 0px) + 8px
+  ) !important;
+
   min-width: 0;
   box-sizing: border-box;
 }
 
-.activity-page-content .activity-list-frame {
+.activity-page-content > .activity-list-frame {
   width: 100%;
   max-width: none;
   min-width: 0;
+
   margin-left: 0 !important;
   margin-right: 0 !important;
+
   box-sizing: border-box;
 }
