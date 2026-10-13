@@ -4311,3 +4311,20 @@ body *::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
 }
+/* Add/Edit Bill and Add Payment Plan:
+   extend the sheet to the bottom safe area. */
+:is(
+  #billSheet,
+  #installmentPlanSheet,
+  [data-bb-copy-id="billSheet"],
+  [data-bb-copy-id="installmentPlanSheet"]
+) {
+  bottom: 0 !important;
+  max-height: none !important;
+
+  padding-bottom: calc(
+    12px + env(safe-area-inset-bottom, 0px)
+  ) !important;
+
+  box-sizing: border-box;
+}

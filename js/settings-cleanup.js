@@ -5,14 +5,83 @@
   const previousOpenBillForm = openBillForm;
   const previousRender = render;
 
-  openBillForm = function(billId = null, selectedDate = null) {
-    const result = previousOpenBillForm.apply(this, arguments);
-    const bill = billId ? Store.getBill(billId) : null;
-    if (!billId || (bill && !Array.isArray(bill.reminderOffsets))) {
-      document.querySelectorAll('input[name="billReminderOffsets"]').forEach(input => {
-        input.checked = [1, 3].includes(Number(input.value));
-      });
+    openBillForm = function (
+    billId = null,
+    selectedDate = null
+  ) {
+    const result = previousOpenBillForm.apply(
+      this,
+      arguments
+    );
+
+    const bill = billId
+      ? Store.getBill(billId)
+      : null;
+
+    const sheet = document.getElementById("billSheet");
+
+    if (!sheet) return result;
+
+    const isPaymentPlan = Boolean(
+      bill?.installmentPlanId
+    );
+
+    const title = sheet.querySelector(".sheet-title");
+
+    if (title) {
+      title.textContent = bill
+        ? isPaymentPlan
+          ? "Edit Payment Plan"
+          : "Edit Bill"
+        : "New Bill";
     }
+
+    // Preserve the existing default-selection behavior.
+    if (
+      !billId ||
+      (bill && !Array.isArray(bill.reminderOffsets))
+    ) {
+      sheet
+        .querySelectorAll(
+          'input[name="billReminderOffsets"]'
+        )
+        .forEach(input => {
+          input.checked = [1, 3].includes(
+            Number(input.value)
+          );
+        });
+    }
+
+    // Hide the complete Reminders section, but retain
+    // its inputs so saving does not erase their values.
+    const reminderInput = sheet.querySelector(
+      'input[name="billReminderOffsets"]'
+    );
+
+    if (reminderInput) {
+      const reminderCard = reminderInput.closest(
+        ".card"
+      );
+
+      const reminderSection = reminderCard
+        ?.parentElement;
+
+      const heading = reminderSection
+        ?.querySelector(":scope > .section-header");
+
+      if (
+        heading?.textContent.trim() === "Reminders"
+      ) {
+        reminderSection.hidden = true;
+
+        reminderSection.style.setProperty(
+          "display",
+          "none",
+          "important"
+        );
+      }
+    }
+
     return result;
   };
 
