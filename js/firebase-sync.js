@@ -347,7 +347,12 @@ async function startHouseholdSync(user) {
     if (generation !== sessionGeneration) return;
     starting = false; cloudIsReady = false; setSyncStatus("error", "Household loading failed; local data was retained.");
     console.error("Bill Beacon sync startup failed:", error);
-    alert("Bill Beacon could not safely load household data. Your local data was retained. Check the connection and try again.");
+    alert(
+  "Bill Beacon household loading failed.\n\n" +
+  "Error: " + (error?.message || String(error)) +
+  (error?.code ? "\nCode: " + error.code : "") +
+  "\n\nYour local data was retained."
+);
   }
 }
 
