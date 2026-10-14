@@ -20145,7 +20145,7 @@ if (dock) {
         !(target instanceof Element) ||
         !dismissContext(target)?.root.contains(target) ||
         target.closest(
-  "input,textarea,select,[contenteditable],.tab-bar,.activity-months"
+      "input,textarea,select,[contenteditable],.tab-bar,.activity-months"
 )
       ) {
         return;
@@ -20184,7 +20184,7 @@ if (dock) {
   }]
 };
     },
-    { passive: true }
+    { capture: true, passive: true }
   );
 
   document.addEventListener(
@@ -20282,7 +20282,7 @@ if (event.cancelable) event.preventDefault();
         }
       }
     },
-    { passive: false }
+    { capture: true, passive: false }
   );
 
   function handleDragEnd(event) {
