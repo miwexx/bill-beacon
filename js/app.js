@@ -16516,16 +16516,19 @@ async function refreshNotificationSettingsCard() {
       "Notifications are blocked. Enable them in your iPhone or browser settings.";
     return;
   }
-
   if (state.subscribed) {
-    button.disabled = true;
-    button.style.opacity = 0.72;
-    button.style.cursor = "default";
+    button.disabled = false;
+    button.style.opacity = 1;
+    button.style.cursor = "pointer";
     button.className = "bb-outline-pill";
-    button.innerHTML = `${svgIcon("checkCircle", 20)} Notifications On`;
+
+    button.innerHTML =
+      `${svgIcon("bell", 20)} Re-register Notifications`;
 
     status.textContent =
-      "Bill reminders are enabled on this device.";
+      "This browser has a push subscription. " +
+      "Tap to register it again for your signed-in account.";
+
     return;
   }
 
