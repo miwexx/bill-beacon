@@ -2046,6 +2046,114 @@ async function sendReminderToUserSubscriptions(
     failures
   };
 }
+
+function personalNotificationPath(uid) {
+  return `users/${encodeURIComponent(uid)}/preferences/notifications`;
+}
+
+function validatePersonalNotificationPreferences(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Invalid notification preferences.");
+  }
+  if (!Array.isArray(value.reminderOffsets) || value.reminderOffsets.length > 32 ||
+      value.reminderOffsets.some(day => !Number.isInteger(day) || day < 0 || day > 365)) {
+    throw new Error("Reminder days must be whole numbers from 0 to 365.");
+  }
+  if (typeof value.reminderTimeOfDay !== "string" ||
+      !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value.reminderTimeOfDay)) {
+    throw new Error("Choose a valid reminder time.");
+  }
+  if (typeof value.timeZone !== "string" || !value.timeZone || value.timeZone.length > 100) {
+    throw new Error("Choose a valid time zone.");
+  }
+  try { new Intl.DateTimeFormat("en-US", {timeZone: value.timeZone}).format(); }
+  catch { throw new Error("Choose a valid time zone, such as America/New_York."); }
+  return {
+    reminderOffsets: [...new Set(value.reminderOffsets)].sort((a,b) => a-b),
+    reminderTimeOfDay: value.reminderTimeOfDay,
+    timeZone: value.timeZone
+  };
+}
+
+async function readPersonalNotificationPreferences(uid, accessToken, householdSettings) {
+  const saved = await getFirestoreDocument(personalNotificationPath(uid), accessToken);
+  if (saved) {
+    return {preferences: validatePersonalNotificationPreferences(saved), source: "personal"};
+  }
+  const legacy = householdSettings || {};
+  const {hour, minute} = parseReminderTimeOfDay(legacy.reminderTimeOfDay);
+  return {
+    source: "legacy-household",
+    preferences: {
+      reminderOffsets: [...normalizeReminderOffsets(
+        Array.isArray(legacy.reminderOffsets) ? legacy.reminderOffsets : [1,3,7,14]
+      )].sort((a,b) => a-b),
+      reminderTimeOfDay: `${String(hour).padStart(2,"0")}:${String(minute).padStart(2,"0")}`,
+      timeZone: validatedReminderTimeZone(legacy.timeZone)
+    }
+  };
+}
+
+async function requireNotificationMembership(uid, accessToken) {
+  const profile = await getUserProfile(uid, accessToken);
+  const householdId = typeof profile?.householdId === "string" ? profile.householdId.trim() : "";
+  if (!householdId) throw new Error("Your account has no household.");
+  const member = await getHouseholdMember(householdId, uid, accessToken);
+  if (!member || !["owner","member"].includes(member.role) ||
+      (member.uid && member.uid !== uid)) throw new Error("Valid household membership is required.");
+  return householdId;
+}
+
+async function handlePersonalNotificationRequest(request, env, origin) {
+  const path = new URL(request.url).pathname;
+  if (!["/notification-preferences", "/notification-subscription-status"].includes(path)) return null;
+  const allowed = path === "/notification-preferences" ? ["GET","POST"] : ["POST"];
+  if (!allowed.includes(request.method)) return json({ok:false,error:"Method not allowed."},405,origin);
+  const authentication = await verifyFirebaseToken(request);
+  if (!authentication.ok) return json({ok:false,error:authentication.error},authentication.status,origin);
+  const uid = authentication.user.uid;
+  let body = null;
+  if (request.method === "POST") {
+    try { body = await request.json(); }
+    catch { return json({ok:false,error:"Request body must be valid JSON."},400,origin); }
+    if (path === "/notification-preferences") {
+      try { body = validatePersonalNotificationPreferences(body); }
+      catch (error) { return json({ok:false,error:error.message},400,origin); }
+    } else if (!isValidPushSubscription(body?.subscription)) {
+      return json({ok:false,error:"A valid device subscription is required."},400,origin);
+    }
+  }
+  try {
+    const accessToken = await getFirestoreAccessToken(env);
+    const householdId = await requireNotificationMembership(uid, accessToken);
+    const snapshot = await getHouseholdSnapshot(householdId, accessToken);
+    if (!snapshot) throw new Error("Shared household is unavailable.");
+    if (path === "/notification-preferences" && request.method === "POST") {
+      await writeFirestoreDocument(personalNotificationPath(uid), {
+        ...body, version:1, updatedAt:new Date().toISOString()
+      }, accessToken);
+      return json({ok:true,uid,householdId,source:"personal",preferences:body},200,origin);
+    }
+    const effective = await readPersonalNotificationPreferences(uid, accessToken, snapshot.settings);
+    if (path === "/notification-preferences") {
+      return json({ok:true,uid,householdId,...effective},200,origin);
+    }
+    const key = await subscriptionKey(uid, body.subscription.endpoint);
+    const record = await env.NOTIFICATIONSKV.get(key,"json");
+    const registered = Boolean(record?.uid === uid &&
+      record.subscription?.endpoint === body.subscription.endpoint &&
+      isValidPushSubscription(record.subscription));
+    const lastRun = await env.NOTIFICATIONSKV.get(`notification-run:${uid}`,"json");
+    return json({
+      ok:true,uid,householdId,membershipValid:true,registered,
+      preferences:effective.preferences,source:effective.source,
+      lastRun:lastRun?.householdId === householdId ? lastRun : null
+    },200,origin);
+  } catch (error) {
+    console.error("Personal notification request failed.", {uid,message:error.message});
+    return json({ok:false,error:"Notification preferences/status could not be loaded or saved. Check Worker logs."},500,origin);
+  }
+}
 async function processUserReminders(env, uid, accessToken, now) {
   const profile = await getUserProfile(uid, accessToken);
 
@@ -2095,25 +2203,17 @@ async function processUserReminders(env, uid, accessToken, now) {
     : {};
 
 const timeZone = validatedReminderTimeZone(settings.timeZone);
+const effectivePreferences = await readPersonalNotificationPreferences(uid, accessToken, settings);
+const notificationPreferences = effectivePreferences.preferences;
 
-// Time-of-day gate: only send when we’re in the chosen window
-const reminderTimeOfDay =
-  typeof settings.reminderTimeOfDay === "string"
-    ? settings.reminderTimeOfDay
-    : null;
-
-if (!isWithinReminderWindow(now, timeZone, reminderTimeOfDay)) {
-  return {
-    uid,
-    householdId,
-    status: "outside-reminder-window",
-    eligible: 0,
-    sent: 0,
-    skipped: 0,
-    removed: 0,
-    failures: 0,
-  };
+// Keep bill occurrence dates in the household calendar zone.
+// Use the person's chosen zone only for the delivery clock.
+if (!isWithinReminderWindow(now, notificationPreferences.timeZone,
+    notificationPreferences.reminderTimeOfDay)) {
+  return {uid,householdId,status:"outside-reminder-window",eligible:0,
+    sent:0,skipped:0,removed:0,failures:0};
 }
+
 
 const todayKey = dateKeyInTimeZone(now, timeZone);
 
@@ -2126,14 +2226,11 @@ const payments = Array.isArray(snapshot.payments)
   : [];
 
 // Global defaults from Settings “Reminders for all bills”
-const globalOffsets = normalizeReminderOffsets(
-  Array.isArray(settings.reminderOffsets)
-    ? settings.reminderOffsets
-    : [1, 3, 7, 14]
-);
+const globalOffsets = normalizeReminderOffsets(notificationPreferences.reminderOffsets);
 
 const outcomes = {
   uid,
+  householdId,
   status: "processed",
   reviewRequired: 0,
   eligible: 0,
@@ -2314,7 +2411,21 @@ async function runScheduledBillReminders(env) {
           accessToken,
           startedAt
         );
-
+          // Preserve the latest evaluation and the last eligible outcome.
+        try {
+          const diagnosticKey = `notification-run:${uid}`;
+          const previousDiagnostic = await env.NOTIFICATIONSKV.get(diagnosticKey, "json");
+          const evaluation = {...result, checkedAt: startedAt.toISOString()};
+          const priorOutcome = previousDiagnostic?.householdId === result.householdId
+            ? previousDiagnostic.lastEligibleOutcome || null : null;
+          await env.NOTIFICATIONSKV.put(diagnosticKey, JSON.stringify({
+            ...evaluation,
+            lastEligibleOutcome: result.status === "processed" && result.eligible > 0
+              ? evaluation : priorOutcome
+          }), {expirationTtl: 60 * 60 * 24 * 7});
+        } catch (error) {
+          console.warn("Could not save notification diagnostic.", {uid,message:error.message});
+        }
         if (result.status === "no-household") {
           summary.noHouseholdUsers += 1;
           continue;
@@ -4761,6 +4872,10 @@ const workerHandlers = {
     }
 
     const url = new URL(request.url);
+
+        const personalNotificationResponse =
+      await handlePersonalNotificationRequest(request, env, origin);
+    if (personalNotificationResponse) return personalNotificationResponse;
    
     const bankAutomationResponse =
   await handleBankAutomationRequest(

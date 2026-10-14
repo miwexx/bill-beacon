@@ -16443,104 +16443,94 @@ async function activateBillNotifications() {
 }
 
 async function getNotificationDeviceState() {
-  const isSupported =
-    "Notification" in window &&
-    "serviceWorker" in navigator &&
-    "PushManager" in window;
-
-  if (!isSupported) {
-    return {
-      supported: false,
-      permission: "unsupported",
-      subscribed: false
-    };
-  }
-
+  const supported = "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+  if (!supported) return {supported:false,permission:"unsupported",subscribed:false};
   const permission = Notification.permission;
-
-  if (permission !== "granted") {
-    return {
-      supported: true,
-      permission,
-      subscribed: false
-    };
-  }
-
+  if (permission !== "granted") return {supported:true,permission,subscribed:false};
+  let subscription;
   try {
     const registration = await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.getSubscription();
-
-    return {
-      supported: true,
-      permission,
-      subscribed: Boolean(subscription)
-    };
+    subscription = await registration.pushManager.getSubscription();
   } catch (error) {
-    console.warn("Could not read notification subscription state.", error);
-
-    return {
-      supported: true,
-      permission,
-      subscribed: false
-    };
+    return {supported:true,permission,subscribed:false,verificationError:error.message};
   }
+  if (!subscription) return {supported:true,permission,subscribed:false};
+  const uid = window.getBillBeaconFirebaseUser?.()?.uid;
+  const initialContext = window.getBillBeaconHouseholdContext?.();
+  const state = {supported:true,permission,subscribed:true,registered:false};
+  try {
+    if (!uid || !initialContext?.ready || initialContext.uid !== uid) {
+      throw new Error("Wait for your signed-in household to load.");
+    }
+    const token = await window.getBillBeaconFirebaseToken?.();
+    if (!token || window.getBillBeaconFirebaseUser?.()?.uid !== uid) {
+      throw new Error("Please sign in again.");
+    }
+    const response = await fetch(NOTIFICATION_WORKER_URL + "/notification-subscription-status", {
+      method:"POST",cache:"no-store",
+      headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
+      body:JSON.stringify({subscription:subscription.toJSON()})
+    });
+    const result = await response.json().catch(() => null);
+    const currentContext = window.getBillBeaconHouseholdContext?.();
+    if (window.getBillBeaconFirebaseUser?.()?.uid !== uid ||
+        currentContext?.generation !== initialContext.generation ||
+        currentContext?.householdId !== initialContext.householdId) {
+      throw new Error("The sign-in session changed.");
+    }
+    if (!response.ok || !result?.ok || result.uid !== uid ||
+        result.householdId !== initialContext.householdId) {
+      throw new Error(result?.error || "Could not verify backend notification registration.");
+    }
+    return {...state,registered:result.registered === true,diagnostic:result};
+  } catch (error) { return {...state,verificationError:error.message}; }
 }
 async function refreshNotificationSettingsCard() {
   const button = document.getElementById("notificationPermissionButton");
   const status = document.getElementById("notificationPermissionStatus");
-
+  const enrollment = document.getElementById("notificationEnrollmentStatus");
   if (!button || !status) return;
-
+  const uid = window.getBillBeaconFirebaseUser?.()?.uid;
+  button.disabled = true;
   const state = await getNotificationDeviceState();
-
-  if (!state.supported) {
-    button.disabled = true;
-    button.style.opacity = 0.55;
-    button.style.cursor = "not-allowed";
-    button.className = "bb-outline-pill";
-    button.innerHTML = `${svgIcon("bell", 20)} Notifications Unavailable`;
-
-    status.textContent =
-      "Notifications are not supported in this browser.";
-    return;
-  }
-
-  if (state.permission === "denied") {
-    button.disabled = true;
-    button.style.opacity = 0.55;
-    button.style.cursor = "not-allowed";
-    button.className = "bb-outline-pill";
-    button.innerHTML = `${svgIcon("bell", 20)} Notifications Blocked`;
-
-    status.textContent =
-      "Notifications are blocked. Enable them in your iPhone or browser settings.";
-    return;
-  }
-  if (state.subscribed) {
-    button.disabled = false;
-    button.style.opacity = 1;
-    button.style.cursor = "pointer";
-    button.className = "bb-outline-pill";
-
-    button.innerHTML =
-      `${svgIcon("bell", 20)} Re-register Notifications`;
-
-    status.textContent =
-      "This browser has a push subscription. " +
-      "Tap to register it again for your signed-in account.";
-
-    return;
-  }
-
-  // Not subscribed, permission allowed
-  button.disabled = false;
-  button.style.opacity = 1;
-  button.style.cursor = "pointer";
+  if (!button.isConnected || window.getBillBeaconFirebaseUser?.()?.uid !== uid) return;
+  const message = text => {status.textContent=text;if(enrollment) enrollment.textContent=text;};
   button.className = "bb-outline-pill";
-  button.innerHTML = `${svgIcon("bell", 20)} Turn On Notifications`;
-
-  status.textContent =
-    "Receive bill reminders on this device.";
+  button.style.opacity = "1";
+  button.style.cursor = "pointer";
+  if (!state.supported || state.permission === "denied") {
+    button.disabled = true;
+    button.style.opacity = "0.55";
+    button.style.cursor = "not-allowed";
+    button.innerHTML = `${svgIcon("bell",20)} ${state.supported ? "Notifications Blocked" : "Notifications Unavailable"}`;
+    message(state.supported ? "Enable notification permission in your device/browser settings."
+      : "Notifications are not supported in this browser.");
+    return;
+  }
+  button.disabled = false;
+  if (state.verificationError) {
+    button.innerHTML = `${svgIcon("bell",20)} Verify / Re-register Notifications`;
+    message(state.verificationError);
+    return;
+  }
+  if (!state.subscribed) {
+    button.innerHTML = `${svgIcon("bell",20)} Turn On Notifications`;
+    message("Enable push notifications on this device for your signed-in account.");
+    return;
+  }
+  if (!state.registered) {
+    button.innerHTML = `${svgIcon("bell",20)} Re-register Notifications`;
+    message("A local subscription exists, but backend registration for this account is missing. Tap to repair it.");
+    return;
+  }
+  button.innerHTML = `${svgIcon("checkCircle",20)} Notifications On · Re-register`;
+  const run = state.diagnostic?.lastRun;
+  const outcome = run?.lastEligibleOutcome;
+  let text = "This subscription is registered for your signed-in account. Device display is not confirmed.";
+  if (run) text += ` Latest schedule check: ${run.checkedAt} (${run.status}).`;
+  else text += " No per-user scheduled result has been recorded yet.";
+  if (outcome) text += ` Last eligible result: ${outcome.sent || 0} push requests accepted, ${outcome.failures || 0} failures, ${outcome.skipped || 0} already-sent reminders (${outcome.checkedAt}).`;
+  message(text);
 }
 async function sendBillNotificationTest() {
   const status = document.getElementById(

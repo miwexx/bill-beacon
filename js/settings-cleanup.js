@@ -16,27 +16,138 @@
     return result;
   };
 
-function saveGlobalReminderSettings() {
-  const sheet = document.getElementById("bbSettingsSectionBody");
-  if (!sheet) return;
-  const toggles = [...sheet.querySelectorAll(".global-reminder-toggle")];
-  const timeInput = sheet.querySelector("#globalReminderTime");
-  if (!toggles.length || !timeInput) return;
-  const time = String(timeInput.value || "");
-  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
-    alert("Choose a valid reminder time.");
-    return;
+let myNotificationPreferences = null;
+let notificationPreferenceBusy = false;
+let notificationPreferenceLoadVersion = 0;
+
+function personalNotificationContext() {
+  const user = window.getBillBeaconFirebaseUser?.();
+  const context = window.getBillBeaconHouseholdContext?.();
+  if (!user?.uid || !context?.ready || context.uid !== user.uid || !context.householdId) {
+    throw new Error("Wait for your signed-in household to finish loading.");
   }
-  const offsets = [...new Set(toggles.filter(input => input.checked)
-    .map(input => Number(input.dataset.days))
-    .filter(value => Number.isInteger(value) && value >= 0 && value <= 365))]
-    .sort((a, b) => a - b);
-  Store.saveSettings({
-    ...Store.getSettings(),
-    reminderOffsets: offsets,
-    reminderTimeOfDay: time
-  });
+  return {uid:user.uid,householdId:context.householdId,generation:context.generation};
 }
+
+function samePersonalNotificationContext(saved) {
+  try {
+    const now = personalNotificationContext();
+    return now.uid === saved.uid && now.householdId === saved.householdId &&
+      now.generation === saved.generation;
+  } catch { return false; }
+}
+
+async function personalNotificationRequest(path, body, context) {
+  const token = await window.getBillBeaconFirebaseToken?.();
+  if (!token || !samePersonalNotificationContext(context)) throw new Error("The sign-in session changed.");
+  const response = await fetch(
+    "https://bill-beacon-notifications.rodz-m-1990.workers.dev" + path,
+    {method:body === undefined ? "GET" : "POST", cache:"no-store",
+     headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
+     ...(body === undefined ? {} : {body:JSON.stringify(body)})}
+  );
+  const result = await response.json().catch(() => null);
+  if (!samePersonalNotificationContext(context)) throw new Error("The sign-in session changed.");
+  if (!response.ok || !result?.ok) throw new Error(result?.error || "Notification request failed.");
+  if (result.uid !== context.uid || result.householdId !== context.householdId) {
+    throw new Error("Notification account verification failed.");
+  }
+  return result;
+}
+
+function setPersonalReminderStatus(body, message, error = false) {
+  const status = body?.querySelector("#personalReminderSaveStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.style.color = error ? "var(--overdue)" : "var(--text-secondary)";
+}
+
+function setPersonalReminderControls(body, disabled) {
+  body?.querySelectorAll(
+    ".global-reminder-toggle,#globalReminderTime,#personalReminderTimeZone,#savePersonalReminders"
+  ).forEach(control => {control.disabled = disabled;});
+}
+
+async function loadPersonalReminderSettings() {
+  if (notificationPreferenceBusy) return;
+
+  const body = document.getElementById("bbSettingsSectionBody");
+  if (!body?.querySelector("#personalReminderSaveStatus")) return;
+  const version = ++notificationPreferenceLoadVersion;
+  myNotificationPreferences = null;
+  setPersonalReminderControls(body,true);
+  setPersonalReminderStatus(body,"Loading your account's reminder preferences…");
+  let context;
+  try {
+    context = personalNotificationContext();
+    const result = await personalNotificationRequest("/notification-preferences",undefined,context);
+    if (version !== notificationPreferenceLoadVersion || !body.isConnected ||
+        !samePersonalNotificationContext(context)) return;
+    myNotificationPreferences = {...result.preferences, ...context};
+    body.dataset.notificationPreferencesUid = context.uid;
+    body.querySelectorAll(".global-reminder-toggle").forEach(input => {
+      input.checked = result.preferences.reminderOffsets.includes(Number(input.dataset.days));
+    });
+    body.querySelector("#globalReminderTime").value = result.preferences.reminderTimeOfDay;
+    body.querySelector("#personalReminderTimeZone").value = result.preferences.timeZone;
+    setPersonalReminderControls(body,false);
+    setPersonalReminderStatus(body,result.source === "personal"
+      ? "Your personal reminder settings. Changes do not affect other household members."
+      : "Existing household defaults loaded. Tap Save My Preferences once to make these yours.");
+  } catch (error) {
+    if (version === notificationPreferenceLoadVersion && body.isConnected) {
+      setPersonalReminderStatus(body,error.message,true);
+    }
+  }
+}
+
+async function saveGlobalReminderSettings() {
+  const body = document.getElementById("bbSettingsSectionBody");
+  if (!body?.querySelector("#personalReminderSaveStatus") || notificationPreferenceBusy) return;
+  let context;
+  try {
+    context = personalNotificationContext();
+    if (!myNotificationPreferences || myNotificationPreferences.uid !== context.uid ||
+        myNotificationPreferences.householdId !== context.householdId ||
+        myNotificationPreferences.generation !== context.generation ||
+        body.dataset.notificationPreferencesUid !== context.uid) {
+      throw new Error("Load your account's preferences before saving.");
+    }
+    const preferences = {
+      reminderOffsets:[...body.querySelectorAll(".global-reminder-toggle")]
+        .filter(input => input.checked).map(input => Number(input.dataset.days)),
+      reminderTimeOfDay:body.querySelector("#globalReminderTime").value,
+      timeZone:body.querySelector("#personalReminderTimeZone").value.trim()
+    };
+        ++notificationPreferenceLoadVersion;
+    notificationPreferenceBusy = true;
+    setPersonalReminderControls(body,true);
+    setPersonalReminderStatus(body,"Saving your personal reminders…");
+    const result = await personalNotificationRequest("/notification-preferences",preferences,context);
+    if (body.isConnected && samePersonalNotificationContext(context)) {
+      myNotificationPreferences = {...result.preferences,...context};
+      setPersonalReminderStatus(body,"Saved for your account only.");
+    }
+  } catch (error) {
+    if (body?.isConnected) setPersonalReminderStatus(body,error.message,true);
+  } finally {
+    notificationPreferenceBusy = false;
+    if (body?.isConnected && context && samePersonalNotificationContext(context) &&
+        myNotificationPreferences?.uid === context.uid) setPersonalReminderControls(body,false);
+  }
+}
+
+window.reloadMyNotificationPreferences = loadPersonalReminderSettings;
+window.saveMyNotificationPreferences = saveGlobalReminderSettings;
+window.addEventListener("billbeacon:signed-out", () => {
+  notificationPreferenceLoadVersion++;
+  myNotificationPreferences = null;
+  const body = document.getElementById("bbSettingsSectionBody");
+  if (body?.querySelector("#personalReminderSaveStatus")) {
+    setPersonalReminderControls(body,true);
+    setPersonalReminderStatus(body,"Sign in and reopen Notifications.");
+  }
+});
 
 
 
@@ -1440,11 +1551,8 @@ function saveGlobalReminderSettings() {
     `;
   }
 function buildNotificationSettingsSection() {
-  const settings = Store.getSettings();
-  const selectedOffsets = Array.isArray(settings.reminderOffsets)
-    ? settings.reminderOffsets.slice().sort((a, b) => a - b)
-    : [1, 3, 7, 14];
-  const reminderTime = settings.reminderTimeOfDay || "09:00";
+  const selectedOffsets = [];
+  const reminderTime = "09:00";
 
   return `
     <section class="settings-section">
@@ -1465,6 +1573,10 @@ function buildNotificationSettingsSection() {
           ${svgIcon("bell", 20)}
           <span>Turn On Notifications</span>
         </button>
+        <p id="notificationEnrollmentStatus" role="status" aria-live="polite"
+          style="font-size:13px;line-height:1.5;margin-top:12px;color:var(--text-secondary)">
+          Checking backend registration…
+        </p>
         <p
           id="notificationTestStatus"
           style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:var(--space-2) 0 0"
@@ -1475,7 +1587,7 @@ function buildNotificationSettingsSection() {
 
       <div class="card card-pad" id="notificationSettingsCard" style="margin-top:var(--space-3)">
         <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
-          Bill & Installment Reminders
+          My Bill & Installment Reminders
         </div>
 
         ${REMINDER_OFFSETS.map(offset => {
@@ -1491,6 +1603,7 @@ function buildNotificationSettingsSection() {
                   <input
                     type="checkbox"
                     class="global-reminder-toggle"
+                    disabled
                     data-days="${escapeHtml(String(offset.days))}"
                     ${isSelected ? "checked" : ""}
                   />
@@ -1511,6 +1624,7 @@ function buildNotificationSettingsSection() {
           >
             <input
               id="globalReminderTime"
+              disabled
               type="time"
               class="form-input"
               value="${escapeHtml(reminderTime)}"
@@ -1520,7 +1634,27 @@ function buildNotificationSettingsSection() {
           </div>
         </div>
 
-       
+        <div class="form-row">
+          <label class="form-label" for="personalReminderTimeZone">Time zone</label>
+          <input id="personalReminderTimeZone" class="form-input" type="text"
+            maxlength="100" disabled value="America/New_York"
+            style="min-width:0;text-align:left" aria-label="Reminder time zone">
+        </div>
+        <p id="personalReminderSaveStatus" role="status" aria-live="polite"
+          style="font-size:13px;line-height:1.5;margin-top:12px;">
+          Loading your personal preferences…
+        </p>
+        <button id="savePersonalReminders" type="button" class="bb-outline-pill"
+          disabled onclick="window.saveMyNotificationPreferences()"
+          style="width:100%;min-height:44px;justify-content:center;margin-top:12px;">
+          Save My Preferences
+        </button>
+        <button type="button" class="bb-outline-pill"
+          onclick="window.reloadMyNotificationPreferences()"
+          style="width:100%;min-height:44px;justify-content:center;margin-top:8px;">
+          Reload My Preferences
+        </button>
+
       </div>
     </section>
   `;
@@ -1847,18 +1981,41 @@ bodyElement.innerHTML = content;
 if (section === "account") {
   refreshHouseholdSettingsCard();
 } else if (section === "notifications") {
+  loadPersonalReminderSettings();
   refreshNotificationSettingsCard();
 
-  // Attach handlers for the global reminder options
+  // Attach handlers for the reminder-day options.
   document
     .querySelectorAll(".global-reminder-toggle")
     .forEach(input => {
-      input.addEventListener("change", saveGlobalReminderSettings);
+      input.addEventListener(
+        "change",
+        saveGlobalReminderSettings
+      );
     });
 
-  const timeInput = document.getElementById("globalReminderTime");
+  // Save when the reminder time changes.
+  const timeInput = document.getElementById(
+    "globalReminderTime"
+  );
+
   if (timeInput) {
-    timeInput.addEventListener("change", saveGlobalReminderSettings);
+    timeInput.addEventListener(
+      "change",
+      saveGlobalReminderSettings
+    );
+  }
+
+  // NEW: save when the reminder time zone changes.
+  const zoneInput = document.getElementById(
+    "personalReminderTimeZone"
+  );
+
+  if (zoneInput) {
+    zoneInput.addEventListener(
+      "change",
+      saveGlobalReminderSettings
+    );
   }
 }
   };
