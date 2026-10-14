@@ -59,6 +59,7 @@ function setPersonalReminderStatus(body, message, error = false) {
   const status = body?.querySelector("#personalReminderSaveStatus");
   if (!status) return;
   status.textContent = message;
+    status.hidden = !message;
   status.style.color = error ? "var(--overdue)" : "var(--text-secondary)";
 }
 
@@ -67,7 +68,67 @@ function setPersonalReminderControls(body, disabled) {
     ".global-reminder-toggle,#globalReminderTime,#personalReminderTimeZone,#savePersonalReminders"
   ).forEach(control => {control.disabled = disabled;});
 }
+function populatePersonalReminderTimeZones(select, selectedZone) {
+  if (!select) return;
 
+  let zones = [];
+
+  try {
+    if (typeof Intl.supportedValuesOf === "function") {
+      zones = Intl.supportedValuesOf("timeZone");
+    }
+  } catch {
+    zones = [];
+  }
+
+  // Fallback for browsers without the timezone-list API.
+  if (!zones.length) {
+    zones = [
+      "America/New_York",
+      "America/Chicago",
+      "America/Denver",
+      "America/Phoenix",
+      "America/Los_Angeles",
+      "America/Anchorage",
+      "Pacific/Honolulu",
+      "America/Puerto_Rico",
+      "Europe/London",
+      "Europe/Paris",
+      "Asia/Kolkata",
+      "Asia/Tokyo",
+      "Australia/Sydney"
+    ];
+  }
+
+  let deviceZone = "";
+
+  try {
+    deviceZone =
+      Intl.DateTimeFormat().resolvedOptions().timeZone || "";
+  } catch {}
+
+  zones = [...new Set([
+    selectedZone,
+    deviceZone,
+    "UTC",
+    ...zones
+  ].filter(Boolean))].sort();
+
+  select.replaceChildren();
+
+  for (const zone of zones) {
+    const option = document.createElement("option");
+    option.value = zone;
+
+    option.textContent =
+      zone.replace(/_/g, " ") +
+      (zone === deviceZone ? " — This device" : "");
+
+    select.appendChild(option);
+  }
+
+  select.value = selectedZone;
+}
 async function loadPersonalReminderSettings() {
   if (notificationPreferenceBusy) return;
 
@@ -89,10 +150,13 @@ async function loadPersonalReminderSettings() {
       input.checked = result.preferences.reminderOffsets.includes(Number(input.dataset.days));
     });
     body.querySelector("#globalReminderTime").value = result.preferences.reminderTimeOfDay;
-    body.querySelector("#personalReminderTimeZone").value = result.preferences.timeZone;
+        populatePersonalReminderTimeZones(
+      body.querySelector("#personalReminderTimeZone"),
+      result.preferences.timeZone
+    );
     setPersonalReminderControls(body,false);
     setPersonalReminderStatus(body,result.source === "personal"
-      ? "Your personal reminder settings. Changes do not affect other household members."
+      ? ""
       : "Existing household defaults loaded. Tap Save My Preferences once to make these yours.");
   } catch (error) {
     if (version === notificationPreferenceLoadVersion && body.isConnected) {
@@ -1573,7 +1637,7 @@ function buildNotificationSettingsSection() {
           ${svgIcon("bell", 20)}
           <span>Turn On Notifications</span>
         </button>
-        <p id="notificationEnrollmentStatus" role="status" aria-live="polite"
+        <p id="notificationEnrollmentStatus" hidden role="status" aria-live="polite"
           style="font-size:13px;line-height:1.5;margin-top:12px;color:var(--text-secondary)">
           Checking backend registration…
         </p>
@@ -1636,9 +1700,15 @@ function buildNotificationSettingsSection() {
 
         <div class="form-row">
           <label class="form-label" for="personalReminderTimeZone">Time zone</label>
-          <input id="personalReminderTimeZone" class="form-input" type="text"
-            maxlength="100" disabled value="America/New_York"
-            style="min-width:0;text-align:left" aria-label="Reminder time zone">
+          <select
+  id="personalReminderTimeZone"
+  class="form-select"
+  disabled
+  style="min-width:0;max-width:65%;text-align:left"
+  aria-label="Reminder time zone"
+>
+  <option value="">Loading time zones…</option>
+</select>
         </div>
         <p id="personalReminderSaveStatus" role="status" aria-live="polite"
           style="font-size:13px;line-height:1.5;margin-top:12px;">

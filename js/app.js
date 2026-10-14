@@ -16494,7 +16494,14 @@ async function refreshNotificationSettingsCard() {
   button.disabled = true;
   const state = await getNotificationDeviceState();
   if (!button.isConnected || window.getBillBeaconFirebaseUser?.()?.uid !== uid) return;
-  const message = text => {status.textContent=text;if(enrollment) enrollment.textContent=text;};
+    const message = text => {
+    status.textContent = text;
+
+    if (enrollment) {
+      enrollment.textContent = text;
+      enrollment.hidden = !text;
+    }
+  };
   button.className = "bb-outline-pill";
   button.style.opacity = "1";
   button.style.cursor = "pointer";
@@ -16523,14 +16530,13 @@ async function refreshNotificationSettingsCard() {
     message("A local subscription exists, but backend registration for this account is missing. Tap to repair it.");
     return;
   }
-  button.innerHTML = `${svgIcon("checkCircle",20)} Notifications On · Re-register`;
-  const run = state.diagnostic?.lastRun;
-  const outcome = run?.lastEligibleOutcome;
-  let text = "This subscription is registered for your signed-in account. Device display is not confirmed.";
-  if (run) text += ` Latest schedule check: ${run.checkedAt} (${run.status}).`;
-  else text += " No per-user scheduled result has been recorded yet.";
-  if (outcome) text += ` Last eligible result: ${outcome.sent || 0} push requests accepted, ${outcome.failures || 0} failures, ${outcome.skipped || 0} already-sent reminders (${outcome.checkedAt}).`;
-  message(text);
+    button.innerHTML =
+    `${svgIcon("checkCircle",20)} Notifications On`;
+
+  button.disabled = true;
+  button.style.opacity = "0.85";
+  button.style.cursor = "default";
+    message("");
 }
 async function sendBillNotificationTest() {
   const status = document.getElementById(
