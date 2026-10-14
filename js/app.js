@@ -20450,6 +20450,7 @@ const viewObserver = new MutationObserver(() => {
         `Moves: ${current.moves}; dx: ${current.dx}; dy: ${current.dy}`,
         `Move cancelable: ${current.cancelable}`,
         `Preview seen: ${current.preview}`,
+                `Preview transform: ${current.transform || "Not recorded"}`,
         `Blocker: ${current.blocker || "None recorded"}`,
         `End: ${current.end}`
       ].join("\n");
@@ -20471,11 +20472,21 @@ const viewObserver = new MutationObserver(() => {
         current.blocker = "Excluded control";
       } else if (touch.clientX > 110) current.blocker = "Start beyond 110px zone";
       else if (!context.back || context.back.disabled) current.blocker = "Back/Close unavailable";
-      queueMicrotask(() => {
-        current.accepted = Boolean(gesture && gesture.id === touch.identifier);
-        if (!current.accepted && !current.blocker) current.blocker = "Start handler did not retain gesture";
+            setTimeout(() => {
+        if (trace !== current) return;
+
+        current.accepted = Boolean(
+          gesture &&
+          gesture.id === touch.identifier
+        );
+
+        if (!current.accepted && !current.blocker) {
+          current.blocker =
+            "No active gesture after start dispatch";
+        }
+
         show(current);
-      });
+      }, 0);
     }, {capture:true,passive:true});
     document.addEventListener("touchmove", event => {
       const current = trace;
@@ -20496,13 +20507,39 @@ const viewObserver = new MutationObserver(() => {
           current.blocker = "Non-cancelable move rejected before preview";
         }
       }
-      queueMicrotask(() => {
-        current.preview ||= Boolean(gesture?.pane?.isConnected);
-        if (gesture?.armed && !gesture.pane && !current.blocker) {
-          current.blocker = "Preview absent — check Back preview unavailable error";
+            setTimeout(() => {
+        if (trace !== current) return;
+
+        const pane = gesture?.pane;
+
+        if (pane?.isConnected) {
+          current.preview = true;
+          current.accepted = true;
+          current.transform =
+            getComputedStyle(pane).transform;
+
+          // Correct the earlier start-check label if a preview exists.
+          if (
+            current.blocker ===
+              "No active gesture after start dispatch" ||
+            current.blocker ===
+              "Start handler did not retain gesture"
+          ) {
+            current.blocker = "";
+          }
         }
+
+        if (
+          gesture?.armed &&
+          !gesture.pane &&
+          !current.blocker
+        ) {
+          current.blocker =
+            "Preview absent — check console error";
+        }
+
         show(current);
-      });
+      }, 0);
     }, {capture:true,passive:true});
     for (const type of ["touchend","touchcancel"]) {
       document.addEventListener(type, () => {
