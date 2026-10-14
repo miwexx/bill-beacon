@@ -19,6 +19,7 @@
 let myNotificationPreferences = null;
 let notificationPreferenceBusy = false;
 let notificationPreferenceLoadVersion = 0;
+let notificationPreferenceSaveAgain = false;
 
 function personalNotificationContext() {
   const user = window.getBillBeaconFirebaseUser?.();
@@ -71,63 +72,38 @@ function setPersonalReminderControls(body, disabled) {
 function populatePersonalReminderTimeZones(select, selectedZone) {
   if (!select) return;
 
-  let zones = [];
+  const zones = [
+    ["America/New_York", "Eastern"],
+    ["America/Chicago", "Central"],
+    ["America/Denver", "Mountain"],
+    ["America/Phoenix", "Arizona"],
+    ["America/Los_Angeles", "Pacific"],
+    ["America/Anchorage", "Alaska"],
+    ["Pacific/Honolulu", "Hawaii"],
+    ["America/Puerto_Rico", "Puerto Rico / Atlantic"]
+  ];
 
-  try {
-    if (typeof Intl.supportedValuesOf === "function") {
-      zones = Intl.supportedValuesOf("timeZone");
-    }
-  } catch {
-    zones = [];
+  // Preserve an existing saved zone rather than silently changing it.
+  if (
+    selectedZone &&
+    !zones.some(([value]) => value === selectedZone)
+  ) {
+    zones.unshift([
+      selectedZone,
+      `Current saved zone — ${selectedZone.replace(/_/g, " ")}`
+    ]);
   }
-
-  // Fallback for browsers without the timezone-list API.
-  if (!zones.length) {
-    zones = [
-      "America/New_York",
-      "America/Chicago",
-      "America/Denver",
-      "America/Phoenix",
-      "America/Los_Angeles",
-      "America/Anchorage",
-      "Pacific/Honolulu",
-      "America/Puerto_Rico",
-      "Europe/London",
-      "Europe/Paris",
-      "Asia/Kolkata",
-      "Asia/Tokyo",
-      "Australia/Sydney"
-    ];
-  }
-
-  let deviceZone = "";
-
-  try {
-    deviceZone =
-      Intl.DateTimeFormat().resolvedOptions().timeZone || "";
-  } catch {}
-
-  zones = [...new Set([
-    selectedZone,
-    deviceZone,
-    "UTC",
-    ...zones
-  ].filter(Boolean))].sort();
 
   select.replaceChildren();
 
-  for (const zone of zones) {
+  for (const [value, label] of zones) {
     const option = document.createElement("option");
-    option.value = zone;
-
-    option.textContent =
-      zone.replace(/_/g, " ") +
-      (zone === deviceZone ? " — This device" : "");
-
+    option.value = value;
+    option.textContent = label;
     select.appendChild(option);
   }
 
-  select.value = selectedZone;
+  select.value = selectedZone || "America/New_York";
 }
 async function loadPersonalReminderSettings() {
   if (notificationPreferenceBusy) return;
@@ -155,9 +131,12 @@ async function loadPersonalReminderSettings() {
       result.preferences.timeZone
     );
     setPersonalReminderControls(body,false);
-    setPersonalReminderStatus(body,result.source === "personal"
-      ? ""
-      : "Existing household defaults loaded. Tap Save My Preferences once to make these yours.");
+        setPersonalReminderStatus(body, "");
+
+    // Establish this account's preferences automatically on first load.
+    if (result.source === "legacy-household") {
+      await saveGlobalReminderSettings();
+    }
   } catch (error) {
     if (version === notificationPreferenceLoadVersion && body.isConnected) {
       setPersonalReminderStatus(body,error.message,true);
@@ -167,45 +146,105 @@ async function loadPersonalReminderSettings() {
 
 async function saveGlobalReminderSettings() {
   const body = document.getElementById("bbSettingsSectionBody");
-  if (!body?.querySelector("#personalReminderSaveStatus") || notificationPreferenceBusy) return;
+
+  if (!body?.querySelector("#personalReminderSaveStatus")) {
+    return;
+  }
+
+  // Keep the latest edit instead of dropping changes during a save.
+  if (notificationPreferenceBusy) {
+    notificationPreferenceSaveAgain = true;
+    return;
+  }
+
   let context;
+
   try {
     context = personalNotificationContext();
-    if (!myNotificationPreferences || myNotificationPreferences.uid !== context.uid ||
-        myNotificationPreferences.householdId !== context.householdId ||
-        myNotificationPreferences.generation !== context.generation ||
-        body.dataset.notificationPreferencesUid !== context.uid) {
-      throw new Error("Load your account's preferences before saving.");
+
+    if (
+      !myNotificationPreferences ||
+      myNotificationPreferences.uid !== context.uid ||
+      myNotificationPreferences.householdId !== context.householdId ||
+      myNotificationPreferences.generation !== context.generation ||
+      body.dataset.notificationPreferencesUid !== context.uid
+    ) {
+      throw new Error(
+        "Load your account's preferences before saving."
+      );
     }
+
     const preferences = {
-      reminderOffsets:[...body.querySelectorAll(".global-reminder-toggle")]
-        .filter(input => input.checked).map(input => Number(input.dataset.days)),
-      reminderTimeOfDay:body.querySelector("#globalReminderTime").value,
-      timeZone:body.querySelector("#personalReminderTimeZone").value.trim()
+      reminderOffsets: [
+        ...body.querySelectorAll(".global-reminder-toggle")
+      ]
+        .filter(input => input.checked)
+        .map(input => Number(input.dataset.days)),
+
+      reminderTimeOfDay:
+        body.querySelector("#globalReminderTime").value,
+
+      timeZone:
+        body.querySelector("#personalReminderTimeZone").value.trim()
     };
-        ++notificationPreferenceLoadVersion;
+
+    ++notificationPreferenceLoadVersion;
     notificationPreferenceBusy = true;
-    setPersonalReminderControls(body,true);
-    setPersonalReminderStatus(body,"Saving your personal reminders…");
-    const result = await personalNotificationRequest("/notification-preferences",preferences,context);
-    if (body.isConnected && samePersonalNotificationContext(context)) {
-      myNotificationPreferences = {...result.preferences,...context};
-      setPersonalReminderStatus(body,"Saved for your account only.");
+
+    // Do not disable inputs or rebuild the form during saving.
+    setPersonalReminderStatus(body, "");
+
+    const result = await personalNotificationRequest(
+      "/notification-preferences",
+      preferences,
+      context
+    );
+
+    if (
+      body.isConnected &&
+      samePersonalNotificationContext(context)
+    ) {
+      myNotificationPreferences = {
+        ...result.preferences,
+        ...context
+      };
+
+      setPersonalReminderStatus(body, "");
     }
   } catch (error) {
-    if (body?.isConnected) setPersonalReminderStatus(body,error.message,true);
+    if (
+      body.isConnected &&
+      (!context || samePersonalNotificationContext(context))
+    ) {
+      setPersonalReminderStatus(
+        body,
+        error.message,
+        true
+      );
+    }
   } finally {
     notificationPreferenceBusy = false;
-    if (body?.isConnected && context && samePersonalNotificationContext(context) &&
-        myNotificationPreferences?.uid === context.uid) setPersonalReminderControls(body,false);
+
+    const saveAgain = notificationPreferenceSaveAgain;
+    notificationPreferenceSaveAgain = false;
+
+    if (
+      saveAgain &&
+      body.isConnected &&
+      context &&
+      samePersonalNotificationContext(context)
+    ) {
+      // Read the current controls and save the most recent values.
+      void saveGlobalReminderSettings();
+    }
   }
 }
-
 window.reloadMyNotificationPreferences = loadPersonalReminderSettings;
 window.saveMyNotificationPreferences = saveGlobalReminderSettings;
 window.addEventListener("billbeacon:signed-out", () => {
   notificationPreferenceLoadVersion++;
   myNotificationPreferences = null;
+    notificationPreferenceSaveAgain = false;
   const body = document.getElementById("bbSettingsSectionBody");
   if (body?.querySelector("#personalReminderSaveStatus")) {
     setPersonalReminderControls(body,true);
@@ -1714,16 +1753,7 @@ function buildNotificationSettingsSection() {
           style="font-size:13px;line-height:1.5;margin-top:12px;">
           Loading your personal preferences…
         </p>
-        <button id="savePersonalReminders" type="button" class="bb-outline-pill"
-          disabled onclick="window.saveMyNotificationPreferences()"
-          style="width:100%;min-height:44px;justify-content:center;margin-top:12px;">
-          Save My Preferences
-        </button>
-        <button type="button" class="bb-outline-pill"
-          onclick="window.reloadMyNotificationPreferences()"
-          style="width:100%;min-height:44px;justify-content:center;margin-top:8px;">
-          Reload My Preferences
-        </button>
+        
 
       </div>
     </section>
