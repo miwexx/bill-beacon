@@ -20426,5 +20426,92 @@ const viewObserver = new MutationObserver(() => {
   window.addEventListener("billbeacon:household-ready",()=>{
     cleanup();previous=null;pageSnapshots.clear();notificationPreview=null;
   });
+  
+  // TEMPORARY notification swipe observer — no gesture actions.
+  (() => {
+    let trace = null;
+    let panel = null;
+    const label = node => node instanceof Element
+      ? `${node.tagName}${node.id ? "#" + node.id : ""}` : "unknown";
+    function show(current) {
+      if (trace !== current) return;
+      if (!panel?.isConnected) {
+        panel = document.createElement("pre");
+        panel.id = "bbNotificationSwipeProbe";
+        panel.style.cssText = "position:fixed;left:8px;right:8px;bottom:90px;z-index:2147483647;margin:0;padding:10px;border:1px solid var(--accent);border-radius:10px;background:var(--surface);color:var(--text);font:11px/1.4 monospace;white-space:pre-wrap;pointer-events:none;";
+        document.body.appendChild(panel);
+      }
+      panel.textContent = [
+        "NOTIFICATION SWIPE CHECK",
+        `Target: ${current.target}`,
+        `Start x: ${current.x}`,
+        `Context: ${current.context}`,
+        `Start accepted: ${current.accepted}`,
+        `Moves: ${current.moves}; dx: ${current.dx}; dy: ${current.dy}`,
+        `Move cancelable: ${current.cancelable}`,
+        `Preview seen: ${current.preview}`,
+        `Blocker: ${current.blocker || "None recorded"}`,
+        `End: ${current.end}`
+      ].join("\n");
+    }
+    document.addEventListener("touchstart", event => {
+      const root = document.getElementById("notificationCenterSheet");
+      if (!root || !(event.target instanceof Element) || !root.contains(event.target) ||
+          event.touches.length !== 1) { trace = null; return; }
+      const touch = event.touches[0];
+      const context = dismissContext(event.target);
+      const current = trace = {
+        target:label(event.target), x:Math.round(touch.clientX), y:touch.clientY,
+        context:context ? `${context.mode}:${context.root?.id || "no id"}` : "none",
+        accepted:false,moves:0,dx:0,dy:0,cancelable:null,preview:false,end:"pending",blocker:""
+      };
+      if (settling) current.blocker = "Previous gesture is still settling";
+      else if (!context?.root.contains(event.target)) current.blocker = "No matching Back/Close context";
+      else if (event.target.closest("input,textarea,select,[contenteditable],.tab-bar,.activity-months")) {
+        current.blocker = "Excluded control";
+      } else if (touch.clientX > 110) current.blocker = "Start beyond 110px zone";
+      else if (!context.back || context.back.disabled) current.blocker = "Back/Close unavailable";
+      queueMicrotask(() => {
+        current.accepted = Boolean(gesture && gesture.id === touch.identifier);
+        if (!current.accepted && !current.blocker) current.blocker = "Start handler did not retain gesture";
+        show(current);
+      });
+    }, {capture:true,passive:true});
+    document.addEventListener("touchmove", event => {
+      const current = trace;
+      if (!current || event.touches.length !== 1) return;
+      const touch = event.touches[0];
+      current.moves++;
+      current.dx = Math.round(touch.clientX-current.x);
+      current.dy = Math.round(Math.abs(touch.clientY-current.y));
+      current.cancelable = event.cancelable;
+      if (gesture && !current.blocker) {
+        const dx = touch.clientX-gesture.x;
+        const dy = Math.abs(touch.clientY-gesture.y);
+        if (!contextMatches(gesture)) current.blocker = "Popup context changed";
+        else if (touch.identifier !== gesture.id) current.blocker = "Touch identity changed";
+        else if (!gesture.armed && (dx < -10 || dy > 32 || (dy > 10 && dy > Math.abs(dx)))) {
+          current.blocker = "Movement rejected as vertical/leftward";
+        } else if (!gesture.armed && dx > 8 && dx > dy*1.5 && !event.cancelable) {
+          current.blocker = "Non-cancelable move rejected before preview";
+        }
+      }
+      queueMicrotask(() => {
+        current.preview ||= Boolean(gesture?.pane?.isConnected);
+        if (gesture?.armed && !gesture.pane && !current.blocker) {
+          current.blocker = "Preview absent — check Back preview unavailable error";
+        }
+        show(current);
+      });
+    }, {capture:true,passive:true});
+    for (const type of ["touchend","touchcancel"]) {
+      document.addEventListener(type, () => {
+        if (!trace) return;
+        trace.end = type;
+        if (type === "touchcancel" && !trace.blocker) trace.blocker = "Touch canceled before completion";
+        show(trace);
+      }, {capture:true,passive:true});
+    }
+  })();
 })();
 // END BILL BEACON DRAG-BACK
