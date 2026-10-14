@@ -1743,7 +1743,7 @@ function buildNotificationSettingsSection() {
         style="margin-top:var(--space-3)"
       >
         <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
-          My Bill & Installment Reminders
+          Global Reminders
         </div>
 
         ${REMINDER_OFFSETS.map(offset => {
