@@ -11645,6 +11645,159 @@ function renderBillDetail() {
 const returnRoute = routeParams.returnRoute || null;
 
 const sourceRecord = bill;
+const hasRecurringSchedule =
+  isRecurringBill(bill) ||
+  Boolean(bill.scheduleHistory?.length);
+
+if (
+  !occurrenceDueDate &&
+  hasRecurringSchedule &&
+  !getCurrentCalendarBillOccurrence(bill)
+) {
+  const archived = Boolean(bill.archivedAt);
+  const destination = returnRoute || "bills";
+
+  const savedReturnParams =
+    routeParams.returnParams &&
+    typeof routeParams.returnParams === "object" &&
+    !Array.isArray(routeParams.returnParams);
+
+  const backAction = routeParams.returnToNotificationPopup
+    ? "returnToNotificationCenter()"
+    : `navigate(
+        '${escapeInlineString(destination)}',
+        ${savedReturnParams ? "getBillDetailReturnParams()" : "{}"}
+      )`;
+
+  const backLabel = routeParams.returnToNotificationPopup
+    ? "Notifications"
+    : destination === "today"
+      ? "Dashboard"
+      : destination === "recurring"
+        ? "Calendar"
+        : "Bills";
+
+  return `
+    <div class="nav-bar">
+      <div class="nav-bar-content">
+        <button
+          type="button"
+          class="nav-button"
+          onclick="${backAction}"
+          aria-label="Back to ${backLabel}"
+          style="color:var(--text);"
+        >
+          ${svgIcon("chevronLeft", 22)}
+          ${backLabel}
+        </button>
+
+        <button
+          type="button"
+          class="nav-button"
+          ${
+            archived
+              ? "disabled"
+              : `onclick="openBillForm(
+                  '${escapeInlineString(bill.id)}'
+                )"`
+          }
+          style="color:var(--text);"
+        >
+          ${archived ? "Archived" : "Edit"}
+        </button>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad content-gap">
+        <div class="card card-pad">
+          <div
+            style="
+              display:flex;
+              align-items:center;
+              gap:12px;
+            "
+          >
+            <div style="width:40px;min-width:40px;">
+              ${billVisual(bill, 40)}
+            </div>
+
+            <div style="min-width:0;flex:1;">
+              <div
+                style="
+                  font-size:var(--text-lg);
+                  font-weight:800;
+                  overflow-wrap:anywhere;
+                "
+              >
+                ${escapeHtml(bill.name)}
+              </div>
+
+              <div style="margin-top:4px;">
+                ${formatCurrency(bill.amount)}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style="
+              margin-top:16px;
+              font-size:var(--text-base);
+              font-weight:800;
+            "
+          >
+            No payment scheduled this month
+          </div>
+
+          <div
+            style="
+              margin-top:8px;
+              font-size:var(--text-sm);
+              line-height:1.5;
+            "
+          >
+            No occurrence was found for
+            ${formatDate(new Date(), "monthYear")}.
+            This does not mean earlier bills are paid.
+            Choose a specific occurrence in Calendar
+            to view its payment status.
+          </div>
+
+          <div
+            style="
+              margin-top:12px;
+              font-size:var(--text-sm);
+            "
+          >
+            Schedule: ${escapeHtml(getBillScheduleLabel(bill))}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="bb-outline-pill"
+          style="width:100%;min-height:46px;"
+          onclick="navigate('recurring')"
+        >
+          ${svgIcon("calendar", 20)}
+          <span>Choose Occurrence in Calendar</span>
+        </button>
+
+        <button
+          type="button"
+          class="bb-outline-pill bill-show-details-button"
+          style="width:100%;min-height:46px;"
+          onclick="openBillDetailsSheet(
+            '${escapeInlineString(bill.id)}'
+          )"
+        >
+          ${svgIcon("doc", 20)}
+          <span>Show Details</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
 const selectedDueDate = occurrenceDueDate || (
   isRecurringBill(bill) || bill.scheduleHistory?.length
     ? getCurrentCalendarBillOccurrence(bill)?.dueDate || bill.dueDate
