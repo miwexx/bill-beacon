@@ -12113,7 +12113,12 @@ function fab() {
     </button>
   `;
 }
+function navigateMainTab(route) {
+  selectedDashboardPaycheckMonth = null;
+  selectedDashboardPaycheck = null;
 
+  navigate(route);
+}
 function tabBar() {
   const tabs = [
   { id: 'today', label: 'Dashboard', icon: 'home' },
@@ -12127,7 +12132,7 @@ function tabBar() {
   return `
     <div class="tab-bar">
       ${tabs.map(tab => `
-        <button class="tab-item ${currentRoute === tab.id ? 'active' : ''}" onclick="navigate('${escapeInlineString(tab.id)}')">
+        <button class="tab-item ${currentRoute === tab.id ? 'active' : ''}" onclick="navigateMainTab('${escapeInlineString(tab.id)}')">
           <div class="tab-icon">${svgIcon(tab.icon, 24)}</div>
           <span>${tab.label}</span>
         </button>
