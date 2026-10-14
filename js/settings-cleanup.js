@@ -19,7 +19,8 @@
 let myNotificationPreferences = null;
 let notificationPreferenceBusy = false;
 let notificationPreferenceLoadVersion = 0;
-let notificationPreferenceSaveAgain = false;
+let notificationPreferencePendingSave = null;
+let notificationPreferenceSaveTask = null;
 
 function personalNotificationContext() {
   const user = window.getBillBeaconFirebaseUser?.();
@@ -65,9 +66,18 @@ function setPersonalReminderStatus(body, message, error = false) {
 }
 
 function setPersonalReminderControls(body, disabled) {
+  const card = body?.querySelector("#notificationSettingsCard");
+
+  if (card) {
+    card.dataset.loading = disabled ? "true" : "false";
+    card.setAttribute("aria-busy", String(disabled));
+  }
+
   body?.querySelectorAll(
     ".global-reminder-toggle,#globalReminderTime,#personalReminderTimeZone,#savePersonalReminders"
-  ).forEach(control => {control.disabled = disabled;});
+  ).forEach(control => {
+    control.disabled = disabled;
+  });
 }
 function populatePersonalReminderTimeZones(select, selectedZone) {
   if (!select) return;
@@ -106,7 +116,11 @@ function populatePersonalReminderTimeZones(select, selectedZone) {
   select.value = selectedZone || "America/New_York";
 }
 async function loadPersonalReminderSettings() {
-  if (notificationPreferenceBusy) return;
+    const pendingSave = notificationPreferenceSaveTask;
+
+  if (pendingSave) {
+    await pendingSave;
+  }
 
   const body = document.getElementById("bbSettingsSectionBody");
   if (!body?.querySelector("#personalReminderSaveStatus")) return;
@@ -151,16 +165,8 @@ async function saveGlobalReminderSettings() {
     return;
   }
 
-  // Keep the latest edit instead of dropping changes during a save.
-  if (notificationPreferenceBusy) {
-    notificationPreferenceSaveAgain = true;
-    return;
-  }
-
-  let context;
-
   try {
-    context = personalNotificationContext();
+    const context = personalNotificationContext();
 
     if (
       !myNotificationPreferences ||
@@ -189,54 +195,90 @@ async function saveGlobalReminderSettings() {
     };
 
     ++notificationPreferenceLoadVersion;
-    notificationPreferenceBusy = true;
 
-    // Do not disable inputs or rebuild the form during saving.
+    // Replace any waiting edit with the latest complete selection.
+    notificationPreferencePendingSave = {
+      preferences,
+      context,
+      body
+    };
+
     setPersonalReminderStatus(body, "");
 
-    const result = await personalNotificationRequest(
-      "/notification-preferences",
-      preferences,
-      context
-    );
-
-    if (
-      body.isConnected &&
-      samePersonalNotificationContext(context)
-    ) {
-      myNotificationPreferences = {
-        ...result.preferences,
-        ...context
-      };
-
-      setPersonalReminderStatus(body, "");
+    if (!notificationPreferenceSaveTask) {
+      notificationPreferenceSaveTask =
+        Promise.resolve().then(
+          drainPersonalReminderSaveQueue
+        );
     }
+
+    await notificationPreferenceSaveTask;
   } catch (error) {
-    if (
-      body.isConnected &&
-      (!context || samePersonalNotificationContext(context))
-    ) {
-      setPersonalReminderStatus(
-        body,
-        error.message,
-        true
-      );
+    if (body.isConnected) {
+      setPersonalReminderStatus(body, error.message, true);
+    }
+  }
+}
+
+async function drainPersonalReminderSaveQueue() {
+  notificationPreferenceBusy = true;
+
+  try {
+    while (notificationPreferencePendingSave) {
+      const job = notificationPreferencePendingSave;
+      notificationPreferencePendingSave = null;
+
+      if (!samePersonalNotificationContext(job.context)) {
+        continue;
+      }
+
+      try {
+        const result = await personalNotificationRequest(
+          "/notification-preferences",
+          job.preferences,
+          job.context
+        );
+
+        if (!samePersonalNotificationContext(job.context)) {
+          continue;
+        }
+
+        myNotificationPreferences = {
+          ...result.preferences,
+          ...job.context
+        };
+
+        if (job.body.isConnected) {
+          setPersonalReminderStatus(job.body, "");
+        }
+      } catch (error) {
+        if (!samePersonalNotificationContext(job.context)) {
+          continue;
+        }
+
+        // A newer queued selection will get its own save attempt.
+        if (notificationPreferencePendingSave) {
+          continue;
+        }
+
+        if (job.body.isConnected) {
+          setPersonalReminderStatus(
+            job.body,
+            error.message,
+            true
+          );
+        } else {
+          alert(
+            "Your reminder preference change could not be saved. " +
+            "Reopen Notifications and check your settings.\n\n" +
+            error.message
+          );
+        }
+      }
     }
   } finally {
     notificationPreferenceBusy = false;
-
-    const saveAgain = notificationPreferenceSaveAgain;
-    notificationPreferenceSaveAgain = false;
-
-    if (
-      saveAgain &&
-      body.isConnected &&
-      context &&
-      samePersonalNotificationContext(context)
-    ) {
-      // Read the current controls and save the most recent values.
-      void saveGlobalReminderSettings();
-    }
+    notificationPreferenceSaveTask = null;
   }
 }
 window.reloadMyNotificationPreferences = loadPersonalReminderSettings;
@@ -244,7 +286,7 @@ window.saveMyNotificationPreferences = saveGlobalReminderSettings;
 window.addEventListener("billbeacon:signed-out", () => {
   notificationPreferenceLoadVersion++;
   myNotificationPreferences = null;
-    notificationPreferenceSaveAgain = false;
+    notificationPreferencePendingSave = null;
   const body = document.getElementById("bbSettingsSectionBody");
   if (body?.querySelector("#personalReminderSaveStatus")) {
     setPersonalReminderControls(body,true);
@@ -1688,7 +1730,18 @@ function buildNotificationSettingsSection() {
         ></p>
       </div>
 
-      <div class="card card-pad" id="notificationSettingsCard" style="margin-top:var(--space-3)">
+            <style>
+        #notificationSettingsCard[data-loading="true"] .form-row {
+          display:none;
+        }
+      </style>
+
+      <div
+        class="card card-pad"
+        id="notificationSettingsCard"
+        data-loading="true"
+        style="margin-top:var(--space-3)"
+      >
         <div style="font-weight:800;font-size:var(--text-base);margin-bottom:var(--space-3)">
           My Bill & Installment Reminders
         </div>
