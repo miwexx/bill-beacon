@@ -3182,6 +3182,38 @@ function renderDashboardUpcomingBill(bill) {
   `;
 }
 let selectedDashboardPaycheck = null;
+let selectedDashboardPaycheckMonth = null;
+
+function getDashboardPaycheckMonth() {
+  const date = selectedDashboardPaycheckMonth || new Date();
+
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    1,
+    12
+  );
+}
+
+function changeDashboardPaycheckMonth(offset) {
+  if (offset !== -1 && offset !== 1) return;
+
+  const current = getDashboardPaycheckMonth();
+
+  selectedDashboardPaycheckMonth = new Date(
+    current.getFullYear(),
+    current.getMonth() + offset,
+    1,
+    12
+  );
+
+  render();
+}
+
+function resetDashboardPaycheckMonth() {
+  selectedDashboardPaycheckMonth = null;
+  render();
+}
 
 function getPaycheckAssignmentLabel(assignment) {
   switch (assignment) {
@@ -3378,11 +3410,19 @@ function getPaycheckBillStatusLabel(bill) {
   };
 }
 
-function renderDashboardPaycheckPlan(referenceDate = new Date()) {
+function renderDashboardPaycheckPlan(
+  referenceDate = getDashboardPaycheckMonth()
+) {
   const plan = getPaycheckPlan(referenceDate);
+  const now = new Date();
+
+  const isCurrentMonth =
+    referenceDate.getFullYear() === now.getFullYear() &&
+    referenceDate.getMonth() === now.getMonth();
 
   if (!selectedDashboardPaycheck) {
-    selectedDashboardPaycheck = getDefaultDashboardPaycheck(referenceDate);
+    selectedDashboardPaycheck =
+      getDefaultDashboardPaycheck(now);
   }
 
   const selectedKey =
@@ -3395,10 +3435,77 @@ function renderDashboardPaycheckPlan(referenceDate = new Date()) {
 
   const previewBills = selected.bills.slice(0, 3);
 
-  return `
+    return `
     <div class="section-header">Paycheck Plan</div>
 
     <div class="card card-pad">
+      <div
+        style="
+          display:grid;
+          grid-template-columns:44px minmax(0,1fr) 44px;
+          align-items:center;
+          gap:8px;
+          margin-bottom:var(--space-3);
+        "
+      >
+        <button
+          type="button"
+          class="bb-outline-pill"
+          aria-label="Previous paycheck plan month"
+          onclick="changeDashboardPaycheckMonth(-1)"
+          style="
+            width:44px;
+            min-height:44px;
+            padding:0;
+            justify-content:center;
+          "
+        >
+          ${svgIcon("chevronLeft", 20)}
+        </button>
+
+        <div
+          aria-live="polite"
+          style="
+            text-align:center;
+            font-size:var(--text-base);
+            font-weight:800;
+          "
+        >
+          ${formatDate(referenceDate, "monthYear")}
+        </div>
+
+        <button
+          type="button"
+          class="bb-outline-pill"
+          aria-label="Next paycheck plan month"
+          onclick="changeDashboardPaycheckMonth(1)"
+          style="
+            width:44px;
+            min-height:44px;
+            padding:0;
+            justify-content:center;
+          "
+        >
+          ${svgIcon("chevronRight", 20)}
+        </button>
+      </div>
+
+      ${
+        !isCurrentMonth
+          ? `
+            <div style="text-align:center;margin-bottom:12px;">
+              <button
+                type="button"
+                class="bb-outline-pill"
+                onclick="resetDashboardPaycheckMonth()"
+                style="min-height:36px;padding:0 14px;"
+              >
+                Current Month
+              </button>
+            </div>
+          `
+          : ""
+      }
       <div
         style="
           display:grid;
@@ -3691,14 +3798,15 @@ function setDashboardPaycheck(paycheckKey) {
 }
 
 function openPaycheckPlanSheet(paycheckKey) {
-  const plan = getPaycheckPlan(new Date());
+  const plan = getPaycheckPlan(
+    getDashboardPaycheckMonth()
+  );
   const selected =
     paycheckKey === "second" ? plan.second : plan.first;
 
-  const paycheckTitle = `Paycheck · ${formatDate(
-    selected.payday,
-    "short"
-  )}`;
+    const paycheckTitle =
+    `${selected.id === "second" ? "Paycheck 2" : "Paycheck 1"}` +
+    ` · ${formatDate(selected.payday, "monthYear")}`;
 
   const billsHtml = selected.bills.length
     ? selected.bills
@@ -4809,7 +4917,7 @@ aria-label="Open settings"
           </button>
         </div>
 
-        ${renderDashboardPaycheckPlan(now)}
+        ${renderDashboardPaycheckPlan()}
 
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">
