@@ -12018,8 +12018,15 @@ function billRow(bill, clickable = false) {
         : getBillScheduleLabel(bill)
       : `Due ${formatDate(bill.dueDate, 'full')}`;
 
-  const detailBillId = bill.isOccurrence ? bill.sourceBillId : bill.id;
-  const detailDueDate = bill.isOccurrence ? bill.dueDate : bill.dueDate;
+    const detailBillId = bill.isOccurrence
+    ? bill.sourceBillId
+    : bill.id;
+
+  const detailDueDate = bill.isOccurrence
+    ? bill.dueDate
+    : isRecurringBill(bill) || bill.scheduleHistory?.length
+      ? ""
+      : bill.dueDate;
 
   const rowClick = clickable
     ? `
