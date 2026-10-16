@@ -4663,7 +4663,7 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
       ${groups.installments.overdue.length ? `
         <button type="button" class="dashboard-installment-warning"
           onclick="openDashboardSeparatedStatus('installments', 'overdue')">
-          ${groups.installments.overdue.length} overdue installment
+          ${groups.installments.overdue.length} overdue installment payment(s)
           ${groups.installments.olderOverdue.length ? ` · ${groups.installments.olderOverdue.length} from earlier months` : ""}
           · View
         </button>` : ""}
@@ -4954,20 +4954,27 @@ function renderToday() {
           aria-label="Monthly bills and installments summary"
         >
           <div
-            class="dashboard-card-topline"
-            style="
-              display:flex;
-              align-items:center;
-              justify-content:space-between;
-              gap:12px;
-              margin:0;
-            "
-          >
-            <span style="font-size:14px;font-weight:800;">
-              ${formatDate(now, "monthYear")}
-            </span>
-
-          </div>
+  class="dashboard-card-topline"
+  style="
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    height:20px;
+    min-height:0;
+    padding:0;
+    margin:0;
+    text-align:center;
+  "
+>
+  <span style="
+    font-size:16px;
+    font-weight:800;
+    line-height:20px;
+    white-space:nowrap;
+  ">
+    ${formatDate(now, "monthYear")}
+  </span>
+</div>
 
           <div style="
             display:grid;
