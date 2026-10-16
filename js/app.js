@@ -4696,11 +4696,54 @@ function openDashboardSeparatedStatus(groupName, status) {
     const tag = removed ? "div" : "button";
     const paymentNumber = record?.installmentNumber;
     const paymentTotal = record?.installmentTotal;
+        const visualRecord = record
+      ? { ...record, name }
+      : null;
+
+    const category = getCategory(record?.category || "other");
+
+    const isPlan = Boolean(
+      record?.installmentPlanId ||
+      record?.installmentProvider
+    );
+
+    const hasBrand = !isPlan && Boolean(getBillBrand(name));
+
+    const iconBackground = isPlan
+      ? "transparent"
+      : hasBrand
+        ? "#fff"
+        : `var(--${category.color})`;
+
+    const iconColor = isPlan
+      ? "var(--accent)"
+      : hasBrand
+        ? "#1e1e2e"
+        : "#fff";
     return `
       <${tag} class="bill-row" ${removed ? "" : `type="button" onclick="${action}"`}
         style="width:100%;text-align:left">
-        <div class="bill-icon" style="background:transparent;overflow:hidden;color:var(--accent)">
-          ${record ? billOrPaymentPlanVisual(record, 34) : svgIcon("checkCircle", 28)}
+                <div
+          class="bill-icon"
+          style="
+            width:42px;
+            height:42px;
+            min-width:42px;
+            flex:0 0 42px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            overflow:hidden;
+            border-radius:12px;
+            background:${iconBackground};
+            color:${iconColor};
+          "
+        >
+          ${
+            visualRecord
+              ? billOrPaymentPlanVisual(visualRecord, 34)
+              : svgIcon("checkCircle", 24)
+          }
         </div>
         <div class="bill-info">
           <div class="bill-name">${escapeHtml(name)}</div>
