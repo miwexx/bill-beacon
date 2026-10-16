@@ -5800,3 +5800,199 @@ max-height: max(160px, calc(50dvh - 88px));
     margin-left: 0;
   }
 }
+/* ====================================
+   DASHBOARD: COMBINED INSTALLMENTS
+   ==================================== */
+
+.dashboard-installments-combined {
+  overflow: hidden;
+  width: 100%;
+  min-width: 0;
+
+  border: 1.5px solid transparent;
+  border-radius: 22px;
+
+  background:
+    linear-gradient(
+      var(--surface),
+      var(--surface)
+    ) padding-box,
+    var(
+      --bb-brand-gradient,
+      linear-gradient(105deg, #8f36ff, #f64cae, #ff7138)
+    ) border-box;
+
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+
+  box-shadow: none;
+}
+
+.dashboard-installments-combined-header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  width: 100%;
+  min-height: 70px;
+  padding: 14px 16px;
+
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+
+  background: transparent;
+  box-shadow: none;
+
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-installments-combined-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+
+  border: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.dashboard-installments-combined-icon svg {
+  display: block;
+  width: 23px;
+  height: 23px;
+
+  color: inherit;
+  fill: currentColor;
+  filter: none;
+}
+
+.dashboard-installments-combined-icon svg path {
+  fill: currentColor;
+}
+
+.dashboard-installments-combined-copy {
+  display: grid;
+  gap: 4px;
+
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-installments-combined-title {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.dashboard-installments-combined-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-installments-combined-chevron {
+  display: flex;
+  align-items: center;
+  flex: 0 0 20px;
+
+  color: var(--text-muted);
+}
+
+.dashboard-installments-combined-statuses {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.dashboard-installments-combined-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+
+  min-width: 0;
+  min-height: 76px;
+  padding: 12px;
+
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+
+  color: var(--text);
+  font: inherit;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-installments-combined-status
+  + .dashboard-installments-combined-status {
+  border-left: 1px solid var(--border);
+}
+
+.dashboard-installments-combined-number {
+  font-size: 27px;
+  font-weight: 850;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-installments-combined-label {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.dashboard-installments-combined-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 16px;
+
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+
+  color: var(--overdue);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.dashboard-installments-combined-warning > span:last-child {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.dashboard-installments-combined button:active {
+  opacity: 0.75;
+}
+
+.dashboard-installments-combined button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}

@@ -4801,84 +4801,158 @@ function getDashboardSeparatedStatus(referenceDate = new Date()) {
   };
   return { bills: makeGroup(false), installments: makeGroup(true) };
 }
-function renderDashboardInstallmentsShortcut() {
+
+function renderDashboardSeparatedStatus(referenceDate = new Date()) {
+  const groups = getDashboardSeparatedStatus(referenceDate);
+
+  const month = escapeHtml(
+    formatDate(referenceDate, "monthYear")
+  );
+
   const unpaidInstallments = getUnpaidPaymentPlanInstallments();
 
   const activePlanCount = new Set(
     unpaidInstallments.map(item => item.planId)
   ).size;
 
-  return `
+  const pill = (group, status, count, label, color) => `
     <button
       type="button"
-      class="dashboard-installments-shortcut"
-      onclick="navigate('payment-plans', { returnRoute: 'today' })"
-      aria-label="Open Installments"
+      class="dashboard-status-card"
+      onclick="openDashboardSeparatedStatus('${group}', '${status}')"
+      aria-label="View ${group} ${label.toLowerCase()}"
     >
-      <span class="dashboard-installments-shortcut-icon">
-        ${svgIcon("creditcard", 23)}
-      </span>
+      <div class="dashboard-status-number ${color}">
+        ${count}
+      </div>
 
-      <span class="dashboard-installments-shortcut-copy">
-        <span class="dashboard-installments-shortcut-title">
-          Installments
-        </span>
-
-        <span class="dashboard-installments-shortcut-subtitle">
-          ${
-            activePlanCount
-              ? `${activePlanCount} Active ${
-                  activePlanCount === 1 ? "Plan" : "Plans"
-                }`
-              : "View payment plans and history"
-          }
-        </span>
-      </span>
-
-      <span class="dashboard-installments-shortcut-chevron">
-        ${svgIcon("chevronRight", 20)}
-      </span>
+      <div class="dashboard-status-label">
+        ${label}
+      </div>
     </button>
   `;
-}
-function renderDashboardSeparatedStatus(referenceDate = new Date()) {
-  const groups = getDashboardSeparatedStatus(referenceDate);
-  const month = escapeHtml(formatDate(referenceDate, "monthYear"));
-  const pill = (group, status, count, label, color) => `
-    <button type="button" class="dashboard-status-card"
-      onclick="openDashboardSeparatedStatus('${group}', '${status}')"
-      aria-label="View ${group} ${label.toLowerCase()}">
-      <div class="dashboard-status-number ${color}">${count}</div>
-      <div class="dashboard-status-label">${label}</div>
-    </button>`;
+
   return `
     <section class="dashboard-separated-status">
-      <div class="section-header">Bill Status · ${month}</div>
+      <div class="section-header">
+        Bill Status &middot; ${month}
+      </div>
+
       <div class="dashboard-status-row">
-        ${pill("bills", "paid", groups.bills.paid.length, "Paid", "text-paid")}
-        ${pill("bills", "due", groups.bills.due.length, "Due", "text-upcoming")}
-        ${pill("bills", "overdue", groups.bills.overdue.length, "Overdue", "text-overdue")}
+        ${pill(
+          "bills",
+          "paid",
+          groups.bills.paid.length,
+          "Paid",
+          "text-paid"
+        )}
+
+        ${pill(
+          "bills",
+          "due",
+          groups.bills.due.length,
+          "Due",
+          "text-upcoming"
+        )}
+
+        ${pill(
+          "bills",
+          "overdue",
+          groups.bills.overdue.length,
+          "Overdue",
+          "text-overdue"
+        )}
       </div>
     </section>
-    <section class="dashboard-separated-status">
-          ${renderDashboardInstallmentsShortcut()}
-      <div class="section-header">Installment Status · ${month}</div>
-      <div class="dashboard-installment-count">
-        ${groups.installments.paid.length} of ${groups.installments.totalCount} installment payments paid
+
+    <section
+      class="dashboard-installments-combined"
+      aria-labelledby="dashboardInstallmentsTitle"
+    >
+      <button
+        type="button"
+        class="dashboard-installments-combined-header"
+        onclick="navigate('payment-plans', { returnRoute: 'today' })"
+        aria-label="Open Installments"
+      >
+        <span
+          class="dashboard-installments-combined-icon"
+          aria-hidden="true"
+        >
+          ${svgIcon("creditcard", 23)}
+        </span>
+
+        <span class="dashboard-installments-combined-copy">
+          <span
+            class="dashboard-installments-combined-title"
+            id="dashboardInstallmentsTitle"
+          >
+            Installments
+          </span>
+
+          <span class="dashboard-installments-combined-meta">
+            ${month}
+            &middot;
+            ${activePlanCount}
+            active ${activePlanCount === 1 ? "plan" : "plans"}
+          </span>
+        </span>
+
+        <span
+          class="dashboard-installments-combined-chevron"
+          aria-hidden="true"
+        >
+          ${svgIcon("chevronRight", 20)}
+        </span>
+      </button>
+
+      <div class="dashboard-installments-combined-statuses">
+        <button
+          type="button"
+          class="dashboard-installments-combined-status"
+          onclick="openDashboardSeparatedStatus('installments', 'paid')"
+          aria-label="View ${
+            groups.installments.paid.length
+          } paid installment payments for ${month}"
+        >
+          <span
+            class="dashboard-installments-combined-number text-paid"
+          >
+            ${groups.installments.paid.length}
+          </span>
+
+          <span class="dashboard-installments-combined-label">
+            Paid
+          </span>
+        </button>
+
+        <button
+          type="button"
+          class="dashboard-installments-combined-status"
+          onclick="openDashboardSeparatedStatus('installments', 'unpaid')"
+          aria-label="View ${
+            groups.installments.unpaid.length
+          } unpaid installment payments for ${month}"
+        >
+          <span
+            class="dashboard-installments-combined-number text-upcoming"
+          >
+            ${groups.installments.unpaid.length}
+          </span>
+
+          <span class="dashboard-installments-combined-label">
+            Due
+          </span>
+        </button>
       </div>
-      <div class="dashboard-status-row dashboard-installment-status-row">
-        ${pill("installments", "paid", groups.installments.paid.length, "Paid", "text-paid")}
-        ${pill("installments", "unpaid", groups.installments.unpaid.length, "Due", "text-upcoming")}
-      </div>
-      ${groups.installments.overdue.length ? `
-        <button type="button" class="dashboard-installment-warning"
-          onclick="openDashboardSeparatedStatus('installments', 'overdue')">
-          ${groups.installments.overdue.length} overdue installment payment(s)
-          ${groups.installments.olderOverdue.length ? ` · ${groups.installments.olderOverdue.length} from earlier months` : ""}
-          · View
-        </button>` : ""}
-    </section>`;
-}
+
+      ${
+        groups.installments.overdue.length
+          ? `
+            <button
+              type="button"
+              class="dashboard-installments-combined-warning"
+              onclick="openDashboardSeparatedStatus('installments', 'overdue')"
 
 function openDashboardSeparatedStatus(groupName, status) {
   closeDashboardStatusSheet();
