@@ -5329,3 +5329,206 @@ max-height: max(160px, calc(50dvh - 88px));
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* ====================================
+   PAYMENTS SELECTOR — REFINED
+   ==================================== */
+
+.payments-section-selector {
+  gap: 5px;
+  padding: 5px;
+  margin: 0 16px 12px;
+
+  border: 1px solid var(--border);
+  border-radius: 16px;
+
+  background: var(--surface-2, var(--bg));
+  box-shadow: none;
+}
+
+.payments-section-button {
+  min-height: 44px;
+  padding: 10px 12px;
+
+  border: 1px solid transparent;
+  border-radius: 11px;
+
+  background: transparent;
+  color: var(--text-muted);
+
+  font-size: var(--text-sm);
+  font-weight: 750;
+  letter-spacing: 0.01em;
+
+  box-shadow: none;
+
+  transition:
+    background-color 160ms ease,
+    color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.payments-section-button.is-selected {
+  background: var(--surface);
+  color: var(--accent);
+  border-color: var(--border);
+
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+/* ====================================
+   COMPACT INSTALLMENT BALANCE
+   ==================================== */
+
+.installments-balance-card {
+  overflow: hidden;
+  margin-top: 12px;
+
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.installments-balance-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+
+  padding: 18px;
+}
+
+.installments-balance-description {
+  min-width: 0;
+}
+
+.installments-balance-label {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: 750;
+}
+
+.installments-balance-count {
+  margin-top: 5px;
+
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.installments-balance-amount {
+  margin-left: auto;
+
+  color: var(--text);
+  font-size: clamp(24px, 6vw, 32px);
+  font-weight: 850;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.installments-active-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 18px;
+
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+
+  background: transparent;
+  color: var(--accent);
+  box-shadow: none;
+
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 750;
+  text-align: left;
+
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.installments-active-shortcut:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
+
+/* ====================================
+   ACTIVE PLANS POPUP
+   Keep below the existing detail sheets.
+   ==================================== */
+
+#activePlansPopupContainer {
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  isolation: isolate;
+}
+
+#activePlansPopupSheet {
+  display: flex;
+  flex-direction: column;
+
+  height: 85dvh;
+  max-height: 85dvh;
+  min-height: 0;
+
+  overflow: hidden;
+  box-sizing: border-box;
+
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+#activePlansPopupSheet > .sheet-handle,
+#activePlansPopupSheet > .sheet-nav {
+  flex-shrink: 0;
+}
+
+#activePlansPopupSheet .sheet-nav {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+}
+
+#activePlansPopupSheet .sheet-title {
+  min-width: 0;
+  text-align: center;
+}
+
+#activePlansPopupSheet .active-plans-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 44px;
+  height: 44px;
+  padding: 0;
+
+  color: var(--text);
+}
+
+#activePlansPopupList {
+  flex: 1 1 auto;
+  min-height: 0;
+
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+
+  padding: 16px 16px 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .payments-section-button {
+    transition: none;
+  }
+}

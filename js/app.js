@@ -7748,7 +7748,7 @@ function expandInstallmentScheduleMonth(button, collapse = false) {
 }
 window.expandInstallmentScheduleMonth =
   expandInstallmentScheduleMonth;
-function renderPaymentPlans() {
+function renderPaymentPlans(activeOnly = false) {
    
   const installmentBills = Store.getBills().filter((bill) =>
     Boolean(bill.installmentPlanId)
@@ -8129,7 +8129,25 @@ function renderPaymentPlans() {
       ${label}
     </button>
   `;
+  if (activeOnly) {
+    return activePlans.length
+      ? activePlans.map(plan => renderPlanCard(plan)).join("")
+      : `
+        <div class="empty-state">
+          <div class="empty-state-icon">
+            ${svgIcon("checkCircle", 40)}
+          </div>
 
+          <div class="empty-state-title">
+            No active plans
+          </div>
+
+          <div class="empty-state-text">
+            Your unpaid installment plans will appear here.
+          </div>
+        </div>
+      `;
+  }
   return `
         ${renderPaymentsHeader()}
     <div class="main-content fade-in">
@@ -8175,45 +8193,36 @@ function renderPaymentPlans() {
             `
             : `
               <section
-                style="
-                  padding:var(--space-4) 0 var(--space-4);
-                  text-align:center;
-                "
-              >
-                <div
-                  style="
-                    font-size:var(--text-base);
-                    color:var(--text-muted);
-                  "
-                >
-                  Remaining Balance
-                </div>
+  class="installments-balance-card"
+  aria-label="Installment balance summary"
+>
+  <div class="installments-balance-main">
+    <div class="installments-balance-description">
+      <div class="installments-balance-label">
+        Remaining Balance
+      </div>
 
-                <div
-                  style="
-                    margin-top:7px;
-                    font-size:clamp(40px, 11vw, 56px);
-                    line-height:1;
-                    font-weight:900;
-                    letter-spacing:-0.05em;
-                    color:var(--text);
-                  "
-                >
-                  ${formatCurrency(totalRemainingBalance)}
-                </div>
+      <div class="installments-balance-count">
+        ${activePlans.length}
+        active ${activePlans.length === 1 ? "plan" : "plans"}
+      </div>
+    </div>
 
-                <div
-                  style="
-                    margin-top:11px;
-                    font-size:var(--text-base);
-                    color:var(--text-muted);
-                  "
-                >
-                  ${activePlans.length} Active ${
-                    activePlans.length === 1 ? "Installment" : "Installments"
-                  } Remaining
-                </div>
-              </section>
+    <div class="installments-balance-amount">
+      ${formatCurrency(totalRemainingBalance)}
+    </div>
+  </div>
+
+  <button
+    type="button"
+    class="installments-active-shortcut"
+    onclick="openActivePlansPopup()"
+    aria-haspopup="dialog"
+  >
+    <span>View Active Plans</span>
+    ${svgIcon("chevronRight", 18)}
+  </button>
+</section>
               ${renderInstallmentUpcomingCard()}
                             ${
                 visibleActivePlans.length
@@ -8310,7 +8319,109 @@ function renderPaymentPlans() {
     </div>
   `;
 }
+function refreshActivePlansPopup() {
+  const list = document.getElementById("activePlansPopupList");
+  if (!list) return;
 
+  const scrollTop = list.scrollTop;
+
+  list.innerHTML = renderPaymentPlans(true);
+  list.scrollTop = scrollTop;
+}
+
+function openActivePlansPopup() {
+  const existing = document.getElementById(
+    "activePlansPopupContainer"
+  );
+
+  if (existing) {
+    refreshActivePlansPopup();
+    existing.querySelector(".active-plans-close")?.focus();
+    return;
+  }
+
+  const container = document.createElement("div");
+  container.id = "activePlansPopupContainer";
+
+  container.innerHTML = `
+    <div
+      class="sheet-overlay show"
+      onclick="closeActivePlansPopup()"
+    ></div>
+
+    <div
+      class="sheet show active-plans-popup"
+      id="activePlansPopupSheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="activePlansPopupTitle"
+    >
+      <div class="sheet-handle"></div>
+
+      <div class="sheet-nav">
+        <button
+          type="button"
+          class="nav-button active-plans-close"
+          onclick="closeActivePlansPopup()"
+          aria-label="Close active plans"
+        >
+          ${svgIcon("close", 22)}
+        </button>
+
+        <div
+          class="sheet-title"
+          id="activePlansPopupTitle"
+        >
+          Active Plans
+        </div>
+
+        <div style="width:44px" aria-hidden="true"></div>
+      </div>
+
+      <div
+        class="sheet-body content-gap"
+        id="activePlansPopupList"
+        role="region"
+        aria-label="Active installment plans"
+        tabindex="0"
+      >
+        ${renderPaymentPlans(true)}
+      </div>
+    </div>
+  `;
+
+  container.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+
+    const childPopupOpen = [
+      "paymentPlanDetailsContainer",
+      "paymentPlanActionsContainer",
+      "installmentPlanContainer"
+    ].some(id => document.getElementById(id));
+
+    if (childPopupOpen) return;
+
+    event.preventDefault();
+    closeActivePlansPopup();
+  });
+
+  document.body.appendChild(container);
+  lockInstallmentPopupScroll();
+
+  container.querySelector(".active-plans-close")?.focus();
+}
+
+function closeActivePlansPopup() {
+  document.getElementById(
+    "activePlansPopupContainer"
+  )?.remove();
+
+  unlockInstallmentPopupScrollIfClosed();
+
+  document.querySelector(
+    "#app .installments-active-shortcut"
+  )?.focus();
+}
 function showMoreActivePaymentPlans() {
   const extraPlans = document.getElementById("extra-active-payment-plans");
   const toggleButton = document.getElementById("toggle-active-payment-plans");
@@ -8848,7 +8959,8 @@ window.closeCompletedPlansHistory = closeCompletedPlansHistory;
 const installmentPopupIds = [
   "paymentPlanDetailsContainer",
   "paymentPlanActionsContainer",
-  "installmentPlanContainer"
+  "installmentPlanContainer",
+  "activePlansPopupContainer"
 ];
 
 let installmentPopupScrollLock = null;
@@ -16668,6 +16780,9 @@ function render() {
     content += tabBar();
   }
   app.innerHTML = content;
+    if (document.getElementById("activePlansPopupContainer")) {
+    refreshActivePlansPopup();
+  }
   if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings(); attachSignOutButton(); }
 }
 
