@@ -5053,7 +5053,7 @@ function renderToday() {
         </section>
 
         ${renderDashboardSeparatedStatus(now)}
-
+          ${renderDashboardPaycheckPlan()}
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">
             Recent Payments
