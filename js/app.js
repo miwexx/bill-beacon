@@ -4967,7 +4967,7 @@ function renderToday() {
   "
 >
   <span style="
-    font-size:20px;
+    font-size:18px;
     font-weight:800;
     line-height:20px;
     white-space:nowrap;
