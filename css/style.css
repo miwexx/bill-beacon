@@ -5752,53 +5752,6 @@ max-height: max(160px, calc(50dvh - 88px));
 .dashboard-installments-shortcut:active {
   opacity: 0.78;
 }
-
-.dashboard-installments-shortcut:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.dashboard-installments-shortcut-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  width: 42px;
-  height: 42px;
-  flex: 0 0 42px;
-
-  border-radius: 12px;
-  background: var(--accent-dim, var(--surface-2));
-  color: var(--accent);
-}
-
-.dashboard-installments-shortcut-copy {
-  display: grid;
-  gap: 4px;
-
-  flex: 1;
-  min-width: 0;
-}
-
-.dashboard-installments-shortcut-title {
-  color: var(--text);
-  font-size: var(--text-base);
-  font-weight: 800;
-}
-
-.dashboard-installments-shortcut-subtitle {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
-  line-height: 1.4;
-}
-
-.dashboard-installments-shortcut-chevron {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
 .dashboard-installments-shortcut:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
