@@ -3712,8 +3712,6 @@ function renderDashboardPaycheckPlan(
   const firstLabel = formatDate(plan.first.payday, "short");
   const secondLabel = formatDate(plan.second.payday, "short");
 
-  const previewBills = selected.bills;
-
     return `
     
 
