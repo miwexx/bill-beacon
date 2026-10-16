@@ -3586,8 +3586,8 @@ function renderPaycheckInlineRows(selected) {
               color:var(--text-muted);
             ">
               ${unpaid.length
-                ? `${unpaid.length} unpaid · ${paidCount} paid`
-                : "All paid for this paycheck"}
+                ? `${unpaid.length} Unpaid · ${paidCount} Paid`
+                : "All Paid"}
             </span>
           </span>
 
@@ -3607,7 +3607,7 @@ function renderPaycheckInlineRows(selected) {
               font-size:var(--text-xs);
               color:var(--text-muted);
             ">
-              ${unpaid.length ? "left" : "Paid"}
+              ${unpaid.length ? "Left" : "Paid"}
             </span>
           </span>
 
