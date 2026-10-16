@@ -5054,46 +5054,6 @@ function renderToday() {
 
         ${renderDashboardSeparatedStatus(now)}
 
-        ${renderDashboardPaycheckPlan()}
-
-        <div class="dashboard-section-title-row">
-          <div class="section-header dashboard-section-header">
-            Upcoming Bills
-          </div>
-
-          <button
-            type="button"
-            class="bb-outline-pill"
-            style="min-height:34px;padding:0 12px;font-size:var(--text-xs);"
-            onclick="openDashboardStatusSheet('upcoming')"
-          >
-            <span>See All</span>
-            <span class="pill-chevron">
-              ${svgIcon("chevronRight", 14)}
-            </span>
-          </button>
-        </div>
-
-        ${
-          upcomingBills.length
-            ? `
-              <div class="upcoming-carousel">
-                ${upcomingBills
-                  .slice(0, 8)
-                  .map(renderDashboardUpcomingBill)
-                  .join("")}
-              </div>
-            `
-            : `
-              <div class="dashboard-empty-card">
-                ${svgIcon("checkCircle", 22)}
-                <span>
-                  No overdue or upcoming bills in the next 7 days
-                </span>
-              </div>
-            `
-        }
-
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">
             Recent Payments
@@ -6345,7 +6305,7 @@ function renderCalendar() {
     (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
   );
 
-  const visibleMonthBills = monthBillsSorted.slice(0, 5);
+  const visibleMonthBills = monthBillsSorted.slice(0, 3);
   const hiddenMonthBills = monthBillsSorted.slice(5);
 
   const prevMonth = new Date(year, month - 1, 1).toISOString();
