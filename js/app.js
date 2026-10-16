@@ -2871,6 +2871,51 @@ function navigate(route, params = {}) {
 
   const main = document.querySelector(".main-content");
   if (main) main.scrollTop = 0;
+  if (route === "today" && params.paycheckInlineReturn) {
+  const saved = params.paycheckInlineReturn;
+
+  const restorePaycheckView = () => {
+    if (currentRoute !== "today") return;
+
+    const list = document.getElementById("paycheckInlineList");
+    if (!list) return;
+
+    const moreButton = list.querySelector(
+      "[data-paycheck-show-more]"
+    );
+
+    if (saved.expanded && moreButton) {
+      list.querySelectorAll("[data-paycheck-extra]").forEach(row => {
+        row.hidden = false;
+      });
+
+      moreButton.setAttribute("aria-expanded", "true");
+      moreButton.textContent = "Show less";
+    }
+
+    const openProviders = new Set(saved.providers || []);
+
+    list.querySelectorAll("details[data-paycheck-provider]")
+      .forEach(group => {
+        group.open = openProviders.has(
+          group.dataset.paycheckProvider
+        );
+      });
+
+    window.scrollTo(0, saved.windowScroll || 0);
+
+    const dashboardMain = document.querySelector(
+      "#app .main-content"
+    );
+
+    if (dashboardMain) {
+      dashboardMain.scrollTop = saved.mainScroll || 0;
+    }
+  };
+
+  restorePaycheckView();
+  requestAnimationFrame(restorePaycheckView);
+}
 
   if (route === "transactions") {
     refreshPlaidSandboxAutomatically();
@@ -3422,7 +3467,34 @@ function togglePaycheckInlineRows(button) {
   button.setAttribute("aria-expanded", String(expanded));
   button.textContent = expanded ? "Show Less" : "Show More";
 }
+function openPaycheckInlineBill(button, billId, dueDate) {
+  const list = button.closest("#paycheckInlineList");
+  const moreButton = list?.querySelector(
+    "[data-paycheck-show-more]"
+  );
 
+  const savedView = {
+    providers: list
+      ? [...list.querySelectorAll("details[open]")]
+          .map(node => node.dataset.paycheckProvider)
+      : [],
+    expanded: moreButton?.getAttribute("aria-expanded") === "true",
+    mainScroll: document.querySelector(
+      "#app .main-content"
+    )?.scrollTop || 0,
+    windowScroll: window.scrollY
+  };
+
+  navigate("detail", {
+    id: billId,
+    occurrenceDueDate: dueDate,
+    returnRoute: "today",
+    returnParams: {
+      ...routeParams,
+      paycheckInlineReturn: savedView
+    }
+  });
+}
 function renderPaycheckInlineRows(selected) {
   const entries = [];
   const providers = new Map();
@@ -3469,11 +3541,11 @@ function renderPaycheckInlineRows(selected) {
     return `
       <button
         type="button"
-        onclick="navigate('detail', {
-          id: '${escapeInlineString(billId)}',
-          occurrenceDueDate: '${escapeInlineString(bill.dueDate)}',
-          returnRoute: 'today'
-        })"
+        onclick="openPaycheckInlineBill(
+  this,
+  '${escapeInlineString(billId)}',
+  '${escapeInlineString(bill.dueDate)}'
+)"
         style="
           width:100%;
           display:flex;
@@ -3632,7 +3704,11 @@ function renderPaycheckInlineRows(selected) {
 
           ${group.bills.map(renderBill).join("")}
         </div>
-      </details>
+      <details
+  data-paycheck-provider="${escapeHtml(
+    group.provider.toLowerCase().replace(/\s+/g, " ")
+  )}"
+>
     `;
   };
 
@@ -3651,7 +3727,7 @@ function renderPaycheckInlineRows(selected) {
   }
 
   return `
-    <div style="
+    <div id="paycheckInlineList" style="
       margin-top:var(--space-3);
       border-top:1px solid var(--border);
     ">
@@ -3674,6 +3750,7 @@ function renderPaycheckInlineRows(selected) {
         <button
           type="button"
           class="bb-outline-pill"
+          data-paycheck-show-more
           aria-expanded="false"
           onclick="togglePaycheckInlineRows(this)"
           style="
@@ -16334,7 +16411,7 @@ const accountSelector = accounts.length
     "
   >
     <div class="section-header">
-      Bank connection
+      Bank Connection
     </div>
 
     <div class="card card-pad">
