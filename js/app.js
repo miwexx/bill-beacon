@@ -8139,7 +8139,7 @@ function renderPaymentPlans(activeOnly = false) {
           </div>
 
           <div class="empty-state-title">
-            No active plans
+            No Active Plans
           </div>
 
           <div class="empty-state-text">
@@ -8204,7 +8204,7 @@ function renderPaymentPlans(activeOnly = false) {
 
       <div class="installments-balance-count">
         ${activePlans.length}
-        active ${activePlans.length === 1 ? "plan" : "plans"}
+        Active ${activePlans.length === 1 ? "Plan" : "Plans"}
       </div>
     </div>
 
