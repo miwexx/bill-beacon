@@ -6059,3 +6059,55 @@ max-height: max(160px, calc(50dvh - 88px));
     ),
     var(--card);
 }
+/* Center the Installments heading between equal-width side columns. */
+
+.dashboard-content .dashboard-installments-combined-header {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 10px;
+
+  min-height: 76px;
+  padding: 14px 16px;
+  text-align: center;
+}
+
+.dashboard-content .dashboard-installments-combined-copy {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+
+  min-width: 0;
+  text-align: center;
+}
+
+.dashboard-content .dashboard-installments-combined-title {
+  display: block;
+
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+}
+
+.dashboard-content .dashboard-installments-combined-meta {
+  display: block;
+  max-width: 100%;
+
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.dashboard-content .dashboard-installments-combined-icon,
+.dashboard-content .dashboard-installments-combined-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 26px;
+  height: 26px;
+  justify-self: center;
+}
