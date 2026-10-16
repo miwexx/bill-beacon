@@ -13330,7 +13330,7 @@ function openBillForm(billId = null, selectedDate = null) {
           </div>
 
           <div>
-            <div class="section-header">Paycheck Plan</div>
+           
 
             <div class="card">
               <div class="form-row">
