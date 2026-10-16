@@ -4901,3 +4901,93 @@ body *::-webkit-scrollbar {
     28px + env(safe-area-inset-bottom, 0px)
   ) !important;
 }
+/* Payment Schedule: fill the screen down to its bottom edge. */
+#paymentPlanScheduleContainer {
+  position: fixed !important;
+  inset: 0 !important;
+
+  width: 100% !important;
+  height: 100dvh !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  margin: 0 !important;
+  padding:
+    calc(env(safe-area-inset-top, 0px) + 12px)
+    0
+    0 !important;
+
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+/* Fill the available space below the top safe-area inset. */
+#paymentPlanScheduleContainer > #paymentPlanScheduleSheet {
+  position: relative !important;
+  inset: auto !important;
+
+  flex: 1 1 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+  box-sizing: border-box !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+
+  background: var(--surface) !important;
+  border-bottom: 0 !important;
+  border-radius:
+    var(--radius-2xl)
+    var(--radius-2xl)
+    0
+    0 !important;
+}
+
+/* Keep the handle and header outside the scrolling content. */
+#paymentPlanScheduleContainer
+  > #paymentPlanScheduleSheet
+  > .sheet-handle,
+#paymentPlanScheduleContainer
+  > #paymentPlanScheduleSheet
+  > .sheet-nav {
+  flex: 0 0 auto !important;
+}
+
+/* One scrolling body, with safe-area spacing inside the popup. */
+#paymentPlanScheduleContainer
+  > #paymentPlanScheduleSheet
+  > .sheet-body {
+  display: block !important;
+  flex: 1 1 0 !important;
+
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+
+  padding:
+    16px
+    16px
+    calc(28px + env(safe-area-inset-bottom, 0px)) !important;
+
+  background: transparent !important;
+}
+
+/* Match the month heading and monthly total sizes. */
+#paymentPlanScheduleContainer
+  [data-installment-month]
+  > div:first-child
+  > div {
+  font-size: var(--text-lg) !important;
+  font-weight: 850;
+}

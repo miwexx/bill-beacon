@@ -20567,20 +20567,20 @@ let goBack = Boolean(
     { passive: true }
   );
 
-  window.addEventListener("resize", () => {
-    cleanup();
-    previous = null; pageSnapshots.clear(); notificationPreview = null;
-  });
+  // Reset interrupted gestures without deleting page Back previews.
+window.addEventListener("resize", () => {
+  cleanup();
+  notificationPreview = null;
+});
 
-  document.addEventListener(
-    "visibilitychange",
-    () => {
-      if (document.visibilityState === "hidden") {
-        cleanup();
-        previous = null; pageSnapshots.clear(); notificationPreview = null;
-      }
-    }
-  );
+document.addEventListener("visibilitychange", () => {
+  // Clean up on both backgrounding and returning to the app.
+  cleanup();
+
+  if (document.visibilityState === "hidden") {
+    notificationPreview = null;
+  }
+});
 
   window.addEventListener(
     "billbeacon:signed-out",
