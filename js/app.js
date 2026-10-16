@@ -3433,7 +3433,7 @@ function renderDashboardPaycheckPlan(
   const firstLabel = formatDate(plan.first.payday, "short");
   const secondLabel = formatDate(plan.second.payday, "short");
 
-  const previewBills = selected.bills.slice(0, 3);
+  const previewBills = selected.bills;
 
     return `
     
@@ -3651,12 +3651,21 @@ function renderDashboardPaycheckPlan(
         previewBills.length
           ? `
             <div
-              style="
-                margin-top:var(--space-3);
-                border-top:1px solid var(--border);
-              "
-            >
-              ${previewBills
+  role="region"
+  aria-label="Bills assigned to this paycheck"
+  tabindex="0"
+  style="
+    margin-top:var(--space-3);
+    border-top:1px solid var(--border);
+    max-height:228px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    overscroll-behavior-y:contain;
+    -webkit-overflow-scrolling:touch;
+    touch-action:pan-y;
+  "
+>
+  ${previewBills
                 .map((bill) => {
                   const status = getPaycheckBillStatusLabel(bill);
                   const sourceBillId = bill.isOccurrence
@@ -3769,23 +3778,7 @@ function renderDashboardPaycheckPlan(
           `
       }
 
-      <button
-        type="button"
-        class="bb-outline-pill"
-        style="
-          width:100%;
-          min-height:42px;
-          margin-top:var(--space-3);
-        "
-        onclick="openPaycheckPlanSheet('${escapeInlineString(selectedKey)}')"
-      >
-        <span>View all ${
-          selected.bills.length
-        } bill${selected.bills.length === 1 ? "" : "s"}</span>
-        <span class="pill-chevron">
-          ${svgIcon("chevronRight", 18)}
-        </span>
-      </button>
+      
     </div>
   `;
 }
