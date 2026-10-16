@@ -6111,3 +6111,14 @@ max-height: max(160px, calc(50dvh - 88px));
   height: 26px;
   justify-self: center;
 }
+/* No card icon; keep the heading centered. */
+
+.dashboard-content .dashboard-installments-combined-copy {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.dashboard-content .dashboard-installments-combined-chevron {
+  grid-column: 3;
+  grid-row: 1;
+}

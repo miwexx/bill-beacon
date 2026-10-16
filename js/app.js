@@ -4875,12 +4875,7 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
         onclick="navigate('payment-plans', { returnRoute: 'today' })"
         aria-label="Open Installments"
       >
-        <span
-          class="dashboard-installments-combined-icon"
-          aria-hidden="true"
-        >
-          ${svgIcon("creditcard", 23)}
-        </span>
+        
 
         <span class="dashboard-installments-combined-copy">
           <span
