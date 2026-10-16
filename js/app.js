@@ -3436,7 +3436,9 @@ function renderDashboardPaycheckPlan(
   const previewBills = selected.bills.slice(0, 3);
 
     return `
-    <div class="section-header">Paycheck Plan</div>
+    <div class="section-header dashboard-paycheck-heading">
+  Paycheck Plan
+</div>
 
     <div class="card card-pad">
       <div

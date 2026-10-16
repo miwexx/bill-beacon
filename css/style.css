@@ -5169,3 +5169,8 @@ max-height: max(160px, calc(50dvh - 88px));
   font-size: 12px;
   line-height: 1.2;
 }
+/* Align Paycheck Plan with the other Dashboard section titles. */
+.dashboard-content .dashboard-paycheck-heading {
+  padding-left: 0;
+  padding-right: 0;
+}
