@@ -5996,21 +5996,19 @@ max-height: max(160px, calc(50dvh - 88px));
   outline: 2px solid var(--accent);
   outline-offset: -4px;
 }
-/* Dashboard status surfaces: match Monthly Snapshot */
+/* Dashboard cards: soft glow from the top-right corner only */
 
+.dashboard-content .dashboard-month-card,
 .dashboard-content .dashboard-installments-combined,
 .dashboard-content .dashboard-status-card {
   border: 1px solid var(--bb-brand-border-strong);
+
   background:
     radial-gradient(
       ellipse at top right,
-      rgba(246, 76, 174, 0.16),
-      transparent 65%
-    ),
-    radial-gradient(
-      ellipse at bottom left,
-      rgba(143, 54, 255, 0.16),
-      transparent 65%
+      rgba(176, 92, 235, 0.10) 0%,
+      rgba(176, 92, 235, 0.035) 25%,
+      transparent 55%
     ),
     var(--card);
 
@@ -6019,19 +6017,23 @@ max-height: max(160px, calc(50dvh - 88px));
   box-shadow: var(--bb-brand-shadow);
 }
 
-/* Match the Monthly Snapshot corner radius. */
+/* Prevent the Monthly Snapshot's old overlay from adding more glow. */
+
+.dashboard-content .dashboard-month-card::before {
+  background: none;
+}
+
+/* Keep the existing shapes. */
 
 .dashboard-content .dashboard-installments-combined {
   border-radius: var(--bb-card-radius, 20px);
 }
 
-/* Keep the individual status buttons slightly more compact. */
-
 .dashboard-content .dashboard-status-card {
   border-radius: var(--radius-lg);
 }
 
-/* Let the combined card's glow show through its inner buttons. */
+/* Inner buttons share the combined card's background. */
 
 .dashboard-content .dashboard-installments-combined-header,
 .dashboard-content .dashboard-installments-combined-status,
@@ -6040,16 +6042,20 @@ max-height: max(160px, calc(50dvh - 88px));
   box-shadow: none;
 }
 
-/* Softer surfaces in light mode, matching Monthly Snapshot. */
+/* Even lighter glow in light mode. */
 
+:root[data-theme="light"]
+  .dashboard-content .dashboard-month-card,
 :root[data-theme="light"]
   .dashboard-content .dashboard-installments-combined,
 :root[data-theme="light"]
   .dashboard-content .dashboard-status-card {
   background:
-    var(--bb-brand-glow),
+    radial-gradient(
+      ellipse at top right,
+      rgba(112, 67, 172, 0.055) 0%,
+      rgba(112, 67, 172, 0.018) 25%,
+      transparent 55%
+    ),
     var(--card);
-
-  border-color: var(--bb-brand-border-strong);
-  box-shadow: var(--bb-brand-shadow);
 }
