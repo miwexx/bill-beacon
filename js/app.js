@@ -8223,7 +8223,7 @@ function openPaymentPlanSchedule() {
     ></div>
 
     <div
-      class="sheet"
+      class="sheet payment-schedule-sheet"
       id="paymentPlanScheduleSheet"
       role="dialog"
       aria-modal="true"
@@ -8246,7 +8246,7 @@ function openPaymentPlanSchedule() {
         <div style="width:54px;"></div>
       </div>
 
-      <div class="sheet-body content-gap">
+      <div class="sheet-body payment-schedule-body">
         ${
           groups.length
             ? groups.map(renderGroup).join("")

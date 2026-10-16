@@ -4816,3 +4816,30 @@ body *::-webkit-scrollbar {
     28px + env(safe-area-inset-bottom, 0px)
   ) !important;
 }
+
+/* Payment Schedule scoped shell: full bottom coverage, one scrolling body. */
+#paymentPlanScheduleContainer > .payment-schedule-sheet {
+  bottom: 0 !important;
+  padding: 0 !important;
+  background: var(--surface) !important;
+  border-bottom: 0 !important;
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0 !important;
+}
+#paymentPlanScheduleContainer > .payment-schedule-sheet > .payment-schedule-body {
+  display: block !important;
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 16px 16px calc(28px + env(safe-area-inset-bottom, 0px)) !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  background: transparent !important;
+}
+#paymentPlanScheduleContainer .payment-schedule-body > [data-installment-month] {
+  flex: none !important;
+  height: auto;
+  min-height: min-content;
+}
+#paymentPlanScheduleContainer .payment-schedule-body > [data-installment-month] + [data-installment-month] {
+  margin-top: 16px;
+}
