@@ -3420,7 +3420,7 @@ function togglePaycheckInlineRows(button) {
   });
 
   button.setAttribute("aria-expanded", String(expanded));
-  button.textContent = expanded ? "Show less" : "Show more";
+  button.textContent = expanded ? "Show Less" : "Show More";
 }
 
 function renderPaycheckInlineRows(selected) {
@@ -3683,7 +3683,7 @@ function renderPaycheckInlineRows(selected) {
             justify-content:center;
           "
         >
-          Show more
+          Show More
         </button>
       ` : ""}
     </div>
@@ -6648,7 +6648,7 @@ function renderCalendar() {
                           class="show-more-bills-button"
                           onclick="toggleMonthBills()"
                         >
-                          Show all ${monthBillsSorted.length} bills
+                          Show All ${monthBillsSorted.length} bills
                           ${svgIcon("chevronRight", 18)}
                         </button>
                       `
@@ -13984,7 +13984,7 @@ window.toggleMonthBills = function() {
 
   button.innerHTML = isOpen
     ? `Show Less ${svgIcon('chevronRight', 18)}`
-    : `Show all ${document.querySelectorAll('#moreMonthBills .bill-row').length + 5} bills ${svgIcon('chevronRight', 18)}`;
+    : `Show All ${document.querySelectorAll('#moreMonthBills .bill-row').length + 5} bills ${svgIcon('chevronRight', 18)}`;
 
   button.classList.toggle('is-open', isOpen);
 };
@@ -16218,7 +16218,7 @@ function renderTransactions() {
                         justify-content:center;
                       "
                     >
-                      Show more
+                      Show More
                       (${remaining} remaining)
                     </button>
                   `
@@ -16238,7 +16238,7 @@ function renderTransactions() {
                         justify-content:center;
                       "
                     >
-                      Show less
+                      Show Less
                     </button>
                   `
                   : ""
