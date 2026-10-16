@@ -5660,19 +5660,22 @@ max-height: max(160px, calc(50dvh - 88px));
 }
 /* Dashboard: entry to the existing Installments screen */
 
+/* Dashboard Installments shortcut — clean, neutral style */
+
 .dashboard-installments-shortcut {
   display: flex;
   align-items: center;
   gap: 12px;
 
   width: 100%;
-  min-height: 72px;
-  margin: 0 0 16px;
-  padding: 14px 16px;
+  min-height: 66px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
 
   border: 1px solid var(--border);
   border-radius: 16px;
   background: var(--surface);
+  background-image: none;
   box-shadow: none;
 
   color: var(--text);
@@ -5681,6 +5684,78 @@ max-height: max(160px, calc(50dvh - 88px));
 
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.dashboard-installments-shortcut-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+
+  border: 1px solid var(--border);
+  border-radius: 11px;
+
+  background: transparent;
+  background-image: none;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+
+.dashboard-installments-shortcut-icon svg {
+  display: block;
+  width: 21px;
+  height: 21px;
+
+  color: inherit;
+  fill: currentColor;
+  filter: none;
+}
+
+.dashboard-installments-shortcut-icon svg path {
+  fill: currentColor;
+}
+
+.dashboard-installments-shortcut-copy {
+  display: grid;
+  gap: 3px;
+
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-installments-shortcut-title {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.dashboard-installments-shortcut-subtitle {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.dashboard-installments-shortcut-chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+
+  color: var(--text-muted);
+}
+
+.dashboard-installments-shortcut:active {
+  opacity: 0.78;
+}
+
+.dashboard-installments-shortcut:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
 }
 
 .dashboard-installments-shortcut-icon {
