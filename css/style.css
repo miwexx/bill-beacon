@@ -5098,3 +5098,13 @@ max-height: max(160px, calc(50dvh - 88px));
   outline: 2px solid var(--accent);
   outline-offset: -3px;
 }
+/* Let the inline schedule hand vertical scrolling to the page. */
+.card.installment-inline-schedule,
+.installment-inline-schedule-scroll {
+  overscroll-behavior-y: auto !important;
+}
+
+.installment-inline-schedule-scroll {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
