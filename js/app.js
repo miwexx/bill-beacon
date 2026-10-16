@@ -4973,7 +4973,7 @@ function renderToday() {
     white-space:nowrap;
     color:#fff;
   ">
-    ${formatDate(now, "monthYear")}
+    ${formatDate(now, "monthYear")} · Monthly Snapshot
   </span>
 </div>
 
