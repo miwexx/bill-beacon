@@ -7255,71 +7255,102 @@ function renderInstallmentScheduleRow(item) {
     </button>
   `;
 }
-
 function renderInstallmentUpcomingCard() {
-  const items = getUnpaidPaymentPlanInstallments().filter(
-    (item) => Number.isFinite(new Date(item.dueDate).getTime())
+  const groups = getPaymentPlanScheduleGroups();
+
+  const paymentCount = groups.reduce(
+    (count, group) => count + group.items.length,
+    0
   );
 
-  const preview = items.slice(0, 4);
+  const renderMonth = (group) => {
+    const monthLabel = formatDate(
+      group.date.toISOString(),
+      "monthYear"
+    );
+
+    const total = group.items.reduce(
+      (sum, item) => sum + (Number(item.amount) || 0),
+      0
+    );
+
+    return `
+      <section
+        class="installment-inline-month"
+        aria-label="${escapeHtml(monthLabel)} payments"
+      >
+        <div class="installment-inline-month-heading">
+          <div class="installment-inline-month-name">
+            ${escapeHtml(monthLabel)}
+          </div>
+
+          <div class="installment-inline-month-total">
+            ${formatCurrency(total)}
+          </div>
+        </div>
+
+        <div class="installment-inline-month-rows">
+          ${group.items
+            .map(renderInstallmentScheduleRow)
+            .join("")}
+        </div>
+      </section>
+    `;
+  };
 
   return `
-    <section class="card" style="overflow:hidden;">
-      <div
-        style="
-          padding:var(--space-4);
-          text-align:center;
-          font-size:var(--text-xl);
-          font-weight:850;
-        "
-      >
-        Upcoming
+    <section
+      class="card installment-inline-schedule"
+      aria-labelledby="installmentInlineScheduleTitle"
+    >
+      <div class="installment-inline-schedule-header">
+        <div
+          id="installmentInlineScheduleTitle"
+          class="installment-inline-schedule-title"
+        >
+          Payment Schedule
+        </div>
+
+        <div class="installment-inline-schedule-subtitle">
+          ${
+            paymentCount
+              ? `${paymentCount} unpaid ${
+                  paymentCount === 1 ? "payment" : "payments"
+                } · Scroll to view all months`
+              : "No unpaid payments"
+          }
+        </div>
       </div>
 
-      ${
-        preview.length
-          ? preview.map(renderInstallmentScheduleRow).join("")
-          : `
-            <div
-              style="
-                padding:0 var(--space-4) var(--space-4);
-                text-align:center;
-              "
-            >
-              No scheduled payments.
-            </div>
-          `
-      }
+      <div
+        class="installment-inline-schedule-scroll"
+        role="region"
+        aria-label="Installment payments grouped by month"
+        tabindex="0"
+      >
+        ${
+          groups.length
+            ? groups.map(renderMonth).join("")
+            : `
+              <div class="empty-state">
+                <div class="empty-state-icon">
+                  ${svgIcon("checkCircle", 36)}
+                </div>
 
-      ${
-        items.length
-          ? `
-            <button
-              type="button"
-              onclick="openPaymentPlanSchedule()"
-              style="
-                display:block;
-                width:100%;
-                padding:var(--space-3) var(--space-4);
-                border:0;
-                border-top:1px solid var(--border);
-                background:transparent;
-                color:var(--accent);
-                font:inherit;
-                font-weight:800;
-                text-align:center;
-                cursor:pointer;
-              "
-            >
-              <span class="gradient-action-text">See More</span>
-            </button>
-          `
-          : ""
-      }
+                <div class="empty-state-title">
+                  You're all caught up
+                </div>
+
+                <div class="empty-state-text">
+                  No unpaid installment payments to show.
+                </div>
+              </div>
+            `
+        }
+      </div>
     </section>
   `;
 }
-
 function expandInstallmentScheduleMonth(button, collapse = false) {
   const section = button.closest("[data-installment-month]");
 
