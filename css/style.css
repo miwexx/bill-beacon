@@ -5532,3 +5532,129 @@ max-height: max(160px, calc(50dvh - 88px));
     transition: none;
   }
 }
+/* ====================================
+   INSIGHTS: INSTALLMENT BALANCE
+   ==================================== */
+
+.insights-installment-card {
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+}
+
+.insights-installment-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 18px 18px 0;
+}
+
+.insights-installment-heading {
+  min-width: 0;
+}
+
+.insights-installment-title {
+  color: var(--text);
+  font-size: var(--text-base);
+  font-weight: 800;
+}
+
+.insights-installment-subtitle {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+.insights-installment-amount {
+  margin-left: auto;
+  color: var(--text);
+  font-size: clamp(26px, 7vw, 34px);
+  font-weight: 850;
+  letter-spacing: -0.035em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.insights-installment-status {
+  padding: 10px 18px 16px;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.insights-installment-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 18px;
+
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+
+  color: var(--accent);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 750;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* Payments keeps a shortcut, not another balance summary. */
+
+.installments-plans-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  width: 100%;
+  min-height: 68px;
+  margin-top: 12px;
+  padding: 14px 16px;
+
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: none;
+
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.installments-plans-entry-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.installments-plans-entry-title {
+  font-size: var(--text-base);
+  font-weight: 800;
+}
+
+.installments-plans-entry-count {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+.installments-plans-entry > svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.insights-installment-link:focus-visible,
+.installments-plans-entry:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -4px;
+}
