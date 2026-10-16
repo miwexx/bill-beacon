@@ -7198,6 +7198,171 @@ function paymentPlanVisual(provider, size = 42) {
     </span>
   `;
 }
+function renderInstallmentScheduleRow(item) {
+  const dueDate = new Date(item.dueDate);
+  const today = new Date();
+
+  today.setHours(0, 0, 0, 0);
+
+  const overdue = dueDate < today;
+
+  const paymentLabel =
+    item.installmentNumber && item.installmentTotal
+      ? `Payment ${item.installmentNumber} of ${item.installmentTotal}`
+      : "Installment payment";
+
+  return `
+    <button
+      type="button"
+      class="bill-row"
+      style="
+        width:100%;
+        text-align:left;
+        background:transparent;
+        border:0;
+        color:inherit;
+        cursor:pointer;
+      "
+      onclick="openPaymentPlanDetails('${escapeInlineString(item.planId)}')"
+      aria-label="View ${escapeHtml(item.storeName)} payment plan"
+    >
+      ${paymentPlanVisual(item.provider, 38)}
+
+      <div class="bill-info" style="min-width:0;">
+        <div class="bill-name">
+          ${escapeHtml(item.storeName)}
+        </div>
+
+        <div class="bill-meta">
+          ${escapeHtml(item.provider)} · ${escapeHtml(paymentLabel)}
+        </div>
+
+        <div
+          class="bill-meta"
+          style="color:${overdue ? "var(--overdue)" : "var(--text-muted)"};"
+        >
+          ${overdue ? "Overdue" : "Due"}
+          ${formatDate(item.dueDate, "short")}
+        </div>
+      </div>
+
+      <div
+        class="bill-amount"
+        style="margin-left:auto; white-space:nowrap;"
+      >
+        ${formatCurrency(item.amount)}
+      </div>
+    </button>
+  `;
+}
+
+function renderInstallmentUpcomingCard() {
+  const items = getUnpaidPaymentPlanInstallments().filter(
+    (item) => Number.isFinite(new Date(item.dueDate).getTime())
+  );
+
+  const preview = items.slice(0, 4);
+
+  return `
+    <section class="card" style="overflow:hidden;">
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          gap:12px;
+          padding:var(--space-4);
+        "
+      >
+        <div style="font-size:var(--text-xl); font-weight:850;">
+          Upcoming
+        </div>
+
+        <div style="font-size:var(--text-sm); color:var(--text-muted);">
+          ${items.length} unpaid ${items.length === 1 ? "payment" : "payments"}
+        </div>
+      </div>
+
+      ${
+        preview.length
+          ? preview.map(renderInstallmentScheduleRow).join("")
+          : `
+            <div style="padding:0 var(--space-4) var(--space-4); color:var(--text-muted);">
+              No unpaid installment payments.
+            </div>
+          `
+      }
+
+      ${
+        items.length
+          ? `
+            <button
+              type="button"
+              onclick="openPaymentPlanSchedule()"
+              style="
+                width:100%;
+                padding:var(--space-3) var(--space-4);
+                border:0;
+                border-top:1px solid var(--border);
+                background:transparent;
+                color:var(--accent);
+                font:inherit;
+                font-weight:800;
+                cursor:pointer;
+              "
+            >
+              <span class="gradient-action-text">See More</span>
+            </button>
+          `
+          : ""
+      }
+    </section>
+  `;
+}
+
+function expandInstallmentScheduleMonth(button, collapse = false) {
+  const section = button.closest("[data-installment-month]");
+
+  if (!section) return;
+
+  const rows = [
+    ...section.querySelectorAll("[data-installment-schedule-row]")
+  ];
+
+  const currentLimit = Number(section.dataset.visibleCount) || 4;
+
+  const nextLimit = collapse
+    ? 4
+    : Math.min(currentLimit + 4, rows.length);
+
+  section.dataset.visibleCount = String(nextLimit);
+
+  rows.forEach((row, index) => {
+    row.hidden = index >= nextLimit;
+  });
+
+  const more = section.querySelector("[data-installment-more]");
+  const less = section.querySelector("[data-installment-less]");
+  const count = section.querySelector("[data-installment-visible-count]");
+
+  if (more) more.hidden = nextLimit >= rows.length;
+  if (less) less.hidden = nextLimit <= 4;
+
+  if (count) {
+    count.textContent =
+      `${Math.min(nextLimit, rows.length)} of ${rows.length} payments shown`;
+  }
+
+  if (collapse) {
+    section.scrollIntoView({
+      block: "start",
+      behavior: "auto"
+    });
+  }
+}
+
+window.expandInstallmentScheduleMonth =
+  expandInstallmentScheduleMonth;
 function renderPaymentPlans() {
     const installmentsBackRoute =
     routeParams.returnRoute === "insights"
@@ -7729,216 +7894,7 @@ function renderPaymentPlans() {
                   } Remaining
                 </div>
               </section>
-
-              ${
-                dueNextPlans.length
-                  ? `
-                    <section
-                      class="card"
-                      style="
-                        overflow:hidden;
-                        background:var(--surface);
-                        border:1px solid rgba(192, 151, 255, 0.18);
-                      "
-                    >
-                      <div
-                        style="
-                          display:flex;
-                          align-items:center;
-                          justify-content:space-between;
-                          gap:var(--space-3);
-                          padding:var(--space-4) var(--space-4) var(--space-3);
-                        "
-                      >
-                        <div
-                          style="
-                            display:flex;
-                            align-items:center;
-                            gap:10px;
-                            font-size:var(--text-xl);
-                            font-weight:850;
-                          "
-                        >
-                          Due Next
-
-                          <span
-                            style="
-                              display:inline-flex;
-                              align-items:center;
-                              justify-content:center;
-                              min-width:28px;
-                              height:28px;
-                              padding:0 8px;
-                              border-radius:999px;
-                              color:#efcaff;
-                              background:linear-gradient(
-                                105deg,
-                                rgba(143, 54, 255, 0.35),
-                                rgba(246, 76, 174, 0.28)
-                              );
-                              font-size:var(--text-sm);
-                              font-weight:850;
-                            "
-                          >
-                            ${dueNextPlans.length}
-                          </span>
-                        </div>
-
-                        <div
-                          style="
-                            font-size:var(--text-xl);
-                            font-weight:850;
-                            white-space:nowrap;
-                          "
-                        >
-                          ${formatCurrency(dueNextTotal)}
-                        </div>
-                      </div>
-
-                      <div>
-                        ${dueNextPlans
-                          .map((plan) => renderOverviewRow(plan, true))
-                          .join("")}
-                      </div>
-
-                      ${
-  activePlans.length > 4
-    ? `
-      <button
-        type="button"
-        onclick="openPaymentPlanSchedule('month')"
-        style="
-          width:100%;
-          padding:var(--space-3) var(--space-4);
-          border:0;
-          border-top:1px solid rgba(192, 151, 255, 0.14);
-          color:#c76aff;
-          background:transparent;
-          font-size:var(--text-base);
-          font-weight:850;
-          cursor:pointer;
-        "
-      >
-        <span class="gradient-action-text">See More</span>
-      </button>
-    `
-    : ""
-}
-                    </section>
-                  `
-                  : ""
-              }
-
-              ${
-                visibleUpcomingPlans.length
-                  ? `
-                    <section
-                      class="card"
-                      style="
-                        overflow:hidden;
-                        background:var(--surface);
-                        border:1px solid rgba(192, 151, 255, 0.18);
-                      "
-                    >
-                      <div
-                        style="
-                          display:flex;
-                          align-items:center;
-                          justify-content:space-between;
-                          gap:var(--space-3);
-                          padding:var(--space-4) var(--space-4) var(--space-3);
-                        "
-                      >
-                        <div
-                          style="
-                            display:flex;
-                            align-items:center;
-                            gap:10px;
-                            font-size:var(--text-xl);
-                            font-weight:850;
-                          "
-                        >
-                          Upcoming
-
-                          <span
-                            style="
-                              display:inline-flex;
-                              align-items:center;
-                              justify-content:center;
-                              min-width:28px;
-                              height:28px;
-                              padding:0 8px;
-                              border-radius:999px;
-                              color:#efcaff;
-                              background:linear-gradient(
-                                105deg,
-                                rgba(143, 54, 255, 0.35),
-                                rgba(246, 76, 174, 0.28)
-                              );
-                              font-size:var(--text-sm);
-                              font-weight:850;
-                            "
-                          >
-                            ${upcomingPlans.length}
-                          </span>
-                        </div>
-
-                        <div
-                          style="
-                            font-size:var(--text-xl);
-                            font-weight:850;
-                            white-space:nowrap;
-                          "
-                        >
-                          ${formatCurrency(upcomingTotal)}
-                        </div>
-                      </div>
-
-                      <div>
-                        ${visibleUpcomingPlans
-                          .map((plan) => renderOverviewRow(plan))
-                          .join("")}
-                      </div>
-
-                      ${
-  upcomingPlans.length > 0
-    ? `
-      <button
-        type="button"
-        onclick="openPaymentPlanSchedule('upcoming')"
-        style="
-          width:100%;
-          padding:var(--space-3) var(--space-4);
-          border:0;
-          border-top:1px solid rgba(192, 151, 255, 0.14);
-          color:#c76aff;
-          background:transparent;
-          font-size:var(--text-base);
-          font-weight:850;
-          cursor:pointer;
-        "
-      >
-        <span class="gradient-action-text">See More</span>
-      </button>
-    `
-    : ""
-}
-                       </section>
-                  `
-                  : ""
-              }
-             ${
-  visibleActivePlans.length
-    ? `
-      <section id="active-payment-plans">
-        <div class="section-header">Active Installments</div>
-
-        <div class="content-gap">
-          ${visibleActivePlans
-            .map((plan) => renderPlanCard(plan))
-            .join("")}
-        </div>
-
+              ${renderInstallmentUpcomingCard()}
         ${
           moreActivePlans.length
             ? `
@@ -8072,71 +8028,44 @@ function getUnpaidPaymentPlanInstallments() {
     })
     .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
 }
-
-function getPaymentPlanScheduleGroups(type) {
-  const now = new Date();
-  const startOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-    12,
-    0,
-    0,
-    0
+function getPaymentPlanScheduleGroups() {
+  const items = getUnpaidPaymentPlanInstallments().filter(
+    (item) => Number.isFinite(new Date(item.dueDate).getTime())
   );
 
-  const currentMonthStart = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1,
-    12,
-    0,
-    0,
-    0
-  );
+  const groups = new Map();
 
-  const nextMonthStart = new Date(
-    now.getFullYear(),
-    now.getMonth() + 1,
-    1,
-    12,
-    0,
-    0,
-    0
-  );
-
-  const installments = getUnpaidPaymentPlanInstallments().filter((item) => {
+  for (const item of items) {
     const dueDate = new Date(item.dueDate);
 
-    if (type === "month") {
-      return (
-        dueDate >= startOfToday &&
-        dueDate >= currentMonthStart &&
-        dueDate < nextMonthStart
-      );
+    const key =
+      `${dueDate.getFullYear()}-` +
+      String(dueDate.getMonth() + 1).padStart(2, "0");
+
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        date: new Date(
+          dueDate.getFullYear(),
+          dueDate.getMonth(),
+          1,
+          12
+        ),
+        items: []
+      });
     }
 
-    return dueDate >= nextMonthStart;
-  });
+    groups.get(key).items.push(item);
+  }
 
-  const groups = installments.reduce((result, installment) => {
-    const dueDate = new Date(installment.dueDate);
-    const key = `${dueDate.getFullYear()}-${String(
-      dueDate.getMonth() + 1
-    ).padStart(2, "0")}`;
-
-    if (!result[key]) {
-      result[key] = {
-        date: new Date(dueDate.getFullYear(), dueDate.getMonth(), 1),
-        items: [],
-      };
-    }
-
-    result[key].items.push(installment);
-    return result;
-  }, {});
-
-  return Object.values(groups).sort((a, b) => a.date - b.date);
+  return [...groups.values()]
+    .sort((a, b) => a.date - b.date)
+    .map((group) => ({
+      ...group,
+      items: group.items.sort(
+        (a, b) => new Date(a.dueDate) - new Date(b.dueDate)
+      )
+    }));
 }
 
 function closePaymentPlanSchedule() {
@@ -8175,140 +8104,112 @@ function closePaymentPlanSchedule() {
   }, 300);
 }
 
-function openPaymentPlanSchedule(type = "month") {
+function openPaymentPlanSchedule() {
   document.getElementById("paymentPlanScheduleContainer")?.remove();
 
-  const isCurrentMonth = type === "month";
-  const title = isCurrentMonth
-    ? "This Month's Payments"
-    : "Upcoming Payment Schedule";
-
-  const groups = getPaymentPlanScheduleGroups(type);
-
-  const renderInstallment = (item) => {
-    const dueDate = new Date(item.dueDate);
-    const day = dueDate.getDate();
-    const month = formatDate(item.dueDate, "monthShort");
-
-    const installmentText =
-      item.installmentNumber && item.installmentTotal
-        ? `Payment ${item.installmentNumber} of ${item.installmentTotal}`
-        : item.provider;
-
-    return `
-      <button
-        type="button"
-        class="bill-row"
-        style="
-          width:100%;
-          text-align:left;
-          background:transparent;
-          border:0;
-          color:inherit;
-          cursor:pointer;
-        "
-        onclick="closePaymentPlanSchedule(); openPaymentPlanDetails('${escapeInlineString(item.planId)}')"
-        aria-label="View ${escapeHtml(item.storeName)} payment plan"
-      >
-        <div
-          style="
-            width:46px;
-            min-width:46px;
-            padding:6px 0;
-            border-radius:12px;
-            text-align:center;
-            color:var(--text);
-            background:rgba(143, 54, 255, 0.12);
-          "
-        >
-          <div style="font-size:var(--text-xs); color:var(--text-muted);">
-            ${month}
-          </div>
-
-          <div style="margin-top:2px; font-size:var(--text-lg); font-weight:900;">
-            ${day}
-          </div>
-        </div>
-
-        <div
-          style="
-            width:42px;
-            height:42px;
-            min-width:42px;
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            overflow:hidden;
-          "
-        >
-          ${paymentPlanVisual(item.provider, 38)}
-        </div>
-
-        <div class="bill-info">
-          <div class="bill-name">${escapeHtml(item.storeName)}</div>
-
-          <div class="bill-meta">
-            ${escapeHtml(item.provider)} · ${escapeHtml(installmentText)}
-          </div>
-        </div>
-
-        <div
-          style="
-            margin-left:auto;
-            padding:7px 11px;
-            border:1px solid rgba(226, 185, 255, 0.68);
-            border-radius:999px;
-            font-size:var(--text-sm);
-            font-weight:800;
-            white-space:nowrap;
-          "
-        >
-          ${formatCurrency(item.amount)}
-        </div>
-      </button>
-    `;
-  };
+  const groups = getPaymentPlanScheduleGroups();
 
   const renderGroup = (group) => {
-    const groupTotal = group.items.reduce(
+    const total = group.items.reduce(
       (sum, item) => sum + item.amount,
       0
     );
 
+    const monthLabel = formatDate(
+      group.date.toISOString(),
+      "monthYear"
+    );
+
     return `
-      <section>
+      <section
+        data-installment-month="${group.key}"
+        data-visible-count="4"
+        style="scroll-margin-top:12px;"
+      >
         <div
           style="
             display:flex;
-            align-items:center;
+            align-items:flex-start;
             justify-content:space-between;
-            gap:var(--space-3);
-            margin:var(--space-3) 0 var(--space-2);
+            gap:12px;
+            margin:12px 0;
           "
         >
-          <div
-            style="
-              font-size:var(--text-xl);
-              font-weight:900;
-              letter-spacing:-0.02em;
-            "
-          >
-            ${formatDate(group.date.toISOString(), "monthYear")}
+          <div>
+            <div style="font-size:var(--text-lg); font-weight:850;">
+              ${escapeHtml(monthLabel)}
+            </div>
+
+            <div
+              style="
+                margin-top:4px;
+                font-size:var(--text-xs);
+                color:var(--text-muted);
+              "
+            >
+              ${group.items.length}
+              unpaid ${group.items.length === 1 ? "payment" : "payments"}
+            </div>
           </div>
 
-          <div
-            style="
-              font-size:var(--text-base);
-              font-weight:800;
-              color:var(--text-muted);
-            "
-          >
-            ${formatCurrency(groupTotal)}
+          <div style="font-weight:850; white-space:nowrap;">
+            ${formatCurrency(total)}
           </div>
         </div>
 
-        <div class="card">
-          ${group.items.map(renderInstallment).join("")}
+        <div class="card" style="overflow:hidden;">
+          ${
+            group.items.map((item, index) => `
+              <div
+                data-installment-schedule-row
+                ${index >= 4 ? "hidden" : ""}
+              >
+                ${renderInstallmentScheduleRow(item)}
+              </div>
+            `).join("")
+          }
+        </div>
+
+        <div
+          data-installment-visible-count
+          style="
+            margin-top:8px;
+            font-size:var(--text-xs);
+            color:var(--text-muted);
+          "
+        >
+          ${Math.min(4, group.items.length)}
+          of ${group.items.length} payments shown
+        </div>
+
+        <div
+          style="
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+            margin-top:8px;
+          "
+        >
+          <button
+            type="button"
+            class="bb-outline-pill"
+            data-installment-more
+            ${group.items.length <= 4 ? "hidden" : ""}
+            onclick="expandInstallmentScheduleMonth(this)"
+            aria-label="Show more payments for ${escapeHtml(monthLabel)}"
+          >
+            See More
+          </button>
+
+          <button
+            type="button"
+            class="bb-outline-pill"
+            data-installment-less
+            hidden
+            onclick="expandInstallmentScheduleMonth(this, true)"
+          >
+            Show Less
+          </button>
         </div>
       </section>
     `;
@@ -8327,28 +8228,26 @@ function openPaymentPlanSchedule(type = "month") {
     <div
       class="sheet"
       id="paymentPlanScheduleSheet"
-      style="max-height:94vh;"
       role="dialog"
       aria-modal="true"
-      aria-label="${escapeHtml(title)}"
+      aria-label="Installment payment schedule"
     >
       <div class="sheet-handle"></div>
 
       <div class="sheet-nav">
-  <button
-    type="button"
-    class="nav-button"
-    onclick="closePaymentPlanSchedule()"
-    aria-label="Back to payment plans"
-    style="color:#b45cff;"
-  >
-    ${svgIcon("chevronLeft", 22)}
-  </button>
+        <button
+          type="button"
+          class="nav-button"
+          onclick="closePaymentPlanSchedule()"
+          aria-label="Back to installments"
+        >
+          ${svgIcon("chevronLeft", 22)}
+        </button>
 
-  <div class="sheet-title">${title}</div>
+        <div class="sheet-title">Payment Schedule</div>
 
-  <div style="width:54px"></div>
-</div>
+        <div style="width:54px;"></div>
+      </div>
 
       <div class="sheet-body content-gap">
         ${
@@ -8360,14 +8259,12 @@ function openPaymentPlanSchedule(type = "month") {
                   ${svgIcon("checkCircle", 44)}
                 </div>
 
-                <div class="empty-state-title">Nothing Scheduled</div>
+                <div class="empty-state-title">
+                  No unpaid installments
+                </div>
 
                 <div class="empty-state-text">
-                  ${
-                    isCurrentMonth
-                      ? "You have no remaining payment-plan installments due this month."
-                      : "You have no remaining payment-plan installments after this month."
-                  }
+                  There are no remaining scheduled payments.
                 </div>
               </div>
             `
@@ -8376,20 +8273,23 @@ function openPaymentPlanSchedule(type = "month") {
     </div>
   `;
 
+  // Open plan details over the schedule so closing details
+  // returns to this month's list and its expanded rows.
   document.body.appendChild(container);
   lockBackgroundScroll();
 
   requestAnimationFrame(() => {
-    document
-      .getElementById("paymentPlanScheduleOverlay")
+    if (!container.isConnected) return;
+
+    container
+      .querySelector("#paymentPlanScheduleOverlay")
       ?.classList.add("show");
 
-    document
-      .getElementById("paymentPlanScheduleSheet")
+    container
+      .querySelector("#paymentPlanScheduleSheet")
       ?.classList.add("show");
   });
 }
-
 window.openPaymentPlanSchedule = openPaymentPlanSchedule;
 window.closePaymentPlanSchedule = closePaymentPlanSchedule;
 function getCompletedPaymentPlans() {

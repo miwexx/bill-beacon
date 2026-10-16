@@ -4731,3 +4731,22 @@ body *::-webkit-scrollbar {
 }
 
 /* END COMPLETED PLANS VIEW FIX */
+/* Installment schedule progressive disclosure */
+
+#paymentPlanScheduleContainer [hidden] {
+  display: none !important;
+}
+
+#paymentPlanScheduleContainer [data-installment-month] {
+  min-width: 0;
+}
+
+/*
+ * Details opened from the schedule must appear above it.
+ * Keep these below the drag-back preview layer.
+ */
+#paymentPlanDetailsContainer {
+  position: relative;
+  z-index: 1300;
+  isolation: isolate;
+}
