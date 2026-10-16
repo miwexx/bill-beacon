@@ -7895,6 +7895,19 @@ function renderPaymentPlans() {
                 </div>
               </section>
               ${renderInstallmentUpcomingCard()}
+                            ${
+                visibleActivePlans.length
+                  ? `
+                    <section id="active-payment-plans">
+                      <div class="section-header">
+                        Active Installments
+                      </div>
+
+                      <div class="content-gap">
+                        ${visibleActivePlans
+                          .map((plan) => renderPlanCard(plan))
+                          .join("")}
+                      </div>
         ${
           moreActivePlans.length
             ? `
