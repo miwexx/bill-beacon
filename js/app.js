@@ -4952,7 +4952,34 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
             <button
               type="button"
               class="dashboard-installments-combined-warning"
-              onclick="openDashboardSeparatedStatus('installments', 'overdue')"
+                            onclick="openDashboardSeparatedStatus('installments', 'overdue')"
+                                        >
+              <span>
+                ${groups.installments.overdue.length}
+                overdue installment ${
+                  groups.installments.overdue.length === 1
+                    ? "payment"
+                    : "payments"
+                }
+
+                ${
+                  groups.installments.olderOverdue.length
+                    ? `&middot; ${groups.installments.olderOverdue.length} from earlier months`
+                    : ""
+                }
+              </span>
+
+              <span aria-hidden="true">
+                ${svgIcon("chevronRight", 16)}
+              </span>
+            </button>
+          `
+          : ""
+      }
+    </section>
+  `;
+}
+
 
 function openDashboardSeparatedStatus(groupName, status) {
   closeDashboardStatusSheet();
