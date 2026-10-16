@@ -8140,17 +8140,38 @@ function getPaymentPlanScheduleGroups(type) {
 }
 
 function closePaymentPlanSchedule() {
-  document
-    .getElementById("paymentPlanScheduleOverlay")
+  const container = document.getElementById(
+    "paymentPlanScheduleContainer"
+  );
+
+  if (!container || container.dataset.closing === "true") {
+    return;
+  }
+
+  container.dataset.closing = "true";
+
+  container
+    .querySelector("#paymentPlanScheduleOverlay")
     ?.classList.remove("show");
 
-  document
-    .getElementById("paymentPlanScheduleSheet")
+  container
+    .querySelector("#paymentPlanScheduleSheet")
     ?.classList.remove("show");
 
   setTimeout(() => {
-    document.getElementById("paymentPlanScheduleContainer")?.remove();
-    unlockBackgroundScroll();
+    // Remove only the popup that this close action belongs to.
+    container.remove();
+
+    // Do not unlock a newer schedule popup opened meanwhile.
+    if (
+      document.getElementById("paymentPlanScheduleContainer")
+    ) {
+      return;
+    }
+
+    unlockBackgroundScroll({
+      resetMainScroll: false
+    });
   }, 300);
 }
 
@@ -19817,10 +19838,26 @@ window.addEventListener("storage", () => {
     ) || null;
   }
   function popupSheets() {
-    return [...document.querySelectorAll(".sheet, #billDetailsSheet")].filter(visible).map((node,index) =>
-      ({node,index,z:Number.parseInt(getComputedStyle(node).zIndex,10)||0})
-    ).sort((a,b)=>a.z-b.z||a.index-b.index).map(item=>item.node);
-  }
+  const selector = [
+    ".sheet",
+    "#billDetailsSheet",
+    '#completed-plans-history > [role="dialog"]'
+  ].join(", ");
+
+  return [...document.querySelectorAll(selector)]
+    .filter(visible)
+    .map((node, index) => ({
+      node,
+      index,
+      z:
+        Number.parseInt(
+          getComputedStyle(node).zIndex,
+          10
+        ) || 0
+    }))
+    .sort((a, b) => a.z - b.z || a.index - b.index)
+    .map((item) => item.node);
+}
   function dismissContext(target = null) {
     const sheets = popupSheets();
     if (sheets.length) {
