@@ -5037,9 +5037,8 @@ body *::-webkit-scrollbar {
   min-width: 0;
   min-height: 0;
 
-  max-height: 50vh;
-  max-height: 50dvh;
-
+  max-height: max(160px, calc(50vh - 88px));
+max-height: max(160px, calc(50dvh - 88px));
   overflow-y: auto;
   overflow-x: hidden;
 

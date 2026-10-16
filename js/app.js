@@ -7316,8 +7316,8 @@ function renderInstallmentUpcomingCard() {
             paymentCount
               ? `${paymentCount} unpaid ${
                   paymentCount === 1 ? "payment" : "payments"
-                } · Scroll to view all months`
-              : "No unpaid payments"
+                } · Scroll To View All Months`
+              : "No Unpaid Payments"
           }
         </div>
       </div>
