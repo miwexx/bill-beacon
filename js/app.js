@@ -4773,7 +4773,7 @@ function renderToday() {
       (dashboardDate(b.voidedAt || b.paidDate)?.getTime() || 0) -
       (dashboardDate(a.voidedAt || a.paidDate)?.getTime() || 0)
     )
-    .slice(0, 5);
+    .slice(0, 3);
 
   const notificationCount = getNotificationCount();
 
@@ -9896,317 +9896,33 @@ for (let i = 5; i >= 0; i -= 1) {
 
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
-                <div class="section-header">
-          ${formatDate(now, "monthYear")}
-        </div>
+        <div class="section-header">${formatDate(now, "monthYear")}</div>
 
-        <section
-          class="card card-pad insights-leftover-card"
-          aria-label="Estimated monthly income after bills and installments"
-        >
+        <section class="card card-pad insights-leftover-card"
+          aria-label="Estimated monthly income and expenses">
           <div class="insights-leftover-top">
             <div class="insights-leftover-column">
-              <div class="insights-leftover-label">
-                Expected Income
-              </div>
-
+              <div class="insights-leftover-label">Expected Income</div>
               <div class="insights-leftover-amount">
-                ${
-                  estimatedMonthlyIncome > 0
-                    ? formatCurrency(estimatedMonthlyIncome)
-                    : "Not set"
-                }
+                ${estimatedMonthlyIncome > 0 ? formatCurrency(estimatedMonthlyIncome) : "Not set"}
               </div>
             </div>
-
-            <div
-              class="insights-leftover-column insights-leftover-right"
-            >
-              <div class="insights-leftover-label">
-                Monthly Expenses
-              </div>
-
-              <div class="insights-leftover-amount">
-                ${formatCurrency(scheduledThisMonth)}
-              </div>
+            <div class="insights-leftover-column insights-leftover-right">
+              <div class="insights-leftover-label">Monthly Expenses</div>
+              <div class="insights-leftover-amount">${formatCurrency(scheduledThisMonth)}</div>
             </div>
           </div>
-
           <div class="insights-leftover-result">
             <div class="insights-leftover-result-heading">
               <div class="insights-leftover-result-label">
-                ${
-                  estimatedMonthlyIncome <= 0
-                    ? "Estimated Leftover"
-                    : estimatedRemaining < 0
-                      ? "Estimated Shortfall"
-                      : "Estimated Leftover"
-                }
+                ${estimatedMonthlyIncome > 0 && estimatedRemaining < 0 ? "Estimated Shortfall" : "Estimated Leftover"}
               </div>
-
-              <div
-                class="insights-leftover-result-amount"
-                style="color:${
-                  estimatedMonthlyIncome <= 0
-                    ? "var(--text-muted)"
-                    : estimatedRemaining < 0
-                      ? "var(--overdue)"
-                      : "var(--paid)"
-                };"
-              >
-                ${
-                  estimatedMonthlyIncome > 0
-                    ? formatCurrency(Math.abs(estimatedRemaining))
-                    : "—"
-                }
+              <div class="insights-leftover-result-amount" style="color:${estimatedMonthlyIncome <= 0 ? "var(--text-muted)" : estimatedRemaining < 0 ? "var(--overdue)" : "var(--paid)"}">
+                ${estimatedMonthlyIncome > 0 ? formatCurrency(Math.abs(estimatedRemaining)) : "—"}
               </div>
             </div>
-
           </div>
         </section>
-        ${
-          activePlans.length
-            ? `
-              <button
-                type="button"
-                class="card card-pad"
-                onclick="navigate('payment-plans', { returnRoute: 'insights' })"
-                style="
-                  width:100%;
-                  text-align:left;
-                  cursor:pointer;
-                  border:1px solid var(--border);
-                "
-                aria-label="View Installments"
-              >
-                <div
-                  style="
-                    display:flex;
-                    align-items:center;
-                    gap:var(--space-2);
-                  "
-                >
-                  <div
-                    style="
-                      width:38px;
-                      height:38px;
-                      border-radius:12px;
-                      display:flex;
-                      align-items:center;
-                      justify-content:center;
-                      color:var(--accent);
-                      background:var(--accent-soft,rgba(124,92,255,.14));
-                    "
-                  >
-                    ${
-                      activePlans.length === 1
-                        ? paymentPlanVisual(nextPlanPayment.provider, 38)
-                        : svgIcon("calendar", 20)
-                    }
-                  </div>
-
-                  <div style="min-width:0;flex:1">
-                    <div style="font-size:var(--text-base);font-weight:800">
-                      Installments
-                    </div>
-
-                    <div
-                      style="
-                        font-size:var(--text-sm);
-                        color:var(--text-muted);
-                        margin-top:3px;
-                      "
-                    >
-                      ${
-                        activePlans.length === 1
-                          ? nextPlanPayment.provider
-                          : `${activePlans.length} Installments`
-                      }
-                    </div>
-                  </div>
-
-                  <div style="text-align:right">
-                    <div style="font-size:var(--text-base);font-weight:800">
-                      ${formatCurrency(paymentPlansRemaining)}
-                    </div>
-
-                    <div
-                      style="
-                        font-size:var(--text-xs);
-                        color:var(--text-muted);
-                        margin-top:3px;
-                      "
-                    >
-                      Next ${formatDate(
-                        nextPlanPayment.nextInstallment.dueDate,
-                        "short"
-                      )}
-                    </div>
-                  </div>
-
-                  ${svgIcon("chevronRight", 18)}
-                </div>
-              </button>
-            `
-            : ""
-        }
-
-        ${
-          largestUpcomingBill
-            ? `
-              <button
-                type="button"
-                class="card card-pad"
-                onclick="navigate('detail', {
-                  id: '${escapeInlineString(largestUpcomingBill.isOccurrence
-                      ? largestUpcomingBill.sourceBillId
-                      : largestUpcomingBill.id)}',
-                  occurrenceDueDate: '${escapeInlineString(largestUpcomingBill.dueDate)}',
-                  returnRoute: 'insights'
-                })"
-                style="
-                  width:100%;
-                  text-align:left;
-                  cursor:pointer;
-                  border:1px solid var(--border);
-                "
-                aria-label="View largest upcoming bill: ${escapeHtml(
-                  largestUpcomingBill.name
-                )}"
-              >
-                <div
-                  style="
-                    display:flex;
-                    align-items:center;
-                    gap:var(--space-3);
-                  "
-                >
-                  <div
-                    style="
-                      width:38px;
-                      height:38px;
-                      min-width:38px;
-                      display:flex;
-                      align-items:center;
-                      justify-content:center;
-                      overflow:hidden;
-                      border-radius:12px;
-                      background:${
-                        largestUpcomingBill.installmentPlanId
-                          ? "transparent"
-                          : getBillBrand(largestUpcomingBill.name)
-                            ? "#fff"
-                            : `var(--${
-                                getCategory(largestUpcomingBill.category).color
-                              })`
-                      };
-                      color:${
-                        largestUpcomingBill.installmentPlanId ||
-                        getBillBrand(largestUpcomingBill.name)
-                          ? "#1e1e2e"
-                          : "white"
-                      };
-                    "
-                  >
-                    ${billOrPaymentPlanVisual(largestUpcomingBill, 38)}
-                  </div>
-
-                  <div style="min-width:0;flex:1">
-                    <div
-                      style="
-                        font-size:var(--text-xs);
-                        color:var(--text-muted);
-                      "
-                    >
-                      Largest Upcoming Bill
-                    </div>
-
-                    <div
-                      style="
-                        margin-top:3px;
-                        font-size:var(--text-base);
-                        font-weight:800;
-                        overflow:hidden;
-                        text-overflow:ellipsis;
-                        white-space:nowrap;
-                      "
-                    >
-                      ${escapeHtml(largestUpcomingBill.name)}
-                    </div>
-
-                    <div
-                      style="
-                        margin-top:3px;
-                        font-size:var(--text-sm);
-                        color:var(--text-muted);
-                      "
-                    >
-                      Due ${formatDate(largestUpcomingBill.dueDate, "short")}
-                    </div>
-                  </div>
-
-                  <div style="text-align:right">
-                    <div style="font-size:var(--text-lg);font-weight:800">
-                      ${formatCurrency(largestUpcomingBill.amount)}
-                    </div>
-
-                    <div
-                      style="
-                        margin-top:3px;
-                        color:var(--text-muted);
-                      "
-                    >
-                      ${svgIcon("chevronRight", 18)}
-                    </div>
-                  </div>
-                </div>
-              </button>
-            `
-            : ""
-        }
-
-        ${
-          overdueBills.length
-            ? `
-              <button
-                class="card card-pad"
-                type="button"
-                onclick="openDashboardStatusSheet('overdue')"
-                style="
-                  width:100%;
-                  text-align:left;
-                  cursor:pointer;
-                  border-color:color-mix(
-                    in srgb,
-                    var(--overdue) 38%,
-                    var(--border)
-                  );
-                "
-                aria-label="View overdue bills"
-              >
-                <div
-                  style="
-                    display:flex;
-                    align-items:center;
-                    gap:var(--space-2);
-                    color:var(--overdue);
-                  "
-                >
-                  ${svgIcon("warning", 18)}
-
-                  <strong>
-                    ${overdueBills.length}
-                    overdue bill${overdueBills.length === 1 ? "" : "s"}
-                  </strong>
-
-                  <span style="margin-left:auto;font-weight:800">
-                    ${formatCurrency(overdueTotal)}
-                  </span>
-                </div>
-              </button>
-            `
-            : ""
-        }
 
         ${
           monthlyLimit > 0
@@ -10230,7 +9946,7 @@ for (let i = 5; i >= 0; i -= 1) {
                           color:var(--text-muted);
                         "
                       >
-                        Spent this month
+                        Paid toward ${formatDate(now, "monthYear")} payments
                       </div>
 
                       <div
@@ -10314,7 +10030,7 @@ for (let i = 5; i >= 0; i -= 1) {
         }
 
         <div>
-          <div class="section-header">Spending by Category</div>
+          <div class="section-header">Payments by Category</div>
 
           <div class="card card-pad">
             ${
@@ -10378,7 +10094,7 @@ for (let i = 5; i >= 0; i -= 1) {
         </div>
 
         <div>
-          <div class="section-header">Monthly Spending · 6 Months</div>
+          <div class="section-header">Monthly Payments · 6 Months</div>
 
           <div class="card card-pad">
             ${
@@ -10390,7 +10106,7 @@ for (let i = 5; i >= 0; i -= 1) {
                     </div>
 
                     <div class="empty-state-text">
-                      Your spending over time will appear here.
+                      Your recorded monthly payment totals will appear here.
                     </div>
                   </div>
                 `
