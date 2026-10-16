@@ -1,6 +1,6 @@
 
 /* ============================================
-   Bill Tracker PWA â€” App Logic
+   Bill Tracker PWA — App Logic
    ============================================ */
 
 // ====================================
@@ -439,7 +439,7 @@ updatePayment(paymentId, updates) {
       title: `${bill?.name || "Bill"} Payment Reversed`,
       detail: `${formatCurrency(
         updatedPayment.amount
-      )} Â· Due ${formatDate(dueDate, "short")}`,
+      )} · Due ${formatDate(dueDate, "short")}`,
       before: {
         paymentId: previousPayment.id,
         status: previousPayment.status,
@@ -840,15 +840,15 @@ function buildDeletedDetail(bill) {
   const amount = formatCurrency(bill.amount);
 
   if (bill.recurrence && bill.recurrence !== "None") {
-    return `${amount} Â· repeats ${bill.recurrence.toLowerCase()}`;
+    return `${amount} · repeats ${bill.recurrence.toLowerCase()}`;
   }
 
   if (bill.dueDay) {
-    return `${amount} Â· due on the ${bill.dueDay}${getOrdinalSuffix(bill.dueDay)}`;
+    return `${amount} · due on the ${bill.dueDay}${getOrdinalSuffix(bill.dueDay)}`;
   }
 
   if (bill.dueDate) {
-    return `${amount} Â· due ${formatDate(bill.dueDate, "short")}`;
+    return `${amount} · due ${formatDate(bill.dueDate, "short")}`;
   }
 
   return amount;
@@ -1647,7 +1647,7 @@ function postponeBill(billId, newDueDate) {
     entityType: bill.installmentPlanId ? "payment_plan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
     title: `${bill.name} postponed`,
-    detail: `${formatDate(previousDueDate, "short")} â†’ ${formatDate(
+    detail: `${formatDate(previousDueDate, "short")} → ${formatDate(
       postponedDueDate,
       "short"
     )}`,
@@ -2001,7 +2001,7 @@ function confirmPostponeRecurringOccurrence(
     detail: `${formatDate(
       originalDueDate,
       "short"
-    )} â†’ ${formatDate(postponedTo, "short")}`,
+    )} → ${formatDate(postponedTo, "short")}`,
     before: {
       dueDate: originalDueDate,
     },
@@ -2257,7 +2257,7 @@ function showPaymentUndoToast(payment, billName) {
         entityType: bill?.installmentPlanId ? "payment_plan" : "bill",
         entityId: bill?.installmentPlanId || activePayment.billId,
         title: `${bill?.name || billName} payment undone`,
-        detail: `${formatCurrency(activePayment.amount)} Â· Due ${formatDate(
+        detail: `${formatCurrency(activePayment.amount)} · Due ${formatDate(
           activePayment.paidForDueDate,
           "short"
         )}`,
@@ -2338,7 +2338,7 @@ function markBillPaid(billId) {
     entityType: bill.installmentPlanId ? "paymentplan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
     title: `${bill.name} Marked as Paid`,
-    detail: `${formatCurrency(payment.amount)} Â· due ${formatDate(
+    detail: `${formatCurrency(payment.amount)} · due ${formatDate(
       dueDate,
       "short"
     )}`,
@@ -2468,7 +2468,7 @@ function markBillUnpaid(billId) {
     entityType: bill.installmentPlanId ? "paymentplan" : "bill",
     entityId: bill.installmentPlanId || bill.id,
     title: `${bill.name} Marked as Unpaid`,
-    detail: `${formatCurrency(payment.amount)} payment voided Â· due ${formatDate(
+    detail: `${formatCurrency(payment.amount)} payment voided · due ${formatDate(
       dueDate,
       "short"
     )}`,
@@ -2980,12 +2980,12 @@ function openTransactionDetails(transactionId) {
       payment.paidForDueDate
         ? `Due ${formatDate(payment.paidForDueDate, "short")}`
         : ""
-    ].filter(Boolean).join(" Â· ");
+    ].filter(Boolean).join(" · ");
   });
 
   alert([
     transaction.merchantName,
-    `${formatCurrency(transaction.amount)} Â· ${
+    `${formatCurrency(transaction.amount)} · ${
       formatDate(transaction.date, "full")
     }`,
     `Status: ${transaction.pending ? "Pending" : "Posted"}`,
@@ -3221,7 +3221,7 @@ function renderDashboardUpcomingBill(bill) {
         "
       >
         ${formatDate(bill.dueDate, "short")}
-        Â· ${relativeDue(bill.dueDate)}
+        · ${relativeDue(bill.dueDate)}
       </div>
     </button>
   `;
@@ -3442,7 +3442,7 @@ function getPaycheckBillStatusLabel(bill) {
 
   if (status === "overdue") {
     return {
-      label: `Overdue Â· ${relativeDue(bill.dueDate)}`,
+      label: `Overdue · ${relativeDue(bill.dueDate)}`,
       color: "var(--overdue)",
       icon: "warning",
     };
@@ -3658,7 +3658,7 @@ function renderPaycheckInlineRows(selected) {
               color:var(--text-muted);
             ">
               ${unpaid.length
-                ? `${unpaid.length} Unpaid Â· ${paidCount} Paid`
+                ? `${unpaid.length} Unpaid · ${paidCount} Paid`
                 : "All Paid"}
             </span>
           </span>
@@ -3686,7 +3686,7 @@ function renderPaycheckInlineRows(selected) {
           <span aria-hidden="true" style="
             color:var(--text-muted);
             font-size:18px;
-          ">âŒ„</span>
+          ">⌄</span>
         </summary>
 
         <div style="
@@ -3699,7 +3699,7 @@ function renderPaycheckInlineRows(selected) {
             font-size:var(--text-xs);
             color:var(--text-muted);
           ">
-            Assigned to this paycheck Â· Tap a payment for details
+            Assigned to this paycheck · Tap a payment for details
           </div>
 
           ${group.bills.map(renderBill).join("")}
@@ -3891,7 +3891,7 @@ function renderDashboardPaycheckPlan(
             cursor:pointer;
           "
         >
-          PAYCHECK Â· ${firstLabel}
+          PAYCHECK · ${firstLabel}
         </button>
 
         <button
@@ -3917,7 +3917,7 @@ function renderDashboardPaycheckPlan(
             cursor:pointer;
           "
         >
-          PAYCHECK Â· ${secondLabel}
+          PAYCHECK · ${secondLabel}
         </button>
       </div>
 
@@ -3936,7 +3936,7 @@ function renderDashboardPaycheckPlan(
               color:var(--text-muted);
             "
           >
-              ${formatDate(selected.startDate, "short")}â€“${formatDate(
+              ${formatDate(selected.startDate, "short")}–${formatDate(
               selected.endDate,
               "short"
             )}
@@ -4022,7 +4022,7 @@ function openPaycheckPlanSheet(paycheckKey) {
 
     const paycheckTitle =
     `${selected.id === "second" ? "Paycheck 2" : "Paycheck 1"}` +
-    ` Â· ${formatDate(selected.payday, "monthYear")}`;
+    ` · ${formatDate(selected.payday, "monthYear")}`;
 
   const billsHtml = selected.bills.length
     ? selected.bills
@@ -4381,7 +4381,7 @@ function renderMore() {
               >
                 ${
                   activePlans
-                    ? `${activePlans} Active Â· ${formatCurrency(upcomingInstallmentTotal)} Due Soon`
+                    ? `${activePlans} Active · ${formatCurrency(upcomingInstallmentTotal)} Due Soon`
                     : "No active plans"
                 }
               </div>
@@ -4761,7 +4761,7 @@ function openDashboardPaidSheet() {
           </div>
           <div class="bill-meta">
             Due ${formatDate(item.dueDate, "short")}
-            ${item.removed ? " Â· Payment retained" : ""}
+            ${item.removed ? " · Payment retained" : ""}
           </div>
         </div>
         <div class="bill-amount">${formatCurrency(item.amount)}</div>
@@ -4804,7 +4804,7 @@ function openDashboardPaidSheet() {
         ${activePaid.length ? `<div class="card">${activePaid.map(renderRow).join("")}</div>` : ""}
         ${removedPaid.length ? `
           <div class="section-header" style="color:var(--overdue);">
-            Removed Bills â€” Payment Retained
+            Removed Bills — Payment Retained
           </div>
           <div class="card">${removedPaid.map(renderRow).join("")}</div>
         ` : ""}
@@ -4860,7 +4860,7 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
     </button>`;
   return `
     <section class="dashboard-separated-status">
-      <div class="section-header">Bill Status Â· ${month}</div>
+      <div class="section-header">Bill Status · ${month}</div>
       <div class="dashboard-status-row">
         ${pill("bills", "paid", groups.bills.paid.length, "Paid", "text-paid")}
         ${pill("bills", "due", groups.bills.due.length, "Due", "text-upcoming")}
@@ -4868,7 +4868,7 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
       </div>
     </section>
     <section class="dashboard-separated-status">
-      <div class="section-header">Installment Status Â· ${month}</div>
+      <div class="section-header">Installment Status · ${month}</div>
       <div class="dashboard-installment-count">
         ${groups.installments.paid.length} of ${groups.installments.totalCount} installment payments paid
       </div>
@@ -4880,8 +4880,8 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
         <button type="button" class="dashboard-installment-warning"
           onclick="openDashboardSeparatedStatus('installments', 'overdue')">
           ${groups.installments.overdue.length} overdue installment payment(s)
-          ${groups.installments.olderOverdue.length ? ` Â· ${groups.installments.olderOverdue.length} from earlier months` : ""}
-          Â· View
+          ${groups.installments.olderOverdue.length ? ` · ${groups.installments.olderOverdue.length} from earlier months` : ""}
+          · View
         </button>` : ""}
     </section>`;
 }
@@ -4965,10 +4965,10 @@ function openDashboardSeparatedStatus(groupName, status) {
           <div class="bill-name">${escapeHtml(name)}</div>
           ${installment && paymentNumber && paymentTotal ? `<div class="bill-meta">Payment ${escapeHtml(paymentNumber)} of ${escapeHtml(paymentTotal)}</div>` : ""}
           <div class="bill-meta" style="color:${paid ? "var(--paid)" : overdue ? "var(--overdue)" : "var(--text-muted)"}">
-            ${paid ? `Paid ${item.paidDate ? formatDate(item.paidDate, "short") : "â€”"} Â· Due` : overdue ? "Overdue Â·" : "Due"}
+            ${paid ? `Paid ${item.paidDate ? formatDate(item.paidDate, "short") : "—"} · Due` : overdue ? "Overdue ·" : "Due"}
             ${formatDate(dueDate, "short")}
           </div>
-          ${removed ? '<div class="bill-meta">Removed record Â· Payment retained</div>' : ""}
+          ${removed ? '<div class="bill-meta">Removed record · Payment retained</div>' : ""}
         </div>
         <div class="bill-amount">${formatCurrency(item.amount)}</div>
       </${tag}>`;
@@ -5066,12 +5066,12 @@ function renderToday() {
 
         <div class="bill-info">
           <div class="bill-name">
-            ${escapeHtml(name)}${voided ? " Â· Voided" : ""}
+            ${escapeHtml(name)}${voided ? " · Voided" : ""}
           </div>
 
           <div class="bill-meta">
             ${voided ? "Payment Voided" : "Paid"}
-            Â· ${escapeHtml(dateLabel)}
+            · ${escapeHtml(dateLabel)}
           </div>
 
           ${
@@ -5081,7 +5081,7 @@ function renderToday() {
                   class="bill-meta"
                   style="color:var(--overdue);"
                 >
-                  Removed Â· History Retained
+                  Removed · History Retained
                 </div>
               `
               : ""
@@ -5189,7 +5189,7 @@ function renderToday() {
     white-space:nowrap;
     color:#fff;
   ">
-    ${formatDate(now, "monthYear")} Â· Monthly Snapshot
+    ${formatDate(now, "monthYear")} · Monthly Snapshot
   </span>
 </div>
 
@@ -5623,11 +5623,11 @@ function renderRecurringOccurrenceRow(bill) {
     status === "paid"
       ? `Paid ${formatDate(bill.dueDate, "short")}`
       : status === "overdue"
-        ? `${getRecurringRelativeLabel(bill.dueDate)} Â· ${formatDate(
+        ? `${getRecurringRelativeLabel(bill.dueDate)} · ${formatDate(
             bill.dueDate,
             "short"
           )}`
-        : `${getRecurringRelativeLabel(bill.dueDate)} Â· ${formatDate(
+        : `${getRecurringRelativeLabel(bill.dueDate)} · ${formatDate(
             bill.dueDate,
             "short"
           )}`;
@@ -5705,7 +5705,7 @@ function renderRecurringOccurrenceRow(bill) {
               >
                 ${escapeHtml(
                   bill.installmentProvider || "Payment plan"
-                )} Â· Payment ${bill.installmentNumber || 1} of ${
+                )} · Payment ${bill.installmentNumber || 1} of ${
                   bill.installmentTotal || "?"
                 }
               </div>
@@ -6022,7 +6022,7 @@ function renderBills() {
     dueDate: 'Due Date',
     amountLow: 'Amount: Low to High',
     amountHigh: 'Amount: High to Low',
-    name: 'Name: Aâ€“Z',
+    name: 'Name: A–Z',
     category: 'Category'
   };
 
@@ -6272,13 +6272,13 @@ function initBillSwipeHandlers() {
           dragging = false;  // vertical scroll
           decided = true;
         } else {
-          // Small movement: donâ€™t decide yet, allow scroll
+          // Small movement: don’t decide yet, allow scroll
           return;
         }
       }
 
       if (!dragging) {
-        // Itâ€™s a scroll: do nothing, let browser handle it
+        // It’s a scroll: do nothing, let browser handle it
         return;
       }
 
@@ -6297,7 +6297,7 @@ function initBillSwipeHandlers() {
         wrapper.classList.remove('swipe-left', 'swipe-right');
       }
 
-      // Block scroll **only** when weâ€™re actively swiping
+      // Block scroll **only** when we’re actively swiping
       event.preventDefault();
     };
 
@@ -6313,13 +6313,13 @@ function initBillSwipeHandlers() {
   const isLeft = wrapper.classList.contains('swipe-left');
 
   if (isRight) {
-    // Swipe right â†’ delete
+    // Swipe right → delete
     reset();
     if (billId) {
       confirmDeleteBill(billId);
     }
   } else if (isLeft) {
-    // Swipe left â†’ edit
+    // Swipe left → edit
     reset();
     if (billId) {
       openBillForm(billId);
@@ -6351,7 +6351,7 @@ function openBillSortSheet() {
     { id: 'dueDate', label: 'Due Date', icon: 'calendar' },
     { id: 'amountLow', label: 'Amount: Low to High', icon: 'trendUp' },
     { id: 'amountHigh', label: 'Amount: High to Low', icon: 'trendUp' },
-    { id: 'name', label: 'Name: Aâ€“Z', icon: 'doc' },
+    { id: 'name', label: 'Name: A–Z', icon: 'doc' },
     { id: 'category', label: 'Category', icon: 'tray' },
   ];
 
@@ -6743,7 +6743,7 @@ function renderCalendar() {
                 <div class="empty-state-icon">${svgIcon("calendar", 44)}</div>
                 <div class="empty-state-title">No bills this month</div>
                 <div class="empty-state-text">
-                  Add a bill to begin planning this monthâ€™s payments.
+                  Add a bill to begin planning this month’s payments.
                 </div>
                 <button
                   class="btn-primary"
@@ -7341,14 +7341,14 @@ function openDashboardStatusSheet(status) {
                       status === "paid" && payment
                         ? `Paid ${formatDate(payment.paidDate, "full")}`
                         : billStatus === "overdue"
-                          ? `Overdue Â· ${formatDate(
+                          ? `Overdue · ${formatDate(
                               bill.dueDate,
                               "full"
                             )}`
                           : `${formatDate(
                               bill.dueDate,
                               "full"
-                            )} Â· ${relativeDue(bill.dueDate)}`;
+                            )} · ${relativeDue(bill.dueDate)}`;
 
                     const category = getCategory(bill.category);
                     const sourceBillId = getSourceBillId(bill);
@@ -7626,7 +7626,7 @@ function renderInstallmentScheduleRow(item) {
         </div>
 
         <div class="bill-meta">
-          ${escapeHtml(item.provider)} Â· ${escapeHtml(paymentLabel)}
+          ${escapeHtml(item.provider)} · ${escapeHtml(paymentLabel)}
         </div>
 
         <div
@@ -7708,7 +7708,7 @@ function renderInstallmentUpcomingCard() {
             paymentCount
               ? `${paymentCount} unpaid ${
                   paymentCount === 1 ? "payment" : "payments"
-                } Â· Scroll To View All Months`
+                } · Scroll To View All Months`
               : "No Unpaid Payments"
           }
         </div>
@@ -7914,9 +7914,9 @@ function renderPaymentPlans() {
     const planTitle = plan.storeName || plan.provider;
 
     const planSubtitle = isCompleted
-      ? `${plan.provider} Â· Paid in full`
+      ? `${plan.provider} · Paid in full`
       : plan.storeName
-        ? `${plan.provider} Â· Payment ${Math.min(
+        ? `${plan.provider} · Payment ${Math.min(
             plan.paidCount + 1,
             plan.installmentCount
           )} of ${plan.installmentCount}`
@@ -8117,7 +8117,7 @@ function renderPaymentPlans() {
               white-space:nowrap;
             "
           >
-            Payment ${paymentNumber} of ${plan.installmentCount} Â· Due ${dueDate}
+            Payment ${paymentNumber} of ${plan.installmentCount} · Due ${dueDate}
           </div>
         </div>
 
@@ -9084,7 +9084,7 @@ function openPaymentPlanDetails(planId) {
 
           <div class="bill-info">
             <div class="bill-name">
-              Payment ${bill.installmentNumber || "â€”"} of ${
+              Payment ${bill.installmentNumber || "—"} of ${
                 bill.installmentTotal || installmentCount
               }
             </div>
@@ -9144,13 +9144,13 @@ function openPaymentPlanDetails(planId) {
       >
         ${unpaidInstallments
           .map((bill) => {
-            const number = bill.installmentNumber || "â€”";
+            const number = bill.installmentNumber || "—";
             const total = bill.installmentTotal || installmentCount;
 
             return `
               <option value="${escapeHtml(bill.id)}">
-                Installment ${number} of ${total} Â·
-                ${formatDate(bill.dueDate, "short")} Â·
+                Installment ${number} of ${total} ·
+                ${formatDate(bill.dueDate, "short")} ·
                 ${formatCurrency(bill.amount)}
               </option>
             `;
@@ -9328,7 +9328,7 @@ function openPaymentPlanDetails(planId) {
             "Next Amount",
             nextInstallment
               ? formatCurrency(nextInstallment.amount)
-              : "â€”"
+              : "—"
           )}
         </div>
 
@@ -9766,7 +9766,7 @@ function openCategorySpendingSheet(categoryId) {
 
           ${item.removed ? `
             <div class="bill-meta" style="color:var(--overdue);">
-              Removed â€” payment retained
+              Removed — payment retained
             </div>
           ` : ""}
         </div>
@@ -10141,7 +10141,7 @@ for (let i = 5; i >= 0; i -= 1) {
                 ${estimatedMonthlyIncome > 0 && estimatedRemaining < 0 ? "Estimated Shortfall" : "Estimated Leftover"}
               </div>
               <div class="insights-leftover-result-amount" style="color:${estimatedMonthlyIncome <= 0 ? "var(--text-muted)" : estimatedRemaining < 0 ? "var(--overdue)" : "var(--paid)"}">
-                ${estimatedMonthlyIncome > 0 ? formatCurrency(Math.abs(estimatedRemaining)) : "â€”"}
+                ${estimatedMonthlyIncome > 0 ? formatCurrency(Math.abs(estimatedRemaining)) : "—"}
               </div>
             </div>
           </div>
@@ -10317,7 +10317,7 @@ for (let i = 5; i >= 0; i -= 1) {
         </div>
 
         <div>
-          <div class="section-header">Monthly Payments Â· 6 Months</div>
+          <div class="section-header">Monthly Payments · 6 Months</div>
 
           <div class="card card-pad">
             ${
@@ -10559,7 +10559,7 @@ function renderActivity() {
     ).padStart(2, "0")}`;
     const currentMonth = monthKey(new Date());
 
-    // TEMPORARY VISUAL PREVIEW â€” eight months, never saved to Store.
+    // TEMPORARY VISUAL PREVIEW — eight months, never saved to Store.
   const mockActivity = [];
 
   const mockTemplates = [
@@ -10735,7 +10735,7 @@ function renderActivity() {
     const appearance = getActivityActionIcon(entry.action);
 
     const dateLabel = date
-      ? `${formatDate(date.toISOString(), "short")} Â· ${
+      ? `${formatDate(date.toISOString(), "short")} · ${
           date.toLocaleTimeString([], {
             hour: "numeric",
             minute: "2-digit"
@@ -10920,8 +10920,8 @@ async function createHouseholdInvite() {
 
   try {
     button.disabled = true;
-    button.textContent = "Creating inviteâ€¦";
-    status.textContent = "Creating your private invite linkâ€¦";
+    button.textContent = "Creating invite…";
+    status.textContent = "Creating your private invite link…";
 
     const response = await fetch(
       `${HOUSEHOLD_INVITE_WORKER_URL}/household-invites`,
@@ -11102,8 +11102,8 @@ function showHouseholdInviteJoinScreen(token) {
     try {
       joinButton.disabled = true;
       cancelButton.disabled = true;
-      joinButton.textContent = "Joiningâ€¦";
-      status.textContent = "Joining the shared householdâ€¦";
+      joinButton.textContent = "Joining…";
+      status.textContent = "Joining the shared household…";
 
       const response = await fetch(
         `${HOUSEHOLD_INVITE_WORKER_URL}/household-invites/accept`,
@@ -11129,7 +11129,7 @@ function showHouseholdInviteJoinScreen(token) {
       }
 
       status.textContent =
-        "You joined the household. Loading shared billsâ€¦";
+        "You joined the household. Loading shared bills…";
 
       removeHouseholdInviteTokenFromUrl();
 
@@ -11206,7 +11206,7 @@ if (paymentPlanCount > 0) {
 
 const dataSummary =
   dataSummaryParts.length > 0
-    ? dataSummaryParts.join(" Â· ")
+    ? dataSummaryParts.join(" · ")
     : "No active bills or payment plans";
 
   const currentAccountEmail =
@@ -11300,7 +11300,7 @@ const dataSummary =
                                 margin-top:3px;
                               "
                             >
-                              ${escapeHtml(source.frequency)} Â·
+                              ${escapeHtml(source.frequency)} ·
                               Next: ${formatDate(
                                 source.nextPayDate,
                                 "short"
@@ -11888,7 +11888,7 @@ const postponeAction = isRecurring
       '${escapeInlineString(detailBill.originalDueDate || detailBill.dueDate)}'
     )`
   : `openPostponeBillSheet('${escapeInlineString(sourceBillId)}')`;
-  const paymentAction = isArchivedHistory ? `<div class="settings-footer">Archived history â€” read only.</div>` : !payment
+  const paymentAction = isArchivedHistory ? `<div class="settings-footer">Archived history — read only.</div>` : !payment
   ? `
     <div
       style="
@@ -12901,7 +12901,7 @@ function openBillDetailsSheet(billId) {
                             "full"
                           )}${
                             voidedDate
-                              ? ` Â· Voided ${formatDate(voidedDate, "full")}`
+                              ? ` · Voided ${formatDate(voidedDate, "full")}`
                               : ""
                           }`
                         : `Paid ${formatDate(paidDate, "full")}`
@@ -12961,7 +12961,7 @@ function openBillDetailsSheet(billId) {
                 <div class="form-row">
                   <div>
                     <div class="form-label">
-                      ${formatDate(item.originalDueDate, "short")} â†’
+                      ${formatDate(item.originalDueDate, "short")} →
                       ${formatDate(item.postponedTo, "short")}
                     </div>
 
@@ -13080,7 +13080,7 @@ function openBillDetailsSheet(billId) {
             <div class="bill-sheet-title">${escapeHtml(bill.name)}</div>
 
             <div class="bill-sheet-subtitle">
-              ${formatCurrency(bill.amount)} Â· ${getPayCycleLabel(bill)}
+              ${formatCurrency(bill.amount)} · ${getPayCycleLabel(bill)}
             </div>
           </div>
         </div>
@@ -13329,7 +13329,7 @@ function openBillForm(billId = null, selectedDate = null) {
                         : ""
                     }
                   >
-                    First paycheck Â· 1st
+                    First paycheck · 1st
                   </option>
 
                   <option
@@ -13340,7 +13340,7 @@ function openBillForm(billId = null, selectedDate = null) {
                         : ""
                     }
                   >
-                    Second paycheck Â· 15th
+                    Second paycheck · 15th
                   </option>
 
                   <option
@@ -13351,7 +13351,7 @@ function openBillForm(billId = null, selectedDate = null) {
                         : ""
                     }
                   >
-                    Previous paycheck Â· 15th
+                    Previous paycheck · 15th
                   </option>
                 </select>
               </div>
@@ -13574,7 +13574,7 @@ function openPaymentLinkPopup(billId) {
         </div>
 
         <div class="settings-footer">
-          Optional. Paste the companyâ€™s payment or sign-in website.
+          Optional. Paste the company’s payment or sign-in website.
         </div>
       </div>
     </div>
@@ -13879,7 +13879,7 @@ function saveBill() {
         return {
           action: "bill_amount_changed",
           title: `${billName} amount changed`,
-          detail: `${formatCurrency(before.amount)} â†’ ${formatCurrency(
+          detail: `${formatCurrency(before.amount)} → ${formatCurrency(
             after.amount
           )}`,
         };
@@ -13889,7 +13889,7 @@ function saveBill() {
         return {
           action: "bill_schedule_changed",
           title: `${billName} schedule changed`,
-          detail: `${formatSchedule(before)} â†’ ${formatSchedule(after)}`,
+          detail: `${formatSchedule(before)} → ${formatSchedule(after)}`,
         };
 
       case "paycheck assignment":
@@ -13898,7 +13898,7 @@ function saveBill() {
           title: `${billName} paycheck plan changed`,
           detail: `${paycheckAssignmentLabel(
             before.paycheckAssignment
-          )} â†’ ${paycheckAssignmentLabel(after.paycheckAssignment)}`,
+          )} → ${paycheckAssignmentLabel(after.paycheckAssignment)}`,
         };
 
       case "Autopay":
@@ -13961,7 +13961,7 @@ function saveBill() {
       entityType: "bill",
       entityId: newBill.id,
       title: `${newBill.name} added`,
-      detail: `${formatCurrency(newBill.amount)} Â· ${formatSchedule(
+      detail: `${formatCurrency(newBill.amount)} · ${formatSchedule(
         newBill
       )}`,
       before: null,
@@ -14858,7 +14858,7 @@ async function loadPlaidSandboxBank() {
 
   try {
     setPlaidBankMessage(
-      "Loading household bank transactionsâ€¦"
+      "Loading household bank transactions…"
     );
 
     const viewingAccountId =
@@ -15378,8 +15378,8 @@ function runPlaidSandboxAutoMatch() {
       entityId: getBillPaymentId(proposal.allocation[0].bill),
       title: "Bank payment matched",
       detail:
-        `${proposal.transaction.merchantName} Â· ` +
-        `${formatCurrency(proposal.transaction.amount)} Â· ` +
+        `${proposal.transaction.merchantName} · ` +
+        `${formatCurrency(proposal.transaction.amount)} · ` +
         `${proposal.allocation.length} installment/bill allocation(s)`,
       after: {
         bankMatchKey: proposal.key,
@@ -15412,7 +15412,7 @@ async function syncPlaidBank() {
 
   const task = (async () => {
     try {
-      setPlaidBankMessage("Loading bank transactionsâ€¦");
+      setPlaidBankMessage("Loading bank transactions…");
 
       const result = await callPlaidWorker(
         "/plaid/sync",
@@ -15479,7 +15479,7 @@ async function choosePlaidSandboxAccount(accountId) {
 
   try {
     setPlaidBankMessage(
-      "Loading selected accountâ€¦"
+      "Loading selected account…"
     );
 
     const result =
@@ -15728,7 +15728,7 @@ async function connectBillBeaconBank() {
       linkToken = saved.token;
     } else {
       setPlaidBankMessage(
-        "Checking the saved bank connectionâ€¦"
+        "Checking the saved bank connection…"
       );
 
       const existing = await callPlaidWorker(
@@ -15811,7 +15811,7 @@ async function connectBillBeaconBank() {
           ) return;
 
           setPlaidBankMessage(
-            "Saving the bank connectionâ€¦"
+            "Saving the bank connection…"
           );
 
           const saved = await callPlaidWorker(
@@ -15873,8 +15873,8 @@ async function connectBillBeaconBank() {
 
     setPlaidBankMessage(
       returning
-        ? "Resuming bank connectionâ€¦"
-        : "Opening Plaidâ€¦"
+        ? "Resuming bank connection…"
+        : "Opening Plaid…"
     );
 
     handler.open();
@@ -16158,7 +16158,7 @@ function renderTransactions() {
           "
         >
           ${formatDate(transaction.date, "short")}
-          ${transaction.pending ? " Â· Pending" : ""}
+          ${transaction.pending ? " · Pending" : ""}
         </span>
       </span>
 
@@ -16174,7 +16174,7 @@ function renderTransactions() {
           };
         "
       >
-        ${transaction.type === "credit" ? "+" : "âˆ’"}
+        ${transaction.type === "credit" ? "+" : "−"}
         ${formatCurrency(transaction.amount)}
       </span>
     </button>
@@ -16395,7 +16395,7 @@ const accountSelector = accounts.length
               ${escapeHtml(account.name)}
               ${
                 account.mask
-                  ? ` Â· â€¢â€¢â€¢â€¢ ${escapeHtml(account.mask)}`
+                  ? ` · •••• ${escapeHtml(account.mask)}`
                   : ""
               }
             </option>
@@ -16881,7 +16881,7 @@ async function sendBillNotificationTest() {
     }
 
     if (status) {
-      status.textContent = "Sending test notificationâ€¦";
+      status.textContent = "Sending test notification…";
     }
 
     const response = await fetch(
@@ -17034,7 +17034,7 @@ async function sendBillInboxTest() {
 
     if (status) {
       status.textContent =
-        "Sending inbox test notificationâ€¦";
+        "Sending inbox test notification…";
     }
 
     const response = await fetch(
@@ -17531,9 +17531,9 @@ function archiveBill(billId) {
       entityType: "paymentplan",
       entityId: planId,
       title: `${storeName} Payment Plan Deleted`,
-      detail: `${provider} Â· ${billsToArchive.length} Payment${
+      detail: `${provider} · ${billsToArchive.length} Payment${
         billsToArchive.length === 1 ? "" : "s"
-      } Â· ${formatCurrency(planTotal)}`,
+      } · ${formatCurrency(planTotal)}`,
       before: {
         planId,
         provider,
@@ -17551,7 +17551,7 @@ function archiveBill(billId) {
       entityType: "bill",
       entityId: selectedBill.id,
       title: `${selectedBill.name} Deleted`,
-      detail: `${formatCurrency(selectedBill.amount)} Â· ${getDueDescription(
+      detail: `${formatCurrency(selectedBill.amount)} · ${getDueDescription(
         selectedBill
       )}`,
       before: buildArchiveSnapshot(selectedBill),
@@ -17655,7 +17655,7 @@ function renderPaymentHistory() {
 
                       <div class="bill-info">
                         <div class="bill-name">
-                          ${billName}${isVoided ? ' Â· Voided' : ''}
+                          ${billName}${isVoided ? ' · Voided' : ''}
                         </div>
 
                         <div
@@ -18094,9 +18094,9 @@ function saveInstallmentPlan() {
     entityType: "paymentplan",
     entityId: planId,
     title: `${storeName} Payment Plan Added`,
-    detail: `${provider} Â· ${installmentCount} payments of ${formatCurrency(
+    detail: `${provider} · ${installmentCount} payments of ${formatCurrency(
       perPaymentAmount
-    )} Â· first due ${firstDueLabel}`,
+    )} · first due ${firstDueLabel}`,
     before: null,
     after: {
       planId,
@@ -18228,7 +18228,7 @@ function normalizeNotificationRecord(documentSnapshot) {
       ? Number(data.offsetDays)
       : null,
     title: data.title || 'Bill Beacon reminder',
-    body: (data.deliveryState === 'pending' ? 'Delivery pending Â· ' : '') + (data.body || ''),
+    body: (data.deliveryState === 'pending' ? 'Delivery pending · ' : '') + (data.body || ''),
     sentAt: data.sentAt?.toDate?.()?.toISOString() || data.sentAt || null,
     readAt: data.readAt || null,
     openedAt: data.openedAt || null,
@@ -18786,7 +18786,7 @@ function renderNotificationCenterContent() {
 
   if (count) {
     count.textContent =
-      `${unread} Unread Â· ${records.length} Reminders`;
+      `${unread} Unread · ${records.length} Reminders`;
   }
 
   const ready = Boolean(
@@ -18849,7 +18849,7 @@ function renderNotificationCenterContent() {
   ) {
     content.textContent =
       window.billBeaconSyncStatus?.().message ||
-      "Loading shared remindersâ€¦";
+      "Loading shared reminders…";
     return;
   }
 
@@ -18928,7 +18928,7 @@ function renderNotificationCenterContent() {
         dueLabel,
         `Received ${received}`,
         notification.readAt ? "Read" : "Unread"
-      ].filter(Boolean).join(" Â· ");
+      ].filter(Boolean).join(" · ");
 
       return `
         ${heading}
@@ -19336,7 +19336,7 @@ async function openNotificationCenter(restore = false) {
         </div>
 
         <p class="bbn-count" id="notificationPopupCount">
-          Loading remindersâ€¦
+          Loading reminders…
         </p>
 
         <div class="bbn-top">
