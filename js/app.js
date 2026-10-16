@@ -4894,7 +4894,7 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
             ${month}
             &middot;
             ${activePlanCount}
-            active ${activePlanCount === 1 ? "plan" : "plans"}
+            Active ${activePlanCount === 1 ? "Plan" : "Plans"}
           </span>
         </span>
 

@@ -5996,3 +5996,60 @@ max-height: max(160px, calc(50dvh - 88px));
   outline: 2px solid var(--accent);
   outline-offset: -4px;
 }
+/* Dashboard status surfaces: match Monthly Snapshot */
+
+.dashboard-content .dashboard-installments-combined,
+.dashboard-content .dashboard-status-card {
+  border: 1px solid var(--bb-brand-border-strong);
+  background:
+    radial-gradient(
+      ellipse at top right,
+      rgba(246, 76, 174, 0.16),
+      transparent 65%
+    ),
+    radial-gradient(
+      ellipse at bottom left,
+      rgba(143, 54, 255, 0.16),
+      transparent 65%
+    ),
+    var(--card);
+
+  background-origin: padding-box;
+  background-clip: padding-box;
+  box-shadow: var(--bb-brand-shadow);
+}
+
+/* Match the Monthly Snapshot corner radius. */
+
+.dashboard-content .dashboard-installments-combined {
+  border-radius: var(--bb-card-radius, 20px);
+}
+
+/* Keep the individual status buttons slightly more compact. */
+
+.dashboard-content .dashboard-status-card {
+  border-radius: var(--radius-lg);
+}
+
+/* Let the combined card's glow show through its inner buttons. */
+
+.dashboard-content .dashboard-installments-combined-header,
+.dashboard-content .dashboard-installments-combined-status,
+.dashboard-content .dashboard-installments-combined-warning {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Softer surfaces in light mode, matching Monthly Snapshot. */
+
+:root[data-theme="light"]
+  .dashboard-content .dashboard-installments-combined,
+:root[data-theme="light"]
+  .dashboard-content .dashboard-status-card {
+  background:
+    var(--bb-brand-glow),
+    var(--card);
+
+  border-color: var(--bb-brand-border-strong);
+  box-shadow: var(--bb-brand-shadow);
+}
