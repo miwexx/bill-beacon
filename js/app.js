@@ -4663,7 +4663,7 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
       ${groups.installments.overdue.length ? `
         <button type="button" class="dashboard-installment-warning"
           onclick="openDashboardSeparatedStatus('installments', 'overdue')">
-          ${groups.installments.overdue.length} overdue installment payment(s)
+          ${groups.installments.overdue.length} overdue installment
           ${groups.installments.olderOverdue.length ? ` · ${groups.installments.olderOverdue.length} from earlier months` : ""}
           · View
         </button>` : ""}
