@@ -2835,6 +2835,16 @@ function getBillDetailReturnParams() {
 }
 
 function navigate(route, params = {}) {
+    savePaymentsViewState();
+
+  if (isPaymentsRoute(route)) {
+    lastPaymentsRoute = route;
+
+    params = {
+      ...paymentsViewState[route].params,
+      ...params
+    };
+  }
   if (
     route === "detail" &&
     currentRoute !== "detail" &&
@@ -2923,6 +2933,17 @@ function navigate(route, params = {}) {
 
   if (route === "bills") {
     initBillSwipeHandlers();
+  }
+    if (isPaymentsRoute(route)) {
+    restorePaymentsViewState();
+
+    const destinationRoute = route;
+
+    requestAnimationFrame(() => {
+      if (currentRoute === destinationRoute) {
+        restorePaymentsViewState();
+      }
+    });
   }
 }
 let transactionSearchTimer = null;
@@ -4285,13 +4306,13 @@ function renderMore() {
             class="section-header"
             style="margin-bottom:10px"
           >
-            Money tools
+            Money Tools
           </div>
 
           <div
             style="
               display:grid;
-              grid-template-columns:1fr 1fr;
+              grid-template-columns:1fr;
               gap:12px;
             "
           >
@@ -4339,53 +4360,7 @@ function renderMore() {
               </div>
             </button>
 
-            <button
-              type="button"
-              onclick="navigate('payment-plans')"
-              style="${moneyTileStyle}"
-            >
-              <div
-                style="
-                  width:42px;
-                  height:42px;
-                  display:flex;
-                  align-items:center;
-                  justify-content:center;
-                  border-radius:14px;
-                  color:var(--bb-more-plan-icon, #ffdce9);
-                  background:var(--bb-more-plan-bg, rgba(246,76,174,.18));
-                "
-              >
-                ${svgIcon("creditcard", 22)}
-              </div>
-
-              <div>
-                <div
-                  style="
-                    font-size:16px;
-                    font-weight:850;
-                    line-height:1.2;
-                  "
-                >
-                  Installments
-                </div>
-
-                </div>
-
-              <div
-                style="
-                  color:var(--text-muted);
-                  font-size:12px;
-                  font-weight:800;
-                "
-              >
-                ${
-                  activePlans
-                    ? `${activePlans} Active · ${formatCurrency(upcomingInstallmentTotal)} Due Soon`
-                    : "No active plans"
-                }
-              </div>
-            </button>
+            
           </div>
 
           <button
@@ -6143,19 +6118,7 @@ function renderBills() {
   }
 
   return `
-    <div class="nav-bar">
-      <div class="nav-bar-content">
-        <div class="nav-title">Bills</div>
-
-        <button
-  class="nav-button"
-  onclick="openBillForm()"
-  aria-label="Add a bill"
->
-  ${svgIcon("plus", 18)}
-</button>
-      </div>
-    </div>
+        ${renderPaymentsHeader()}
 
         <div class="main-content fade-in bills-page-content">
       ${
@@ -6451,6 +6414,10 @@ function setBillSort(sort) {
   routeParams.billSort = sort;
   closeBillSortSheet();
   render();
+
+  if (currentRoute === "bills") {
+    initBillSwipeHandlers();
+  }
 }
 function renderCalendar() {
   const viewDate = routeParams.month
@@ -7782,15 +7749,7 @@ function expandInstallmentScheduleMonth(button, collapse = false) {
 window.expandInstallmentScheduleMonth =
   expandInstallmentScheduleMonth;
 function renderPaymentPlans() {
-    const installmentsBackRoute =
-    routeParams.returnRoute === "insights"
-      ? "insights"
-      : "more";
-
-  const installmentsBackLabel =
-    installmentsBackRoute === "insights"
-      ? "Insights"
-      : "More";
+   
   const installmentBills = Store.getBills().filter((bill) =>
     Boolean(bill.installmentPlanId)
   );
@@ -8172,64 +8131,7 @@ function renderPaymentPlans() {
   `;
 
   return `
-    <div class="nav-bar">
-  <div
-    class="nav-bar-content"
-    style="
-      display:grid;
-      grid-template-columns:44px 1fr 44px;
-      align-items:center;
-    "
-  >
-    <button
-      type="button"
-      class="nav-button"
-            onclick="navigate('${installmentsBackRoute}')"
-      aria-label="Back to ${installmentsBackLabel}"
-      title="Back to ${installmentsBackLabel}"
-      style="
-        width:44px;
-        height:44px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        padding:0;
-        color:var(--text);
-      "
-    >
-      ${svgIcon("chevronLeft", 22)}
-    </button>
-
-    <div
-      class="nav-title"
-      style="
-        min-width:0;
-        text-align:center;
-      "
-    >
-      Installments
-    </div>
-
-    <button
-      type="button"
-      class="nav-button"
-      onclick="closeAddMenu(); openInstallmentPlanForm()"
-      aria-label="Add a payment plan"
-      title="Add payment plan"
-      style="
-        width:44px;
-        height:44px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        padding:0;
-        color:#b45cff;
-      "
-    >
-      ${svgIcon("plus", 22)}
-    </button>
-  </div>
-</div>
+        ${renderPaymentsHeader()}
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
         ${
@@ -12288,30 +12190,189 @@ function fab() {
     </button>
   `;
 }
+// ====================================
+// PAYMENTS: BILLS / INSTALLMENTS
+// ====================================
+
+let lastPaymentsRoute = "bills";
+
+const paymentsViewState = {
+  bills: {
+    params: {},
+    windowScroll: 0,
+    scrolls: []
+  },
+
+  "payment-plans": {
+    params: {},
+    windowScroll: 0,
+    scrolls: []
+  }
+};
+
+function isPaymentsRoute(route) {
+  return route === "bills" || route === "payment-plans";
+}
+
+function savePaymentsViewState() {
+  if (!isPaymentsRoute(currentRoute)) return;
+
+  const state = paymentsViewState[currentRoute];
+
+  state.params = { ...routeParams };
+  state.windowScroll = window.scrollY || 0;
+
+  state.scrolls = [
+    ...document.querySelectorAll(
+      "#app .main-content, " +
+      "#app .bills-list-scroll, " +
+      "#app .installment-inline-schedule-scroll"
+    )
+  ].map(element => element.scrollTop);
+
+  lastPaymentsRoute = currentRoute;
+}
+
+function restorePaymentsViewState() {
+  if (!isPaymentsRoute(currentRoute)) return;
+
+  const state = paymentsViewState[currentRoute];
+
+  const elements = document.querySelectorAll(
+    "#app .main-content, " +
+    "#app .bills-list-scroll, " +
+    "#app .installment-inline-schedule-scroll"
+  );
+
+  elements.forEach((element, index) => {
+    element.scrollTop = state.scrolls[index] || 0;
+  });
+
+  window.scrollTo(0, state.windowScroll || 0);
+}
+
+function switchPaymentsSection(route) {
+  if (!isPaymentsRoute(route) || route === currentRoute) return;
+
+  navigate(route, {
+    ...paymentsViewState[route].params
+  });
+}
+
+function renderPaymentsHeader() {
+  const installmentsSelected = currentRoute === "payment-plans";
+
+  const addAction = installmentsSelected
+    ? "openInstallmentPlanForm()"
+    : "openBillForm()";
+
+  const addLabel = installmentsSelected
+    ? "Add installment plan"
+    : "Add bill";
+
+  return `
+    <div class="nav-bar payments-nav-bar">
+      <div class="nav-bar-content payments-nav-content">
+        <div class="payments-header-spacer" aria-hidden="true"></div>
+
+        <div class="nav-title">Payments</div>
+
+        <button
+          type="button"
+          class="nav-button payments-add-button"
+          onclick="${addAction}"
+          aria-label="${addLabel}"
+          title="${addLabel}"
+        >
+          ${svgIcon("plus", 22)}
+        </button>
+      </div>
+
+      <div
+        class="payments-section-selector"
+        role="group"
+        aria-label="Payment type"
+      >
+        <button
+          type="button"
+          class="payments-section-button ${
+            installmentsSelected ? "" : "is-selected"
+          }"
+          aria-pressed="${!installmentsSelected}"
+          onclick="switchPaymentsSection('bills')"
+        >
+          Bills
+        </button>
+
+        <button
+          type="button"
+          class="payments-section-button ${
+            installmentsSelected ? "is-selected" : ""
+          }"
+          aria-pressed="${installmentsSelected}"
+          onclick="switchPaymentsSection('payment-plans')"
+        >
+          Installments
+        </button>
+      </div>
+    </div>
+  `;
+}
 function navigateMainTab(route) {
   selectedDashboardPaycheckMonth = null;
   selectedDashboardPaycheck = null;
+
+  if (route === "payments") {
+    const destination = isPaymentsRoute(currentRoute)
+      ? currentRoute
+      : lastPaymentsRoute;
+
+    // Leave the current Payments view untouched if already there.
+    if (currentRoute === destination) return;
+
+    navigate(destination, {
+      ...paymentsViewState[destination].params
+    });
+
+    return;
+  }
 
   navigate(route);
 }
 function tabBar() {
   const tabs = [
-  { id: 'today', label: 'Dashboard', icon: 'home' },
-  { id: 'recurring', label: 'Calendar', icon: 'calendar' },
-  { id: 'bills', label: 'Bills', icon: 'tray' },
-  { id: 'insights', label: 'Insights', icon: 'chart' },
-  { id: "more", label: "More", icon: "moreVertical" }
-  
-];
+    { id: "today", label: "Dashboard", icon: "home" },
+    { id: "recurring", label: "Calendar", icon: "calendar" },
+    { id: "payments", label: "Payments", icon: "tray" },
+    { id: "insights", label: "Insights", icon: "chart" },
+    { id: "more", label: "More", icon: "moreVertical" }
+  ];
 
   return `
     <div class="tab-bar">
-      ${tabs.map(tab => `
-        <button class="tab-item ${currentRoute === tab.id ? 'active' : ''}" onclick="navigateMainTab('${escapeInlineString(tab.id)}')">
-          <div class="tab-icon">${svgIcon(tab.icon, 24)}</div>
-          <span>${tab.label}</span>
-        </button>
-      `).join('')}
+      ${tabs.map(tab => {
+        const active = tab.id === "payments"
+          ? isPaymentsRoute(currentRoute)
+          : (
+              currentRoute === tab.id ||
+              (tab.id === "recurring" && currentRoute === "calendar")
+            );
+
+        return `
+          <button
+            type="button"
+            class="tab-item ${active ? "active" : ""}"
+            ${active ? 'aria-current="page"' : ""}
+            onclick="navigateMainTab('${escapeInlineString(tab.id)}')"
+          >
+            <div class="tab-icon">
+              ${svgIcon(tab.icon, 24)}
+            </div>
+
+            <span>${tab.label}</span>
+          </button>
+        `;
+      }).join("")}
     </div>
   `;
 }
@@ -16594,8 +16655,15 @@ function render() {
   const view = Object.prototype.hasOwnProperty.call(views, currentRoute) ? views[currentRoute] : renderToday;
   let content = view();
     if (
-    ["today", "recurring", "bills", "more", "insights"]
-      .includes(currentRoute)
+        [
+      "today",
+      "recurring",
+      "calendar",
+      "bills",
+      "payment-plans",
+      "more",
+      "insights"
+    ].includes(currentRoute)
   ) {
     content += tabBar();
   }
