@@ -6451,6 +6451,10 @@ function setBillSort(sort) {
   routeParams.billSort = sort;
   closeBillSortSheet();
   render();
+
+  if (currentRoute === "bills") {
+    initBillSwipeHandlers();
+  }
 }
 function renderCalendar() {
   const viewDate = routeParams.month
