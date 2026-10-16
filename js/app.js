@@ -9896,106 +9896,83 @@ for (let i = 5; i >= 0; i -= 1) {
 
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
-        <div class="section-header">This Month</div>
-
-        <div class="stat-row">
-          <div class="stat-card">
-            <div class="stat-value text-paid">
-              ${formatCurrency(estimatedMonthlyIncome)}
-            </div>
-            <div class="stat-label">Expected Income</div>
-          </div>
-
-          <div class="stat-card">
-            <div class="stat-value text-upcoming">
-              ${formatCurrency(stillDueThisMonth)}
-            </div>
-            <div class="stat-label">Still Due</div>
-          </div>
+                <div class="section-header">
+          ${formatDate(now, "monthYear")}
         </div>
 
-        <div class="card card-pad">
-          <div
-            style="
-              display:grid;
-              grid-template-columns:1fr 1fr;
-              gap:var(--space-3);
-            "
-          >
-            <div>
-              <div
-                style="
-                  font-size:var(--text-xs);
-                  color:var(--text-muted);
-                  margin-bottom:4px;
-                "
-              >
-                Scheduled
+        <section
+          class="card card-pad insights-leftover-card"
+          aria-label="Estimated monthly income after bills and installments"
+        >
+          <div class="insights-leftover-top">
+            <div class="insights-leftover-column">
+              <div class="insights-leftover-label">
+                Expected Income
               </div>
 
-              <div style="font-size:var(--text-xl);font-weight:800">
+              <div class="insights-leftover-amount">
+                ${
+                  estimatedMonthlyIncome > 0
+                    ? formatCurrency(estimatedMonthlyIncome)
+                    : "Not set"
+                }
+              </div>
+            </div>
+
+            <div
+              class="insights-leftover-column insights-leftover-right"
+            >
+              <div class="insights-leftover-label">
+                Monthly Bills
+              </div>
+
+              <div class="insights-leftover-amount">
                 ${formatCurrency(scheduledThisMonth)}
               </div>
             </div>
+          </div>
 
-            <div style="text-align:right">
-              <div
-                style="
-                  font-size:var(--text-xs);
-                  color:var(--text-muted);
-                  margin-bottom:4px;
-                "
-              >
-                Paid
+          <div class="insights-leftover-result">
+            <div class="insights-leftover-result-heading">
+              <div class="insights-leftover-result-label">
+                ${
+                  estimatedMonthlyIncome <= 0
+                    ? "Estimated Leftover"
+                    : estimatedRemaining < 0
+                      ? "Estimated Shortfall"
+                      : "Estimated Leftover"
+                }
               </div>
 
               <div
-                class="text-paid"
-                style="font-size:var(--text-xl);font-weight:800"
+                class="insights-leftover-result-amount"
+                style="color:${
+                  estimatedMonthlyIncome <= 0
+                    ? "var(--text-muted)"
+                    : estimatedRemaining < 0
+                      ? "var(--overdue)"
+                      : "var(--paid)"
+                };"
               >
-                ${formatCurrency(paidThisMonth)}
+                ${
+                  estimatedMonthlyIncome > 0
+                    ? formatCurrency(Math.abs(estimatedRemaining))
+                    : "—"
+                }
               </div>
             </div>
-          </div>
 
-          <div
-            class="dashboard-progress-track"
-            style="margin-top:var(--space-4)"
-          >
-            <div
-              class="dashboard-progress-fill"
-              style="
-                width:${
-                  getDashboardMonthSummary(now).progress
-                }%
-              "
-            ></div>
-          </div>
-
-          <div
-            style="
-              display:flex;
-              justify-content:space-between;
-              margin-top:8px;
-              font-size:var(--text-xs);
-              color:var(--text-muted);
-            "
-          >
-            <span>
-              ${unpaidBillsThisMonth.length}
-              Bill${unpaidBillsThisMonth.length === 1 ? "" : "s"} Remaining
-            </span>
-
-            <span>
+            <div class="insights-leftover-note">
               ${
-                estimatedMonthlyIncome > 0
-                  ? `Est. ${formatCurrency(estimatedRemaining)} After Bills`
-                  : "Add income in settings to see your estimate"
+                estimatedMonthlyIncome <= 0
+                  ? "Add expected income in Settings to see your estimate."
+                  : estimatedRemaining < 0
+                    ? "Scheduled bills and installments exceed expected income."
+                    : "After this month’s scheduled bills and installments."
               }
-            </span>
+            </div>
           </div>
-        </div>
-
+        </section>
         ${
           activePlans.length
             ? `
