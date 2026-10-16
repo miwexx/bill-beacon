@@ -4967,14 +4967,6 @@ function renderToday() {
               ${formatDate(now, "monthYear")}
             </span>
 
-            <span style="
-              font-size:12px;
-              font-weight:600;
-              color:var(--text-muted);
-            ">
-              ${billCounts.paid.length} of
-              ${billCounts.totalCount} Bills Paid
-            </span>
           </div>
 
           <div style="
