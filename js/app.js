@@ -4808,7 +4808,19 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
   const month = escapeHtml(
     formatDate(referenceDate, "monthYear")
   );
+  const installmentRemainingCents =
+    groups.installments.unpaid.reduce((total, item) => {
+      const amount = Number(item.amount);
 
+      return total + (
+        Number.isFinite(amount)
+          ? Math.round(amount * 100)
+          : 0
+      );
+    }, 0);
+
+  const installmentRemainingThisMonth =
+    installmentRemainingCents / 100;
   const unpaidInstallments = getUnpaidPaymentPlanInstallments();
 
   const activePlanCount = new Set(
@@ -4870,36 +4882,43 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
       aria-labelledby="dashboardInstallmentsTitle"
     >
       <button
-        type="button"
-        class="dashboard-installments-combined-header"
-        onclick="navigate('payment-plans', { returnRoute: 'today' })"
-        aria-label="Open Installments"
-      >
-        
+  type="button"
+  class="dashboard-installments-combined-header"
+  onclick="navigate('payment-plans', { returnRoute: 'today' })"
+  aria-label="Open Installments. ${formatCurrency(
+    installmentRemainingThisMonth
+  )} remaining for ${month}"
+>
+  <span class="dashboard-installments-heading-block">
+    <span
+      class="dashboard-installments-heading-title"
+      id="dashboardInstallmentsTitle"
+    >
+      Installments
+    </span>
 
-        <span class="dashboard-installments-combined-copy">
-          <span
-            class="dashboard-installments-combined-title"
-            id="dashboardInstallmentsTitle"
-          >
-            Installments
-          </span>
+    <span class="dashboard-installments-heading-month">
+      ${month}
+    </span>
+  </span>
 
-          <span class="dashboard-installments-combined-meta">
-            ${month}
-            &middot;
-            ${activePlanCount}
-            Active ${activePlanCount === 1 ? "Plan" : "Plans"}
-          </span>
-        </span>
+  <span class="dashboard-installments-heading-balance">
+    <span class="dashboard-installments-heading-amount">
+      ${formatCurrency(installmentRemainingThisMonth)}
+    </span>
 
-        <span
-          class="dashboard-installments-combined-chevron"
-          aria-hidden="true"
-        >
-          ${svgIcon("chevronRight", 20)}
-        </span>
-      </button>
+    <span class="dashboard-installments-heading-caption">
+      Remaining
+    </span>
+  </span>
+
+  <span
+    class="dashboard-installments-heading-arrow"
+    aria-hidden="true"
+  >
+    ${svgIcon("chevronRight", 20)}
+  </span>
+</button>
 
       <div class="dashboard-installments-combined-statuses">
         <button

@@ -6122,3 +6122,99 @@ max-height: max(160px, calc(50dvh - 88px));
   grid-column: 3;
   grid-row: 1;
 }
+/* Installments header: title left, monthly balance right. */
+
+.dashboard-content .dashboard-installments-combined-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 12px;
+
+  width: 100%;
+  min-height: 78px;
+  padding: 16px 18px;
+
+  text-align: left;
+}
+
+/* Left side */
+
+.dashboard-installments-heading-block {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.dashboard-installments-heading-title {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.2px;
+}
+
+.dashboard-installments-heading-month {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Right side */
+
+.dashboard-installments-heading-balance {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+
+  min-width: 0;
+  text-align: right;
+}
+
+.dashboard-installments-heading-amount {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.15;
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dashboard-installments-heading-caption {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.dashboard-installments-heading-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 18px;
+  color: var(--text-muted);
+}
+
+/* Keep the side-by-side layout comfortable on narrow screens. */
+
+@media (max-width: 360px) {
+  .dashboard-content .dashboard-installments-combined-header {
+    gap: 8px;
+    padding: 14px 12px;
+  }
+
+  .dashboard-installments-heading-title {
+    font-size: 15px;
+  }
+
+  .dashboard-installments-heading-amount {
+    font-size: 18px;
+  }
+
+  .dashboard-installments-heading-month,
+  .dashboard-installments-heading-caption {
+    font-size: 11px;
+  }
+}
