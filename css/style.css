@@ -5147,3 +5147,25 @@ max-height: max(160px, calc(50dvh - 88px));
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
 }
+/* Hide the installment completion counter. */
+.dashboard-installment-count {
+  display: none;
+}
+
+/* Compact only the installment Paid and Due pills. */
+.dashboard-installment-status-row .dashboard-status-card {
+  min-height: 74px;
+  padding: 10px 8px;
+}
+
+.dashboard-installment-status-row .dashboard-status-number {
+  min-height: 28px;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.dashboard-installment-status-row .dashboard-status-label {
+  margin-top: 5px;
+  font-size: 12px;
+  line-height: 1.2;
+}
