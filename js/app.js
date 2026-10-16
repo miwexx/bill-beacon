@@ -7267,28 +7267,26 @@ function renderInstallmentUpcomingCard() {
     <section class="card" style="overflow:hidden;">
       <div
         style="
-          display:flex;
-          align-items:center;
-          justify-content:space-between;
-          gap:12px;
           padding:var(--space-4);
+          text-align:center;
+          font-size:var(--text-xl);
+          font-weight:850;
         "
       >
-        <div style="font-size:var(--text-xl); font-weight:850;">
-          Upcoming
-        </div>
-
-        <div style="font-size:var(--text-sm); color:var(--text-muted);">
-          ${items.length} unpaid ${items.length === 1 ? "payment" : "payments"}
-        </div>
+        Upcoming
       </div>
 
       ${
         preview.length
           ? preview.map(renderInstallmentScheduleRow).join("")
           : `
-            <div style="padding:0 var(--space-4) var(--space-4); color:var(--text-muted);">
-              No unpaid installment payments.
+            <div
+              style="
+                padding:0 var(--space-4) var(--space-4);
+                text-align:center;
+              "
+            >
+              No scheduled payments.
             </div>
           `
       }
@@ -7300,6 +7298,7 @@ function renderInstallmentUpcomingCard() {
               type="button"
               onclick="openPaymentPlanSchedule()"
               style="
+                display:block;
                 width:100%;
                 padding:var(--space-3) var(--space-4);
                 border:0;
@@ -7308,6 +7307,7 @@ function renderInstallmentUpcomingCard() {
                 color:var(--accent);
                 font:inherit;
                 font-weight:800;
+                text-align:center;
                 cursor:pointer;
               "
             >
@@ -7329,7 +7329,8 @@ function expandInstallmentScheduleMonth(button, collapse = false) {
     ...section.querySelectorAll("[data-installment-schedule-row]")
   ];
 
-  const currentLimit = Number(section.dataset.visibleCount) || 4;
+  const currentLimit =
+    Number(section.dataset.visibleCount) || 4;
 
   const nextLimit = collapse
     ? 4
@@ -7343,14 +7344,13 @@ function expandInstallmentScheduleMonth(button, collapse = false) {
 
   const more = section.querySelector("[data-installment-more]");
   const less = section.querySelector("[data-installment-less]");
-  const count = section.querySelector("[data-installment-visible-count]");
 
-  if (more) more.hidden = nextLimit >= rows.length;
-  if (less) less.hidden = nextLimit <= 4;
+  if (more) {
+    more.hidden = nextLimit >= rows.length;
+  }
 
-  if (count) {
-    count.textContent =
-      `${Math.min(nextLimit, rows.length)} of ${rows.length} payments shown`;
+  if (less) {
+    less.hidden = nextLimit <= 4;
   }
 
   if (collapse) {
@@ -7360,7 +7360,6 @@ function expandInstallmentScheduleMonth(button, collapse = false) {
     });
   }
 }
-
 window.expandInstallmentScheduleMonth =
   expandInstallmentScheduleMonth;
 function renderPaymentPlans() {
@@ -8137,32 +8136,30 @@ function openPaymentPlanSchedule() {
       <section
         data-installment-month="${group.key}"
         data-visible-count="4"
-        style="scroll-margin-top:12px;"
+        class="card"
+        style="
+          overflow:hidden;
+          margin-bottom:0;
+          scroll-margin-top:12px;
+        "
       >
         <div
           style="
             display:flex;
-            align-items:flex-start;
+            align-items:center;
             justify-content:space-between;
             gap:12px;
-            margin:12px 0;
+            padding:var(--space-4);
           "
         >
-          <div>
-            <div style="font-size:var(--text-lg); font-weight:850;">
-              ${escapeHtml(monthLabel)}
-            </div>
-
-            <div
-              style="
-                margin-top:4px;
-                font-size:var(--text-xs);
-                color:var(--text-muted);
-              "
-            >
-              ${group.items.length}
-              unpaid ${group.items.length === 1 ? "payment" : "payments"}
-            </div>
+          <div
+            style="
+              min-width:0;
+              font-size:var(--text-lg);
+              font-weight:850;
+            "
+          >
+            ${escapeHtml(monthLabel)}
           </div>
 
           <div style="font-weight:850; white-space:nowrap;">
@@ -8170,60 +8167,47 @@ function openPaymentPlanSchedule() {
           </div>
         </div>
 
-        <div class="card" style="overflow:hidden;">
-          ${
-            group.items.map((item, index) => `
-              <div
-                data-installment-schedule-row
-                ${index >= 4 ? "hidden" : ""}
-              >
-                ${renderInstallmentScheduleRow(item)}
+        ${
+          group.items.map((item, index) => `
+            <div
+              data-installment-schedule-row
+              ${index >= 4 ? "hidden" : ""}
+            >
+              ${renderInstallmentScheduleRow(item)}
+            </div>
+          `).join("")
+        }
+
+        ${
+          group.items.length > 4
+            ? `
+              <div class="installment-month-footer">
+                <button
+                  type="button"
+                  data-installment-more
+                  onclick="expandInstallmentScheduleMonth(this)"
+                  aria-label="See more payments for ${escapeHtml(monthLabel)}"
+                >
+                  <span class="gradient-action-text">
+                    See More
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  data-installment-less
+                  hidden
+                  onclick="expandInstallmentScheduleMonth(this, true)"
+                  aria-label="See fewer payments for ${escapeHtml(monthLabel)}"
+                >
+                  <span class="gradient-action-text">
+                    See Less
+                  </span>
+                </button>
               </div>
-            `).join("")
-          }
-        </div>
-
-        <div
-          data-installment-visible-count
-          style="
-            margin-top:8px;
-            font-size:var(--text-xs);
-            color:var(--text-muted);
-          "
-        >
-          ${Math.min(4, group.items.length)}
-          of ${group.items.length} payments shown
-        </div>
-
-        <div
-          style="
-            display:flex;
-            flex-wrap:wrap;
-            gap:8px;
-            margin-top:8px;
-          "
-        >
-          <button
-            type="button"
-            class="bb-outline-pill"
-            data-installment-more
-            ${group.items.length <= 4 ? "hidden" : ""}
-            onclick="expandInstallmentScheduleMonth(this)"
-            aria-label="Show more payments for ${escapeHtml(monthLabel)}"
-          >
-            See More
-          </button>
-
-          <button
-            type="button"
-            class="bb-outline-pill"
-            data-installment-less
-            hidden
-            onclick="expandInstallmentScheduleMonth(this, true)"
-          >
-            Show Less
-          </button>
-        </div>
+            `
+            : ""
+        }
       </section>
     `;
   };
@@ -8273,11 +8257,7 @@ function openPaymentPlanSchedule() {
                 </div>
 
                 <div class="empty-state-title">
-                  No unpaid installments
-                </div>
-
-                <div class="empty-state-text">
-                  There are no remaining scheduled payments.
+                  No scheduled payments
                 </div>
               </div>
             `
@@ -8286,8 +8266,6 @@ function openPaymentPlanSchedule() {
     </div>
   `;
 
-  // Open plan details over the schedule so closing details
-  // returns to this month's list and its expanded rows.
   document.body.appendChild(container);
   lockBackgroundScroll();
 

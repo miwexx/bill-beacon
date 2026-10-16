@@ -4750,3 +4750,69 @@ body *::-webkit-scrollbar {
   z-index: 1300;
   isolation: isolate;
 }
+/* Centered installment month footer actions */
+
+#paymentPlanScheduleContainer [hidden] {
+  display: none !important;
+}
+
+#paymentPlanScheduleContainer .installment-month-footer {
+  width: 100%;
+}
+
+#paymentPlanScheduleContainer .installment-month-footer > button {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: var(--space-3) var(--space-4);
+
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
+
+  background: transparent;
+  color: var(--accent);
+
+  font: inherit;
+  font-weight: 800;
+  text-align: center;
+  cursor: pointer;
+}
+/* Payment Schedule: continuous popup surface to screen bottom. */
+#paymentPlanScheduleContainer #paymentPlanScheduleSheet {
+  bottom: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  box-sizing: border-box;
+
+  border-radius: var(--radius-2xl) var(--radius-2xl) 0 0 !important;
+  border-bottom: 0 !important;
+  background: var(--surface) !important;
+}
+
+#paymentPlanScheduleContainer #paymentPlanScheduleSheet > .sheet-handle,
+#paymentPlanScheduleContainer #paymentPlanScheduleSheet > .sheet-nav {
+  flex: 0 0 auto !important;
+}
+
+#paymentPlanScheduleContainer #paymentPlanScheduleSheet .sheet-body {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box;
+
+  background: transparent !important;
+  padding-bottom: calc(
+    28px + env(safe-area-inset-bottom, 0px)
+  ) !important;
+}
