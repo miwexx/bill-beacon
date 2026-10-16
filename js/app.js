@@ -8940,7 +8940,7 @@ function openPaymentPlanDetails(planId) {
           )}
         </div>
 
-        <div class="section-header">Installments</div>
+        <div class="section-header">Payment History</div>
 
         <div class="card" style="margin-bottom:0;">
           ${installmentRows}
