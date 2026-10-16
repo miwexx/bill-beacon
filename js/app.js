@@ -4563,7 +4563,7 @@ function getDashboardPaidOccurrences(referenceDate = new Date()) {
         name:
           payment.billSnapshot?.name ||
           bill?.name ||
-          "Removed bill",
+          "Removed Bill",
         removed: !activeBill,
         dueDate: occurrenceDate.toISOString(),
         expectedAmount:
@@ -4827,8 +4827,8 @@ function renderDashboardInstallmentsShortcut() {
         <span class="dashboard-installments-shortcut-subtitle">
           ${
             activePlanCount
-              ? `${activePlanCount} active ${
-                  activePlanCount === 1 ? "plan" : "plans"
+              ? `${activePlanCount} Active ${
+                  activePlanCount === 1 ? "Plan" : "Plans"
                 }`
               : "View payment plans and history"
           }
