@@ -4605,10 +4605,144 @@ function openDashboardPaidSheet() {
   fitBillListSheet("dashboardPaidSheet", 1);
 
 }
+function dashboardIsInstallment(item) {
+  return Boolean(
+    item?.installmentPlanId || item?.bill?.installmentPlanId ||
+    item?.payments?.some(payment => payment.billSnapshot?.installmentPlanId)
+  );
+}
 
+function getDashboardSeparatedStatus(referenceDate = new Date()) {
+  const summary = getDashboardMonthSummary(referenceDate);
+  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
+  const overdue = getAllOverdueBillOccurrences(referenceDate);
+  const makeGroup = installment => {
+    const matches = item => dashboardIsInstallment(item) === installment;
+    const paid = summary.paid.filter(matches);
+    const unpaid = summary.unpaid.filter(matches);
+    return {
+      paid,
+      unpaid,
+      totalCount: paid.length + unpaid.length,
+      due: unpaid.filter(bill => getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming"),
+      overdue: overdue.filter(matches),
+      olderOverdue: overdue.filter(bill => matches(bill) && new Date(bill.dueDate) < monthStart)
+    };
+  };
+  return { bills: makeGroup(false), installments: makeGroup(true) };
+}
+
+function renderDashboardSeparatedStatus(referenceDate = new Date()) {
+  const groups = getDashboardSeparatedStatus(referenceDate);
+  const month = escapeHtml(formatDate(referenceDate, "monthYear"));
+  const pill = (group, status, count, label, color) => `
+    <button type="button" class="dashboard-status-card"
+      onclick="openDashboardSeparatedStatus('${group}', '${status}')"
+      aria-label="View ${group} ${label.toLowerCase()}">
+      <div class="dashboard-status-number ${color}">${count}</div>
+      <div class="dashboard-status-label">${label}</div>
+    </button>`;
+  return `
+    <section class="dashboard-separated-status">
+      <div class="section-header">Bill Status · ${month}</div>
+      <div class="dashboard-status-row">
+        ${pill("bills", "paid", groups.bills.paid.length, "Paid", "text-paid")}
+        ${pill("bills", "due", groups.bills.due.length, "Due", "text-upcoming")}
+        ${pill("bills", "overdue", groups.bills.overdue.length, "Overdue", "text-overdue")}
+      </div>
+    </section>
+    <section class="dashboard-separated-status">
+      <div class="section-header">Installment Status · ${month}</div>
+      <div class="dashboard-installment-count">
+        ${groups.installments.paid.length} of ${groups.installments.totalCount} installment payments paid
+      </div>
+      <div class="dashboard-status-row dashboard-installment-status-row">
+        ${pill("installments", "paid", groups.installments.paid.length, "Paid", "text-paid")}
+        ${pill("installments", "unpaid", groups.installments.unpaid.length, "Due", "text-upcoming")}
+      </div>
+      ${groups.installments.overdue.length ? `
+        <button type="button" class="dashboard-installment-warning"
+          onclick="openDashboardSeparatedStatus('installments', 'overdue')">
+          ${groups.installments.overdue.length} overdue installment payment(s)
+          ${groups.installments.olderOverdue.length ? ` · ${groups.installments.olderOverdue.length} from earlier months` : ""}
+          · View
+        </button>` : ""}
+    </section>`;
+}
+
+function openDashboardSeparatedStatus(groupName, status) {
+  closeDashboardStatusSheet();
+  const now = new Date();
+  const installment = groupName === "installments";
+  const group = getDashboardSeparatedStatus(now)[installment ? "installments" : "bills"];
+  const items = group[status] || [];
+  const paid = status === "paid";
+  const label = installment ? "Installment Payments" : "Bills";
+  const statusLabel = paid ? "Paid" : status === "overdue" ? "Overdue" : "Due";
+  const period = status === "overdue" ? "All dates" : formatDate(now, "monthYear");
+  const title = `${statusLabel} ${label}`;
+  const total = dashboardMoneyTotal(items.map(item => item.amount));
+  const rows = items.map(item => {
+    const record = paid ? item.bill || item.payments?.find(payment => payment.billSnapshot)?.billSnapshot : item;
+    const planId = record?.installmentPlanId;
+    const name = item.name || record?.name || "Payment";
+    const dueDate = item.dueDate;
+    const overdue = !paid && getOccurrenceStatus(item, new Date(dueDate)) === "overdue";
+    const removed = paid && item.removed;
+    const billId = paid ? item.billId : getBillPaymentId(item);
+    const action = removed ? "" : installment && planId
+      ? `closeDashboardStatusSheet();openPaymentPlanDetails('${escapeInlineString(planId)}')`
+      : `closeDashboardStatusSheet();navigate('detail',{id:'${escapeInlineString(billId)}',occurrenceDueDate:'${escapeInlineString(dueDate)}',returnRoute:'today'})`;
+    const tag = removed ? "div" : "button";
+    const paymentNumber = record?.installmentNumber;
+    const paymentTotal = record?.installmentTotal;
+    return `
+      <${tag} class="bill-row" ${removed ? "" : `type="button" onclick="${action}"`}
+        style="width:100%;text-align:left">
+        <div class="bill-icon" style="background:transparent;overflow:hidden;color:var(--accent)">
+          ${record ? billOrPaymentPlanVisual(record, 34) : svgIcon("checkCircle", 28)}
+        </div>
+        <div class="bill-info">
+          <div class="bill-name">${escapeHtml(name)}</div>
+          ${installment && paymentNumber && paymentTotal ? `<div class="bill-meta">Payment ${escapeHtml(paymentNumber)} of ${escapeHtml(paymentTotal)}</div>` : ""}
+          <div class="bill-meta" style="color:${paid ? "var(--paid)" : overdue ? "var(--overdue)" : "var(--text-muted)"}">
+            ${paid ? `Paid ${item.paidDate ? formatDate(item.paidDate, "short") : "—"} · Due` : overdue ? "Overdue ·" : "Due"}
+            ${formatDate(dueDate, "short")}
+          </div>
+          ${removed ? '<div class="bill-meta">Removed record · Payment retained</div>' : ""}
+        </div>
+        <div class="bill-amount">${formatCurrency(item.amount)}</div>
+      </${tag}>`;
+  }).join("");
+  const container = document.createElement("div");
+  container.id = "dashboardStatusContainer";
+  container.innerHTML = `
+    <div class="sheet-overlay show" onclick="closeDashboardStatusSheet()"></div>
+    <div class="sheet show" id="dashboardStatusSheet" role="dialog" aria-modal="true" aria-label="${escapeHtml(title)}">
+      <div class="sheet-handle"></div>
+      <div class="sheet-nav">
+        <button type="button" class="nav-button" onclick="closeDashboardStatusSheet()" aria-label="Back to dashboard">${svgIcon("chevronLeft", 22)}</button>
+        <div class="sheet-title">${escapeHtml(title)}</div>
+        <div style="width:54px"></div>
+      </div>
+      <div class="sheet-body">
+        <div class="card card-pad">
+          <div style="display:flex;justify-content:space-between;gap:12px;font-weight:800">
+            <span>${items.length} ${installment ? "payments" : "bills"}</span>
+            <span>${formatCurrency(total)}</span>
+          </div>
+          <div class="bill-meta">${escapeHtml(period)}</div>
+        </div>
+        ${items.length ? `<div class="card">${rows}</div>` : '<div class="empty-state">Nothing to show.</div>'}
+      </div>
+    </div>`;
+  document.body.appendChild(container);
+  fitBillListSheet("dashboardStatusSheet", 1);
+}
 function renderToday() {
   const now = new Date();
   const summary = getDashboardMonthSummary(now);
+  const billCounts = getDashboardSeparatedStatus(now).bills;
 
   const currentDateLabel = new Intl.DateTimeFormat(undefined, {
     weekday: "short",
@@ -4748,7 +4882,7 @@ aria-label="Open settings"
     padding:18px 20px;
     text-align:left;
   "
-  aria-label="This month's bills"
+  aria-label="Monthly bills and installments summary"
 >
   <div
     class="dashboard-card-topline"
@@ -4761,7 +4895,7 @@ aria-label="Open settings"
     "
   >
     <span style="font-size:14px;font-weight:800;">
-      This Month
+      ${formatDate(now, "monthYear")}
     </span>
 
     <span style="
@@ -4769,7 +4903,7 @@ aria-label="Open settings"
       font-weight:600;
       color:var(--text-muted);
     ">
-      ${summary.paidCount} of ${summary.totalCount} Bills Paid
+      ${billCounts.paid.length} of ${billCounts.totalCount} Bills Paid
     </span>
   </div>
 
@@ -4783,7 +4917,7 @@ aria-label="Open settings"
     <button
       type="button"
       onclick="openDashboardStatusSheet('unpaid')"
-      aria-label="View this month's due and overdue bills"
+      aria-label="View this month's due and overdue bills and installments"
       style="
         display:flex;
         flex-direction:column;
@@ -4825,7 +4959,7 @@ aria-label="Open settings"
     <button
       type="button"
       onclick="openDashboardPaidSheet()"
-      aria-label="View this month's paid bills"
+      aria-label="View this month's paid bills and installments"
       style="
         display:flex;
         flex-direction:column;
@@ -4885,37 +5019,7 @@ aria-label="Open settings"
   </div>
 </section>
 
-        <div class="section-header">Bill Status This Month</div>
-        <div class="dashboard-status-row">
-          <button type="button"
-            class="dashboard-status-card status-paid-card"
-            onclick="openDashboardPaidSheet()" aria-label="View paid bills">
-            <div class="dashboard-status-number text-paid">
-              ${summary.paidCount}
-            </div>
-            <div class="dashboard-status-label">Paid</div>
-          </button>
-
-          <button type="button"
-            class="dashboard-status-card status-upcoming-card"
-            onclick="openDashboardStatusSheet('due')"
-            aria-label="View bills due">
-            <div class="dashboard-status-number text-upcoming">
-              ${dueBills.length}
-            </div>
-            <div class="dashboard-status-label">Due</div>
-          </button>
-
-          <button type="button"
-            class="dashboard-status-card status-overdue-card"
-            onclick="openDashboardStatusSheet('overdue')"
-            aria-label="View overdue bills">
-            <div class="dashboard-status-number text-overdue">
-              ${overdueBills.length}
-            </div>
-            <div class="dashboard-status-label">Overdue</div>
-          </button>
-        </div>
+        ${renderDashboardSeparatedStatus(now)}
 
         ${renderDashboardPaycheckPlan()}
 

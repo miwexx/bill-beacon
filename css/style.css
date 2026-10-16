@@ -5108,3 +5108,42 @@ max-height: max(160px, calc(50dvh - 88px));
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y;
 }
+.dashboard-separated-status .section-header {
+  padding: 8px 0;
+}
+.dashboard-installment-status-row {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.dashboard-installment-count {
+  margin: 0 0 10px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 650;
+}
+.dashboard-installment-warning {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--overdue-bg);
+  color: var(--overdue);
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 700;
+  text-align: left;
+}
+.dashboard-combined-label {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+.card.installment-inline-schedule,
+.installment-inline-schedule-scroll {
+  overscroll-behavior-y: auto !important;
+}
+.installment-inline-schedule-scroll {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
