@@ -3409,7 +3409,286 @@ function getPaycheckBillStatusLabel(bill) {
     icon: "calendar",
   };
 }
+function togglePaycheckInlineRows(button) {
+  const list = button.previousElementSibling;
+  if (!list) return;
 
+  const expanded = button.getAttribute("aria-expanded") !== "true";
+
+  list.querySelectorAll("[data-paycheck-extra]").forEach(row => {
+    row.hidden = !expanded;
+  });
+
+  button.setAttribute("aria-expanded", String(expanded));
+  button.textContent = expanded ? "Show less" : "Show more";
+}
+
+function renderPaycheckInlineRows(selected) {
+  const entries = [];
+  const providers = new Map();
+
+  selected.bills.forEach(bill => {
+    const installment = Boolean(
+      bill.installmentPlanId || bill.installmentProvider
+    );
+
+    if (!installment) {
+      entries.push({ type: "bill", bill });
+      return;
+    }
+
+    const provider = String(
+      bill.installmentProvider || "Other installments"
+    ).trim() || "Other installments";
+
+    const key = provider.toLowerCase().replace(/\s+/g, " ");
+
+    if (!providers.has(key)) {
+      const group = {
+        type: "provider",
+        provider,
+        bills: []
+      };
+
+      providers.set(key, group);
+      entries.push(group);
+    }
+
+    providers.get(key).bills.push(bill);
+  });
+
+  const renderBill = bill => {
+    const status = getPaycheckBillStatusLabel(bill);
+    const billId = getBillPaymentId(bill);
+    const installment = Boolean(
+      bill.installmentPlanId || bill.installmentProvider
+    );
+    const brand = Boolean(getBillBrand(bill.name));
+    const category = getCategory(bill.category);
+
+    return `
+      <button
+        type="button"
+        onclick="navigate('detail', {
+          id: '${escapeInlineString(billId)}',
+          occurrenceDueDate: '${escapeInlineString(bill.dueDate)}',
+          returnRoute: 'today'
+        })"
+        style="
+          width:100%;
+          display:flex;
+          align-items:center;
+          gap:10px;
+          padding:12px 0;
+          border:0;
+          background:transparent;
+          color:var(--text);
+          font:inherit;
+          text-align:left;
+          cursor:pointer;
+        "
+      >
+        <span style="
+          width:32px;
+          height:32px;
+          flex:0 0 32px;
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          overflow:hidden;
+          border-radius:10px;
+          background:${
+            installment
+              ? "transparent"
+              : brand
+                ? "#fff"
+                : `var(--${category.color})`
+          };
+          color:${brand ? "#1e1e2e" : "#fff"};
+        ">
+          ${billOrPaymentPlanVisual(bill, 28)}
+        </span>
+
+        <span style="min-width:0;flex:1;">
+          <span style="
+            display:block;
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+            font-size:var(--text-sm);
+            font-weight:800;
+          ">
+            ${escapeHtml(bill.name)}
+          </span>
+
+          <span style="
+            display:flex;
+            align-items:center;
+            gap:4px;
+            margin-top:3px;
+            color:${status.color};
+            font-size:var(--text-xs);
+          ">
+            ${svgIcon(status.icon, 14)}
+            <span>${escapeHtml(status.label)}</span>
+          </span>
+        </span>
+
+        <span style="
+          flex-shrink:0;
+          font-size:var(--text-sm);
+          font-weight:800;
+          white-space:nowrap;
+        ">
+          ${formatCurrency(bill.amount)}
+        </span>
+      </button>
+    `;
+  };
+
+  const renderProvider = group => {
+    const unpaid = group.bills.filter(
+      bill => !isOccurrencePaid(bill, new Date(bill.dueDate))
+    );
+
+    const remaining = dashboardMoneyTotal(
+      unpaid.map(bill => bill.amount)
+    );
+
+    const paidCount = group.bills.length - unpaid.length;
+
+    return `
+      <details>
+        <summary style="
+          display:flex;
+          align-items:center;
+          gap:10px;
+          padding:12px 0;
+          cursor:pointer;
+          list-style:none;
+          color:var(--text);
+        ">
+          ${paymentPlanVisual(group.provider, 32)}
+
+          <span style="min-width:0;flex:1;">
+            <span style="
+              display:block;
+              font-size:var(--text-sm);
+              font-weight:800;
+            ">
+              ${escapeHtml(group.provider)}
+            </span>
+
+            <span style="
+              display:block;
+              margin-top:3px;
+              font-size:var(--text-xs);
+              color:var(--text-muted);
+            ">
+              ${unpaid.length
+                ? `${unpaid.length} unpaid · ${paidCount} paid`
+                : "All paid for this paycheck"}
+            </span>
+          </span>
+
+          <span style="text-align:right;flex-shrink:0;">
+            <span style="
+              display:block;
+              font-size:var(--text-sm);
+              font-weight:800;
+              color:${unpaid.length ? "var(--text)" : "var(--paid)"};
+            ">
+              ${formatCurrency(remaining)}
+            </span>
+
+            <span style="
+              display:block;
+              margin-top:3px;
+              font-size:var(--text-xs);
+              color:var(--text-muted);
+            ">
+              ${unpaid.length ? "left" : "Paid"}
+            </span>
+          </span>
+
+          <span aria-hidden="true" style="
+            color:var(--text-muted);
+            font-size:18px;
+          ">⌄</span>
+        </summary>
+
+        <div style="
+          margin:0 0 12px 16px;
+          padding-left:12px;
+          border-left:2px solid var(--border);
+        ">
+          <div style="
+            margin:0 0 4px;
+            font-size:var(--text-xs);
+            color:var(--text-muted);
+          ">
+            Assigned to this paycheck · Tap a payment for details
+          </div>
+
+          ${group.bills.map(renderBill).join("")}
+        </div>
+      </details>
+    `;
+  };
+
+  if (!entries.length) {
+    return `
+      <div style="
+        margin-top:var(--space-3);
+        padding-top:var(--space-3);
+        border-top:1px solid var(--border);
+        color:var(--text-muted);
+        font-size:var(--text-sm);
+      ">
+        No bills assigned to this paycheck yet.
+      </div>
+    `;
+  }
+
+  return `
+    <div style="
+      margin-top:var(--space-3);
+      border-top:1px solid var(--border);
+    ">
+      <div>
+        ${entries.map((entry, index) => `
+          <div
+            ${index >= 3 ? "data-paycheck-extra hidden" : ""}
+            style="border-bottom:1px solid var(--border);"
+          >
+            ${
+              entry.type === "provider"
+                ? renderProvider(entry)
+                : renderBill(entry.bill)
+            }
+          </div>
+        `).join("")}
+      </div>
+
+      ${entries.length > 3 ? `
+        <button
+          type="button"
+          class="bb-outline-pill"
+          aria-expanded="false"
+          onclick="togglePaycheckInlineRows(this)"
+          style="
+            width:100%;
+            min-height:42px;
+            margin-top:var(--space-3);
+            justify-content:center;
+          "
+        >
+          Show more
+        </button>
+      ` : ""}
+    </div>
+  `;
+}
 function renderDashboardPaycheckPlan(
   referenceDate = getDashboardPaycheckMonth()
 ) {
@@ -3643,142 +3922,11 @@ function renderDashboardPaycheckPlan(
           color:var(--text-muted);
         "
       >
-        <span>${formatCurrency(selected.paid)} Paid</span>
+               <span>${formatCurrency(selected.paid)} Paid</span>
         <span>${formatCurrency(selected.scheduled)} Scheduled</span>
       </div>
 
-      ${
-        previewBills.length
-          ? `
-            <div
-  role="region"
-  aria-label="Bills assigned to this paycheck"
-  tabindex="0"
-  style="
-    margin-top:var(--space-3);
-    border-top:1px solid var(--border);
-    max-height:228px;
-    overflow-y:auto;
-    overflow-x:hidden;
-    overscroll-behavior-y:contain;
-    -webkit-overflow-scrolling:touch;
-    touch-action:pan-y;
-  "
->
-  ${previewBills
-                .map((bill) => {
-                  const status = getPaycheckBillStatusLabel(bill);
-                  const sourceBillId = bill.isOccurrence
-                    ? bill.sourceBillId
-                    : bill.id;
-
-                  return `
-                    <button
-                      type="button"
-                      onclick="navigate('detail', {
-                        id: '${escapeInlineString(sourceBillId)}',
-                        occurrenceDueDate: '${escapeInlineString(bill.dueDate)}',
-                        returnRoute: 'today'
-                      })"
-                      style="
-                        width:100%;
-                        display:flex;
-                        align-items:center;
-                        gap:10px;
-                        padding:12px 0;
-                        border:0;
-                        border-bottom:1px solid var(--border);
-                        background:transparent;
-                        color:inherit;
-                        font:inherit;
-                        text-align:left;
-                        cursor:pointer;
-                      "
-                    >
-                      <div
-                        style="
-                          width:32px;
-                          height:32px;
-                          min-width:32px;
-                          display:flex;
-                          align-items:center;
-                          justify-content:center;
-                          border-radius:10px;
-                          overflow:hidden;
-                          background:${
-                            getBillBrand(bill.name)
-                              ? "#fff"
-                              : `var(--${getCategory(bill.category).color})`
-                          };
-                          color:${
-                            getBillBrand(bill.name)
-                              ? "#1e1e2e"
-                              : "#fff"
-                          };
-                        "
-                      >
-                        ${billOrPaymentPlanVisual(bill, 28)}
-                      </div>
-
-                      <div style="min-width:0;flex:1;">
-                        <div
-                          style="
-                            overflow:hidden;
-                            text-overflow:ellipsis;
-                            white-space:nowrap;
-                            font-size:var(--text-sm);
-                            font-weight:800;
-                          "
-                        >
-                          ${escapeHtml(bill.name)}
-                        </div>
-
-                        <div
-                          style="
-                            margin-top:3px;
-                            display:flex;
-                            align-items:center;
-                            gap:4px;
-                            color:${status.color};
-                            font-size:var(--text-xs);
-                          "
-                        >
-                          ${svgIcon(status.icon, 14)}
-                          <span>${status.label}</span>
-                        </div>
-                      </div>
-
-                      <div
-                        style="
-                          text-align:right;
-                          font-size:var(--text-sm);
-                          font-weight:800;
-                        "
-                      >
-                        ${formatCurrency(bill.amount)}
-                      </div>
-                    </button>
-                  `;
-                })
-                .join("")}
-            </div>
-          `
-          : `
-            <div
-              style="
-                margin-top:var(--space-3);
-                padding-top:var(--space-3);
-                border-top:1px solid var(--border);
-                color:var(--text-muted);
-                font-size:var(--text-sm);
-              "
-            >
-              No bills assigned to this paycheck yet.
-            </div>
-          `
-      }
-
-      
+      ${renderPaycheckInlineRows(selected)}
     </div>
   `;
 }
