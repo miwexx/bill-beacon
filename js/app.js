@@ -4291,7 +4291,7 @@ function renderMore() {
           <div
             style="
               display:grid;
-              grid-template-columns:1fr 1fr;
+              grid-template-columns:1fr;
               gap:12px;
             "
           >
@@ -4339,53 +4339,7 @@ function renderMore() {
               </div>
             </button>
 
-            <button
-              type="button"
-              onclick="navigate('payment-plans')"
-              style="${moneyTileStyle}"
-            >
-              <div
-                style="
-                  width:42px;
-                  height:42px;
-                  display:flex;
-                  align-items:center;
-                  justify-content:center;
-                  border-radius:14px;
-                  color:var(--bb-more-plan-icon, #ffdce9);
-                  background:var(--bb-more-plan-bg, rgba(246,76,174,.18));
-                "
-              >
-                ${svgIcon("creditcard", 22)}
-              </div>
-
-              <div>
-                <div
-                  style="
-                    font-size:16px;
-                    font-weight:850;
-                    line-height:1.2;
-                  "
-                >
-                  Installments
-                </div>
-
-                </div>
-
-              <div
-                style="
-                  color:var(--text-muted);
-                  font-size:12px;
-                  font-weight:800;
-                "
-              >
-                ${
-                  activePlans
-                    ? `${activePlans} Active · ${formatCurrency(upcomingInstallmentTotal)} Due Soon`
-                    : "No active plans"
-                }
-              </div>
-            </button>
+            
           </div>
 
           <button
@@ -4847,7 +4801,46 @@ function getDashboardSeparatedStatus(referenceDate = new Date()) {
   };
   return { bills: makeGroup(false), installments: makeGroup(true) };
 }
+function renderDashboardInstallmentsShortcut() {
+  const unpaidInstallments = getUnpaidPaymentPlanInstallments();
 
+  const activePlanCount = new Set(
+    unpaidInstallments.map(item => item.planId)
+  ).size;
+
+  return `
+    <button
+      type="button"
+      class="dashboard-installments-shortcut"
+      onclick="navigate('payment-plans', { returnRoute: 'today' })"
+      aria-label="Open Installments"
+    >
+      <span class="dashboard-installments-shortcut-icon">
+        ${svgIcon("creditcard", 23)}
+      </span>
+
+      <span class="dashboard-installments-shortcut-copy">
+        <span class="dashboard-installments-shortcut-title">
+          Installments
+        </span>
+
+        <span class="dashboard-installments-shortcut-subtitle">
+          ${
+            activePlanCount
+              ? `${activePlanCount} active ${
+                  activePlanCount === 1 ? "plan" : "plans"
+                }`
+              : "View payment plans and history"
+          }
+        </span>
+      </span>
+
+      <span class="dashboard-installments-shortcut-chevron">
+        ${svgIcon("chevronRight", 20)}
+      </span>
+    </button>
+  `;
+}
 function renderDashboardSeparatedStatus(referenceDate = new Date()) {
   const groups = getDashboardSeparatedStatus(referenceDate);
   const month = escapeHtml(formatDate(referenceDate, "monthYear"));
@@ -4868,6 +4861,7 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
       </div>
     </section>
     <section class="dashboard-separated-status">
+          ${renderDashboardInstallmentsShortcut()}
       <div class="section-header">Installment Status · ${month}</div>
       <div class="dashboard-installment-count">
         ${groups.installments.paid.length} of ${groups.installments.totalCount} installment payments paid
@@ -7786,15 +7780,15 @@ function expandInstallmentScheduleMonth(button, collapse = false) {
 window.expandInstallmentScheduleMonth =
   expandInstallmentScheduleMonth;
 function renderPaymentPlans() {
-    const installmentsBackRoute =
+      const installmentsBackRoute =
     routeParams.returnRoute === "insights"
       ? "insights"
-      : "more";
+      : "today";
 
   const installmentsBackLabel =
     installmentsBackRoute === "insights"
       ? "Insights"
-      : "More";
+      : "Dashboard";
   const installmentBills = Store.getBills().filter((bill) =>
     Boolean(bill.installmentPlanId)
   );
