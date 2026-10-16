@@ -9923,7 +9923,7 @@ for (let i = 5; i >= 0; i -= 1) {
               class="insights-leftover-column insights-leftover-right"
             >
               <div class="insights-leftover-label">
-                Monthly Bills
+                Monthly Expenses
               </div>
 
               <div class="insights-leftover-amount">
@@ -9962,15 +9962,6 @@ for (let i = 5; i >= 0; i -= 1) {
               </div>
             </div>
 
-            <div class="insights-leftover-note">
-              ${
-                estimatedMonthlyIncome <= 0
-                  ? "Add expected income in Settings to see your estimate."
-                  : estimatedRemaining < 0
-                    ? "Scheduled bills and installments exceed expected income."
-                    : "After this month’s scheduled bills and installments."
-              }
-            </div>
           </div>
         </section>
         ${
