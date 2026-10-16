@@ -4967,10 +4967,11 @@ function renderToday() {
   "
 >
   <span style="
-    font-size:16px;
+    font-size:20px;
     font-weight:800;
     line-height:20px;
     white-space:nowrap;
+    color:#fff;
   ">
     ${formatDate(now, "monthYear")}
   </span>
