@@ -5658,24 +5658,33 @@ max-height: max(160px, calc(50dvh - 88px));
   outline: 2px solid var(--accent);
   outline-offset: -4px;
 }
-/* Dashboard: entry to the existing Installments screen */
-
-/* Dashboard Installments shortcut — clean, neutral style */
+/* Dashboard Installments — compact branded pill */
 
 .dashboard-installments-shortcut {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 
   width: 100%;
-  min-height: 66px;
-  margin: 0 0 14px;
-  padding: 12px 14px;
+  min-height: 54px;
+  margin: 0 0 16px;
+  padding: 10px 16px;
 
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--surface);
-  background-image: none;
+  border: 1.5px solid transparent;
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      var(--surface),
+      var(--surface)
+    ) padding-box,
+    var(
+      --bb-brand-gradient,
+      linear-gradient(105deg, #8f36ff, #f64cae, #ff7138)
+    ) border-box;
+
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
   box-shadow: none;
 
   color: var(--text);
@@ -5686,22 +5695,24 @@ max-height: max(160px, calc(50dvh - 88px));
   -webkit-tap-highlight-color: transparent;
 }
 
+/* One-color icon, without the separate colored tile. */
+
 .dashboard-installments-shortcut-icon {
   display: flex;
   align-items: center;
   justify-content: center;
 
-  width: 38px;
-  height: 38px;
-  flex: 0 0 38px;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
 
-  border: 1px solid var(--border);
-  border-radius: 11px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
 
   background: transparent;
-  background-image: none;
-  color: var(--text-muted);
   box-shadow: none;
+  color: var(--text);
 }
 
 .dashboard-installments-shortcut-icon svg {
@@ -5718,9 +5729,14 @@ max-height: max(160px, calc(50dvh - 88px));
   fill: currentColor;
 }
 
+/* Title left; active-plan count right. */
+
 .dashboard-installments-shortcut-copy {
-  display: grid;
-  gap: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 3px 10px;
 
   flex: 1;
   min-width: 0;
@@ -5734,6 +5750,8 @@ max-height: max(160px, calc(50dvh - 88px));
 }
 
 .dashboard-installments-shortcut-subtitle {
+  margin-left: auto;
+
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 500;
@@ -5744,15 +5762,41 @@ max-height: max(160px, calc(50dvh - 88px));
   display: flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 20px;
+
+  width: 18px;
+  flex: 0 0 18px;
 
   color: var(--text-muted);
 }
 
-.dashboard-installments-shortcut:active {
-  opacity: 0.78;
+.dashboard-installments-shortcut-chevron svg {
+  width: 18px;
+  height: 18px;
 }
+
+.dashboard-installments-shortcut:active {
+  opacity: 0.8;
+}
+
 .dashboard-installments-shortcut:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
+}
+
+/* Let longer text wrap cleanly on narrow screens. */
+
+@media (max-width: 360px) {
+  .dashboard-installments-shortcut {
+    padding: 10px 14px;
+  }
+
+  .dashboard-installments-shortcut-copy {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .dashboard-installments-shortcut-subtitle {
+    margin-left: 0;
+  }
 }
