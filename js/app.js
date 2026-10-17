@@ -844,11 +844,11 @@ function buildDeletedDetail(bill) {
   }
 
   if (bill.dueDay) {
-    return `${amount} · due on the ${bill.dueDay}${getOrdinalSuffix(bill.dueDay)}`;
+    return `${amount} · Due On The ${bill.dueDay}${getOrdinalSuffix(bill.dueDay)}`;
   }
 
   if (bill.dueDate) {
-    return `${amount} · due ${formatDate(bill.dueDate, "short")}`;
+    return `${amount} · Due ${formatDate(bill.dueDate, "short")}`;
   }
 
   return amount;
@@ -4164,9 +4164,9 @@ function renderDashboardPaycheckPlan(
               color:var(--text-muted);
             "
           >
-            ${selected.paidBills.length} of ${selected.bills.length} bill${
-              selected.bills.length === 1 ? "" : "s"
-            } paid
+            ${selected.paidBills.length} of ${selected.bills.length} ${
+  selected.bills.length === 1 ? "Bill" : "Bills"
+} Paid
           </div>
         </div>
 
@@ -12681,7 +12681,7 @@ function billRow(bill, clickable = false) {
   const scheduleText =
     bill.recurrence && bill.recurrence !== 'None'
       ? bill.recurrence === 'Monthly'
-        ? `Due on the ${ordinal(dueDay)} of each month`
+        ? `Due On The ${ordinal(dueDay)} Of Each Month`
         : getBillScheduleLabel(bill)
       : `Due ${formatDate(bill.dueDate, 'full')}`;
 
@@ -14288,7 +14288,7 @@ function saveBill() {
         bill.dueDay || new Date(bill.dueDate).getDate()
       );
 
-      return `due on the ${day}${getOrdinalSuffix(day)} of each month`;
+      return `Due On The ${day}${getOrdinalSuffix(day)} Of Each Month`;
     }
 
     return bill.dueDate
@@ -18055,12 +18055,12 @@ function archiveBill(billId) {
         bill.dueDay || new Date(bill.dueDate).getDate()
       );
 
-      return `due on the ${day}${getOrdinalSuffix(day)}`;
+      return `Due On The ${day}${getOrdinalSuffix(day)}`;
     }
 
     return bill.dueDate
-      ? `due ${formatDate(bill.dueDate, "short")}`
-      : "no due date";
+      ? `Due ${formatDate(bill.dueDate, "short")}`
+      : "No Due Date";
   };
 
   /*
