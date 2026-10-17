@@ -8159,6 +8159,24 @@ function expandInstallmentScheduleMonth(button, collapse = false) {
 }
 window.expandInstallmentScheduleMonth =
   expandInstallmentScheduleMonth;
+function getInstallmentProgress(paidCount, installmentCount) {
+  const total = Math.max(0, Math.trunc(Number(installmentCount) || 0));
+  const paid = Math.min(total, Math.max(0, Math.trunc(Number(paidCount) || 0)));
+  const complete = total > 0 && paid === total;
+  return {paid, total, complete,
+    percent:complete ? 100 : total ? Math.min(99, Math.floor(paid / total * 100)) : 0};
+}
+
+function renderInstallmentProgressBar(paidCount, installmentCount) {
+  const progress = getInstallmentProgress(paidCount, installmentCount);
+  return `<div role="progressbar" aria-valuemin="0" aria-valuemax="100"
+    aria-valuenow="${progress.percent}"
+    aria-label="${progress.paid} of ${progress.total} installments paid"
+    style="display:block;box-sizing:border-box;flex:none;width:100%;height:6px;min-height:6px;margin-top:14px;overflow:hidden;border-radius:999px;background:rgba(174,96,255,.14);">
+    <div style="display:block;box-sizing:border-box;width:${progress.percent}%;height:6px;min-height:6px;border-radius:inherit;background:${progress.complete ? 'var(--paid, #34c759)' : 'linear-gradient(105deg, #8f36ff 0%, #c44cff 34%, #f64cae 65%, #ff7138 100%)'};transition:width 180ms ease;"></div>
+  </div>`;
+}
+
 function renderPaymentPlans() {
       const installmentsBackRoute =
     routeParams.returnRoute === "insights"
@@ -8305,10 +8323,6 @@ function renderPaymentPlans() {
         ? `Paid ${formatDate(plan.paidInFullAt, "short")}`
         : "Complete";
 
-    const progressPercent = plan.installmentCount
-      ? Math.round((plan.paidCount / plan.installmentCount) * 100)
-      : 0;
-
     const nextPaymentAmount = plan.nextInstallment
       ? formatCurrency(plan.nextInstallment.amount)
       : null;
@@ -8388,30 +8402,7 @@ function renderPaymentPlans() {
           </div>
         </div>
 
-        <div
-          style="
-            height:6px;
-            margin-top:14px;
-            overflow:hidden;
-            border-radius:999px;
-            background:rgba(174, 96, 255, 0.14);
-          "
-          aria-label="${progressPercent}% of payments completed"
-        >
-          <div
-            style="
-              width:${progressPercent}%;
-              height:100%;
-              border-radius:inherit;
-              background:${
-                isCompleted
-                  ? "var(--text-subtle, #6f6b7c)"
-                  : "linear-gradient(105deg, #8f36ff 0%, #c44cff 34%, #f64cae 65%, #ff7138 100%)"
-              };
-              transition:width 180ms ease;
-            "
-          ></div>
-        </div>
+        ${renderInstallmentProgressBar(plan.paidCount, plan.installmentCount)}
 
         <div
           style="
@@ -9171,6 +9162,7 @@ function openCompletedPlansHistory() {
         display:flex;
         width:100%;
         align-items:center;
+        flex-wrap:wrap;
         gap:var(--space-3);
         padding:var(--space-4);
         text-align:left;
@@ -9216,6 +9208,10 @@ function openCompletedPlansHistory() {
         "
       >
         ${formatCurrency(plan.totalAmount)} paid
+      </div>
+      <div style="flex:0 0 100%;min-width:0;">
+        ${renderInstallmentProgressBar(plan.paidCount, plan.installmentCount)}
+        <div style="margin-top:8px;font-size:var(--text-xs);color:var(--text-muted);">${plan.paidCount} of ${plan.installmentCount} payments complete</div>
       </div>
     </button>
   `;
@@ -9662,6 +9658,8 @@ function openPaymentPlanDetails(planId) {
               </div>
             </div>
           </div>
+          ${renderInstallmentProgressBar(paidCount, installmentCount)}
+          <div style="margin-top:8px;font-size:var(--text-xs);color:var(--text-muted);">${paidCount} of ${installmentCount} payments complete</div>
         </div>
 
         ${paymentSelectorHtml}
@@ -10627,7 +10625,7 @@ for (let i = 5; i >= 0; i -= 1) {
         }
 
         <div>
-          <div class="section-header">Payments by Category</div>
+          <div class="section-header">Spending by Category</div>
 
           <div class="card card-pad">
             ${
@@ -10691,7 +10689,7 @@ for (let i = 5; i >= 0; i -= 1) {
         </div>
 
         <div>
-          <div class="section-header">Monthly Payments · 6 Months</div>
+          <div class="section-header">Monthly Spending</div>
 
           <div class="card card-pad">
             ${
