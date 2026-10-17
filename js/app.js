@@ -3435,13 +3435,52 @@ function saveOccurrenceFundingMove(billId, dueDate, expected) {
   const bills = Store.getBills();
   const index = bills.findIndex(bill => bill.id === billId);
   if (index < 0) throw new Error("This bill is no longer available.");
+  const movedAt = new Date().toISOString();
+  const snapshot = funding => ({
+    billId, occurrenceKey:context.key,
+    originalDueDate:context.bill.originalDueDate || context.bill.dueDate,
+    dueDate:context.bill.dueDate, amount:Number(context.bill.amount),
+    month:funding.month, paycheck:funding.paycheck,
+    paycheckDate:paycheckOccurrenceKey(occurrenceFundingDate(funding)),
+    paycheckLabel:occurrenceFundingLabel(funding)
+  });
+  const entry = {
+    id:uid(), timestamp:movedAt, action:"bill_occurrence_paycheck_moved",
+    entityType:"bill", entityId:billId,
+    title:`${context.bill.name} moved to another paycheck`,
+    detail:[
+      `${formatCurrency(context.bill.amount)} · Occurrence due ${formatDate(context.bill.dueDate, "full")}`,
+      `From: ${occurrenceFundingLabel(context.from)}`,
+      `To: ${occurrenceFundingLabel(context.to)}`,
+      "Due date unchanged · Only this occurrence"
+    ].join("\n"),
+    before:snapshot(context.from), after:{...snapshot(context.to), movedAt}
+  };
   bills[index] = {...bills[index], paycheckOccurrenceOverrides: {
     ...(bills[index].paycheckOccurrenceOverrides || {}),
     [context.key]: {month:context.to.month, paycheck:context.to.paycheck,
       fromMonth:context.from.month, fromPaycheck:context.from.paycheck,
-      dueDate:context.bill.dueDate, movedAt:new Date().toISOString()}
+      dueDate:context.bill.dueDate, movedAt}
   }};
-  Store.saveBills(bills);
+  const entries = [...Store.getActivityLog(), entry];
+  // Publish one data-change event only after both local records are saved.
+  const previousBills = localStorage.getItem("bills");
+  const previousActivity = localStorage.getItem("activityLog");
+  try {
+    localStorage.setItem("bills", JSON.stringify(bills));
+    localStorage.setItem("activityLog", JSON.stringify(entries));
+  } catch (error) {
+    let rollbackFailed = false;
+    for (const [key, value] of [["bills", previousBills], ["activityLog", previousActivity]]) {
+      try {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      } catch (_) { rollbackFailed = true; }
+    }
+    if (rollbackFailed) throw new Error("The move could not be fully saved or restored. Reload and review the bill and Activity & Changes before trying again.");
+    throw new Error("The move and activity entry could not be saved. Nothing was changed. Check available device storage and try again.");
+  }
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 }
 function commitMoveOccurrencePaycheck(billId, dueDate, context) {
   const dialog = document.getElementById("moveOccurrencePaycheckDialog");
@@ -10741,6 +10780,7 @@ function getActivityActionIcon(action) {
         color: "var(--accent)",
       };
 
+    case "bill_occurrence_paycheck_moved":
     case "bill_due_date_changed":
     case "bill_schedule_changed":
     case "bill_postponed":
@@ -10804,6 +10844,8 @@ function getActivityActionIcon(action) {
 
 function getActivityLabel(action) {
   switch (action) {
+    case "bill_occurrence_paycheck_moved":
+      return "Bill occurrence moved";
     case "bill_created":
       return "Bill added";
 
@@ -11102,13 +11144,15 @@ function renderActivity() {
           </div>
 
           ${entry.detail ? `
-            <div class="activity-log-detail">
+            <div class="activity-log-detail"${entry.action === "bill_occurrence_paycheck_moved" ? ' style="white-space:pre-line;"' : ""}>
               ${escapeHtml(entry.detail)}
             </div>
           ` : ""}
 
           <div class="activity-log-date">
-            ${escapeHtml(dateLabel)}
+            ${escapeHtml(entry.action === "bill_occurrence_paycheck_moved" && date
+              ? `Moved on ${formatDate(date.toISOString(), "full")} at ${date.toLocaleTimeString([], {hour:"numeric", minute:"2-digit"})}`
+              : dateLabel)}
           </div>
         </div>
       </div>
