@@ -417,7 +417,7 @@ window.addEventListener("billbeacon:signed-out", () => {
               "
               onclick="window.openSettingsSection('records')"
             >
-              Import & Export Data
+              Backup & Restore
             </button>
 
             <button
@@ -1941,35 +1941,28 @@ window.addEventListener("bb-device-appearance-changed", () => {
   body.innerHTML = buildAppearanceSettingsSection();
   body.scrollTop = scroll;
 });
-   function buildRecordsSettingsSection() {
-  return `
-    <section class="settings-section">
-      
-
-      <div class="card">
-        ${settingsAction(
-          "Export Bills CSV",
-          "export",
-          "exportCSV()"
-        )}
-
-        ${settingsAction(
-          "Import Bills CSV",
-          "tray",
-          "document.getElementById('billImportFile').click()"
-        )}
-      </div>
-
-      <input
-        id="billImportFile"
-        type="file"
-        accept=".csv,text/csv"
-        style="display:none;"
-        onchange="importBillsCSV(event)"
-      >
-    </section>
-  `;
-}
+  function buildRecordsSettingsSection() {
+    return `
+      <section class="settings-section">
+        <div class="section-header" style="padding-left:0;">Bills & Installments</div>
+        <p style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:0 0 12px;">Import or export schedule information only. No payments, paid status, activity, bank data or settings. Imported schedules start unpaid, even if the original plan was completed.</p>
+        <div class="card">
+          ${settingsAction("Export Bills & Installments CSV", "export", "exportCSV()")}
+          ${settingsAction("Import Bills & Installments CSV", "tray", "document.getElementById('bbScheduleImportFile').click()")}
+        </div>
+        <input id="bbScheduleImportFile" type="file" accept=".csv,text/csv" style="display:none;" onchange="importBillsCSV(event)">
+      </section>
+      <section class="settings-section">
+        <div class="section-header" style="padding-left:0;">Full Backup & Restore</div>
+        <p style="font-size:var(--text-sm);color:var(--text-muted);line-height:1.5;margin:0 0 12px;">Keep bills, installments, previous payments and reversals, Activity & Changes, archived records, income sources, schedule exceptions and app settings. Includes locally saved transaction records and device appearance.</p>
+        <div class="card">
+          ${settingsAction("Create Full Backup", "export", "exportBillTrackerBackup()")}
+          ${settingsAction("Restore Full Backup", "tray", "chooseBillTrackerBackup()")}
+        </div>
+        <input id="bbFullBackupInput" type="file" accept=".json,application/json" style="display:none;" onchange="importBillTrackerBackup(event)">
+        <p style="font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;margin-top:12px;">Restore replaces the covered records in your signed-in household. Account identity, membership, passwords, live bank connections, server notification inbox and personal reminder preferences are not included. Backup files contain private financial information; keep them secure.</p>
+      </section>`;
+  }
     function buildAboutSettingsSection() {
     return `
       <section class="settings-section">
@@ -2113,7 +2106,7 @@ window.addEventListener("bb-device-appearance-changed", () => {
       title = "Appearance";
       content = buildAppearanceSettingsSection();
     } else if (section === "records") {
-      title = "Import & Export Data";
+      title = "Backup & Restore";
       content = buildRecordsSettingsSection();
     } else if (section === "about") {
       title = "About";

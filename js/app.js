@@ -11882,7 +11882,7 @@ const dataSummary =
               <div class="form-label">${svgIcon("export", 18)}</div>
 
               <div style="flex:1;color:var(--text)">
-  Export Bills CSV
+  Export Bills & Installments CSV
 </div>
             </div>
 
@@ -11894,7 +11894,7 @@ const dataSummary =
               <div class="form-label">${svgIcon("tray", 18)}</div>
 
               <div style="flex:1;color:var(--text)">
-  Import Bills CSV
+  Import Bills & Installments CSV
 </div>
 
               <input
@@ -14664,13 +14664,57 @@ function clearAllAppData() {
   alert("Local app lists were cleared. Account and server-side bank connection were not deleted.");
 }
 
+// Transfer operations use the signed-in destination household, never the file's identity.
+let bbFullTransferBusy = false;
+function bbTransferContext() {
+  const user = window.getBillBeaconFirebaseUser?.();
+  const live = window.getBillBeaconHouseholdContext?.();
+  if (!user?.uid || !live?.ready || live.uid !== user.uid || !live.householdId)
+    throw new Error("Wait for your signed-in household to finish loading.");
+  return {uid:user.uid, householdId:live.householdId, generation:live.generation};
+}
+function bbTransferAssert(saved) {
+  const live = bbTransferContext();
+  if (live.uid !== saved.uid || live.householdId !== saved.householdId || live.generation !== saved.generation)
+    throw new Error("The account or household changed. Nothing further was imported.");
+}
+async function bbTransferPrepare(context) {
+  if (typeof window.billBeaconPrepareDataTransfer !== "function") throw new Error("The household transfer helper is unavailable.");
+  const prepared = await window.billBeaconPrepareDataTransfer();
+  bbTransferAssert(context);
+  if (prepared.householdId !== context.householdId) throw new Error("Household verification failed.");
+  return prepared;
+}
+function bbTransferDownload(text, type, filename) {
+  if (new Blob([text]).size > 10 * 1024 * 1024) throw new Error("Export exceeds the supported 10 MB import limit.");
+  const url = URL.createObjectURL(new Blob([text], {type}));
+  const link = document.createElement("a");
+  link.href=url; link.download=filename; document.body.appendChild(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url),1000);
+}
+function bbTransferSafeSettings(settings) {
+  const forbidden = /token|password|secret|credential|authorization|apikey|plaid|bank/i;
+  const clean = value => {
+    if (Array.isArray(value)) return value.map(clean);
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value)
+      .filter(([key]) => !forbidden.test(key) && !["__proto__","constructor","prototype"].includes(key))
+      .map(([key,item]) => [key,clean(item)]));
+    return value;
+  };
+  return clean(settings || {});
+}
+function bbTransferSummary(data) {
+  const bills = data.bills || [];
+  return `${bills.filter(b => !b.installmentPlanId).length} bills; ${new Set(bills.filter(b => b.installmentPlanId).map(b => b.installmentPlanId)).size} installment plans (${bills.filter(b => b.installmentPlanId).length} installments); ${(data.payments || []).length} payment records; ${(data.activityLog || []).length} activity entries; ${(data.archivedBills || []).length} archived records; ${(data.incomeSources || []).length} income sources.`;
+}
+
 const BB_BILLS_CSV_HEADERS = [
   "Format", "Source Household", "ID", "Record Type", "Name", "Amount",
   "Due Date", "Category", "Recurrence", "Due Day", "Reminders",
   "Pay Cycle", "Paycheck Assignment", "Payment Method", "Payment Link",
   "Autopay", "Notes", "Plan ID", "Provider", "Merchant",
   "Installment Number", "Installment Total", "Frequency Days", "Original Plan Total",
-  "Paid (Information Only)"
+  "Track From Month"
 ];
 let bbBillsCsvBusy = false;
 
@@ -14783,14 +14827,14 @@ function bbBillsCsvFingerprint(bill) {
     bill.installmentNumber || null, bill.installmentTotal || null]);
 }
 
-function bbBillsCsvBuild(bills, householdId, isPaid) {
+function bbBillsCsvBuild(bills, householdId) {
   const rows = [BB_BILLS_CSV_HEADERS];
   for (const bill of bills) {
-    if (bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt || bill.paidInFullAt ||
-        ["cancelled", "canceled", "paid-in-full", "paidInFull"].includes(bill.status)) continue;
-    const paid = isPaid(bill);
-    if (bill.installmentPlanId && paid) continue;
-    rows.push(["Bill Beacon Bills CSV 1", householdId, bill.id,
+    if (bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt ||
+        ["cancelled", "canceled", "archived"].includes(String(bill.status || "").toLowerCase())) continue;
+    const tracking = bill.recurrence && bill.recurrence !== "None"
+      ? (getBillTrackingStartKey(bill) || bbBillsCsvDateKey(bill.dueDate)).slice(0,7) : "";
+    rows.push(["Bill Beacon Schedules CSV 2", householdId, bill.id,
       bill.installmentPlanId ? "Installment" : "Bill", bill.name, bill.amount,
       bbBillsCsvDateKey(bill.dueDate), bill.category || "other", bill.recurrence || "None",
       bill.dueDay ?? "", JSON.stringify(bill.reminderOffsets || []), bill.payCycle || "",
@@ -14798,29 +14842,22 @@ function bbBillsCsvBuild(bills, householdId, isPaid) {
       bill.autopay ? "Yes" : "No", bill.notes || "", bill.installmentPlanId || "",
       bill.installmentProvider || "", bill.installmentStore || "",
       bill.installmentNumber ?? "", bill.installmentTotal ?? "",
-      bill.installmentFrequencyDays ?? "", bill.installmentOriginalTotal ?? "", paid ? "Yes" : "No"]);
+      bill.installmentFrequencyDays ?? "", bill.installmentOriginalTotal ?? "", tracking]);
   }
-  return {count: rows.length - 1, csv: "\uFEFF" + rows.map(row => row.map(bbBillsCsvCell).join(",")).join("\r\n") + "\r\n"};
+  return {count:rows.length-1,csv:"\uFEFF"+rows.map(row=>row.map(bbBillsCsvCell).join(",")).join("\r\n")+"\r\n"};
 }
 
 async function exportCSV() {
-  if (bbBillsCsvBusy) return;
-  bbBillsCsvBusy = true;
+  if (bbBillsCsvBusy || bbFullTransferBusy) return;
+  bbBillsCsvBusy=true;
   try {
-    if (typeof window.billBeaconPrepareDataTransfer !== "function") {
-      throw new Error("The sync-aware transfer helper is missing. Keep the earlier firebase-sync.js export helper.");
-    }
-    const prepared = await window.billBeaconPrepareDataTransfer();
-    const result = bbBillsCsvBuild(prepared.snapshot.bills, prepared.householdId,
-      bill => isOccurrencePaid(bill, new Date(bill.dueDate)));
-    if (!result.count) throw new Error("No active bills or unpaid installments to export.");
-    const url = URL.createObjectURL(new Blob([result.csv], {type: "text/csv;charset=utf-8"}));
-    const link = document.createElement("a"); link.href = url;
-    link.download = `bill-beacon-bills-${new Date().toISOString().slice(0,10)}.csv`;
-    document.body.appendChild(link); link.click(); link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch (error) {alert(`Could not export bills: ${error.message}`);}
-  finally {bbBillsCsvBusy = false;}
+    const context=bbTransferContext();
+    const prepared=await bbTransferPrepare(context);
+    const result=bbBillsCsvBuild(prepared.snapshot.bills,prepared.householdId);
+    if (!result.count) throw new Error("No bill or installment schedules to export.");
+    bbTransferDownload(result.csv,"text/csv;charset=utf-8",`bill-beacon-schedules-${new Date().toISOString().slice(0,10)}.csv`);
+  } catch(error) { alert(`Could not export schedules: ${error.message}`); }
+  finally { bbBillsCsvBusy=false; }
 }
 
 async function bbBillsCsvPreview(text, existing, archived, householdId) {
@@ -14852,7 +14889,7 @@ async function bbBillsCsvPreview(text, existing, archived, householdId) {
         return key ? String(row[headers.get(key)] ?? "") : "";
       };
       const format = raw("Format");
-      const modern = format === "Bill Beacon Bills CSV 1";
+      const modern = ["Bill Beacon Bills CSV 1", "Bill Beacon Schedules CSV 2"].includes(format);
       if (format && !modern) throw new Error("Unsupported CSV format.");
       const get = (...names) => {
         const value = raw(...names);
@@ -14992,6 +15029,10 @@ async function bbBillsCsvPreview(text, existing, archived, householdId) {
         if (planNumbers.has(planKey) && planNumbers.get(planKey) !== slot) throw new Error("Conflicting rows for the same installment number.");
         planNumbers.set(planKey, slot);
       }
+      const trackingMonth = get("Track From Month").trim();
+      if (trackingMonth && (!/^\d{4}-\d{2}$/.test(trackingMonth) || !bbBillsCsvValidDate(trackingMonth+"-01")))
+        throw new Error("Track From Month must be YYYY-MM.");
+      if (recurrence !== "None") bill.trackingStartDate = (trackingMonth || dateKey.slice(0,7))+"-01";
       const fingerprint = bbBillsCsvFingerprint(bill);
       const id = sourceId
         ? (sourceHousehold && sourceHousehold !== householdId
@@ -15021,50 +15062,41 @@ async function bbBillsCsvPreview(text, existing, archived, householdId) {
 }
 
 async function importBillsCSV(event) {
-  const input = event.target, file = input.files?.[0];
-  if (!file || bbBillsCsvBusy) {input.value = ""; return;}
-  bbBillsCsvBusy = true; let applied = false;
+  const input=event.target, file=input.files?.[0];
+  if (!file || bbBillsCsvBusy || bbFullTransferBusy) {input.value="";return;}
+  bbBillsCsvBusy=true; let applied=false;
   try {
-    if (file.size > 10 * 1024 * 1024) throw new Error("CSV exceeds the 10 MB limit.");
-    if (typeof window.billBeaconPrepareDataTransfer !== "function") {
-      throw new Error("The sync-aware transfer helper is missing. Keep the earlier firebase-sync.js export helper.");
-    }
-    const prepared = await window.billBeaconPrepareDataTransfer();
-    const preview = await bbBillsCsvPreview(await file.text(), prepared.snapshot.bills,
-      prepared.snapshot.archivedBills, prepared.householdId);
-    if (preview.errors.length) throw new Error("Nothing imported. Correct these rows:\n" + preview.errors.slice(0,20).join("\n") +
-      (preview.errors.length > 20 ? `\nPlus ${preview.errors.length-20} more errors.` : ""));
-    if (!preview.added.length) {alert(`No new records to add. ${preview.skipped.length} existing/duplicate rows skipped.`); return;}
-    const installments = preview.added.filter(bill => bill.installmentPlanId).length;
-    const notice = [
-      `Add ${preview.added.length-installments} bills and ${installments} installment records?`,
+    if (file.size>10*1024*1024) throw new Error("CSV exceeds the 10 MB limit.");
+    const context=bbTransferContext();
+    const prepared=await bbTransferPrepare(context);
+    const text=await file.text(); bbTransferAssert(context);
+    const preview=await bbBillsCsvPreview(text,prepared.snapshot.bills,prepared.snapshot.archivedBills,prepared.householdId);
+    bbTransferAssert(context);
+    if (preview.errors.length) throw new Error("Nothing imported. Correct these rows:\n"+preview.errors.slice(0,20).join("\n"));
+    if (!preview.added.length) {alert(`No new schedules. ${preview.skipped.length} existing/duplicate rows skipped.`);return;}
+    const plans=new Set(preview.added.filter(b=>b.installmentPlanId).map(b=>b.installmentPlanId)).size;
+    const installments=preview.added.filter(b=>b.installmentPlanId).length;
+    if (!confirm([
+      `Import into household ${context.householdId}?`,
+      `${preview.added.length-installments} bills and ${plans} plans (${installments} installment records) will be added.`,
       `${preview.skipped.length} existing/duplicate rows will be skipped.`,
-      preview.skipped.slice(0,8).join("\n"),
-      "Existing bills, payments, bank links, and archived records will NOT be replaced.",
-      "Imported records start unpaid. Paid labels are information only; payment history is not imported.",
-      `${preview.paidLabels} CSV row(s) contain paid labels.`,
-      "New records use today's creation timestamp. Past schedule versions and postponement history are not imported."
-    ].filter(Boolean).join("\n\n");
-    if (!confirm(notice)) return;
-    const fresh = await window.billBeaconPrepareDataTransfer();
-    if (fresh.householdId !== prepared.householdId ||
-        JSON.stringify(bbBillsCsvCanonical(fresh.snapshot)) !== JSON.stringify(bbBillsCsvCanonical(prepared.snapshot))) {
-      throw new Error("Household data changed after the preview. Select the file again.");
-    }
-    Store.saveBills([...fresh.snapshot.bills, ...preview.added]); applied = true;
+      "ALL imported schedules start unpaid, including previously completed plans. Past due dates can appear overdue.",
+      "No payment history, activity, settings, bank records, or one-time paycheck moves are imported. Existing records are not replaced.",
+      preview.paidLabels ? `${preview.paidLabels} legacy paid labels are ignored.` : ""
+    ].filter(Boolean).join("\n\n"))) return;
+    const fresh=await bbTransferPrepare(context);
+    if (JSON.stringify(bbBillsCsvCanonical(fresh.snapshot))!==JSON.stringify(bbBillsCsvCanonical(prepared.snapshot)))
+      throw new Error("Household data changed after preview. Select the file again.");
+    bbTransferAssert(context);
+    Store.saveBills([...fresh.snapshot.bills,...preview.added]); applied=true;
     render();
-    await window.billBeaconPrepareDataTransfer();
-    alert(`${preview.added.length} new bill/installment records added and household save completed.`);
-  } catch (error) {
-    alert((applied ? "Records were added locally, but cloud confirmation did not finish. Do not clear local data. " : "") + error.message);
-  } finally {input.value = ""; bbBillsCsvBusy = false;}
+    await bbTransferPrepare(context);
+    // No success toast or banner.
+  } catch(error) {
+    alert((applied ? "Schedules were added locally, but cloud confirmation did not finish. Keep local data and review sync before retrying. " : "")+error.message);
+  } finally {input.value="";bbBillsCsvBusy=false;}
 }
 
-
-
-// ====================================
-// MAIN RENDER
-// ====================================
 function closeNotificationCenter(keepReturn = false) {
   const container = document.getElementById(
     "notificationCenterContainer"
@@ -17645,7 +17677,12 @@ function addNotificationSettings() {
 function validateBillBeaconBackup(data) {
   const object = value => value && typeof value === "object" && !Array.isArray(value);
   if (!object(data) || !Array.isArray(data.bills) || !Array.isArray(data.payments)) throw new Error("Invalid Bill Beacon backup.");
-  if (data.version != null && ![1, 2].includes(data.version)) throw new Error("Unsupported backup version.");
+  if (data.version != null && ![1, 2, 3].includes(data.version)) throw new Error("Unsupported backup version.");
+  if (data.app != null && data.app !== "Bill Beacon") throw new Error("This is not a Bill Beacon backup.");
+  if (data.version === 3 && data.kind !== "full-backup") throw new Error("Use schedule import for schedule files, not full restore.");
+  if (data.version === 3) for (const key of ["archivedBills","incomeSources","activityLog","bankTransactions"]) {
+    if (!Array.isArray(data[key])) throw new Error(`Full backup is missing ${key}.`);
+  }
   let visited = 0;
   const inspect = (value, depth = 0) => {
     if (++visited > 1000000 || depth > 24) throw new Error("Backup is too complex.");
@@ -17680,106 +17717,127 @@ function validateBillBeaconBackup(data) {
   if (data.settings != null && !object(data.settings)) throw new Error("Invalid backup settings.");
   if (data.settings?.currency != null && !/^[A-Z]{3}$/.test(data.settings.currency)) throw new Error("Invalid backup currency.");
   if (data.settings?.theme != null && !["light", "dark", "system"].includes(data.settings.theme)) throw new Error("Invalid backup theme.");
+  for (const bill of [...data.bills,...(data.archivedBills || [])]) {
+    if (typeof bill.name !== "string" || !bill.name.trim() || bill.amount == null ||
+        !Number.isSafeInteger(Math.round(Number(bill.amount)*100)) || !bill.dueDate)
+      throw new Error("A bill has invalid name, amount or due date.");
+    if (bill.recurrence && !RECURRENCE.includes(bill.recurrence)) throw new Error("Invalid recurring schedule.");
+    if (bill.paycheckAssignment && !["auto","first","second","previous"].includes(bill.paycheckAssignment))
+      throw new Error("Invalid paycheck assignment.");
+    if (bill.installmentPlanId && (!Number.isInteger(Number(bill.installmentNumber)) ||
+        !Number.isInteger(Number(bill.installmentTotal)) || Number(bill.installmentNumber)<1 ||
+        Number(bill.installmentNumber)>Number(bill.installmentTotal))) throw new Error("Invalid installment numbering.");
+    if (bill.paycheckOccurrenceOverrides != null) {
+      if (!object(bill.paycheckOccurrenceOverrides)) throw new Error("Invalid occurrence paycheck moves.");
+      for (const [key,move] of Object.entries(bill.paycheckOccurrenceOverrides)) {
+        if (!bbBillsCsvValidDate(key) || !object(move) || !bbBillsCsvValidDate(String(move.month)+"-01") ||
+            !["first","second"].includes(move.paycheck) ||
+            (move.fromMonth && !bbBillsCsvValidDate(String(move.fromMonth)+"-01")) ||
+            (move.fromPaycheck && !["first","second","previous"].includes(move.fromPaycheck)))
+          throw new Error("Invalid occurrence paycheck move.");
+      }
+    }
+  }
+  const ids = new Set([...data.bills,...(data.archivedBills || [])].map(bill=>bill.id));
+  for (const payment of data.payments) {
+    if (!payment.paidDate || payment.amount == null || !Number.isSafeInteger(Math.round(Number(payment.amount)*100)))
+      throw new Error("Invalid payment date or amount.");
+    if (!ids.has(payment.billId) && !payment.billSnapshot) throw new Error("Payment has no bill or historical bill snapshot.");
+    if (payment.status && !["active","voided"].includes(String(payment.status).toLowerCase()))
+      throw new Error("Unsupported payment status.");
+  }
+  if (data.deviceAppearance != null) {
+    const p=data.deviceAppearance;
+    if (!object(p) || !["light","dark","system"].includes(p.mode) ||
+        !["device","schedule"].includes(p.source) ||
+        !/^([01]\d|2[0-3]):[0-5]\d$/.test(p.lightAt) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(p.darkAt))
+      throw new Error("Invalid device appearance settings.");
+  }
   return data;
 }
 
 function restoreBillBeaconBackup(data) {
   validateBillBeaconBackup(data);
-  const entries = new Map([["bills", JSON.stringify(data.bills)], ["payments", JSON.stringify(data.payments)],
-    ["archivedBills", JSON.stringify(data.archivedBills || [])], ["initialized", "true"]]);
-  for (const key of ["incomeSources", "activityLog", "bankTransactions", "settings"]) if (data[key] !== undefined) entries.set(key, JSON.stringify(data[key]));
-  const previous = new Map([...entries.keys()].map(key => [key, localStorage.getItem(key)]));
-  try { for (const [key, value] of entries) localStorage.setItem(key, value); }
-  catch (error) {
-    let rollbackFailed = false;
-    for (const [key, value] of previous) {
-      try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key, value); } catch { rollbackFailed = true; }
+  const entries=new Map([["bills",JSON.stringify(data.bills)],["payments",JSON.stringify(data.payments)],
+    ["archivedBills",JSON.stringify(data.archivedBills || [])],["initialized","true"]]);
+  for (const key of ["incomeSources","activityLog","bankTransactions"])
+    if (data[key] !== undefined) entries.set(key,JSON.stringify(data[key]));
+  if (data.settings !== undefined) entries.set("settings",JSON.stringify(bbTransferSafeSettings(data.settings)));
+  if (data.deviceAppearance) entries.set("billbeacon:device-appearance:v1",JSON.stringify(data.deviceAppearance));
+  const previous=new Map([...entries.keys()].map(key=>[key,localStorage.getItem(key)]));
+  try { for (const [key,value] of entries) localStorage.setItem(key,value); }
+  catch(error) {
+    let rollbackFailed=false;
+    for (const [key,value] of previous) {
+      try {if (value===null) localStorage.removeItem(key);else localStorage.setItem(key,value);}
+      catch (_) {rollbackFailed=true;}
     }
-    if (rollbackFailed) throw new Error("Restore failed and rollback was incomplete. Keep your backup and recover storage before editing data.");
-    throw error;
+    if (rollbackFailed) throw new Error("Restore failed and rollback was incomplete. Keep the backup and recover device storage before editing.");
+    throw new Error("Restore failed. Previous local records were restored. Check device storage.");
   }
+  window.bbDeviceAppearanceMemory=null;
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 }
+
 async function exportBillTrackerBackup() {
+  if (bbFullTransferBusy || bbBillsCsvBusy) return;
+  bbFullTransferBusy=true;
   try {
-    if (
-      typeof window.billBeaconPrepareDataTransfer !==
-      "function"
-    ) {
-      throw new Error(
-        "Update the household sync file " +
-        "before creating this backup."
-      );
-    }
-
-    const prepared =
-      await window.billBeaconPrepareDataTransfer();
-
-    const backup = {
-      app: "Bill Beacon",
-      version: 2,
-      exportedAt: new Date().toISOString(),
-      sourceHouseholdId: prepared.householdId,
-
-      ...prepared.snapshot,
-
-      bankTransactions: Store.getBankTransactions()
-    };
-
+    const context=bbTransferContext();
+    const prepared=await bbTransferPrepare(context);
+    const backup={app:"Bill Beacon",kind:"full-backup",version:3,
+      exportedAt:new Date().toISOString(),sourceHouseholdId:prepared.householdId,
+      ...prepared.snapshot, settings:bbTransferSafeSettings(prepared.snapshot.settings),
+      bankTransactions:Store.getBankTransactions(),
+      exclusions:["Authentication and passwords","Household membership and account profile","Plaid connections and credentials","Server-only notification inbox and personal reminder preferences"]};
+    const appearance=localStorage.getItem("billbeacon:device-appearance:v1");
+    if (appearance) backup.deviceAppearance=JSON.parse(appearance);
     validateBillBeaconBackup(backup);
-
-    const url = URL.createObjectURL(
-      new Blob(
-        [JSON.stringify(backup, null, 2)],
-        { type: "application/json" }
-      )
-    );
-
-    const link = document.createElement("a");
-
-    link.href = url;
-    link.download =
-      `bill-beacon-backup-` +
-      `${new Date().toISOString().slice(0, 10)}.json`;
-
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-
-    setTimeout(
-      () => URL.revokeObjectURL(url),
-      1000
-    );
-  } catch (error) {
-    alert(
-      `Could not create backup: ${error.message}`
-    );
-  }
+    bbTransferAssert(context);
+    bbTransferDownload(JSON.stringify(backup,null,2),"application/json",`bill-beacon-full-backup-${new Date().toISOString().slice(0,10)}.json`);
+  } catch(error) {alert(`Could not create full backup: ${error.message}`);}
+  finally {bbFullTransferBusy=false;}
 }
+
 function chooseBillTrackerBackup() {
-  document.getElementById("billTrackerBackupFile").click();
+  document.getElementById("bbFullBackupInput")?.click();
 }
 
-function importBillTrackerBackup(event) {
-  const input = event.target; const file = input.files?.[0]; if (!file) return;
-  if (file.size > 10 * 1024 * 1024) { alert("Backup exceeds the supported 10 MB limit."); input.value = ""; return; }
-  const reader = new FileReader();
-  reader.onerror = () => { alert("Backup file could not be read."); input.value = ""; };
-  reader.onload = () => {
-    try {
-      const backup = validateBillBeaconBackup(JSON.parse(String(reader.result)));
-      const omitted = ["incomeSources", "activityLog", "bankTransactions"].filter(key => backup[key] === undefined);
-      const summary = `${backup.bills.length} active bills, ${backup.payments.length} payments, ${(backup.archivedBills || []).length} archived bills.`;
-      const notice = omitted.length ? " Older backups omit some lists; those lists will remain unchanged." : "";
-      if (!confirm(`Restore this backup? ${summary}\n\nIncluded app data will be replaced and may sync to your household.${notice}`)) return;
-      restoreBillBeaconBackup(backup); initTheme(); render(); alert("Backup restored successfully.");
-    } catch (error) { alert(`Could not restore backup: ${error.message}`); }
-    finally { input.value = ""; }
-  };
-  reader.readAsText(file);
+async function importBillTrackerBackup(event) {
+  const input=event.target,file=input.files?.[0];
+  if (!file || bbFullTransferBusy || bbBillsCsvBusy) {input.value="";return;}
+  bbFullTransferBusy=true;let applied=false;
+  try {
+    if (file.size>10*1024*1024) throw new Error("Backup exceeds the 10 MB limit.");
+    const context=bbTransferContext();
+    const prepared=await bbTransferPrepare(context);
+    const data=validateBillBeaconBackup(JSON.parse(await file.text()));
+    bbTransferAssert(context);
+    const omitted=["incomeSources","activityLog","bankTransactions","settings"].filter(key=>data[key]===undefined);
+    const notice=[
+      `RESTORE FULL BACKUP into household ${context.householdId}?`,
+      bbTransferSummary(data),
+      "This REPLACES the covered bills, installment schedules, payments, activity, archived records, income and settings. It can change data for everyone in this household.",
+      data.sourceHouseholdId && data.sourceHouseholdId!==context.householdId
+        ? "This backup came from another household. Its financial records will be copied into THIS household; sign-in and membership will not change." : "",
+      omitted.length ? `Older backup: omitted lists stay unchanged: ${omitted.join(", ")}. Archived records default to empty if absent.` : "",
+      "Passwords, account profile, household membership, live bank connection, server notification inbox and personal reminder preferences are NOT restored.",
+      "Save a full backup of this destination household before proceeding. Continue?"
+    ].filter(Boolean).join("\n\n");
+    if (!confirm(notice)) return;
+    const fresh=await bbTransferPrepare(context);
+    if (JSON.stringify(bbBillsCsvCanonical(fresh.snapshot))!==JSON.stringify(bbBillsCsvCanonical(prepared.snapshot)))
+      throw new Error("Household data changed after preview. Select the backup again.");
+    bbTransferAssert(context);
+    restoreBillBeaconBackup(data);applied=true;
+    if (typeof closeSettingsSectionSheet === "function") closeSettingsSectionSheet();
+    initTheme();render();
+    await bbTransferPrepare(context);
+    // No success toast or banner.
+  } catch(error) {
+    alert((applied ? "Backup restored locally, but cloud confirmation did not finish. Keep local data and resolve sync before retrying. " : "Could not restore backup: ")+error.message);
+  } finally {input.value="";bbFullTransferBusy=false;}
 }
-
-
 
 function addBackupSettings() {
   if (
