@@ -6226,3 +6226,18 @@ max-height: max(160px, calc(50dvh - 88px));
   text-overflow: ellipsis;
   pointer-events: none;
 }
+/* Dashboard: centered installment-plans shortcut */
+.bb-dashboard-payment-status .bb-payment-status-plans {
+  justify-content: center;
+  text-align: center;
+  min-height: 46px;
+  padding: 12px 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Hide the arrow */
+.bb-dashboard-payment-status
+  .bb-payment-status-plans > [aria-hidden="true"] {
+  display: none;
+}
