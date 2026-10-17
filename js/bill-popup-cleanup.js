@@ -348,3 +348,59 @@
 
   window.BillBeaconSplitCardPolish = { version: 1 };
 })();
+/* Consistent Move To Next Paycheck styling.
+   Does not relocate any buttons. */
+(() => {
+  "use strict";
+
+  if (window.BillBeaconMoveButtonStyle) return;
+  if (typeof renderOccurrenceFundingAction !== "function") return;
+
+  const previousFunding = renderOccurrenceFundingAction;
+
+  renderOccurrenceFundingAction = function () {
+    const html = previousFunding.apply(this, arguments);
+
+    const root = document.createElement("div");
+    root.innerHTML = html;
+
+    let changed = false;
+
+    root.querySelectorAll("button[onclick]").forEach(button => {
+      const action = button.getAttribute("onclick") || "";
+
+      if (!/\bopenMoveOccurrencePaycheck\s*\(/.test(action)) {
+        return;
+      }
+
+      button.textContent = "Move To Next Paycheck";
+      button.classList.add("bb-outline-pill");
+
+      const styles = {
+        width: "100%",
+        "min-height": "40px",
+        height: "auto",
+        padding: "8px 12px",
+        display: "flex",
+        "align-items": "center",
+        "justify-content": "center",
+        "text-align": "center",
+        color: "var(--text)",
+        "font-size": "14px",
+        "font-weight": "700",
+        "line-height": "1.2",
+        "box-sizing": "border-box"
+      };
+
+      for (const [property, value] of Object.entries(styles)) {
+        button.style.setProperty(property, value, "important");
+      }
+
+      changed = true;
+    });
+
+    return changed ? root.innerHTML : html;
+  };
+
+  window.BillBeaconMoveButtonStyle = { version: 1 };
+})();
