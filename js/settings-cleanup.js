@@ -350,11 +350,7 @@ window.addEventListener("billbeacon:signed-out", () => {
       <div class="content-pad content-gap">
 
         <section class="settings-section">
-          <div class="section-header">
-            Settings
-          </div>
-
-          <div class="card card-pad">
+  <div class="card card-pad">
             <button
               type="button"
               class="bb-outline-pill"
