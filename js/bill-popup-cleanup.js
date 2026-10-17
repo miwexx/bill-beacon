@@ -295,18 +295,23 @@
       manage.insertAdjacentElement("afterend", move);
 
       move.classList.add("bb-outline-pill");
-
+        move.textContent = "Move To Next Paycheck";
       const styles = {
-        width: "100%",
-        "min-height": "40px",
-        height: "auto",
-        padding: "8px 12px",
-        "margin-top": "10px",
-        "font-size": "14px",
-        "line-height": "1.2",
-        "justify-content": "space-between",
-        "box-sizing": "border-box"
-      };
+  width: "100%",
+  "min-height": "40px",
+  height: "auto",
+  padding: "8px 12px",
+  "margin-top": "10px",
+  display: "flex",
+  "align-items": "center",
+  "justify-content": "center",
+  "text-align": "center",
+  color: "var(--text)",
+  "font-size": "14px",
+  "font-weight": "700",
+  "line-height": "1.2",
+  "box-sizing": "border-box"
+};
 
       for (const [property, value] of Object.entries(styles)) {
         move.style.setProperty(property, value, "important");
