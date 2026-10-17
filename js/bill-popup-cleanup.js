@@ -59,18 +59,66 @@
     return result.sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")));
   }
 
-  function notesMarkup(context) {
-    const entries=sharedNotes(context);
-    const body=entries.length?entries.map(entry=>{
-      const stamp=new Date(entry.timestamp);
-      const time=Number.isFinite(stamp.getTime())?stamp.toLocaleString():"";
-      const meta=[time,entry.actorName||""].filter(Boolean).join(" · ");
+    function notesMarkup(context) {
+    const entries = sharedNotes(context);
+    const contentId = `bb-occurrence-notes-${uid()}`;
+    const body = entries.length ? entries.map(entry => {
+      const stamp = new Date(entry.timestamp);
+      const time = Number.isFinite(stamp.getTime()) ? stamp.toLocaleString() : "";
+      const meta = [time, entry.actorName || ""].filter(Boolean).join(" · ");
       return `<article style="padding:12px 0;border-top:1px solid var(--border);">
-        ${meta?`<div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:6px;">${escapeHtml(meta)}</div>`:""}
-        <div style="color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;">${escapeHtml(entry.text)}</div></article>`;
-    }).join(""):'<div style="padding:10px 0;color:var(--text-muted);font-size:var(--text-sm);">No changes recorded for this occurrence.</div>';
-    return `<section data-bb-shared-occurrence-notes="details"><div class="section-header" style="padding-left:0;padding-right:0;">Notes for this occurrence</div><div class="card" style="padding:0 14px;">${body}</div></section>`;
+        ${meta ? `<div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:6px;">${escapeHtml(meta)}</div>` : ""}
+        <div style="color:var(--text);white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;">${escapeHtml(entry.text)}</div>
+      </article>`;
+    }).join("") : '<div style="padding:10px 0;color:var(--text-muted);font-size:var(--text-sm);">No changes recorded for this occurrence.</div>';
+
+    requestAnimationFrame(refreshOccurrenceNotesDisclosure);
+
+    return `<section data-bb-shared-occurrence-notes="details" data-notes-expanded="false">
+      <div class="section-header" style="padding-left:0;padding-right:0;">Notes for this occurrence</div>
+      <div class="card" style="padding:0 14px;">
+        <div id="${escapeHtml(contentId)}" data-bb-notes-content style="max-height:160px;overflow:hidden;">${body}</div>
+        <button type="button" data-bb-notes-toggle hidden aria-expanded="false" aria-controls="${escapeHtml(contentId)}"
+          onclick="bbToggleOccurrenceNotes(this)"
+          style="display:none;width:100%;min-height:40px;padding:10px 0;border:0;border-top:1px solid var(--border);background:transparent;color:var(--accent);font:inherit;font-size:var(--text-sm);font-weight:700;text-align:center;">
+          Show More
+        </button>
+      </div>
+    </section>`;
   }
+
+  function refreshOccurrenceNotesDisclosure() {
+    document.querySelectorAll('[data-bb-shared-occurrence-notes="details"]').forEach(section => {
+      if (!section.isConnected) return;
+      const content = section.querySelector("[data-bb-notes-content]");
+      const button = section.querySelector("[data-bb-notes-toggle]");
+      if (!content || !button) return;
+
+      const expanded = section.dataset.notesExpanded === "true";
+      const needsMore = content.scrollHeight > 161;
+      content.style.maxHeight = expanded || !needsMore ? "none" : "160px";
+      content.style.overflow = expanded || !needsMore ? "visible" : "hidden";
+      button.hidden = !needsMore;
+      button.style.display = needsMore ? "block" : "none";
+      button.setAttribute("aria-expanded", String(expanded && needsMore));
+      button.textContent = expanded ? "Show Less" : "Show More";
+    });
+  }
+
+  window.bbToggleOccurrenceNotes = function (button) {
+    const section = button.closest('[data-bb-shared-occurrence-notes="details"]');
+    if (!section) return;
+    section.dataset.notesExpanded = String(section.dataset.notesExpanded !== "true");
+    refreshOccurrenceNotesDisclosure();
+  };
+
+  if (!window.BillBeaconNotesResizeInstalled) {
+    window.BillBeaconNotesResizeInstalled = true;
+    window.addEventListener("resize", () => {
+      requestAnimationFrame(refreshOccurrenceNotesDisclosure);
+    }, {passive: true});
+  }
+
 
   function stripNotes(root) {
     root.querySelectorAll("details").forEach(node=>{
