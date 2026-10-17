@@ -5361,7 +5361,11 @@ function openDashboardSeparatedStatus(groupName, status) {
       <div class="sheet-body">
         <div class="card card-pad">
           <div style="display:flex;justify-content:space-between;gap:12px;font-weight:800">
-            <span>${items.length} ${installment ? "payments" : "bills"}</span>
+            <span>${items.length} ${
+  installment
+    ? (items.length === 1 ? "Payment" : "Payments")
+    : (items.length === 1 ? "Bill" : "Bills")
+}</span>
             <span>${formatCurrency(total)}</span>
           </div>
           <div class="bill-meta">${escapeHtml(period)}</div>
