@@ -413,7 +413,7 @@
     if(!context||context.key!==expected.key||JSON.stringify(context.from)!==JSON.stringify(expected.from)||JSON.stringify(context.to)!==JSON.stringify(expected.to)||JSON.stringify(context.source)!==JSON.stringify(expected.source))
       throw new Error("This occurrence changed. Close and reopen the move sheet.");
     const bills=allBills(),i=bills.findIndex(b=>b.id===id),at=new Date().toISOString();
-    const text=`${context.bill.name}: ${formatCurrency(context.bill.amount)}, due ${formatDate(context.bill.dueDate,"full")}. Moved from ${occurrenceFundingLabel(context.from)} to ${occurrenceFundingLabel(context.to)} `;
+    const text=`${context.bill.name}: ${formatCurrency(context.bill.amount)}, due ${formatDate(context.bill.dueDate,"full")}. Moved from ${occurrenceFundingLabel(context.from)} to ${occurrenceFundingLabel(context.to)}. Original due date unchanged; only this occurrence.`;
     bills[i]={...bills[i],paycheckOccurrenceOverrides:{...(bills[i].paycheckOccurrenceOverrides || {}),[context.key]:{month:context.to.month,paycheck:context.to.paycheck,fromMonth:context.from.month,fromPaycheck:context.from.paycheck,dueDate:context.bill.dueDate,movedAt:at}}};
     bills[i]=note(bills[i],context.key,text);
     if(bills[i].splitPaymentParentId) {
