@@ -4341,46 +4341,7 @@ function renderMore() {
 
             
           </div>
-<button
-  type="button"
-  onclick="openInstallmentPlanForm()"
-  style="${wideCardStyle}; margin-top:12px"
->
-  <span
-    style="
-      width:46px;
-      height:46px;
-      flex:0 0 46px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      border:1px solid var(--border);
-      border-radius:15px;
-      color:var(--text);
-      background:transparent;
-    "
-    aria-hidden="true"
-  >
-    ${svgIcon("plus", 22)}
-  </span>
 
-  <span style="min-width:0; flex:1;">
-    <span style="
-      display:block;
-      font-size:16px;
-      font-weight:800;
-    ">
-      Add Installment Plan
-    </span>
-  </span>
-
-  <span
-    style="display:flex; color:var(--text-muted);"
-    aria-hidden="true"
-  >
-    ${svgIcon("chevronRight", 20)}
-  </span>
-</button>
           <button
             type="button"
             onclick="openCreditCardsComingSoon()"
