@@ -10817,7 +10817,7 @@ for (let i = 5; i >= 0; i -= 1) {
                   </div>
                 `
                 : `
-                  <div class="chart-bar-container">
+                  <div class="chart-bar-container" style="height:140px;padding:8px 0;">
                     ${monthlyData
                       .map(
                         (month) => `
@@ -10853,7 +10853,7 @@ for (let i = 5; i >= 0; i -= 1) {
                   </div>
                 `
             }
-            ${bbRenderSpendingComparison(now)}
+            
           </div>
         </div>
         ${bbRenderScheduledCommitments(now)}
