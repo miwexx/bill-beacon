@@ -6218,3 +6218,43 @@ max-height: max(160px, calc(50dvh - 88px));
     font-size: 11px;
   }
 }
+/* BEGIN SETTINGS: QUIET BUTTONS */
+
+/* Settings page and Settings section popups only. */
+:is(
+  #app:has(.settings-page-header) .main-content,
+  [data-bb-copy-id="app"]:has(.settings-page-header) .main-content,
+  #bbSettingsSectionSheet,
+  [data-bb-copy-id="bbSettingsSectionSheet"]
+) :is(.bb-outline-pill, .bb-muted-pill, .btn-secondary) {
+  width: 100% !important;
+  min-height: 48px !important;
+  box-sizing: border-box;
+
+  padding: 12px 16px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+
+  background: var(--surface) !important;
+  background-image: none !important;
+  box-shadow: none !important;
+
+  color: var(--text) !important;
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+/* Remove the bright icon treatment from outline buttons. */
+:is(
+  #app:has(.settings-page-header) .main-content,
+  [data-bb-copy-id="app"]:has(.settings-page-header) .main-content,
+  #bbSettingsSectionSheet,
+  [data-bb-copy-id="bbSettingsSectionSheet"]
+) :is(.bb-outline-pill, .bb-muted-pill, .btn-secondary)
+  :is(.pill-icon, .pill-chevron) {
+  color: var(--text-secondary) !important;
+}
+
+/* Primary actions: solid purple ins
