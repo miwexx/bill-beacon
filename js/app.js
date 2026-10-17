@@ -10326,7 +10326,7 @@ function bbRenderScheduledCommitments(date) {
     const totals = bbInsightScheduledSplit(month);
     return `<div style="padding:14px 0;${index ? 'border-top:1px solid var(--border);' : ''}"><div style="display:flex;justify-content:space-between;gap:12px;font-weight:700;"><span>${escapeHtml(formatDate(month,"monthYear"))}</span><span style="font-variant-numeric:tabular-nums;">${formatCurrency(totals.total / 100)}</span></div><div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:7px;line-height:1.5;">Bills ${formatCurrency(totals.bills / 100)} · Installments ${formatCurrency(totals.installments / 100)}</div></div>`;
   }).join("");
-  return `<section aria-label="Three-month scheduled commitments"><div class="section-header">Scheduled Commitments</div><div class="card card-pad"><div style="font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;">Based on saved due dates · Includes paid and unpaid</div>${rows}<div style="font-size:var(--text-xs);color:var(--text-muted);border-top:1px solid var(--border);padding-top:12px;line-height:1.5;">Scheduled estimates, not remaining balances. Future amounts may change.</div></div></section>`;
+  return `<section aria-label="Three-month scheduled commitments"><div class="section-header">Scheduled Commitments</div><div class="card card-pad"><div style="font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;">Based on saved due dates · Includes paid and unpaid</div>${rows}<div style="font-size:var(--text-xs);color:var(--text-muted);border-top:1px solid var(--border);padding-top:12px;line-height:1.5;"></div></div></section>`;
 }
 
 function bbInsightComparison(date) {
