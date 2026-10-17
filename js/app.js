@@ -10311,7 +10311,7 @@ function bbRenderSpendingBreakdown(date) {
   const billsPercent = totals.total ? totals.bills / totals.total * 100 : 0;
   const line = (label, cents, color) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;"><span style="display:flex;align-items:center;gap:8px;"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${color};"></span>${label}</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${formatCurrency(cents / 100)}</span></div>`;
   return `<section aria-label="Spending breakdown"><div class="section-header">Spending Breakdown</div>
-    <div class="card card-pad"><div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:8px;">${escapeHtml(formatDate(date,"monthYear"))} </div>
+    <div class="card card-pad">
     ${line("Bills", totals.bills, "var(--accent, #b45cff)")}
     ${line("Installments", totals.installments, "var(--cat-paymentplans, #9333ea)")}
     <div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;font-weight:700;"><span>Total paid</span><span>${formatCurrency(totals.total / 100)}</span></div>
@@ -10597,7 +10597,10 @@ for (let i = 5; i >= 0; i -= 1) {
 
     <div class="main-content fade-in">
       <div class="content-pad content-gap">
-        <div class="section-header">${formatDate(now, "monthYear")}</div>
+        <div class="section-header"
+     style="color:var(--text);font-size:18px;font-weight:700;line-height:1.4;">
+  ${formatDate(now, "monthYear")}
+</div>
 
         <section class="card card-pad insights-leftover-card"
           aria-label="Estimated monthly income and expenses">
