@@ -183,7 +183,7 @@
       const totalCents=plan?.totalCents ?? cents(bill.amount);
       if(totalCents<=0)throw new Error("A split bill must have a positive total.");
       editor={session:saved,id,date:bill.dueDate,key:plan?.occurrenceKey || originKey(bill),totalCents,expected:fingerprint(),rows:
-        plan?partsFor(source,plan).map(p=>({id:p.id,amount:String(p.amount),date:key(p.dueDate),locked:Store.getPaymentsForBill(p.id).length>0})):
+        plan?partsFor(source,plan).map(p=>({id:p.id,amount:String(p.amount),date:key(p.dueDate),locked: Store.getPaymentsForBill(p.id).some(active)})):
         [{id:uid(),amount:(Math.floor(totalCents/2)/100).toFixed(2),date:key(bill.dueDate),locked:false},{id:uid(),amount:((totalCents-Math.floor(totalCents/2))/100).toFixed(2),date:key(bill.dueDate),locked:false}]};
       if(plan&&editor.rows.length!==plan.partIds.length)throw new Error("A split payment is missing. Review the backup before editing.");
       editorFocus=document.activeElement;
@@ -269,10 +269,26 @@
         let total=0;
         for(const r of draft.rows){const amount=cents(r.amount);if(amount<=0||!dateFromInput(r.date))throw new Error("Each payment needs a positive amount and valid payment date.");total+=amount;}
         if(total!==draft.totalCents)throw new Error(`Allocate exactly ${formatCurrency(draft.totalCents/100)}. The payment amounts must add up to the full bill total.`);
-        for(const p of oldParts.filter(p=>history.some(pay=>pay.billId===p.id))) {
-          const r=draft.rows.find(r=>r.id===p.id);
-          if(!r||cents(r.amount)!==cents(p.amount)||r.date!==key(p.dueDate))throw new Error("Portions with payment history cannot be changed or removed. Reverse and remove the schedule to start over.");
-        }
+        for (
+  const p of oldParts.filter(part =>
+    history.some(payment =>
+      payment.billId === part.id && active(payment)
+    )
+  )
+) {
+  const row = draft.rows.find(item => item.id === p.id);
+
+  if (
+    !row ||
+    cents(row.amount) !== cents(p.amount) ||
+    row.date !== key(p.dueDate)
+  ) {
+    throw new Error(
+      "Payments with an active payment cannot be changed. " +
+      "Reverse the payment first."
+    );
+  }
+}
         const now=new Date().toISOString(),planId=old?.id || uid();
         const parts=draft.rows.map((r,i)=>{
           const existing=oldParts.find(p=>p.id===r.id);
