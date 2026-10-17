@@ -1,5 +1,5 @@
 /* ============================================
-   Bill Tracker PWA 
+   Bill Tracker PWA
    ============================================ */
 
 :root {
@@ -42,7 +42,7 @@
 }
 
 /* ============================================
-   DARK MODE 
+   DARK MODE
    ============================================ */
 :root,
 [data-theme="dark"] {
@@ -174,7 +174,7 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", system-ui, sans-serif;
   font-size: var(--text-base);
   line-height: 1.4;
   color: var(--text);
@@ -390,7 +390,7 @@ a { color: var(--accent); text-decoration: none; }
 .bill-swipe-wrapper.swipe-left .bill-swipe-background {
   background: var(--accent);
   opacity: 1;
-} 
+}
 .bill-row {
   display: flex;
   align-items: center;
@@ -470,7 +470,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 .summary-card::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -50%;
   left: -20%;
@@ -1055,7 +1055,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 .detail-header::before {
-  content: '';
+  content: "";
   position: absolute;
   top: -60%;
   left: -20%;
@@ -1490,9 +1490,6 @@ a { color: var(--accent); text-decoration: none; }
   font-weight: 700;
 }
 
-.upcoming-carousel::-webkit-scrollbar {
-  display: none;
-}
 
 .upcoming-bill-card {
   width: 156px;
@@ -1860,9 +1857,6 @@ a { color: var(--accent); text-decoration: none; }
   color: var(--paid);
 }
 
-.cycle-filter-bar {
-  margin-bottom: var(--space-2);
-}
 
 /* Center the Recurring filter pills */
 .filter-bar {
@@ -2115,11 +2109,7 @@ a { color: var(--accent); text-decoration: none; }
   font-weight: 650;
   cursor: pointer;
 }
-html,
-body {
-  min-height: 100%;
-  background: var(--bg);
-}
+
 
 #app {
   min-height: 100dvh;
@@ -2136,11 +2126,7 @@ body {
 }
 
 /* Stable iPhone PWA layout: do not lock the app shell */
-html,
-body {
-  min-height: 100%;
-  background: var(--bg);
-}
+
 
 #app {
   min-height: 100dvh;
@@ -2193,13 +2179,7 @@ body {
 }
 
 /* TEMPORARY: disable all motion to diagnose iPhone PWA bottom-bar jump */
-*,
-*::before,
-*::after {
-  animation: none !important;
-  transition: none !important;
-  scroll-behavior: auto !important;
-}
+
 
 /* TEMPORARY PWA FIX: show every modal immediately, with no slide behavior */
 .sheet,
@@ -2464,9 +2444,6 @@ body {
   background: var(--bg);
 }
 
-.login-screen.hidden {
-  display: none;
-}
 
 .login-card {
   width: min(100%, 410px);
@@ -2565,10 +2542,6 @@ body {
   font-weight: 800;
 }
 
-.login-button:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
 
 .login-button-primary {
   margin-top: 4px;
@@ -2628,12 +2601,6 @@ body {
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
 }
 
-.login-logo img {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-}
 
 .login-title {
   margin: 0;
@@ -4644,14 +4611,6 @@ body *::-webkit-scrollbar {
   border-radius: var(--radius-2xl) var(--radius-2xl) 0 0 !important;
 }
 
-#paymentPlanScheduleContainer
-  > #paymentPlanScheduleSheet
-  > .sheet-handle,
-#paymentPlanScheduleContainer
-  > #paymentPlanScheduleSheet
-  > .sheet-nav {
-  flex: 0 0 auto !important;
-}
 
 #paymentPlanScheduleContainer
   > #paymentPlanScheduleSheet
@@ -4735,9 +4694,6 @@ body *::-webkit-scrollbar {
 /* END COMPLETED PLANS VIEW FIX */
 /* Installment schedule progressive disclosure */
 
-#paymentPlanScheduleContainer [hidden] {
-  display: none !important;
-}
 
 #paymentPlanScheduleContainer [data-installment-month] {
   min-width: 0;
@@ -5101,15 +5057,8 @@ max-height: max(160px, calc(50dvh - 88px));
   outline-offset: -3px;
 }
 /* Let the inline schedule hand vertical scrolling to the page. */
-.card.installment-inline-schedule,
-.installment-inline-schedule-scroll {
-  overscroll-behavior-y: auto !important;
-}
 
-.installment-inline-schedule-scroll {
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-}
+
 .dashboard-separated-status .section-header {
   padding: 8px 0;
 }
@@ -6258,5 +6207,3 @@ max-height: max(160px, calc(50dvh - 88px));
   :is(.pill-icon, .pill-chevron) {
   color: var(--text-secondary) !important;
 }
-
-/* Primary actions: solid purple ins
