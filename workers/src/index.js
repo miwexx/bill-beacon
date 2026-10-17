@@ -777,9 +777,12 @@ function getReminderOccurrencesForMonth(bill, dueDateKey, timeZone, payments = [
   ).filter(Boolean));
   return reminderGetVersionedBillOccurrences(normalizedBill, new ReminderCalendarDate(year, month - 1, 1, 12), normalizedPayments)
     .filter(occurrence => {
+      // Linked portions now carry the obligation. Do not also remind for the parent.
+      const originalKey = reminderGetLocalDateKey(occurrence.originalDueDate || occurrence.dueDate);
+      const split = bill.splitOccurrencePlans?.[originalKey];
+      if (split?.enabled) return false;
       const dueKey = reminderGetLocalDateKey(occurrence.dueDate);
       if (recordedKeys.has(dueKey)) return true;
-      const originalKey = reminderGetLocalDateKey(occurrence.originalDueDate || occurrence.dueDate);
       return Boolean(startKey && originalKey >= startKey && dueKey >= startKey);
     })
     .map(occurrence => ({originalDueDateKey: reminderGetLocalDateKey(occurrence.originalDueDate || occurrence.dueDate),
@@ -1360,6 +1363,13 @@ if (offsetDays === 1) {
   } else {
     title = `${timingTitle}: ${bill.name}`;
     body = `Amount due: ${amount}`;
+  }
+
+  if (bill.splitPaymentParentId) {
+    title = `Split Payment ${timingTitle}: ${bill.splitParentName || bill.name}`;
+    const original = reminderFinancialDateKey(bill.splitOriginalDueDate, validatedReminderTimeZone(settings?.timeZone));
+    body = `Portion ${bill.splitPaymentPartNumber} of ${bill.splitPaymentTotalParts} · Planned ${formattedDueDate} · Amount: ${amount}` +
+      (original ? ` · Original bill due ${formatDateKey(original)}` : "");
   }
 
   return {
@@ -4389,6 +4399,25 @@ async function buildBankNewPaymentAllocation({
   transaction,
   itemId
 }) {
+  // Split portions are paid manually in this build. Never reconcile or
+  // allocate a matching debit automatically until split-aware matching is added.
+  const normalize = value => String(value || "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ").trim();
+  const description = ` ${normalize(
+    `${transaction?.merchantName || ""} ${transaction?.originalDescription || ""}`
+  )} `;
+  const splitMerchant = (household?.bills || []).some(bill => {
+    if (!bill.splitPaymentParentId || !isActiveBill(bill)) return false;
+    const name = normalize(bill.splitParentName || bill.name);
+    return Boolean(name && description.includes(` ${name} `));
+  });
+  if (splitMerchant) {
+    return {
+      status: "review",
+      reason: "This merchant has split-payment records. Record or review its portions manually; no bank payment was changed."
+    };
+  }
+
   const plan =
     await buildBankNewPaymentAllocationCore({
       household,
