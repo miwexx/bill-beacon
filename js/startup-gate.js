@@ -31,6 +31,7 @@
       panel.querySelector("#bb-startup-retry").addEventListener("click", retry);
       panel.querySelector("#bb-startup-signout").addEventListener("click", requestSignOut);
     }
+    panel.classList.toggle("bb-startup-error", Boolean(failure));
     panel.querySelector("#bb-startup-message").textContent = failure || lastStage;
     panel.querySelector("#bb-startup-actions").style.display = failure ? "grid" : "none";
     panel.querySelector("#bb-startup-signout").hidden = !appUser();
