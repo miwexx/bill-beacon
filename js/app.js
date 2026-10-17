@@ -2873,9 +2873,11 @@ function navigate(route, params = {}) {
   if (main) main.scrollTop = 0;
   if (route === "today" && params.paycheckInlineReturn) {
   const saved = params.paycheckInlineReturn;
+  if (saved.key && saved.key !== paycheckInlineViewKey()) return;
+  paycheckInlineViews[paycheckInlineViewKey()] = saved;
 
   const restorePaycheckView = () => {
-    if (currentRoute !== "today") return;
+    if (currentRoute !== "today" || (saved.key && saved.key !== paycheckInlineViewKey())) return;
 
     const list = document.getElementById("paycheckInlineList");
     if (!list) return;
@@ -2916,6 +2918,21 @@ function navigate(route, params = {}) {
   restorePaycheckView();
   requestAnimationFrame(restorePaycheckView);
 }
+
+  if (route === "today" && params.paycheckSheetReturn?.key === paycheckInlineViewKey()) {
+    const saved = params.paycheckSheetReturn;
+    openPaycheckPlanSheet(saved.paycheck);
+    const restoreSheet = () => {
+      if (currentRoute !== "today" || saved.key !== paycheckInlineViewKey()) return;
+      const parent = document.getElementById("paycheckPlanContainer");
+      const body = parent?.querySelector(".sheet-body");
+      const list = parent?.querySelector(".paycheck-bills-scroll");
+      if (body) body.scrollTop = saved.bodyScroll;
+      if (list) list.scrollTop = saved.listScroll;
+    };
+    restoreSheet();
+    requestAnimationFrame(restoreSheet);
+  }
 
   if (route === "transactions") {
     refreshPlaidSandboxAutomatically();
@@ -3252,11 +3269,18 @@ function changeDashboardPaycheckMonth(offset) {
     12
   );
 
+  selectedDashboardPaycheck = "first";
+  paycheckInlineViews = {};
+  if (routeParams) {delete routeParams.paycheckInlineReturn;delete routeParams.paycheckSheetReturn;}
+
   render();
 }
 
 function resetDashboardPaycheckMonth() {
   selectedDashboardPaycheckMonth = null;
+  selectedDashboardPaycheck = "first";
+  paycheckInlineViews = {};
+  if (routeParams) {delete routeParams.paycheckInlineReturn;delete routeParams.paycheckSheetReturn;}
   render();
 }
 
@@ -3273,6 +3297,203 @@ function getPaycheckAssignmentLabel(assignment) {
       return "Automatic by due date";
   }
 }
+
+
+// Step 5: funding exceptions belong to a single bill occurrence, not its series.
+function paycheckOccurrenceKey(value) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))
+    ? String(value) : getLocalDateKey(value);
+}
+function paycheckMonthKey(value) {
+  return paycheckOccurrenceKey(value).slice(0, 7);
+}
+function paycheckMonthDate(key) {
+  const [year, month] = key.split("-").map(Number);
+  return new Date(year, month - 1, 1, 12);
+}
+function getOccurrencePaycheckOverride(bill) {
+  const source = Store.getBill(getBillPaymentId(bill));
+  const key = paycheckOccurrenceKey(bill.originalDueDate || bill.dueDate);
+  const item = source?.paycheckOccurrenceOverrides?.[key];
+  return item && /^\d{4}-(0[1-9]|1[0-2])$/.test(item.month) &&
+    ["first", "second"].includes(item.paycheck) ? item : null;
+}
+function getOccurrenceFunding(bill) {
+  const override = getOccurrencePaycheckOverride(bill);
+  if (override) return {month: override.month, paycheck: override.paycheck};
+  const assignment = bill.paycheckAssignment || "auto";
+  return {
+    month: paycheckMonthKey(bill.dueDate),
+    paycheck: ["first", "second", "previous"].includes(assignment)
+      ? assignment : new Date(bill.dueDate).getDate() <= 14 ? "first" : "second"
+  };
+}
+function nextOccurrenceFunding(funding) {
+  if (funding.paycheck === "previous") return {month: funding.month, paycheck: "first"};
+  if (funding.paycheck === "first") return {month: funding.month, paycheck: "second"};
+  const date = paycheckMonthDate(funding.month);
+  date.setMonth(date.getMonth() + 1);
+  return {month: paycheckMonthKey(date), paycheck: "first"};
+}
+function occurrenceFundingDate(funding) {
+  const date = paycheckMonthDate(funding.month);
+  if (funding.paycheck === "previous") date.setMonth(date.getMonth() - 1);
+  date.setDate(funding.paycheck === "first" ? 1 : 15);
+  return date;
+}
+function occurrenceFundingLabel(funding) {
+  return `${funding.paycheck === "first" ? "Paycheck 1" : funding.paycheck === "second" ? "Paycheck 2" : "Previous paycheck"} · ${formatDate(occurrenceFundingDate(funding), "short")} · ${occurrenceFundingDate(funding).getFullYear()}`;
+}
+function renderOccurrenceMoveNote(bill) {
+  const moved = getOccurrencePaycheckOverride(bill);
+  if (!moved) return "";
+  return `<span style="display:block;margin-top:4px;color:var(--text-muted);font-size:var(--text-xs);">Moved from ${escapeHtml(occurrenceFundingLabel({month:moved.fromMonth, paycheck:moved.fromPaycheck}))}</span>`;
+}
+function getPaycheckFundingBills(referenceDate) {
+  const targetMonth = paycheckMonthKey(referenceDate);
+  const sourceMonths = new Set([targetMonth]);
+  Store.getBills().forEach(bill => {
+    Object.entries(bill.paycheckOccurrenceOverrides || {}).forEach(([key, move]) => {
+      if (move?.month === targetMonth && /^\d{4}-\d{2}-\d{2}$/.test(key)) {
+        sourceMonths.add(key.slice(0, 7));
+        if (move.dueDate) sourceMonths.add(paycheckMonthKey(move.dueDate));
+      }
+    });
+  });
+  const seen = new Set();
+  return [...sourceMonths].flatMap(month => getCalendarBillsForMonth(paycheckMonthDate(month)))
+    .filter(bill => {
+      const key = `${getBillPaymentId(bill)}:${paycheckOccurrenceKey(bill.originalDueDate || bill.dueDate)}`;
+      if (seen.has(key) || getOccurrenceFunding(bill).month !== targetMonth) return false;
+      seen.add(key);
+      return !bill.isArchivedHistory || isOccurrencePaid(bill, new Date(bill.dueDate));
+    });
+}
+function getPaycheckMoveContext(billId, dueDate) {
+  const source = Store.getBill(billId);
+  if (!source || source.archivedAt) return null;
+  const bill = resolveCalendarBillOccurrence(billId, dueDate);
+  if (!bill) return null;
+  const from = getOccurrenceFunding(bill);
+  return {source, bill, from, to:nextOccurrenceFunding(from),
+    key:paycheckOccurrenceKey(bill.originalDueDate || bill.dueDate)};
+}
+function renderOccurrenceFundingAction(bill) {
+  const id = getBillPaymentId(bill);
+  const funding = getOccurrenceFunding(bill);
+  return `<div style="margin-top:var(--space-3);">
+    <div style="font-size:var(--text-sm);color:var(--text-muted);">Due ${escapeHtml(formatDate(bill.dueDate, "full"))}<br>Funded by ${escapeHtml(occurrenceFundingLabel(funding))}</div>
+    ${renderOccurrenceMoveNote(bill)}
+    <button type="button" onclick="openMoveOccurrencePaycheck('${escapeInlineString(id)}','${escapeInlineString(bill.dueDate)}')" style="display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:16px 0;background:transparent;border:0;border-bottom:1px solid var(--border);color:var(--text);font:inherit;text-align:left;cursor:pointer;">
+      <span>Move to next paycheck</span>${svgIcon("chevronRight", 18)}
+    </button></div>`;
+}
+function closeMoveOccurrencePaycheck() {
+  const dialog = document.getElementById("moveOccurrencePaycheckDialog");
+  if (!dialog) return;
+  dialog.close();
+  dialog.remove();
+  document.getElementById("moveOccurrencePaycheckStyle")?.remove();
+}
+function openMoveOccurrencePaycheck(billId, dueDate) {
+  const context = getPaycheckMoveContext(billId, dueDate);
+  if (!context) return;
+  closeMoveOccurrencePaycheck();
+  const {bill, from, to} = context;
+  const style = document.createElement("style");
+  style.id = "moveOccurrencePaycheckStyle";
+  style.textContent = `#moveOccurrencePaycheckDialog::backdrop{background:rgba(0,0,0,.58)}#moveOccurrencePaycheckDialog button{min-height:46px}#moveOccurrencePaycheckDialog:focus{outline:none}`;
+  document.head.appendChild(style);
+  const dialog = document.createElement("dialog");
+  dialog.id = "moveOccurrencePaycheckDialog";
+  dialog.setAttribute("role", "dialog");
+  dialog.setAttribute("aria-modal", "true");
+  dialog.setAttribute("aria-labelledby", "moveOccurrencePaycheckTitle");
+  dialog.setAttribute("aria-describedby", "moveOccurrencePaycheckScope");
+  dialog.style.cssText = "position:fixed;inset:auto 0 0;margin:0 auto;width:min(100%,540px);max-width:100%;max-height:85dvh;overflow:auto;box-sizing:border-box;padding:24px 20px calc(24px + env(safe-area-inset-bottom));border:1px solid var(--border);border-radius:22px 22px 0 0;background:var(--surface,#20202b);color:var(--text,#fff);";
+  dialog.innerHTML = `<h2 id="moveOccurrencePaycheckTitle" style="font-size:20px;margin:0 0 20px;">Move to next paycheck?</h2>
+    <div style="font-weight:700;">${escapeHtml(bill.name)} · ${formatCurrency(bill.amount)}</div>
+    <div style="margin-top:6px;color:var(--text-muted);">Due ${escapeHtml(formatDate(bill.dueDate,"full"))}</div>
+    <div style="display:grid;grid-template-columns:44px 1fr;gap:14px;margin:24px 0;"><span>From</span><span>${escapeHtml(occurrenceFundingLabel(from))}</span><span>To</span><span>${escapeHtml(occurrenceFundingLabel(to))}</span></div>
+    <p id="moveOccurrencePaycheckScope" style="line-height:1.5;color:var(--text-muted);">Only this occurrence will move. The due date and future bills stay unchanged.</p>
+    ${paycheckOccurrenceKey(occurrenceFundingDate(to)) > paycheckOccurrenceKey(bill.dueDate) ? `<p style="line-height:1.5;">This paycheck arrives after the bill’s due date. Moving it does not extend the due date.</p>` : ""}
+    <p data-move-error role="alert" style="color:var(--overdue);" hidden></p>
+    <div style="display:flex;gap:12px;margin-top:24px;"><button type="button" class="btn-secondary" style="flex:1;" onclick="closeMoveOccurrencePaycheck()">Cancel</button><button type="button" class="btn-primary" data-confirm-move style="flex:1;">Move bill</button></div>`;
+  dialog.querySelector("[data-confirm-move]").onclick = () => commitMoveOccurrencePaycheck(billId, dueDate, context);
+  dialog.addEventListener("cancel", event => {event.preventDefault();closeMoveOccurrencePaycheck();});
+  dialog.addEventListener("click", event => {if(event.target === dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom)closeMoveOccurrencePaycheck();}});
+  document.body.appendChild(dialog);
+  dialog.showModal();
+}
+function saveOccurrenceFundingMove(billId, dueDate, expected) {
+  const context = getPaycheckMoveContext(billId, dueDate);
+  if (!context || JSON.stringify(context.from) !== JSON.stringify(expected.from) ||
+    JSON.stringify(context.to) !== JSON.stringify(expected.to) || context.key !== expected.key ||
+    Number(context.bill.amount) !== Number(expected.bill.amount)) {
+    throw new Error("This bill changed. Close this sheet and review it before moving.");
+  }
+  const bills = Store.getBills();
+  const index = bills.findIndex(bill => bill.id === billId);
+  if (index < 0) throw new Error("This bill is no longer available.");
+  bills[index] = {...bills[index], paycheckOccurrenceOverrides: {
+    ...(bills[index].paycheckOccurrenceOverrides || {}),
+    [context.key]: {month:context.to.month, paycheck:context.to.paycheck,
+      fromMonth:context.from.month, fromPaycheck:context.from.paycheck,
+      dueDate:context.bill.dueDate, movedAt:new Date().toISOString()}
+  }};
+  Store.saveBills(bills);
+}
+function commitMoveOccurrencePaycheck(billId, dueDate, context) {
+  const dialog = document.getElementById("moveOccurrencePaycheckDialog");
+  if (!dialog) return;
+  const button = dialog.querySelector("[data-confirm-move]");
+  if (button.disabled) return;
+  button.disabled = true;
+  try { saveOccurrenceFundingMove(billId, dueDate, context); }
+  catch(error) {
+    const message = dialog.querySelector("[data-move-error]");
+    message.textContent = error.message || "Could not save this change. Please try again.";
+    message.hidden = false;
+    button.disabled = false;
+    return;
+  }
+  closeMoveOccurrencePaycheck();
+  if (routeParams.returnRoute === "today") navigate("today", getBillDetailReturnParams());
+  else render();
+}
+
+let paycheckInlineViews = {};
+function paycheckInlineViewKey() {
+  return `${paycheckMonthKey(getDashboardPaycheckMonth())}:${selectedDashboardPaycheck || "first"}`;
+}
+function capturePaycheckInlineView() {
+  const list = document.getElementById("paycheckInlineList");
+  if (!list || list.dataset.viewKey !== paycheckInlineViewKey()) return null;
+  const saved = {key:list.dataset.viewKey,
+    providers:[...list.querySelectorAll("details[data-paycheck-provider][open]")].map(node => node.dataset.paycheckProvider),
+    expanded:list.querySelector("[data-paycheck-show-more]")?.getAttribute("aria-expanded") === "true",
+    mainScroll:document.querySelector("#app .main-content")?.scrollTop || 0,
+    windowScroll:window.scrollY};
+  paycheckInlineViews[saved.key] = saved;
+  return saved;
+}
+function restorePaycheckInlineView() {
+  const list = document.getElementById("paycheckInlineList");
+  if (!list) return;
+  const saved = paycheckInlineViews[list.dataset.viewKey];
+  if (!saved) return;
+  const button = list.querySelector("[data-paycheck-show-more]");
+  list.querySelectorAll("[data-paycheck-extra]").forEach(row => row.hidden = !saved.expanded);
+  if (button) {button.setAttribute("aria-expanded",String(saved.expanded));button.textContent=saved.expanded?"Show Less":"Show More";}
+  list.querySelectorAll("details[data-paycheck-provider]").forEach(node => node.open = saved.providers.includes(node.dataset.paycheckProvider));
+}
+document.addEventListener("toggle", event => {
+  if (event.target.matches?.("#paycheckInlineList details[data-paycheck-provider]")) capturePaycheckInlineView();
+}, true);
+["billbeacon:signed-out", "billbeacon:household-ready"].forEach(name => window.addEventListener(name, () => {
+  paycheckInlineViews = {};
+  closeMoveOccurrencePaycheck();
+}));
 
 function getPaycheckPlan(referenceDate = new Date()) {
   const year = referenceDate.getFullYear();
@@ -3293,39 +3514,17 @@ function getPaycheckPlan(referenceDate = new Date()) {
     0
   );
 
-  const bills = getCalendarBillsForMonth(
-    new Date(year, month, 1, 12, 0, 0, 0)
-  ).filter(bill => !bill.isArchivedHistory || isOccurrencePaid(bill, new Date(bill.dueDate)));
+  const bills = getPaycheckFundingBills(referenceDate);
 
   const firstBills = [];
   const secondBills = [];
   const previousBills = [];
 
-  bills.forEach((bill) => {
-    const assignment = bill.paycheckAssignment || "auto";
-    const dueDate = new Date(bill.dueDate);
-    const dueDay = dueDate.getDate();
-
-    if (assignment === "previous") {
-      previousBills.push(bill);
-      return;
-    }
-
-    if (assignment === "first") {
-      firstBills.push(bill);
-      return;
-    }
-
-    if (assignment === "second") {
-      secondBills.push(bill);
-      return;
-    }
-
-    if (dueDay <= 14) {
-      firstBills.push(bill);
-    } else {
-      secondBills.push(bill);
-    }
+  bills.forEach(bill => {
+    const funding = getOccurrenceFunding(bill);
+    if (funding.paycheck === "previous") previousBills.push(bill);
+    else if (funding.paycheck === "second") secondBills.push(bill);
+    else firstBills.push(bill);
   });
 
   const sortBills = (items) =>
@@ -3466,33 +3665,13 @@ function togglePaycheckInlineRows(button) {
 
   button.setAttribute("aria-expanded", String(expanded));
   button.textContent = expanded ? "Show Less" : "Show More";
+  capturePaycheckInlineView();
 }
 function openPaycheckInlineBill(button, billId, dueDate) {
-  const list = button.closest("#paycheckInlineList");
-  const moreButton = list?.querySelector(
-    "[data-paycheck-show-more]"
-  );
-
-  const savedView = {
-    providers: list
-      ? [...list.querySelectorAll("details[open]")]
-          .map(node => node.dataset.paycheckProvider)
-      : [],
-    expanded: moreButton?.getAttribute("aria-expanded") === "true",
-    mainScroll: document.querySelector(
-      "#app .main-content"
-    )?.scrollTop || 0,
-    windowScroll: window.scrollY
-  };
-
+  const savedView = capturePaycheckInlineView();
   navigate("detail", {
-    id: billId,
-    occurrenceDueDate: dueDate,
-    returnRoute: "today",
-    returnParams: {
-      ...routeParams,
-      paycheckInlineReturn: savedView
-    }
+    id:billId, occurrenceDueDate:dueDate, returnRoute:"today",
+    returnParams:{...routeParams, paycheckInlineReturn:savedView}
   });
 }
 function renderPaycheckInlineRows(selected) {
@@ -3604,6 +3783,7 @@ function renderPaycheckInlineRows(selected) {
             ${svgIcon(status.icon, 14)}
             <span>${escapeHtml(status.label)}</span>
           </span>
+          ${renderOccurrenceMoveNote(bill)}
         </span>
 
         <span style="
@@ -3630,7 +3810,7 @@ function renderPaycheckInlineRows(selected) {
     const paidCount = group.bills.length - unpaid.length;
 
     return `
-      <details>
+      <details data-paycheck-provider="${escapeHtml(group.provider.toLowerCase().replace(/\s+/g, " "))}">
         <summary style="
           display:flex;
           align-items:center;
@@ -3704,11 +3884,7 @@ function renderPaycheckInlineRows(selected) {
 
           ${group.bills.map(renderBill).join("")}
         </div>
-      <details
-  data-paycheck-provider="${escapeHtml(
-    group.provider.toLowerCase().replace(/\s+/g, " ")
-  )}"
->
+      </details>
     `;
   };
 
@@ -3727,7 +3903,7 @@ function renderPaycheckInlineRows(selected) {
   }
 
   return `
-    <div id="paycheckInlineList" style="
+    <div id="paycheckInlineList" data-view-key="${escapeHtml(paycheckInlineViewKey())}" style="
       margin-top:var(--space-3);
       border-top:1px solid var(--border);
     ">
@@ -4007,10 +4183,24 @@ function renderDashboardPaycheckPlan(
 }
 
 function setDashboardPaycheck(paycheckKey) {
+  capturePaycheckInlineView();
   selectedDashboardPaycheck =
     paycheckKey === "second" ? "second" : "first";
 
   render();
+}
+
+function openPaycheckSheetBill(button, billId, dueDate) {
+  const container = button.closest("#paycheckPlanContainer");
+  const saved = {
+    key:paycheckInlineViewKey(), paycheck:container?.dataset.paycheckKey || "first",
+    bodyScroll:container?.querySelector(".sheet-body")?.scrollTop || 0,
+    listScroll:container?.querySelector(".paycheck-bills-scroll")?.scrollTop || 0
+  };
+  const inline = capturePaycheckInlineView();
+  closePaycheckPlanSheet();
+  navigate("detail", {id:billId, occurrenceDueDate:dueDate, returnRoute:"today",
+    returnParams:{...routeParams, paycheckInlineReturn:inline, paycheckSheetReturn:saved}});
 }
 
 function openPaycheckPlanSheet(paycheckKey) {
@@ -4037,11 +4227,7 @@ function openPaycheckPlanSheet(paycheckKey) {
               type="button"
               class="bill-row"
               style="width:100%;text-align:left;"
-              onclick="closePaycheckPlanSheet();navigate('detail', {
-                id: '${escapeInlineString(sourceBillId)}',
-                occurrenceDueDate: '${escapeInlineString(bill.dueDate)}',
-                returnRoute: 'today'
-              })"
+              onclick="openPaycheckSheetBill(this, '${escapeInlineString(sourceBillId)}', '${escapeInlineString(bill.dueDate)}')"
             >
               <div
                 class="bill-icon"
@@ -4071,6 +4257,7 @@ function openPaycheckPlanSheet(paycheckKey) {
                 >
                   ${status.label}
                 </div>
+                ${renderOccurrenceMoveNote(bill)}
               </div>
 
               <div class="bill-amount">
@@ -4172,6 +4359,7 @@ function openPaycheckPlanSheet(paycheckKey) {
 }
 
 function closePaycheckPlanSheet() {
+  if (routeParams) delete routeParams.paycheckSheetReturn;
   const container = document.getElementById(
     "paycheckPlanContainer"
   );
@@ -12234,6 +12422,7 @@ const postponeAction = isRecurring
 
         ${renderLegacyPaymentReviewNotice(sourceBillId)}
         ${paymentAction}
+        ${!isArchivedHistory ? renderOccurrenceFundingAction(detailBill) : ""}
 
         <button
           type="button"
@@ -16738,6 +16927,7 @@ const accountSelector = accounts.length
   `;
 }
 function render() {
+  if (currentRoute === "today") capturePaycheckInlineView();
   const app = document.getElementById("app"); if (!app) return;
   const views = {today: renderToday, recurring: renderRecurring, bills: renderBills, more: renderMore,
     calendar: renderCalendar, insights: renderInsights, activity: renderActivity, "payment-plans": renderPaymentPlans,
@@ -16751,6 +16941,7 @@ function render() {
     content += tabBar();
   }
   app.innerHTML = content;
+  if (currentRoute === "today") restorePaycheckInlineView();
   if (currentRoute !== "history") { addNotificationSettings(); addBackupSettings(); attachSignOutButton(); }
 }
 
@@ -20004,6 +20195,7 @@ window.addEventListener("storage", () => {
     .map((item) => item.node);
 }
   function dismissContext(target = null) {
+    if (document.getElementById("moveOccurrencePaycheckDialog")?.open) return null;
     const sheets = popupSheets();
     if (sheets.length) {
       const root = sheets[sheets.length-1];
