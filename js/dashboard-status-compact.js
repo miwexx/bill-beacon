@@ -65,8 +65,8 @@
       </div>
       ${overdueFromEarlier?'<p class="bb-payment-status-scope">Overdue includes earlier months.</p>':""}
       ${hasInstallments?`<button type="button" class="bb-payment-status-plans"
-        onclick="navigate('payment-plans',{returnRoute:'today'})" aria-label="View installment plans">
-        <span>View installment plans</span><span aria-hidden="true">${svgIcon("chevronRight",16)}</span>
+        onclick="navigate('payment-plans',{returnRoute:'today'})" aria-label="View Installment Plans">
+        <span>View Installment Plans</span><span aria-hidden="true">${svgIcon("chevronRight",16)}</span>
       </button>`:'<div style="height:8px;"></div>'}
     </section>`;
   };
