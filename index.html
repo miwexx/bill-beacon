@@ -43,6 +43,24 @@
   <title>Bill Beacon</title>
 
   <style id="bb-startup-critical-style">
+
+#bb-startup-screen::after {
+  content: "Logging in…";
+  position: absolute;
+  top: 60%;
+  left: 24px;
+  right: 24px;
+  text-align: center;
+  color: #596174;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+#bb-startup-screen.bb-startup-error::after,
+#bb-startup-screen:has(#bb-startup-actions[style*="grid"])::after {
+  display: none;
+}
     html:not([data-bb-startup="login"]) #login-screen {
       display: none !important;
     }
