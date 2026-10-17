@@ -10257,6 +10257,112 @@ function getMonthlyCategoryPayments(referenceDate = new Date()) {
     };
   });
 }
+function bbInsightMoneyCents(value) {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100)) : 0;
+}
+
+function bbInsightHasPlans() {
+  return Store.getBills().some(bill => bill.installmentPlanId &&
+    !bill.archivedAt && !bill.cancelledAt &&
+    !["cancelled", "canceled", "archived"].includes(String(bill.status || "").toLowerCase()));
+}
+
+function bbInsightIsInstallment(item) {
+  const snapshots = (item.payments || []).map(payment => payment.billSnapshot).filter(Boolean);
+  const snapshot = snapshots.find(value => value.installmentPlanId || value.category);
+  return snapshot ? Boolean(snapshot.installmentPlanId || snapshot.category === "paymentplans")
+    : Boolean(item.installmentPlanId || item.bill?.installmentPlanId ||
+      item.category === "paymentplans" || item.bill?.category === "paymentplans");
+}
+
+function bbInsightSplit(items, scheduled = false) {
+  const result = {bills:0, installments:0, total:0};
+  for (const item of items) {
+    const amount = bbInsightMoneyCents(scheduled ? item.expectedAmount : item.amount);
+    result[bbInsightIsInstallment(item) ? "installments" : "bills"] += amount;
+    result.total += amount;
+  }
+  return result;
+}
+
+function bbInsightScheduledSplit(date) {
+  const summary = getDashboardMonthSummary(date);
+  const seen = new Set();
+  const items = [];
+  for (const bill of summary.bills) {
+    if (bill.cancelledAt || ["cancelled", "canceled"].includes(String(bill.status || "").toLowerCase())) continue;
+    const key = `${getBillPaymentId(bill)}:${getLocalDateKey(bill.dueDate)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    items.push({bill, expectedAmount:bill.amount});
+  }
+  for (const paid of summary.paid) {
+    if (seen.has(paid.key)) continue;
+    seen.add(paid.key);
+    items.push(paid);
+  }
+  return bbInsightSplit(items, true);
+}
+
+function bbRenderSpendingBreakdown(date) {
+  if (!bbInsightHasPlans()) return "";
+  const totals = bbInsightSplit(getMonthlyCategoryPayments(date));
+  const billsPercent = totals.total ? totals.bills / totals.total * 100 : 0;
+  const line = (label, cents, color) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:9px 0;"><span style="display:flex;align-items:center;gap:8px;"><span aria-hidden="true" style="width:8px;height:8px;border-radius:50%;background:${color};"></span>${label}</span><span style="font-weight:700;font-variant-numeric:tabular-nums;">${formatCurrency(cents / 100)}</span></div>`;
+  return `<section aria-label="Spending breakdown"><div class="section-header">Spending Breakdown</div>
+    <div class="card card-pad"><div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:8px;">${escapeHtml(formatDate(date,"monthYear"))} · Payments toward this month’s bills</div>
+    ${line("Bills", totals.bills, "var(--accent, #b45cff)")}
+    ${line("Installments", totals.installments, "var(--cat-paymentplans, #9333ea)")}
+    <div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--border);padding-top:12px;margin-top:4px;font-weight:700;"><span>Total paid</span><span>${formatCurrency(totals.total / 100)}</span></div>
+    ${totals.total ? `<div aria-label="Bills ${Math.round(billsPercent)} percent; installments ${Math.round(100-billsPercent)} percent" style="display:flex;height:8px;margin-top:16px;border-radius:8px;overflow:hidden;background:var(--surface-2);"><span style="display:block;flex:none;width:${billsPercent}%;background:var(--accent, #b45cff);"></span><span style="display:block;flex:none;width:${100-billsPercent}%;background:var(--cat-paymentplans, #9333ea);"></span></div>` : `<div style="margin-top:12px;font-size:var(--text-sm);color:var(--text-muted);">No spending recorded this month.</div>`}
+    </div></section>`;
+}
+
+function bbRenderScheduledCommitments(date) {
+  if (!bbInsightHasPlans()) return "";
+  const rows = Array.from({length:3}, (_, index) => {
+    const month = new Date(date.getFullYear(), date.getMonth()+index, 1, 12);
+    const totals = bbInsightScheduledSplit(month);
+    return `<div style="padding:14px 0;${index ? 'border-top:1px solid var(--border);' : ''}"><div style="display:flex;justify-content:space-between;gap:12px;font-weight:700;"><span>${escapeHtml(formatDate(month,"monthYear"))}</span><span style="font-variant-numeric:tabular-nums;">${formatCurrency(totals.total / 100)}</span></div><div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:7px;line-height:1.5;">Bills ${formatCurrency(totals.bills / 100)} · Installments ${formatCurrency(totals.installments / 100)}</div></div>`;
+  }).join("");
+  return `<section aria-label="Three-month scheduled commitments"><div class="section-header">Scheduled Commitments</div><div class="card card-pad"><div style="font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;">Based on saved due dates · Includes paid and unpaid</div>${rows}<div style="font-size:var(--text-xs);color:var(--text-muted);border-top:1px solid var(--border);padding-top:12px;line-height:1.5;">Scheduled estimates, not remaining balances. Future amounts may change.</div></div></section>`;
+}
+
+function bbInsightComparison(date) {
+  const previous = new Date(date.getFullYear(), date.getMonth()-1, 1, 12);
+  const day = Math.min(date.getDate(), new Date(previous.getFullYear(), previous.getMonth()+1, 0).getDate());
+  const current = new Date(date.getFullYear(), date.getMonth(), 1, 12);
+  const collect = month => {
+    const cutoff = new Date(month.getFullYear(),month.getMonth(),day,23,59,59,999);
+    let cents=0, count=0;
+    for (const item of getDashboardPaidOccurrences(month)) {
+      const due = dashboardDate(item.dueDate);
+      if (!due || due.getDate() > day) continue;
+      for (const payment of item.payments || []) {
+        const paidDate = dashboardDate(payment.paidDate);
+        if (!paidDate || paidDate > cutoff) continue;
+        cents += bbInsightMoneyCents(payment.amount);
+        count++;
+      }
+    }
+    return {cents,count};
+  };
+  const nowTotal = collect(current), beforeTotal = collect(previous);
+  if (!nowTotal.count || !beforeTotal.count) return null;
+  return {difference:nowTotal.cents-beforeTotal.cents, day, current, previous};
+}
+
+function bbRenderSpendingComparison(date) {
+  const comparison = bbInsightComparison(date);
+  if (!comparison) return "";
+  const {difference, day, current, previous} = comparison;
+  const text = difference === 0 ? "Same amount paid toward bills due in the matching period last month"
+    : `${formatCurrency(Math.abs(difference)/100)} ${difference > 0 ? "more" : "less"} paid toward bills due in the matching period last month`;
+  const label = month => `${month.toLocaleDateString(undefined,{month:"short",year:"numeric"})} 1–${day}`;
+  return `<div style="border-top:1px solid var(--border);margin-top:16px;padding-top:12px;line-height:1.5;"><div style="font-size:var(--text-sm);">${escapeHtml(text)}</div><div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:5px;">${escapeHtml(label(current))} compared with ${escapeHtml(label(previous))} · Recorded by each period’s end</div></div>`;
+}
+
 function renderInsights() {
   const payments = Store.getPayments();
   const now = new Date();
@@ -10624,6 +10730,8 @@ for (let i = 5; i >= 0; i -= 1) {
             : ""
         }
 
+        ${bbRenderSpendingBreakdown(now)}
+
         <div>
           <div class="section-header">Spending by Category</div>
 
@@ -10742,8 +10850,10 @@ for (let i = 5; i >= 0; i -= 1) {
                   </div>
                 `
             }
+            ${bbRenderSpendingComparison(now)}
           </div>
         </div>
+        ${bbRenderScheduledCommitments(now)}
       </div>
     </div>
   `;
