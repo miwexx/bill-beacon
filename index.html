@@ -19,44 +19,82 @@
   >
 
   <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="./icons/bill-beacon-icon.png">
-<link rel="icon" href="./icons/bill-beacon-icon.png">
-<link rel="stylesheet" href="css/style.css?v=household-popup-1">
+  <link rel="apple-touch-icon" href="./icons/bill-beacon-icon.png">
+  <link rel="icon" href="./icons/bill-beacon-icon.png">
+  <link rel="stylesheet" href="css/style.css?v=household-popup-1">
 
   <script>
-  try {
-    const settings = JSON.parse(localStorage.getItem("settings") || "{}");
-    const theme = settings.theme || "dark";
+    try {
+      const settings = JSON.parse(
+        localStorage.getItem("settings") || "{}"
+      );
 
-    document.documentElement.setAttribute(
-      "data-theme",
-      theme === "light" ? "light" : "dark"
-    );
-  } catch {
-    document.documentElement.setAttribute("data-theme", "dark");
-  }
-</script>
+      const theme = settings.theme || "dark";
+
+      document.documentElement.setAttribute(
+        "data-theme",
+        theme === "light" ? "light" : "dark"
+      );
+    } catch {
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  </script>
 
   <title>Bill Beacon</title>
+
+  <style id="bb-startup-critical-style">
+    html:not([data-bb-startup="login"]) #login-screen {
+      display: none !important;
+    }
+
+    html:not([data-bb-startup="ready"]) #app {
+      display: none !important;
+    }
+
+    #bb-startup-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 28px;
+      background: var(--bg, #08080b);
+      color: var(--text, #ffffff);
+    }
+
+    html[data-bb-startup="login"] #bb-startup-screen,
+    html[data-bb-startup="ready"] #bb-startup-screen {
+      display: none !important;
+    }
+
+    html:not([data-bb-startup="login"]):not([data-bb-startup="ready"]) body {
+      overflow: hidden !important;
+    }
+  </style>
+
+  <script src="js/startup-gate.js?v=step8-1"></script>
 </head>
 
 <body>
   <section id="login-screen" class="login-screen">
     <div class="login-card">
       <div class="login-logo" aria-label="Bill Beacon logo">
-  <img
-    src="./icons/bill-beacon-icon.png"
-    alt="Bill Beacon app icon"
-    width="88"
-    height="88"
-  >
-</div>
+        <img
+          src="./icons/bill-beacon-icon.png"
+          alt="Bill Beacon app icon"
+          width="88"
+          height="88"
+        >
+      </div>
 
       <h1 class="login-title">Bill Beacon</h1>
 
-
       <div class="login-form">
-        <label class="login-label" for="email-login">Email</label>
+        <label class="login-label" for="email-login">
+          Email
+        </label>
 
         <input
           id="email-login"
@@ -68,27 +106,29 @@
           required
         >
 
-        <label class="login-label" for="password-login">Password</label>
+        <label class="login-label" for="password-login">
+          Password
+        </label>
 
         <input
-  id="password-login"
-  class="login-input"
-  type="password"
-  autocomplete="current-password"
-  placeholder="Password"
-  required
->
+          id="password-login"
+          class="login-input"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Password"
+          required
+        >
 
-<button
-  id="forgot-password-button"
-  class="forgot-password-button"
-  type="button"
->
-  Forgot password?
-</button>
+        <button
+          id="forgot-password-button"
+          class="forgot-password-button"
+          type="button"
+        >
+          Forgot password?
+        </button>
 
-<p
-  id="login-error"
+        <p
+          id="login-error"
           class="login-error"
           role="alert"
           aria-live="polite"
@@ -114,15 +154,15 @@
   </section>
 
   <div id="app" style="display: none;"></div>
-  
-<script type="module" src="js/firebase-sync.js"></script>
-<script type="module" src="js/firebase-auth.js"></script>
-<script src="js/app.js"></script>
-<script src="js/settings-cleanup.js?v=settings-cleanup-2"></script>
-<script src="js/about-legal.js"></script>
-<script type="module" src="js/account-tutorial.js?v=3"></script>
-<script src="js/login-polish.js?v=1"></script>
-<!-- Reminder test UI disabled: its buildCard() function is missing. -->
 
+  <script type="module" src="js/firebase-sync.js"></script>
+  <script type="module" src="js/firebase-auth.js"></script>
+  <script src="js/app.js"></script>
+  <script src="js/settings-cleanup.js?v=settings-cleanup-2"></script>
+  <script src="js/about-legal.js"></script>
+  <script type="module" src="js/account-tutorial.js?v=3"></script>
+  <script src="js/login-polish.js?v=1"></script>
+
+  <!-- Reminder test UI disabled: its buildCard() function is missing. -->
 </body>
 </html>
