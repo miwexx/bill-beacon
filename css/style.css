@@ -6207,3 +6207,22 @@ max-height: max(160px, calc(50dvh - 88px));
   :is(.pill-icon, .pill-chevron) {
   color: var(--text-secondary) !important;
 }
+/* Center Calendar, Bills, and Insights page titles. */
+.nav-bar-content:has(> .bb-centered-page-title) {
+  position: relative;
+  justify-content: flex-end;
+  min-height: 56px;
+}
+
+.nav-bar-content > .bb-centered-page-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 112px);
+  margin: 0;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}

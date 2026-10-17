@@ -6336,7 +6336,7 @@ function renderRecurring() {
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <div class="nav-title">Recurring</div>
+        <div class="nav-title bb-centered-page-title">Calendar</div>
 
         <button
           class="nav-button"
@@ -6519,7 +6519,7 @@ function renderBills() {
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <div class="nav-title">Bills</div>
+        <div class="nav-title bb-centered-page-title">Bills</div>
 
         <button
   class="nav-button"
@@ -10591,7 +10591,7 @@ for (let i = 5; i >= 0; i -= 1) {
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <div class="nav-title">Insights</div>
+        <div class="nav-title bb-centered-page-title">Insights</div>
       </div>
     </div>
 
