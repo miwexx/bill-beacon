@@ -3385,7 +3385,7 @@ function renderOccurrenceFundingAction(bill) {
     <div style="font-size:var(--text-sm);color:var(--text-muted);">Due ${escapeHtml(formatDate(bill.dueDate, "full"))}<br>Funded by ${escapeHtml(occurrenceFundingLabel(funding))}</div>
     ${renderOccurrenceMoveNote(bill)}
     <button type="button" onclick="openMoveOccurrencePaycheck('${escapeInlineString(id)}','${escapeInlineString(bill.dueDate)}')" style="display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:16px 0;background:transparent;border:0;border-bottom:1px solid var(--border);color:var(--text);font:inherit;text-align:left;cursor:pointer;">
-      <span>Move to next paycheck</span>${svgIcon("chevronRight", 18)}
+      <span>Move To Next Paycheck</span>${svgIcon("chevronRight", 18)}
     </button></div>`;
 }
 function closeMoveOccurrencePaycheck() {
@@ -3411,11 +3411,11 @@ function openMoveOccurrencePaycheck(billId, dueDate) {
   dialog.setAttribute("aria-labelledby", "moveOccurrencePaycheckTitle");
   dialog.setAttribute("aria-describedby", "moveOccurrencePaycheckScope");
   dialog.style.cssText = "position:fixed;inset:auto 0 0;margin:0 auto;width:min(100%,540px);max-width:100%;max-height:85dvh;overflow:auto;box-sizing:border-box;padding:24px 20px calc(24px + env(safe-area-inset-bottom));border:1px solid var(--border);border-radius:22px 22px 0 0;background:var(--surface,#20202b);color:var(--text,#fff);";
-  dialog.innerHTML = `<h2 id="moveOccurrencePaycheckTitle" style="font-size:20px;margin:0 0 20px;">Move to next paycheck?</h2>
+  dialog.innerHTML = `<h2 id="moveOccurrencePaycheckTitle" style="font-size:20px;margin:0 0 20px;">Move To Next Paycheck?</h2>
     <div style="font-weight:700;">${escapeHtml(bill.name)} · ${formatCurrency(bill.amount)}</div>
     <div style="margin-top:6px;color:var(--text-muted);">Due ${escapeHtml(formatDate(bill.dueDate,"full"))}</div>
     <div style="display:grid;grid-template-columns:44px 1fr;gap:14px;margin:24px 0;"><span>From</span><span>${escapeHtml(occurrenceFundingLabel(from))}</span><span>To</span><span>${escapeHtml(occurrenceFundingLabel(to))}</span></div>
-    <p id="moveOccurrencePaycheckScope" style="line-height:1.5;color:var(--text-muted);">Only this occurrence will move. The due date and future bills stay unchanged.</p>
+   
     ${paycheckOccurrenceKey(occurrenceFundingDate(to)) > paycheckOccurrenceKey(bill.dueDate) ? `<p style="line-height:1.5;">This paycheck arrives after the bill’s due date. Moving it does not extend the due date.</p>` : ""}
     <p data-move-error role="alert" style="color:var(--overdue);" hidden></p>
     <div style="display:flex;gap:12px;margin-top:24px;"><button type="button" class="btn-secondary" style="flex:1;" onclick="closeMoveOccurrencePaycheck()">Cancel</button><button type="button" class="btn-primary" data-confirm-move style="flex:1;">Move bill</button></div>`;
