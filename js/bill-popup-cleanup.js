@@ -244,3 +244,102 @@
   window.BillBeaconPopupCleanup={version:2,
     _test:{noteContext,sharedNotes,notesMarkup,cleanText,groupParts,paymentCents,scheduleMarkup,selectedParams}};
 })();
+/* Split-card polish: append below the existing popup-cleanup code. */
+(() => {
+  "use strict";
+
+  if (window.BillBeaconSplitCardPolish) return;
+
+  if (
+    !window.BillBeaconPopupCleanup ||
+    typeof renderOccurrenceFundingAction !== "function"
+  ) {
+    console.error(
+      "Split-card polish: load the popup cleanup first."
+    );
+    return;
+  }
+
+  const previousFunding = renderOccurrenceFundingAction;
+
+  renderOccurrenceFundingAction = function (bill) {
+    const html = previousFunding.apply(this, arguments);
+
+    const root = document.createElement("div");
+    root.innerHTML = html;
+
+    const card = root.querySelector(
+      "[data-bb-split-schedule]"
+    );
+
+    // Leave ordinary, unsplit bills unchanged.
+    if (!card) return html;
+
+    const move = [...root.querySelectorAll("button")]
+      .find(button =>
+        /\bopenMoveOccurrencePaycheck\s*\(/.test(
+          button.getAttribute("onclick") || ""
+        )
+      );
+
+    const manage = [...card.querySelectorAll("button")]
+      .find(button =>
+        button.textContent.replace(/\s+/g, " ").trim() ===
+        "Manage Split Payments"
+      );
+
+    if (move && manage) {
+      const oldContainer = move.parentElement;
+
+      // Move the existing control; keep its payment-specific action.
+      manage.insertAdjacentElement("afterend", move);
+
+      move.classList.add("bb-outline-pill");
+
+      const styles = {
+        width: "100%",
+        "min-height": "40px",
+        height: "auto",
+        padding: "8px 12px",
+        "margin-top": "10px",
+        "font-size": "14px",
+        "line-height": "1.2",
+        "justify-content": "space-between",
+        "box-sizing": "border-box"
+      };
+
+      for (const [property, value] of Object.entries(styles)) {
+        move.style.setProperty(property, value, "important");
+      }
+
+      if (
+        oldContainer !== card &&
+        oldContainer?.hasAttribute("data-bb-clean-funding") &&
+        oldContainer.children.length === 0
+      ) {
+        oldContainer.remove();
+      }
+    }
+
+    card.querySelectorAll(
+      '[data-bb-split-payment][aria-current="true"]'
+    ).forEach(button => {
+      const styles = {
+        background: "rgba(180, 92, 255, 0.07)",
+        border: "1px solid rgba(180, 92, 255, 0.30)",
+        "border-radius": "12px",
+        "box-shadow":
+          "inset 3px 0 0 rgba(180, 92, 255, 0.75)",
+        color: "var(--text)"
+      };
+
+      for (const [property, value] of Object.entries(styles)) {
+        button.style.setProperty(property, value, "important");
+      }
+    });
+
+    return root.innerHTML;
+  };
+
+  window.BillBeaconSplitCardPolish = { version: 1 };
+})();
