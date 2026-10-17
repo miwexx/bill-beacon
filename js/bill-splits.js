@@ -1,9 +1,10 @@
-/* Bill Beacon BROWSER script: split payments and occurrence notes. Original paycheck layout retained.
+/* Bill Beacon BROWSER script v3: split labels, previous-detail navigation and occurrence notes.
    Load as a CLASSIC script AFTER app.js and settings-cleanup.js. */
 (() => {
   "use strict";
   if (window.BillBeaconSplits) return;
   const original = {
+    billRow: billRow,
     calendar: getCalendarBillsForMonth,
     resolve: resolveCalendarBillOccurrence,
     current: getCurrentCalendarBillOccurrence,
@@ -111,22 +112,39 @@
     return resolveCalendarBillOccurrence(id,date) ||
       (!isRecurringBill(source) && key(source.dueDate)===key(date)?source:null);
   }
+  function cleanNoteText(value) {
+    return String(value || "").replace(/\n?Fully allocated[;,]?\s*original biller due date unchanged[.;,]?\s*Only this occurrence\.?/gi, "").trim();
+  }
   function notesHTML(bill) {
     const source=sourceFor(bill);if(!source) return "";
     const notes=source.occurrenceNotes?.[originKey(bill)] || [];
     if (!notes.length) return "";
     return `<details class="card" style="margin-top:12px;padding:14px;"><summary style="font-weight:750;cursor:pointer;">Notes for this occurrence (${notes.length})</summary>${notes.map(n=>
-      `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;"><div style="font-size:var(--text-xs);color:var(--text-muted);">${escapeHtml(new Date(n.timestamp).toLocaleString())} · ${escapeHtml(n.actorName || "Household member")}</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:5px;">${escapeHtml(n.text)}</div></div>`).join("")}</details>`;
+      `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px;"><div style="font-size:var(--text-xs);color:var(--text-muted);">${escapeHtml(new Date(n.timestamp).toLocaleString())} · ${escapeHtml(n.actorName || "Household member")}</div><div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:5px;">${escapeHtml(cleanNoteText(n.text))}</div></div>`).join("")}</details>`;
+  }
+  function displayBill(bill) {
+    if(!bill?.splitPaymentParentId)return bill;
+    const name=String(bill.splitParentName || bill.name || "Bill").replace(/\s*-\s*Split\s+\d+$/i,"");
+    return {...bill,name:`${name} - Split ${bill.splitPaymentPartNumber}`};
   }
   function row(bill) {
     const status=getPaycheckBillStatusLabel(bill),id=getBillPaymentId(bill);
     return `<button type="button" class="bill-row" style="width:100%;text-align:left;color:var(--text);"
-      onclick="navigate('detail',{id:'${escapeInlineString(id)}',occurrenceDueDate:'${escapeInlineString(bill.dueDate)}',returnRoute:'today'})">
+      onclick="bbSplitOpenDetail('${escapeInlineString(id)}','${escapeInlineString(bill.dueDate)}')">
       <span style="width:32px;flex:0 0 32px;overflow:hidden;">${billOrPaymentPlanVisual(bill,32)}</span>
-      <span class="bill-info"><span class="bill-name" style="display:block;">Payment ${bill.splitPaymentPartNumber || 1}</span>
+      <span class="bill-info"><span class="bill-name" style="display:block;">${escapeHtml(displayBill(bill).name)}</span>
       <span class="bill-meta" style="color:${status.color};">${escapeHtml(status.label)}</span></span>
       <span class="bill-amount">${formatCurrency(bill.amount)}</span></button>`;
   }
+  window.bbSplitOpenDetail=function(id,date) {
+    const params=JSON.parse(JSON.stringify(routeParams || {}));
+    const route=currentRoute;
+    const scroll={window:window.scrollY || 0,main:document.querySelector("#app .main-content")?.scrollTop || 0};
+    // Each child carries the exact route/params it was opened from, including
+    // the existing paycheck-sheet/inline return information. No Dashboard fallback.
+    navigate("detail",{id,occurrenceDueDate:date,returnRoute:route,returnParams:params,
+      bbSplitReturn:{route,params,scroll}});
+  };
   let editorScroll=null,editorFocus=null;
   function closeEditor() {
     document.getElementById("bbSplitContainer")?.remove();
@@ -167,7 +185,7 @@
       editor={session:saved,id,date:bill.dueDate,key:plan?.occurrenceKey || originKey(bill),totalCents,expected:fingerprint(),rows:
         plan?partsFor(source,plan).map(p=>({id:p.id,amount:String(p.amount),date:key(p.dueDate),locked:Store.getPaymentsForBill(p.id).length>0})):
         [{id:uid(),amount:(Math.floor(totalCents/2)/100).toFixed(2),date:key(bill.dueDate),locked:false},{id:uid(),amount:((totalCents-Math.floor(totalCents/2))/100).toFixed(2),date:key(bill.dueDate),locked:false}]};
-      if(plan&&editor.rows.length!==plan.partIds.length)throw new Error("A split portion is missing. Restore or review the backup before editing.");
+      if(plan&&editor.rows.length!==plan.partIds.length)throw new Error("A split payment is missing. Review the backup before editing.");
       editorFocus=document.activeElement;
       const container=document.createElement("div");container.id="bbSplitContainer";
       container.style.cssText="position:fixed;inset:0;z-index:1500;isolation:isolate;";
@@ -222,6 +240,7 @@
       editorRows();document.getElementById("bbSplitClose").focus({preventScroll:true});
     } catch(error){closeEditor();alert(error.message);}
   }
+
   async function saveEditor(remove) {
     const draft=editor;if(!draft||busy)return;
     await operation(async(saved,applied)=>{
@@ -277,7 +296,7 @@
             id:uid(),originalDueDate:plan.originalDueDate,cancelled:true,splitPaymentPlanId:plan.id}];
         }
         nextBills.push(...parts);
-        text=`${old?"Split schedule updated":"Bill split"}: ${formatCurrency(plan.totalCents/100)}, originally due ${formatDate(plan.dueDate,"full")}.\n`+parts.map(p=>`${formatCurrency(p.amount)} planned ${formatDate(p.dueDate,"full")} · ${occurrenceFundingLabel(getOccurrenceFunding(p))}`).join("\n")+"\nFully allocated; original biller due date unchanged. Only this occurrence.";
+        text=`${old?"Split schedule updated":"Bill split"}: ${formatCurrency(plan.totalCents/100)}, originally due ${formatDate(plan.dueDate,"full")}.\n`+parts.map(p=>`${formatCurrency(p.amount)} planned ${formatDate(p.dueDate,"full")} · ${occurrenceFundingLabel(getOccurrenceFunding(p))}`).join("\n");
       }
       const parentIndex=nextBills.findIndex(b=>b.id===source.id);
       nextBills[parentIndex]=note(nextBills[parentIndex],draft.key,text);
@@ -290,8 +309,9 @@
   // A portion is a real linked one-time obligation, so existing payment history,
   // calendar totals and reversals operate on its exact amount, not the parent total.
   getCalendarBillsForMonth=function(date=new Date()) {
-    return original.calendar(date).filter(b=>!planFor(sourceFor(b)||b,b.originalDueDate || b.dueDate));
+    return original.calendar(date).filter(b=>!planFor(sourceFor(b)||b,b.originalDueDate || b.dueDate)).map(displayBill);
   };
+  billRow=function(bill,...args) {return original.billRow(displayBill(bill),...args);};
   resolveCalendarBillOccurrence=function(id,date) {
     const found=original.resolve(id,date);if(found)return found;
     const source=Store.getBill(id),p=planFor(source,date);if(!p)return null;
@@ -319,17 +339,70 @@
     }
     const splitButton=source&&!source.splitPaymentParentId&&!source.installmentPlanId&&!isOccurrencePaid(bill,new Date(bill.dueDate))?
       `<button type="button" class="bb-outline-pill" style="width:100%;margin-top:12px;" onclick="bbOpenSplit('${escapeInlineString(source.id)}','${escapeInlineString(bill.dueDate)}')">Split This Payment</button>`:"";
-    const parentLink=source?.splitPaymentParentId?`<p style="font-size:var(--text-sm);color:var(--text-muted);">Split ${source.splitPaymentPartNumber} of ${source.splitPaymentTotalParts} · Original bill due ${escapeHtml(formatDate(source.splitOriginalDueDate,"full"))}</p><button type="button" class="bb-outline-pill" style="width:100%;" onclick="navigate('detail',{id:'${escapeInlineString(source.splitPaymentParentId)}',occurrenceDueDate:'${escapeInlineString(source.splitOriginalDueDate)}',returnRoute:'today'})">View Original Bill & Split Notes</button>`:"";
+    const parentLink=source?.splitPaymentParentId?`<p style="font-size:var(--text-sm);color:var(--text-muted);">Split ${source.splitPaymentPartNumber} of ${source.splitPaymentTotalParts} · Original bill due ${escapeHtml(formatDate(source.splitOriginalDueDate,"full"))}</p><button type="button" class="bb-outline-pill" style="width:100%;" onclick="bbSplitOpenDetail('${escapeInlineString(source.splitPaymentParentId)}','${escapeInlineString(source.splitOriginalDueDate)}')">View Original Bill & Split Notes</button>`:"";
     return original.fundingAction(bill)+splitButton+parentLink+notesHTML(bill);
   };
   renderBillDetail=function() {
     const source=Store.getBill(routeParams.id);
-    const p=planFor(source,routeParams.occurrenceDueDate || getCurrentCalendarBillOccurrence(source)?.dueDate);
+    const p=planFor(source,routeParams.occurrenceDueDate || (source?getCurrentCalendarBillOccurrence(source)?.dueDate:null));
     let html=original.detail();
-    if(p) html=html.replace(/Mark as Paid/g,"Manage Split Payments").replace(/Mark as Unpaid/g,"Manage Paid Portions");
-    return html;
+    if(!source?.splitPaymentParentId&&!p&&!routeParams.bbSplitReturn)return html;
+    const holder=document.createElement("div");holder.innerHTML=html;
+    if(p) {
+      // Parent is a schedule container, not a second overdue obligation.
+      holder.querySelector(".detail-status")?.remove();
+      for(const button of holder.querySelectorAll("button")) {
+        if(button.textContent.trim()==="Mark as Paid") {
+          button.innerHTML="Manage Split Payments";
+          button.setAttribute("onclick",`bbOpenSplit('${escapeInlineString(source.id)}','${escapeInlineString(p.dueDate)}')`);
+        } else if(button.textContent.trim()==="Mark as Unpaid") button.innerHTML="Manage Paid Portions";
+      }
+    }
+    for(const button of holder.querySelectorAll("button")) {
+      if(!["Manage Split Payments","Postpone","Manage Paid Portions"].includes(button.textContent.trim()))continue;
+      button.style.setProperty("min-height","40px","important");
+      button.style.setProperty("height","auto","important");
+      button.style.setProperty("padding","8px 12px","important");
+      button.style.setProperty("font-size","14px","important");
+      button.style.setProperty("line-height","1.2","important");
+    }
+    if(routeParams.bbSplitReturn) {
+      const back=holder.querySelector(".nav-bar .nav-button");
+      if(back) {
+        // Keep a navigate(...) handler: the existing swipe engine discovers it.
+        back.setAttribute("onclick","navigate('detail', bbSplitBackParams())");
+        back.setAttribute("aria-label","Back to previous bill details");
+        back.innerHTML=svgIcon("chevronLeft",22)+" Back";
+      }
+    }
+    return holder.innerHTML;
   };
-  // Preserve the original paycheck-list and popup renderers.
+  window.bbSplitBackParams=function() {
+    const back=routeParams.bbSplitReturn;
+    if(!back||back.route!=="detail")return getBillDetailReturnParams();
+    const params=JSON.parse(JSON.stringify(back.params));
+    params.bbSplitRestoreScroll={...back.scroll};
+    return params;
+  };
+  // Restore scroll after returning; the normal navigate function handles sheet
+  // and inline paycheck state already carried by the preserved route parameters.
+  const renderBeforeSplitScroll=render;
+  render=function(...args) {
+    const saved=routeParams.bbSplitRestoreScroll;
+    if(saved)delete routeParams.bbSplitRestoreScroll;
+    const result=renderBeforeSplitScroll.apply(this,args);
+    if(saved) {
+      const route=currentRoute,id=routeParams.id,due=routeParams.occurrenceDueDate;
+      requestAnimationFrame(()=>{
+        if(currentRoute!==route||routeParams.id!==id||routeParams.occurrenceDueDate!==due)return;
+        window.scrollTo(0,saved.window || 0);
+        const main=document.querySelector("#app .main-content");if(main)main.scrollTop=saved.main || 0;
+      });
+    }
+    return result;
+  };
+  window.render=render;
+  // Original paycheck inline list and popup layouts are unchanged.
   getPaycheckMoveContext=function(id,date) {
     const context=original.moveContext(id,date);
     return context?{...context,splitSession:session()}:context;
@@ -452,6 +525,6 @@
   };
   window.bbOpenSplit=openEditor;
   window.addEventListener("billbeacon:signed-out",closeEditor);
-  window.BillBeaconSplits={version:2,
-    _test:{cents,planFor,partsFor,note,commit,session,row,openEditor,saveEditor}};
+  window.BillBeaconSplits={version:3,
+    _test:{cents,planFor,partsFor,note,commit,session,row,openEditor,saveEditor,displayBill,cleanNoteText}};
 })();
