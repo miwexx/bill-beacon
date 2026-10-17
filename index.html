@@ -22,6 +22,7 @@
   <link rel="apple-touch-icon" href="./icons/bill-beacon-icon.png">
   <link rel="icon" href="./icons/bill-beacon-icon.png">
   <link rel="stylesheet" href="css/style.css?v=household-popup-1">
+  <link rel="preload" as="image" href="./icons/startup-screen.jpg">
 
   <script>
     try {
@@ -29,93 +30,152 @@
         localStorage.getItem("settings") || "{}"
       );
 
-      const theme = settings.theme || "dark";
-
       document.documentElement.setAttribute(
         "data-theme",
-        theme === "light" ? "light" : "dark"
+        settings.theme === "light" ? "light" : "dark"
       );
     } catch {
       document.documentElement.setAttribute("data-theme", "dark");
+    }
+
+    /*
+      Initial-screen preference only.
+      Firebase still controls authentication and access.
+    */
+    try {
+      const wasSignedOut =
+        localStorage.getItem(
+          "billbeacon:last-confirmed-signed-out"
+        ) === "1";
+
+      document.documentElement.setAttribute(
+        "data-bb-startup",
+        wasSignedOut ? "login" : "loading"
+      );
+    } catch {
+      document.documentElement.setAttribute(
+        "data-bb-startup",
+        "loading"
+      );
     }
   </script>
 
   <title>Bill Beacon</title>
 
   <style id="bb-startup-critical-style">
-
-#bb-startup-screen::after {
-  content: "Logging in…";
-  position: absolute;
-  top: 60%;
-  left: 24px;
-  right: 24px;
-  text-align: center;
-  color: #ffffff;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 15px;
-  font-weight: 500;
-}
-
-#bb-startup-screen.bb-startup-error::after,
-#bb-startup-screen:has(#bb-startup-actions[style*="grid"])::after {
-  display: none;
-}
+    /* Show login only during the login phase. */
     html:not([data-bb-startup="login"]) #login-screen {
       display: none !important;
     }
 
+    /* Keep financial screens hidden until the household is ready. */
     html:not([data-bb-startup="ready"]) #app {
       display: none !important;
     }
 
+    /* Startup image with black surrounding space. */
     #bb-startup-screen {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483647;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 28px;
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
 
-  background-color: #000000;
-  background-image: url("./icons/startup-screen.jpg");
-  background-position: center;
-  background-size: contain;
-  background-repeat: no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
 
-  color: #202b3d;
-}
+      box-sizing: border-box;
+      padding: 28px;
 
-/* Normal startup: show only the image. */
-#bb-startup-screen > div {
-  display: none;
-}
+      background-color: #000000;
+      background-image: url("./icons/startup-screen.jpg");
+      background-position: center;
+      background-size: contain;
+      background-repeat: no-repeat;
 
-/* Show recovery controls only if startup fails or takes too long. */
-#bb-startup-screen.bb-startup-error > div,
-#bb-startup-screen:has(#bb-startup-actions[style*="grid"]) > div {
-  display: block;
-  padding: 24px;
-  border: 1px solid #d8dce4;
-  border-radius: 18px;
-  background: #ffffff;
-  color: #202b3d;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
-}
+      color: #ffffff;
+    }
 
+    /*
+      Keep normal status text available to screen readers,
+      without displaying it over the image.
+    */
+    #bb-startup-screen > div {
+      position: absolute;
+      width: 1px !important;
+      height: 1px;
+
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+
+      clip: rect(0, 0, 0, 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* Reveal recovery controls when startup fails or times out. */
+    #bb-startup-screen.bb-startup-error > div {
+      position: static;
+      width: min(340px, 100%) !important;
+      height: auto;
+
+      margin: 0;
+      padding: 24px;
+      overflow: visible;
+
+      clip: auto;
+      clip-path: none;
+      white-space: normal;
+      box-sizing: border-box;
+
+      border: 1px solid #d8dce4;
+      border-radius: 18px;
+
+      background: #ffffff;
+      color: #202b3d;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    /* Startup caption. */
+    #bb-startup-screen::after {
+      content: "Logging in…";
+
+      position: absolute;
+      top: 60%;
+      left: 24px;
+      right: 24px;
+
+      text-align: center;
+      color: #ffffff;
+
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    /* Avoid overlapping the caption with error controls. */
+    #bb-startup-screen.bb-startup-error::after {
+      display: none;
+    }
+
+    /* Remove the splash when login or the app is ready. */
     html[data-bb-startup="login"] #bb-startup-screen,
     html[data-bb-startup="ready"] #bb-startup-screen {
       display: none !important;
     }
 
+    /* Prevent background scrolling during startup. */
     html:not([data-bb-startup="login"]):not([data-bb-startup="ready"]) body {
       overflow: hidden !important;
     }
   </style>
 
-  <script src="js/startup-gate.js?v=step8-1"></script>
+  <script src="js/startup-gate.js?v=step8-3"></script>
 </head>
 
 <body>
@@ -145,6 +205,7 @@
           inputmode="email"
           placeholder="Email"
           required
+          disabled
         >
 
         <label class="login-label" for="password-login">
@@ -158,12 +219,14 @@
           autocomplete="current-password"
           placeholder="Password"
           required
+          disabled
         >
 
         <button
           id="forgot-password-button"
           class="forgot-password-button"
           type="button"
+          disabled
         >
           Forgot password?
         </button>
@@ -179,6 +242,7 @@
           id="email-signin-button"
           class="login-button login-button-primary"
           type="button"
+          disabled
         >
           Sign In
         </button>
@@ -187,6 +251,7 @@
           id="email-create-button"
           class="login-button login-button-secondary"
           type="button"
+          disabled
         >
           Create Account
         </button>

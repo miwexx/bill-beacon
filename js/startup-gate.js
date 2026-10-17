@@ -1,17 +1,34 @@
-/* Bill Beacon: neutral authentication/household startup gate.
-   Load synchronously in <head>, after the critical CSS in the read-me. */
+/* Bill Beacon startup gate: last confirmed signed-out state is a UI hint only. */
 (() => {
   "use strict";
   if (window.BillBeaconStartupGate) return;
   const root = document.documentElement;
-  let phase = "loading";
+  const LOGIN_HINT = "billbeacon:last-confirmed-signed-out";
+  let loginHint = false;
+  try { loginHint = localStorage.getItem(LOGIN_HINT) === "1"; } catch (_) {}
+  let phase = loginHint ? "login" : "loading";
   let expectedUid = null;
+  let authSettled = false;
   let timer = null;
   let failure = "";
   let lastStage = "Checking your saved session…";
   let panel = null;
   const appUser = () => window.getBillBeaconFirebaseUser?.() || null;
   const context = () => window.getBillBeaconHouseholdContext?.();
+
+  function rememberSignedOut(value) {
+    try {
+      if (value) localStorage.setItem(LOGIN_HINT, "1");
+      else localStorage.removeItem(LOGIN_HINT);
+    } catch (_) {}
+  }
+
+  function lockLogin(locked) {
+    for (const id of ["email-login", "password-login", "email-signin-button", "email-create-button", "forgot-password-button"]) {
+      const control = document.getElementById(id);
+      if (control) control.disabled = locked;
+    }
+  }
 
   function paint() {
     if (!document.body) return;
@@ -23,8 +40,8 @@
         <div style="font-size:22px;font-weight:700;">Bill Beacon</div>
         <p id="bb-startup-message" role="status" aria-live="polite" style="margin:14px 0 0;font-size:14px;line-height:1.5;"></p>
         <div id="bb-startup-actions" style="display:none;gap:10px;margin-top:22px;">
-          <button type="button" id="bb-startup-retry" style="min-height:46px;border:1px solid var(--border,#555);border-radius:12px;background:var(--surface,#20202b);color:inherit;font:inherit;cursor:pointer;">Retry</button>
-          <button type="button" id="bb-startup-signout" style="min-height:46px;border:1px solid var(--border,#555);border-radius:12px;background:transparent;color:inherit;font:inherit;cursor:pointer;">Sign Out</button>
+          <button type="button" id="bb-startup-retry" style="min-height:46px;border:1px solid #ccd3df;border-radius:12px;background:#f2f4f8;color:#202b3d;font:inherit;cursor:pointer;">Retry</button>
+          <button type="button" id="bb-startup-signout" style="min-height:46px;border:1px solid #ccd3df;border-radius:12px;background:#f2f4f8;color:#202b3d;font:inherit;cursor:pointer;">Sign Out</button>
         </div>
       </div>`;
       document.body.appendChild(panel);
@@ -40,8 +57,10 @@
   function armSlowWarning() {
     clearTimeout(timer);
     timer = setTimeout(() => {
-      if (phase !== "loading") return;
-      failure = "This is taking longer than expected. Check your connection and retry. You have not been signed out by this screen.";
+      if (phase === "ready" || (phase === "login" && authSettled)) return;
+      phase = "loading";
+      root.setAttribute("data-bb-startup", "loading");
+      failure = "Startup is taking longer than expected. Check your connection and retry. This screen has not signed you out.";
       paint();
     }, 25000);
   }
@@ -55,40 +74,28 @@
     armSlowWarning();
   }
 
-  function fail(message) {
-    if (phase !== "loading") return;
-    clearTimeout(timer);
-    failure = message;
-    paint();
-  }
-
   function reveal() {
     const user = appUser();
     const live = context();
-    if (phase !== "loading" || !expectedUid || !user ||
-        user.uid !== expectedUid || !live?.ready || live.uid !== user.uid ||
-        !live.householdId) return false;
+    if (!authSettled || phase !== "loading" || !expectedUid || !user ||
+        user.uid !== expectedUid || !live?.ready || live.uid !== user.uid || !live.householdId) return false;
     clearTimeout(timer);
     phase = "ready";
+    failure = "";
+    rememberSignedOut(false);
     root.setAttribute("data-bb-startup", "ready");
-    // The existing auth module remains responsible for .hidden and inline display.
     return true;
   }
 
   function retry() {
     const user = appUser();
     const live = context();
-    if (!user || !window.billBeaconSyncStatus) {
-      window.location.reload();
-      return;
-    }
-    if (live?.ready && live.uid === user.uid && expectedUid === user.uid) {
+    if (user && live?.ready && live.uid === user.uid && expectedUid === user.uid) {
       failure = "";
       window.dispatchEvent(new CustomEvent("billbeacon:household-ready", {detail:live}));
       reveal();
       return;
     }
-    // Reload when setup may still be running, instead of starting a second sync job.
     window.location.reload();
   }
 
@@ -108,11 +115,7 @@
 
   function discardOldScreens() {
     const app = document.getElementById("app");
-    if (app) {
-      app.style.display = "none";
-      app.replaceChildren();
-    }
-    // Remove leftover app dialogs and copied page previews on a real signed-out transition.
+    if (app) { app.style.display = "none"; app.replaceChildren(); }
     for (const child of Array.from(document.body?.children || [])) {
       if (["app", "login-screen", "bb-startup-screen"].includes(child.id)) continue;
       if (["SCRIPT", "STYLE", "LINK", "NOSCRIPT"].includes(child.tagName)) continue;
@@ -124,48 +127,50 @@
   window.addEventListener("billbeacon:authenticated", event => {
     const user = event.detail?.user;
     if (!user?.uid || appUser()?.uid !== user.uid) return;
+    authSettled = true;
     expectedUid = user.uid;
+    rememberSignedOut(false);
     loading("Loading your household…");
-    // Sync initialization follows this event; reveal only after its ready event.
   });
 
   window.addEventListener("billbeacon:household-ready", event => {
     const live = context();
     const incoming = event.detail;
-    if (!incoming?.ready || incoming.uid !== expectedUid ||
-        incoming.uid !== live?.uid || incoming.householdId !== live?.householdId ||
-        incoming.generation !== live?.generation) return;
+    if (!incoming?.ready || incoming.uid !== expectedUid || incoming.uid !== live?.uid ||
+        incoming.householdId !== live?.householdId || incoming.generation !== live?.generation) return;
     reveal();
   });
 
   window.addEventListener("billbeacon:signed-out", () => {
     if (appUser()) return;
     clearTimeout(timer);
+    authSettled = true;
     phase = "login";
     expectedUid = null;
     failure = "";
+    rememberSignedOut(true);
     discardOldScreens();
     root.setAttribute("data-bb-startup", "login");
+    lockLogin(false);
     paint();
   });
 
   window.addEventListener("billbeacon:sync-status", event => {
     if (phase !== "loading" || !expectedUid || appUser()?.uid !== expectedUid) return;
     if (event.detail?.state === "error") {
-      fail("Your account is signed in, but household loading could not finish. Check your connection and retry, or choose Sign Out.");
-    }
-  });
-
-  window.addEventListener("online", () => {
-    if (phase === "loading" && failure) {
-      lastStage = "Connection restored. Waiting for your household…";
+      clearTimeout(timer);
+      failure = "Your account is signed in, but household loading could not finish. Check your connection and retry, or choose Sign Out.";
       paint();
     }
   });
 
-  window.BillBeaconStartupGate = {getState:() => ({phase, expectedUid, error:failure || null})};
-  root.setAttribute("data-bb-startup", "loading");
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", paint, {once:true});
-  else paint();
+  window.BillBeaconStartupGate = {getState:() => ({phase, expectedUid, authSettled, error:failure || null})};
+  root.setAttribute("data-bb-startup", phase);
+  function initializeUI() {
+    if (!authSettled) lockLogin(true);
+    paint();
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", initializeUI, {once:true});
+  else initializeUI();
   armSlowWarning();
 })();
