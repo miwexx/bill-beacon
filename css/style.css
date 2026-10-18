@@ -6241,3 +6241,25 @@ max-height: max(160px, calc(50dvh - 88px));
   .bb-payment-status-plans > [aria-hidden="true"] {
   display: none;
 }
+/* Slightly tighter Dashboard Payment Status card */
+.bb-dashboard-payment-status {
+  padding: 10px 12px 0;
+}
+
+.bb-dashboard-payment-status .bb-payment-status-heading {
+  margin-bottom: 4px;
+}
+
+.bb-dashboard-payment-status .bb-payment-status-columns {
+  min-height: 20px;
+}
+
+.bb-dashboard-payment-status .bb-payment-status-row {
+  min-height: 44px;
+}
+
+.bb-dashboard-payment-status .bb-payment-status-count {
+  min-height: 44px;
+  padding: 2px 0;
+  font-size: 21px;
+}
