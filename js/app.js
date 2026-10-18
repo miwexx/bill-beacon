@@ -6398,7 +6398,7 @@ function renderBills() {
     !bill.splitPaymentParentId
 );
 
-  const billSort = routeParams.billSort || 'dueDate';
+  const billSort = routeParams.billSort || 'name';
 
   const sortOptions = {
     dueDate: 'Due Date',
@@ -6727,7 +6727,7 @@ function closeBillSortSheet() {
 }
 
 function openBillSortSheet() {
-  const currentSort = routeParams.billSort || 'dueDate';
+  const currentSort = routeParams.billSort || 'name';
 
   const options = [
     { id: 'dueDate', label: 'Due Date', icon: 'calendar' },

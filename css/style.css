@@ -6401,3 +6401,21 @@ max-height: max(160px, calc(50dvh - 88px));
 .bills-page-content .bill-meta {
   color: var(--text-secondary) !important;
 }
+/* Bills: wider, fuller Sort pill */
+.bills-page-content button[onclick*="openBillSortSheet"] {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+
+  min-height: 48px !important;
+  padding: 12px 18px !important;
+  box-sizing: border-box;
+
+  justify-content: center;
+  gap: 10px;
+  border-radius: 999px !important;
+
+  font-size: var(--text-base);
+  font-weight: 700;
+  line-height: 1.3;
+}
