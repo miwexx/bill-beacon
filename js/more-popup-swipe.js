@@ -1,170 +1,150 @@
-/* Bill Beacon More popup swipe + opaque background, v1.
-Load ONCE, AFTER more-tools-preview.js:
-<script src="js/more-popup-swipe.js?v=1"></script>
-Targets only the More native dialog (#bbml-dialog; also supports preview v1).
-No data reads/writes, network requests, global router changes, or app swipe patches.
-Swipe right from the left 36px of a popup, or across its header/body text.
-Controls are protected (except a gesture starting at the popup's left edge).
-Vertical scrolling, ordinary taps and text inputs keep their normal behavior.
-Backdrop is fully opaque. The More page is revealed only when the popup closes.
-Validation: syntax check and 20 controlled Chromium checks passed, including
-native touch input and vertical scrolling. Not tested on a physical iPhone.
-Removal: remove this script tag and reload, or BillBeaconMorePopupSwipe.uninstall().
+/* Bill Beacon More popup swipe v2 — previous-screen preview.
+REPLACE more-popup-swipe.js. Keep it AFTER the data-connected More file:
+<script src="js/more-popup-swipe.js?v=2"></script>
+Resting popups have opaque backdrops. During a deliberate right drag, an inert
+DOM snapshot of the current More page is revealed behind the moving popup.
+No financial data is read from Store, saved, or sent anywhere. No screenshot API.
+Only the More dialog is affected; other app swipe handlers are unchanged.
+Validation: syntax check and 19 controlled Chromium checks passed, including
+native touch, snapshot creation, scroll preservation and short-drag cancellation.
+Not verified on a physical iPhone or against the deployed production app.
 */
 (() => {
  'use strict';
- if (window.BillBeaconMorePopupSwipe) return;
- const STYLE='bb-more-popup-swipe-style';
- const SELECTOR='dialog#bbml-dialog,dialog#bbmp-dialog';
- const contexts=new Map();
- let observer=null, active=true;
+ if(window.BillBeaconMorePopupSwipe?.version==='2.0.0')return;
+ window.BillBeaconMorePopupSwipe?.uninstall?.();
+ const STYLE='bb-more-popup-swipe-style',SELECTOR='dialog#bbml-dialog,dialog#bbmp-dialog';
+ const contexts=new Map();let observer=null,active=true;
  const reduced=()=>!!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
  const CSS=String.raw`
- dialog#bbml-dialog::backdrop,
- dialog#bbmp-dialog::backdrop {
-   background:var(--bg,#15151e)!important;
-   opacity:1!important;
-   backdrop-filter:none!important;
-   -webkit-backdrop-filter:none!important;
- }
- dialog#bbml-dialog.bb-more-swipe-ready,
- dialog#bbmp-dialog.bb-more-swipe-ready {
-   will-change:auto;
- }
- dialog#bbml-dialog.bb-more-swiping,
- dialog#bbmp-dialog.bb-more-swiping {
-   will-change:transform;
-   user-select:none!important;
-   -webkit-user-select:none!important;
- }
+ dialog#bbml-dialog::backdrop,dialog#bbmp-dialog::backdrop{background:var(--bg,#15151e)!important;opacity:1!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+ .bb-more-swipe-stage-front{display:flex;flex-direction:column;box-sizing:border-box;overflow:hidden;position:absolute;z-index:2;will-change:transform;user-select:none;-webkit-user-select:none}
+ .bb-more-swipe-stage-back{position:absolute;inset:0;overflow:hidden;z-index:0;pointer-events:none;background:var(--bg,#15151e)}
+ .bb-more-swipe-stage-dim{position:absolute;inset:0;z-index:1;background:rgba(0,0,0,.28);pointer-events:none}
  `;
- function visible(dialog){
-   return dialog.isConnected && dialog.open && !dialog.closest('[data-bb-drag-preview],[data-bb-copy-id]');
+ function visible(d){return d.isConnected&&d.open&&!d.closest('[data-bb-drag-preview],[data-bb-copy-id]');}
+ function snapshot(){
+  const app=document.getElementById('app');if(!app)return null;
+  const rect=app.getBoundingClientRect();if(!rect.width||!rect.height)return null;
+  const copy=app.cloneNode(true), originals=[app,...app.querySelectorAll('*')],copies=[copy,...copy.querySelectorAll('*')],scrolls=[];
+  for(let i=0;i<copies.length;i++){
+   const n=copies[i],o=originals[i];
+   if(n.id){n.setAttribute('data-bb-copy-id',n.id);n.removeAttribute('id');}
+   for(const attr of [...n.attributes])if(/^on/i.test(attr.name)||attr.name==='autofocus')n.removeAttribute(attr.name);
+   n.style.setProperty('animation','none','important');n.style.setProperty('transition','none','important');
+   if(o.scrollTop||o.scrollLeft)scrolls.push([n,o.scrollTop,o.scrollLeft]);
+   if(o instanceof HTMLInputElement){n.value=o.value;n.checked=o.checked;}
+   else if(o instanceof HTMLTextAreaElement||o instanceof HTMLSelectElement)n.value=o.value;
+   if(o.matches('.main-content')){
+    const style=getComputedStyle(o),r=o.getBoundingClientRect();
+    n.style.setProperty('height',r.height+'px','important');
+    n.style.setProperty('overflow-y',style.overflowY,'important');
+   }
+  }
+  copy.querySelectorAll('script,iframe,object,embed').forEach(n=>n.remove());
+  copy.setAttribute('data-bb-drag-preview','more-page');copy.setAttribute('aria-hidden','true');copy.inert=true;
+  copy.style.setProperty('position','absolute','important');copy.style.setProperty('left',rect.left+'px','important');copy.style.setProperty('top',rect.top+'px','important');
+  copy.style.setProperty('width',rect.width+'px','important');copy.style.setProperty('height',rect.height+'px','important');
+  copy.style.setProperty('margin','0','important');copy.style.setProperty('transform','none','important');
+  return {copy,restore(){for(const [node,top,left]of scrolls){node.scrollTop=top;node.scrollLeft=left;}}};
  }
  function attach(dialog){
-   if(contexts.has(dialog)||!active)return;
-   const ac=new AbortController();
-   const savedTransform=dialog.style.getPropertyValue('transform');
-   const savedTransformPriority=dialog.style.getPropertyPriority('transform');
-   const savedTransition=dialog.style.getPropertyValue('transition');
-   const savedTransitionPriority=dialog.style.getPropertyPriority('transition');
-   let gesture=null, settling=false, suppressClick=false, timer=null;
-   dialog.classList.add('bb-more-swipe-ready');
-   const listen=(name,fn,options={})=>dialog.addEventListener(name,fn,{...options,signal:ac.signal});
-   function restoreStyle(){
-     if(savedTransform)dialog.style.setProperty('transform',savedTransform,savedTransformPriority);else dialog.style.removeProperty('transform');
-     if(savedTransition)dialog.style.setProperty('transition',savedTransition,savedTransitionPriority);else dialog.style.removeProperty('transition');
-     dialog.classList.remove('bb-more-swiping');
+  if(!active||contexts.has(dialog))return;
+  const ac=new AbortController();let gesture=null,stage=null,settling=false,suppressClick=false,timer=null;
+  const listen=(name,fn,options={})=>dialog.addEventListener(name,fn,{...options,signal:ac.signal});
+  function restore(){
+   if(!stage)return;
+   const old=stage;stage=null;
+   for(const child of [...old.front.childNodes])dialog.appendChild(child);
+   old.front.remove();old.back.remove();old.dim.remove();
+   if(old.inline===null)dialog.removeAttribute('style');else dialog.setAttribute('style',old.inline);
+   for(const [node,top,left]of old.scrolls){node.scrollTop=top;node.scrollLeft=left;}
+   if(old.focus?.isConnected&&dialog.open)old.focus.focus({preventScroll:true});
+  }
+  function reset(){clearTimeout(timer);timer=null;gesture=null;settling=false;restore();}
+  function buildStage(){
+   const snap=snapshot();if(!snap)return false;
+   const r=dialog.getBoundingClientRect(),style=getComputedStyle(dialog);
+   const front=document.createElement('div'),back=document.createElement('div'),dim=document.createElement('div');
+   front.className='bb-more-swipe-stage-front';back.className='bb-more-swipe-stage-back';dim.className='bb-more-swipe-stage-dim';
+   back.setAttribute('data-bb-drag-preview','more-background');back.setAttribute('aria-hidden','true');back.inert=true;
+   dim.setAttribute('aria-hidden','true');
+   const scrolls=[...dialog.querySelectorAll('*')].filter(n=>n.scrollTop||n.scrollLeft).map(n=>[n,n.scrollTop,n.scrollLeft]);
+   const original={inline:dialog.getAttribute('style'),focus:document.activeElement,scrolls,front,back,dim};
+   Object.assign(front.style,{left:r.left+'px',top:r.top+'px',width:r.width+'px',height:r.height+'px',background:style.backgroundColor,color:style.color,border:style.border,borderRadius:style.borderRadius,boxShadow:style.boxShadow,font:style.font});
+   front.style.setProperty('transform','translate3d(0,0,0)','important');
+   while(dialog.firstChild)front.appendChild(dialog.firstChild);
+   back.appendChild(snap.copy);dialog.append(back,dim,front);stage=original;
+   const full={position:'fixed',inset:'0',left:'0',top:'0',right:'0',bottom:'0',width:'100%',height:'100dvh','max-width':'none','max-height':'none','min-width':'0',margin:'0',padding:'0',border:'0','border-radius':'0','box-shadow':'none',background:'transparent',overflow:'hidden',display:'block',transform:'none'};
+   for(const [key,value]of Object.entries(full))dialog.style.setProperty(key,value,'important');
+   snap.restore();for(const [n,t,l]of scrolls){n.scrollTop=t;n.scrollLeft=l;}
+   return true;
+  }
+  function finish(complete){
+   if(settling)return;settling=true;const dx=gesture?.dx||0;gesture=null;suppressClick=dx>0;
+   const duration=reduced()?0:complete?180:150;
+   const end=()=>{
+    timer=null;
+    if(complete&&visible(dialog)){
+     const api=dialog.id==='bbml-dialog'?window.BillBeaconMoreLive:window.BillBeaconMorePreview;
+     if(typeof api?.close==='function')api.close();else{dialog.close();dialog.remove();}
+    }
+    restore();settling=false;setTimeout(()=>{suppressClick=false;},0);
+   };
+   if(!stage||!duration){end();return;}
+   stage.front.style.setProperty('transition',`transform ${duration}ms ease-out`,'important');
+   stage.front.style.setProperty('transform',`translate3d(${complete?window.innerWidth:0}px,0,0)`,'important');
+   stage.dim.style.transition=`opacity ${duration}ms ease-out`;stage.dim.style.opacity=complete?'0':'1';
+   timer=setTimeout(end,duration+25);
+  }
+  const findTouch=(e,id)=>[...e.touches,...e.changedTouches].find(t=>t.identifier===id);
+  function start(e){
+   if(settling||!visible(dialog)||e.touches.length!==1)return;
+   const t=e.touches[0],target=e.target;if(!(target instanceof Element))return;
+   if(target.closest('input,textarea,select,option,[contenteditable],a,[data-bb-drag-preview]'))return;
+   const r=dialog.getBoundingClientRect(),edge=t.clientX>=r.left&&t.clientX<=r.left+36;
+   if(target.closest('button,[role="button"],label')&&!edge)return;
+   const selection=window.getSelection?.();if(selection&&!selection.isCollapsed&&String(selection).trim())return;
+   gesture={id:t.identifier,x:t.clientX,y:t.clientY,dx:0,dragging:false,width:r.width,samples:[{x:t.clientX,t:performance.now()}]};
+  }
+  function move(e){
+   if(!gesture)return;
+   if(e.touches.length!==1){if(gesture.dragging)finish(false);else gesture=null;return;}
+   const t=findTouch(e,gesture.id);if(!t)return;
+   const dx=t.clientX-gesture.x,dy=t.clientY-gesture.y;
+   if(!gesture.dragging){
+    if(Math.max(Math.abs(dx),Math.abs(dy))<10)return;
+    if(Math.abs(dy)>=Math.abs(dx)||dx<=0){gesture=null;return;}
+    if(dx<Math.abs(dy)*1.35)return;
+    if(!e.cancelable){gesture=null;return;}
+    if(!buildStage()){gesture=null;return;}
+    gesture.dragging=true;
    }
-   function reset(){clearTimeout(timer);timer=null;gesture=null;settling=false;restoreStyle();}
-   function finish(complete){
-     if(settling)return;
-     settling=true;
-     const dx=gesture?.dx||0;
-     gesture=null;
-     if(dx>0)suppressClick=true;
-     const duration=reduced()?0:complete?180:150;
-     const end=()=>{
-       timer=null;
-       if(complete&&visible(dialog)){
-         // Use the owning add-on's close method so its state and focus cleanup run.
-         const api=dialog.id==='bbml-dialog'?window.BillBeaconMoreLive:window.BillBeaconMorePreview;
-         if(typeof api?.close==='function')api.close();
-         else {dialog.close();dialog.remove();}
-       }
-       restoreStyle();settling=false;
-       setTimeout(()=>{suppressClick=false;},0);
-     };
-     if(!duration){end();return;}
-     dialog.style.setProperty('transition',`transform ${duration}ms ease-out`,'important');
-     dialog.style.setProperty('transform',`translate3d(${complete?window.innerWidth:0}px,0,0)`,'important');
-     timer=setTimeout(end,duration+25);
-   }
-   function touchById(event,id){return [...event.touches,...event.changedTouches].find(t=>t.identifier===id);}
-   function start(event){
-     if(!active||settling||!visible(dialog)||event.touches.length!==1)return;
-     const touch=event.touches[0],target=event.target;
-     if(!(target instanceof Element))return;
-     if(target.closest('input,textarea,select,option,[contenteditable],a,[data-bb-drag-preview]'))return;
-     const rect=dialog.getBoundingClientRect();
-     const edge=touch.clientX>=rect.left&&touch.clientX<=rect.left+36;
-     const header=!!target.closest('.bbml-dialog-header,.bbmp-dialog-header');
-     if(target.closest('button,[role="button"],label')&&!edge)return;
-     const selection=window.getSelection?.();
-     if(selection&&!selection.isCollapsed&&String(selection).trim())return;
-     gesture={id:touch.identifier,x:touch.clientX,y:touch.clientY,dx:0,dragging:false,edge,header,samples:[{x:touch.clientX,t:performance.now()}]};
-   }
-   function move(event){
-     if(!gesture)return;
-     if(event.touches.length!==1){if(gesture.dragging)finish(false);else gesture=null;return;}
-     const touch=touchById(event,gesture.id);if(!touch)return;
-     const dx=touch.clientX-gesture.x,dy=touch.clientY-gesture.y;
-     if(!gesture.dragging){
-       if(Math.max(Math.abs(dx),Math.abs(dy))<10)return;
-       if(Math.abs(dy)>=Math.abs(dx)||dx<=0){gesture=null;return;}
-       if(dx<Math.abs(dy)*1.35)return;
-       gesture.dragging=true;
-       dialog.classList.add('bb-more-swiping');
-       dialog.style.setProperty('transition','none','important');
-     }
-     if(!event.cancelable){finish(false);return;}
-     event.preventDefault();
-     // Only stop other gesture systems once horizontal intent is established.
-     event.stopPropagation();
-     gesture.dx=Math.max(0,dx);
-     const now=performance.now();
-     gesture.samples.push({x:touch.clientX,t:now});
-     gesture.samples=gesture.samples.filter(s=>now-s.t<=120).slice(-10);
-     dialog.style.setProperty('transform',`translate3d(${gesture.dx}px,0,0)`,'important');
-   }
-   function end(event){
-     if(!gesture)return;
-     if(!gesture.dragging){gesture=null;return;}
-     const touch=touchById(event,gesture.id);
-     const now=performance.now(),samples=gesture.samples.filter(s=>now-s.t<=100),first=samples[0];
-     const velocity=touch&&first?(touch.clientX-first.x)/Math.max(1,now-first.t):0;
-     const dx=touch?Math.max(0,touch.clientX-gesture.x):gesture.dx;
-     gesture.dx=dx;
-     const threshold=Math.min(140,dialog.getBoundingClientRect().width*.30);
-     const deliberate=dx>=threshold||(dx>=50&&velocity>.55);
-     const reversing=velocity<-.15;
-     if(event.cancelable)event.preventDefault();
-     event.stopPropagation();
-     finish(!!touch&&deliberate&&!reversing);
-   }
-   function cancel(){if(gesture?.dragging)finish(false);else gesture=null;}
-   function click(event){if(!suppressClick)return;event.preventDefault();event.stopImmediatePropagation();suppressClick=false;}
-   listen('touchstart',start,{passive:true,capture:true});
-   listen('touchmove',move,{passive:false,capture:true});
-   listen('touchend',end,{passive:false,capture:true});
-   listen('touchcancel',cancel,{passive:true,capture:true});
-   listen('click',click,{capture:true});
-   listen('close',()=>{reset();detach(dialog);},{once:true});
-   const cleanup=()=>{reset();ac.abort();dialog.classList.remove('bb-more-swipe-ready');};
-   contexts.set(dialog,{cleanup,reset});
+   if(!e.cancelable){finish(false);return;}
+   e.preventDefault();e.stopPropagation();gesture.dx=Math.max(0,dx);
+   const now=performance.now();gesture.samples.push({x:t.clientX,t:now});gesture.samples=gesture.samples.filter(s=>now-s.t<=120).slice(-10);
+   stage.front.style.setProperty('transform',`translate3d(${gesture.dx}px,0,0)`,'important');
+   stage.dim.style.opacity=String(Math.max(0,1-gesture.dx/window.innerWidth));
+  }
+  function end(e){
+   if(!gesture)return;if(!gesture.dragging){gesture=null;return;}
+   const t=findTouch(e,gesture.id),now=performance.now(),first=gesture.samples.filter(s=>now-s.t<=100)[0];
+   const velocity=t&&first?(t.clientX-first.x)/Math.max(1,now-first.t):0;
+   const dx=t?Math.max(0,t.clientX-gesture.x):gesture.dx;gesture.dx=dx;
+   const threshold=Math.min(140,gesture.width*.30),complete=!!t&&velocity>=-.15&&(dx>=threshold||(dx>=50&&velocity>.55));
+   if(e.cancelable)e.preventDefault();e.stopPropagation();finish(complete);
+  }
+  function cancel(){if(gesture?.dragging)finish(false);else gesture=null;}
+  listen('touchstart',start,{capture:true,passive:true});listen('touchmove',move,{capture:true,passive:false});listen('touchend',end,{capture:true,passive:false});listen('touchcancel',cancel,{capture:true,passive:true});
+  listen('click',e=>{if(!suppressClick)return;e.preventDefault();e.stopImmediatePropagation();suppressClick=false;},{capture:true});
+  listen('close',()=>{reset();detach(dialog);},{once:true});
+  contexts.set(dialog,{reset,cleanup(){reset();ac.abort();}});
  }
- function detach(dialog){const ctx=contexts.get(dialog);if(!ctx)return;ctx.cleanup();contexts.delete(dialog);}
- function scan(){
-   for(const dialog of document.querySelectorAll(SELECTOR))attach(dialog);
-   for(const dialog of contexts.keys())if(!dialog.isConnected)detach(dialog);
- }
- function interrupted(){for(const ctx of contexts.values())ctx.reset();}
- function init(){
-   if(!active)return;
-   if(!document.getElementById(STYLE)){const style=document.createElement('style');style.id=STYLE;style.textContent=CSS;document.head.append(style);}
-   scan();observer=new MutationObserver(scan);observer.observe(document.body,{childList:true,subtree:true});
- }
- function uninstall(){
-   if(!active)return;active=false;observer?.disconnect();
-   for(const dialog of [...contexts.keys()])detach(dialog);
-   document.getElementById(STYLE)?.remove();
-   document.removeEventListener('DOMContentLoaded',init);
-   document.removeEventListener('visibilitychange',interrupted);
-   window.removeEventListener('resize',interrupted);
-   delete window.BillBeaconMorePopupSwipe;
- }
- document.addEventListener('visibilitychange',interrupted);
- window.addEventListener('resize',interrupted);
- window.BillBeaconMorePopupSwipe=Object.freeze({version:'1.0.0',uninstall});
+ function detach(d){const c=contexts.get(d);if(c){c.cleanup();contexts.delete(d);}}
+ function scan(){for(const d of document.querySelectorAll(SELECTOR))attach(d);for(const d of contexts.keys())if(!d.isConnected)detach(d);}
+ function interrupt(){for(const c of contexts.values())c.reset();}
+ function init(){if(!active)return;const style=document.createElement('style');style.id=STYLE;style.textContent=CSS;document.head.append(style);scan();observer=new MutationObserver(scan);observer.observe(document.body,{childList:true,subtree:true});}
+ function uninstall(){if(!active)return;active=false;observer?.disconnect();for(const d of [...contexts.keys()])detach(d);document.getElementById(STYLE)?.remove();document.removeEventListener('DOMContentLoaded',init);document.removeEventListener('visibilitychange',interrupt);window.removeEventListener('resize',interrupt);delete window.BillBeaconMorePopupSwipe;}
+ document.addEventListener('visibilitychange',interrupt);window.addEventListener('resize',interrupt);window.BillBeaconMorePopupSwipe=Object.freeze({version:'2.0.0',uninstall});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
