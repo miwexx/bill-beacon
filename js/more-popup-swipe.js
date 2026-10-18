@@ -1,13 +1,4 @@
-/* Bill Beacon More popup swipe v3 — stable previous-screen typography.
-REPLACE more-popup-swipe.js. Load after the data-connected More add-on:
-<script src="js/more-popup-swipe.js?v=3"></script>
-The inert More-page snapshot freezes computed fonts and text spacing BEFORE
-insertion into the native dialog. Popup heading CSS therefore cannot resize it.
-Resting background stays opaque. Existing app text sizes are not modified.
-No storage/network calls. Only the new More dialogs are affected.
-Validation: syntax plus 26 Chromium fixture checks passed. Tests deliberately
-use conflicting popup/page fonts and compare computed text sizes before, during
-and after native-touch dismissal. Physical iPhone testing is still needed.
+/* Bill Beacon More popup swipe v3 — 
 */
 (() => {
  'use strict';
