@@ -123,9 +123,7 @@
     paid.setAttribute("aria-label","View paid payments assigned to this month's paycheck plans");
     card.setAttribute("aria-label","Monthly Snapshot by assigned paycheck month");
     const progress=card.querySelector(".dashboard-progress-fill");if(progress)progress.style.width=`${summary.progress}%`;
-    const caption=document.createElement("div");caption.textContent="By paycheck month";
-    caption.style.cssText="text-align:center;font-size:10px;color:var(--text-muted);margin-top:5px;";
-    const heading=card.querySelector(".dashboard-card-topline");if(heading)heading.insertAdjacentElement("afterend",caption);
+    
     return holder.innerHTML;
   };
   window.addEventListener("billbeacon:signed-out",window.closeFundingSnapshotList);
