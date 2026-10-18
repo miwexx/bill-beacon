@@ -130,7 +130,7 @@
         : "#fff"
   };
 ">
-  ${billOrPaymentPlanVisual(visual,32)}
+  ${billOrPaymentPlanVisual(visual,42)}
 </span>
       <span class="bill-info"><span class="bill-name" style="display:block;">${escapeHtml(name)}</span>
       <span class="bill-meta" style="color:${color};">${paid?svgIcon("checkCircle",13):status==="overdue"?svgIcon("warning",13):svgIcon("calendar",13)} ${label} · ${escapeHtml(formatDate(bill.dueDate,"short"))}</span></span>

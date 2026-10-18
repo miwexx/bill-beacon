@@ -6379,3 +6379,21 @@ max-height: max(160px, calc(50dvh - 88px));
   width: 24px;
   height: 24px;
 }
+/* Calendar logos: no extra background or frame */
+.bb-calendar-preview-page .bb-calendar-preview-logo {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+/* Let the logo fill its existing 42px space */
+.bb-calendar-preview-page .bb-calendar-preview-logo img {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain !important;
+  transform: none !important;
+}
