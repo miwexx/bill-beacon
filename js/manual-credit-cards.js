@@ -216,7 +216,356 @@
       </div>
     `;
   }
+  function estimateCardPayoff(card) {
+    const balanceStart = Number(card.openingBalanceCents);
+    const payment = Number(card.plannedPaymentCents);
+    const apr = Number(card.aprBasisPoints);
 
+    if (
+      !Number.isSafeInteger(balanceStart) ||
+      balanceStart < 0 ||
+      !Number.isSafeInteger(payment) ||
+      payment < 0 ||
+      !Number.isSafeInteger(apr) ||
+      apr < 0
+    ) {
+      return { status: "invalid" };
+    }
+
+    if (balanceStart === 0) {
+      return { status: "zero" };
+    }
+
+    if (payment === 0) {
+      return { status: "payment-needed" };
+    }
+
+    let balance = balanceStart;
+    let interestTotal = 0;
+    let paidTotal = 0;
+
+    for (let month = 1; month <= 1200; month++) {
+      // APR basis points / 10,000 / 12 months.
+      const interest = Math.round(
+        balance * apr / 120000
+      );
+
+      if (payment <= interest) {
+        return { status: "too-low" };
+      }
+
+      const actualPayment = Math.min(
+        payment,
+        balance + interest
+      );
+
+      interestTotal += interest;
+      paidTotal += actualPayment;
+
+      balance =
+        balance +
+        interest -
+        actualPayment;
+
+      if (balance <= 0) {
+        return {
+          status: "estimated",
+          months: month,
+          interestCents: interestTotal,
+          totalCents: paidTotal
+        };
+      }
+    }
+
+    return { status: "long-term" };
+  }
+
+  function payoffMonthDate(firstDate, monthsAfter) {
+    const [year, month, day] = firstDate
+      .split("-")
+      .map(Number);
+
+    const target = new Date(
+      year,
+      month - 1 + monthsAfter,
+      1,
+      12
+    );
+
+    const lastDay = new Date(
+      target.getFullYear(),
+      target.getMonth() + 1,
+      0
+    ).getDate();
+
+    target.setDate(Math.min(day, lastDay));
+
+    return target;
+  }
+
+  function showOverview(state, id) {
+    const card = state.cards.get(id);
+
+    if (!card || !alive(state)) return;
+
+    state.view = "overview";
+    state.cardId = id;
+    state.serial++;
+
+    const estimate = estimateCardPayoff(card);
+
+    let payoffContent = "";
+
+    if (estimate.status === "estimated") {
+      const usableDate =
+        validDate(card.nextDueDate) &&
+        validDate(card.balanceAsOf) &&
+        card.nextDueDate >= card.balanceAsOf &&
+        card.nextDueDate >= today();
+
+      let payoffDate = "Check next due date";
+
+      if (usableDate) {
+        payoffDate = payoffMonthDate(
+          card.nextDueDate,
+          estimate.months - 1
+        ).toLocaleDateString(undefined, {
+          month: "long",
+          year: "numeric"
+        });
+      }
+
+      const years = Math.floor(
+        estimate.months / 12
+      );
+
+      const months = estimate.months % 12;
+
+      const duration = [
+        years
+          ? `${years} year${years === 1 ? "" : "s"}`
+          : "",
+        months
+          ? `${months} month${months === 1 ? "" : "s"}`
+          : ""
+      ].filter(Boolean).join(" ");
+
+      payoffContent = `
+        <section class="bbml-panel">
+          <h3>Your payoff estimate</h3>
+
+          ${row("Estimated payoff", payoffDate)}
+
+          ${row(
+            "Estimated time",
+            duration
+          )}
+
+          ${row(
+            "Monthly payments",
+            String(estimate.months)
+          )}
+
+          ${row(
+            "Estimated interest",
+            money(
+              estimate.interestCents,
+              card.currency
+            )
+          )}
+
+          ${row(
+            "Estimated total paid",
+            money(
+              estimate.totalCents,
+              card.currency
+            )
+          )}
+
+          ${
+            usableDate
+              ? ""
+              : note(
+                  "A payoff date needs a valid upcoming payment " +
+                  "date that is not earlier than the balance date."
+                )
+          }
+        </section>
+      `;
+    } else {
+      const explanations = {
+        zero:
+          "The starting balance you entered is zero. " +
+          "There is no balance to project from.",
+        "payment-needed":
+          "Enter a planned monthly payment to calculate " +
+          "a payoff estimate.",
+        "too-low":
+          "The planned payment does not exceed the first " +
+          "month’s estimated interest, so this model " +
+          "does not produce a payoff date.",
+        "long-term":
+          "This plan exceeds the calculator’s " +
+          "100-year limit. No payoff date is shown.",
+        invalid:
+          "The saved balance, APR or planned payment " +
+          "could not be used for a payoff estimate."
+      };
+
+      payoffContent = `
+        <section class="bbml-panel">
+          <h3>Payoff estimate</h3>
+
+          ${note(
+            explanations[estimate.status] ||
+            "Estimate unavailable."
+          )}
+        </section>
+      `;
+    }
+
+    const belowMinimum =
+      card.openingBalanceCents > 0 &&
+      card.plannedPaymentCents <
+        card.minimumPaymentCents;
+
+    body(
+      state,
+      `
+        <p class="bbml-source">
+          Private · manually tracked
+        </p>
+
+        <section class="bbml-panel">
+          <h3>
+            ${escape(
+              card.nickname || card.bank
+            )}
+          </h3>
+
+          <p class="bbml-help">
+            ${escape(card.bank)}
+            •••• ${escape(card.last4)}
+          </p>
+
+          <div
+            style="
+              padding:12px 0 18px;
+              border-bottom:1px solid var(--border);
+            "
+          >
+            <div
+              style="
+                color:var(--text-secondary);
+                font-size:12px;
+              "
+            >
+              Balance entered
+            </div>
+
+            <div
+              style="
+                margin-top:6px;
+                font-size:32px;
+                line-height:1.2;
+                font-weight:800;
+                overflow-wrap:anywhere;
+              "
+            >
+              ${escape(
+                money(
+                  card.openingBalanceCents,
+                  card.currency
+                )
+              )}
+            </div>
+
+            <div
+              style="
+                margin-top:6px;
+                color:var(--text-secondary);
+                font-size:12px;
+              "
+            >
+              As of ${escape(card.balanceAsOf)}
+            </div>
+          </div>
+
+          ${row(
+            "Your monthly payment",
+            money(
+              card.plannedPaymentCents,
+              card.currency
+            )
+          )}
+
+          ${row(
+            "Current minimum",
+            money(
+              card.minimumPaymentCents,
+              card.currency
+            )
+          )}
+
+          ${row(
+            "Next payment due",
+            card.nextDueDate
+          )}
+
+          ${
+            belowMinimum
+              ? note(
+                  "Your planned payment is below " +
+                  "the minimum payment you entered."
+                )
+              : ""
+          }
+        </section>
+
+        ${payoffContent}
+
+        ${button(
+          "Card Details",
+          "card-information",
+          id
+        )}
+
+        <div style="margin-top:12px">
+          ${button(
+            "Back to My Cards",
+            "list"
+          )}
+        </div>
+
+        <details style="margin-top:18px">
+          <summary>How this estimate works</summary>
+
+          ${note(
+            "This estimate starts with your saved starting " +
+            "balance and assumes the same APR and payment " +
+            "each month, with no new purchases, fees or refunds. " +
+            "Interest is approximated as APR divided by 12, " +
+            "rounded to cents before each payment. " +
+            "The first payment is assigned to your saved " +
+            "next due date. It is not an issuer payoff quote."
+          )}
+
+          ${note(
+            "Purchase and payment tracking has not been " +
+            "added yet. Until then, this screen does not " +
+            "automatically update the balance as time passes."
+          )}
+        </details>
+
+        <p
+          id="mcc-message"
+          role="status"
+          class="bbml-help"
+        ></p>
+      `,
+      card.bank + " •••• " + card.last4
+    );
+  }
   function showDetails(state, id) {
     const card = state.cards.get(id);
 
@@ -360,7 +709,7 @@
         selectedId &&
         state.cards.has(selectedId)
       ) {
-        return showDetails(state, selectedId);
+        return showOverview(state, selectedId);
       }
 
       const cards = [...state.cards]
@@ -983,7 +1332,7 @@
 
       void loadCards(
         state,
-        state.view === "details"
+        ["overview", "details"].includes(state.view)
           ? state.cardId
           : null
       );
@@ -1008,7 +1357,11 @@
     } else if (action === "new") {
       newCard(state);
     } else if (action === "details") {
+      showOverview(state, id);
+    } else if (action === "card-information") {
       showDetails(state, id);
+    } else if (action === "overview") {
+      showOverview(state, id);
     } else if (action === "archive") {
       void archiveCard(state, id);
     }
