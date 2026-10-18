@@ -6392,7 +6392,11 @@ function renderBills() {
 
   // Payment-plan installments remain stored as individual bills for their
   // independent due dates and payment history, but do not appear in Bills.
-  const bills = allBills.filter(bill => !bill.installmentPlanId);
+  const bills = allBills.filter(
+  bill =>
+    !bill.installmentPlanId &&
+    !bill.splitPaymentParentId
+);
 
   const billSort = routeParams.billSort || 'dueDate';
 

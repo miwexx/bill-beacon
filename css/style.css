@@ -6397,3 +6397,7 @@ max-height: max(160px, calc(50dvh - 88px));
   object-fit: contain !important;
   transform: none !important;
 }
+/* Bills tab: clearer schedule descriptions */
+.bills-page-content .bill-meta {
+  color: var(--text-secondary) !important;
+}
