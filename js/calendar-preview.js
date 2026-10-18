@@ -108,7 +108,30 @@
     return `<button type="button" class="bill-row" style="width:100%;text-align:left;color:var(--text);"
       onclick="BillBeaconCalendarPreview.openBill('${escapeInlineString(id)}','${escapeInlineString(bill.dueDate)}')"
       aria-label="${escapeHtml(`${name}, ${label.toLowerCase()}, ${formatDate(bill.dueDate,"full")}, ${formatCurrency(bill.amount)}`)}">
-      <span style="display:flex;align-items:center;justify-content:center;flex:0 0 34px;width:34px;height:34px;overflow:hidden;">${billOrPaymentPlanVisual(visual,32)}</span>
+      <span class="bill-icon bb-calendar-preview-logo" style="
+  width:42px;
+  height:42px;
+  min-width:42px;
+  flex:0 0 42px;
+  border-radius:10px;
+  overflow:hidden;
+  background:${
+    bill.installmentPlanId || bill.installmentProvider
+      ? "transparent"
+      : getBillBrand(visual.name)
+        ? "#fff"
+        : `var(--${getCategory(bill.category).color})`
+  };
+  color:${
+    bill.installmentPlanId || bill.installmentProvider
+      ? "var(--accent)"
+      : getBillBrand(visual.name)
+        ? "#1e1e2e"
+        : "#fff"
+  };
+">
+  ${billOrPaymentPlanVisual(visual,32)}
+</span>
       <span class="bill-info"><span class="bill-name" style="display:block;">${escapeHtml(name)}</span>
       <span class="bill-meta" style="color:${color};">${paid?svgIcon("checkCircle",13):status==="overdue"?svgIcon("warning",13):svgIcon("calendar",13)} ${label} · ${escapeHtml(formatDate(bill.dueDate,"short"))}</span></span>
       <span class="bill-amount">${formatCurrency(bill.amount)}</span><span aria-hidden="true" style="color:var(--text-muted);">${svgIcon("chevronRight",16)}</span></button>`;

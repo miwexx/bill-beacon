@@ -6359,3 +6359,23 @@ max-height: max(160px, calc(50dvh - 88px));
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
+/* Calendar payment-list logos only */
+.bb-calendar-preview-page .bb-calendar-preview-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.bb-calendar-preview-page .bb-calendar-preview-logo img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain !important;
+  transform: none !important;
+}
+
+/* Keep fallback category icons proportionate */
+.bb-calendar-preview-page .bb-calendar-preview-logo > svg {
+  width: 24px;
+  height: 24px;
+}
