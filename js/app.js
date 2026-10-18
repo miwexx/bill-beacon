@@ -3949,7 +3949,7 @@ function renderPaycheckInlineRows(selected) {
       <div>
         ${entries.map((entry, index) => `
           <div
-            ${index >= 3 ? "data-paycheck-extra hidden" : ""}
+            ${index >= 5 ? "data-paycheck-extra hidden" : ""}
             style="border-bottom:1px solid var(--border);"
           >
             ${
@@ -3961,7 +3961,7 @@ function renderPaycheckInlineRows(selected) {
         `).join("")}
       </div>
 
-      ${entries.length > 3 ? `
+      ${entries.length > 5 ? `
         <button
           type="button"
           class="bb-outline-pill"
