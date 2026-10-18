@@ -1,324 +1,187 @@
-/*
-Bill Beacon — More tools design preview v1
-INSTALL: Load ONCE as the LAST classic script in index.html:
-<script src="js/more-tools-preview.js?v=1"></script>
-Requires app.js (renderMore, render, navigate). All styles are included.
-New tools use SAMPLE DATA ONLY. No storage writes, fetches, sync calls,
-permission requests, file uploads or financial actions are performed here.
-Banking, Activity & Changes and Settings use the app's existing routes.
-REMOVE: remove the script tag and reload, or call BillBeaconMorePreview.uninstall().
-This is a visual/interaction prototype, not completed feature implementations.
-Validation: Node syntax check and 36 Chromium fixture checks passed.
-Fixture checks are not an end-to-end test against the deployed Bill Beacon app.
+/* Bill Beacon More tools — app-data beta v2.
+REPLACE the old more-tools-preview.js with this file. Load once LAST:
+<script src="js/more-tools-preview.js?v=2"></script>
+Reads existing Store records and app calculation helpers. No new record schema,
+network requests, storage writes, permission requests or automatic corrections.
+Goals, card debt terms and documents remain unconfigured when unsupported.
+Figures are current-device household snapshots, not bank-balance guarantees.
+Remove the script and reload to restore More; uninstall() also restores it.
+Validation: syntax check plus 39 Chromium fixture checks passed. These checks
+use controlled records and adapter functions, not your deployed production app.
 */
 (() => {
-  'use strict';
-  if (window.BillBeaconMorePreview) return;
-  if (typeof renderMore !== 'function' || typeof navigate !== 'function') {
-    console.error('More preview: load after app.js and other app scripts.');
-    return;
+ 'use strict';
+ if(window.BillBeaconMoreLive)return;
+ if(typeof renderMore!=='function'||typeof navigate!=='function'||typeof Store==='undefined'){
+  console.error('More tools: load after app.js and all app add-ons.');return;
+ }
+ window.BillBeaconMorePreview?.uninstall?.();
+ const originalMore=renderMore, STYLE='bbml-style', DIALOG='bbml-dialog';
+ let active=true, opened=null, openedScope=null, timer=null;
+ const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const array=x=>Array.isArray(x)?x:[];
+ const num=x=>x!==null&&x!==undefined&&String(x).trim()!==''&&Number.isFinite(Number(x))?Number(x):null;
+ const cents=x=>{const n=num(x);return n!==null&&n>=0&&Number.isSafeInteger(Math.round(n*100))?Math.round(n*100):null;};
+ const total=xs=>{let n=0;for(const x of xs){const c=cents(x);if(c===null||!Number.isSafeInteger(n+c))return null;n+=c;}return n/100;};
+ function date(x){if(!x)return null;const s=String(x);if(/^\d{4}-\d{2}-\d{2}$/.test(s)){const [y,m,d]=s.split('-').map(Number);const t=new Date(y,m-1,d,12);return t.getFullYear()===y&&t.getMonth()===m-1&&t.getDate()===d?t:null;}const t=new Date(s);return Number.isFinite(t.getTime())?t:null;}
+ const sameMonth=(x,ref=new Date())=>{const d=date(x);return !!d&&d.getFullYear()===ref.getFullYear()&&d.getMonth()===ref.getMonth();};
+ const fmtDate=x=>{const d=date(x);return d?d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}):'Date unavailable';};
+ const monthLabel=()=>new Date().toLocaleDateString(undefined,{month:'long',year:'numeric'});
+ function money(x,s){if(x===null||!Number.isFinite(Number(x)))return 'Unavailable';const currency=s?.settings?.currency||'USD';try{return new Intl.NumberFormat(undefined,{style:'currency',currency}).format(Number(x));}catch{return Number(x).toFixed(2)+' '+currency;}}
+ function scope(){
+  if(typeof window.getBillBeaconFirebaseUser!=='function'||typeof window.getBillBeaconHouseholdContext!=='function')return {ok:false,reason:'Household identity helpers are unavailable. Records are not displayed.'};
+  const u=window.getBillBeaconFirebaseUser(),h=window.getBillBeaconHouseholdContext();
+  if(!u?.uid)return {ok:false,reason:'Sign in to view household data.'};
+  if(!h?.ready||!h.householdId||h.uid!==u.uid)return {ok:false,reason:'Wait for your signed-in household to finish loading.'};
+  return {ok:true,key:JSON.stringify([u.uid,h.householdId,h.generation??null]),context:h};
+ }
+ function snapshot(){
+  const identity=scope();if(!identity.ok)return {ok:false,reason:identity.reason};
+  try{
+   const read=name=>{if(typeof Store[name]!=='function')throw new Error('Missing '+name);const v=Store[name]();if(!Array.isArray(v)||v.some(x=>!x||typeof x!=='object'||Array.isArray(x)))throw new Error('Invalid '+name);return v;};
+   const settings=Store.getSettings();if(!settings||typeof settings!=='object')throw new Error('Settings unavailable');
+   return {ok:true,scope:identity.key,bills:read('getBills'),payments:read('getPayments'),income:read('getIncomeSources'),activity:read('getActivityLog'),settings};
+  }catch{return {ok:false,reason:'The app records could not be read safely. Open the existing screens and check household sync.'};}
+ }
+ const enabled=b=>b&&!b.archived&&!b.archivedAt&&!b.cancelled&&!b.cancelledAt&&!['cancelled','canceled','archived','paid-in-full','paidInFull'].includes(b.status)&&!b.paidInFullAt;
+ const regular=s=>s.bills.filter(b=>enabled(b)&&!b.installmentPlanId&&!b.splitPaymentParentId);
+ function paymentActive(p){try{if(typeof isFinancialPaymentActive==='function')return !!isFinancialPaymentActive(p);}catch{return false;}return !!p&&!p.voidedAt&&(!p.status||p.status==='active');}
+ function uniquePayments(s){const seen=new Set();return s.payments.filter(p=>{if(!p||!p.id)return !!p;if(seen.has(p.id))return false;seen.add(p.id);return true;});}
+ const PATHS={bank:'M3 10h18M4 10v10M9 10v10M15 10v10M20 10v10M2 21h20M12 3 2 8h20Z',forecast:'m3 17 5-5 4 3 8-10M14 5h6v6',goal:'M20 12a8 8 0 1 1-3-6M16 12a4 4 0 1 1-4-4M12 12l9-9M17 3h4v4',renew:'M20 7v5h-5M4 17v-5h5M5 8a7 7 0 0 1 12-3l3 4M4 15l3 4a7 7 0 0 0 12-3',card:'M3 5h18v14H3ZM3 10h18M7 15h4',review:'M9 3h6v4H9ZM9 5H5v16h14V5h-4M9 12h6M9 16h4',report:'M5 3h10l4 4v14H5ZM14 3v5h5M9 17v-3M12 17v-6M15 17v-4',activity:'M3 12h4l3-7 4 14 3-7h4',sync:'M20 7v5h-5M4 17v-5h5M5 8a7 7 0 0 1 12-3l3 4M4 15l3 4a7 7 0 0 0 12-3',settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',document:'M5 3h10l4 4v14H5ZM14 3v5h5M8 12h8M8 16h6',arrow:'m9 5 7 7-7 7',close:'m6 6 12 12M18 6 6 18'};
+ const icon=(name,size=22)=>`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${PATHS[name]||PATHS.document}"/></svg>`;
+ const TOOLS={forecast:['Forecast & What-If','Compare expected income with assigned bills.','forecast','purple'],goals:['Goals & Sinking Funds','A place for future savings targets.','goal','green'],subscriptions:['Subscriptions & Renewals','Your subscription-category bills and saved schedules.','renew','pink'],cards:['Credit Cards','Existing card-payment bills; no invented balances.','card','blue'],documents:['Bill Documents','Your saved bill notes; attachments are not enabled.','document','orange'],review:['Needs Review','Basic checks of the records already in the app.','review','orange'],monthly:['Monthly Review','Recorded payments and changes for this month.','report','purple'],connections:['Connections & Sync Health','What this device currently knows about connections.','sync','green']};
+ const note=t=>`<div class="bbml-callout">${esc(t)}</div>`;
+ const help=t=>`<p class="bbml-help">${esc(t)}</p>`;
+ const panel=(t,b)=>`<section class="bbml-panel"><h3>${esc(t)}</h3>${b}</section>`;
+ const empty=(t,b)=>`<div class="bbml-empty">${icon('document',30)}<h3>${esc(t)}</h3><p>${esc(b)}</p></div>`;
+ const metric=(label,value,sub='')=>`<div class="bbml-metric"><span>${esc(label)}</span><strong>${esc(value)}</strong><small>${esc(sub)}</small></div>`;
+ const metrics=(a,b)=>`<div class="bbml-metrics">${a}${b}</div>`;
+ const detail=(label,value,sub='')=>`<div class="bbml-detail"><div><span>${esc(label)}</span>${sub?`<small>${esc(sub)}</small>`:''}</div><strong>${esc(value)}</strong></div>`;
+ const routeButton=(label,route)=>`<button type="button" class="bbml-outline" data-bbml-action="route:${esc(route)}">${esc(label)} ${icon('arrow',16)}</button>`;
+ function item(title,sub,value='',action=''){
+  const tag=action?'button':'div';return `<${tag} ${action?`type="button" data-bbml-action="${esc(action)}"`:''} class="bbml-item"><span class="bbml-dot"></span><span class="bbml-item-copy"><strong>${esc(title)}</strong><small>${esc(sub)}</small></span>${value?`<span class="bbml-value">${esc(value)}</span>`:''}${action?icon('arrow',14):''}</${tag}>`;
+ }
+ function billItem(b,s,sub){return item(b.name||'Unnamed bill',sub,money(num(b.amount),s),'bill:'+b.id);}
+ function row(name,sub,symbol,tone,action,tag=''){
+  return `<button type="button" class="bbml-row" data-bbml-action="${esc(action)}"><span class="bbml-icon bbml-${tone}">${icon(symbol)}</span><span class="bbml-row-copy"><span class="bbml-row-title">${esc(name)}</span><span class="bbml-row-sub">${esc(sub)}</span></span>${tag?`<span class="bbml-tag">${esc(tag)}</span>`:''}<span class="bbml-chevron">${icon('arrow',16)}</span></button>`;
+ }
+ const group=(title,body)=>`<section class="bbml-section"><h2>${esc(title)}</h2><div class="bbml-group">${body}</div></section>`;
+ function main(){
+  const s=snapshot();const tool=k=>{const t=TOOLS[k];return row(t[0],t[1],t[2],t[3],'open:'+k,k==='goals'?'Not set up':k==='documents'?'Notes':k==='cards'?'Bills':'Read-only');};
+  return `<div class="nav-bar"><div class="nav-bar-content bbml-nav"><span></span><div class="nav-title">More</div><span></span></div></div><div class="main-content fade-in bbml-page"><div class="content-pad bbml-content"><div class="bbml-intro"><div><p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p><h1>Plan ahead. Stay in control.</h1></div><span class="bbml-badge">App-data beta</span></div><p class="bbml-intro-note">${esc(s.ok?'Your current household records. Read-only tools; no automatic changes.':s.reason)}</p><button type="button" class="bbml-bank" data-bbml-action="route:transactions"><span class="bbml-icon bbml-purple">${icon('bank',24)}</span><span class="bbml-row-copy"><span class="bbml-row-title">Banking</span><span class="bbml-row-sub">Open your existing transactions</span></span><span class="bbml-bank-link">View ${icon('arrow',15)}</span></button>${group('Planning',tool('forecast')+tool('goals'))}${group('Manage',tool('subscriptions')+tool('cards')+tool('documents'))}${group('Review',tool('review')+tool('monthly')+row('Activity & Changes','Your existing bill and payment change history.','activity','orange','route:activity'))}${group('App',tool('connections')+row('Settings','Account, appearance, reminders and backups.','settings','purple','route:settings'))}<p class="bbml-footer">No sample records · projections are not available balances · ${esc(monthLabel())}</p></div></div>`;
+ }
+ function forecast(s){
+  if(!s.income.length)return {error:'No income sources are saved. Add income in Settings before comparing income with bills.'};
+  if(typeof getPaycheckPlan!=='function'||typeof getTotalIncomeForPayCycle!=='function')return {error:'The existing paycheck calculation helpers are unavailable. No substitute totals were invented.'};
+  try{const p=getPaycheckPlan(new Date());const first=num(getTotalIncomeForPayCycle('first')),second=num(getTotalIncomeForPayCycle('second'));
+   if(first===null||second===null||!p?.first||!p?.second||cents(p.first.scheduled)===null||cents(p.second.scheduled)===null)throw new Error();
+   return {plan:p,first,second};
+  }catch{return {error:'The app paycheck plan could not be calculated. Check Needs Review and the existing Dashboard.'};}
+ }
+ function forecastHTML(s){
+  const f=forecast(s);if(f.error)return empty('Forecast not available',f.error)+routeButton('Open Settings','settings');
+  const p=f.plan;const first=f.first-Number(p.first.scheduled),second=f.second-Number(p.second.scheduled);
+  return note('Current-month funding model: full expected income minus all assigned scheduled bills, including paid bills. This is not a bank balance or money left to spend.')+metrics(metric('Paycheck 1 model',money(first,s),monthLabel()),metric('Paycheck 2 model',money(second,s),monthLabel()))+panel('Existing paycheck plan',detail('Paycheck 1 expected income',money(f.first,s))+detail('Paycheck 1 scheduled bills',money(p.first.scheduled,s))+detail('Paycheck 2 expected income',money(f.second,s))+detail('Paycheck 2 scheduled bills',money(p.second.scheduled,s))+(p.previous?detail('Previous-paycheck scheduled bills',money(p.previous.scheduled,s),'Separate funding bucket; excluded from the two comparisons above.'):'') )+help('Uses the app’s current income-estimate and paycheck-assignment rules. Variable/manual income, everyday spending, savings, older overdue bills and actual account balances may not be included. No money is reserved.')+panel('Try a hypothetical change',`<label for="bbml-cycle" class="bbml-field-label">Apply to paycheck</label><select id="bbml-cycle" class="bbml-input"><option value="first">Paycheck 1</option><option value="second">Paycheck 2</option></select><label for="bbml-extra" class="bbml-field-label">Additional expense (${esc(s.settings.currency||'USD')})</label><input id="bbml-extra" class="bbml-input" type="number" min="0" max="1000000000" step="0.01" inputmode="decimal" value="0"><div id="bbml-result" class="bbml-result" aria-live="polite"></div>${help('This adjustment exists only in this open screen. It does not add a bill or change your paycheck plan.')}`)+routeButton('Open Dashboard paycheck plan','today');
+ }
+ function normalizedMonthly(b){const n=num(b.amount);if(n===null||n<0)return null;return ({Weekly:n*52/12,'Every 2 Weeks':n*26/12,Monthly:n,Quarterly:n/3,Yearly:n/12})[b.recurrence]??null;}
+ function nextDates(bills){
+  const result=new Map(),today=new Date();today.setHours(0,0,0,0);
+  const add=(id,value)=>{const d=date(value);if(d&&d>=today&&(!result.has(id)||d<result.get(id)))result.set(id,d);};
+  try{if(typeof getCalendarBillsForMonth==='function')for(let i=0;i<13;i++)for(const x of array(getCalendarBillsForMonth(new Date(today.getFullYear(),today.getMonth()+i,1,12))))add(x.sourceBillId||x.id,x.dueDate);
+   if(typeof getCurrentCalendarBillOccurrence==='function')for(const b of bills){const x=getCurrentCalendarBillOccurrence(b,new Date());if(x)add(b.id,x.dueDate);}
+  }catch{}
+  return result;
+ }
+ function subscriptionsHTML(s){
+  const bills=regular(s).filter(b=>b.category==='subscriptions');if(!bills.length)return empty('No subscription-category bills','Only bills already categorized as Subscriptions appear here. Other recurring bills are not automatically reclassified.')+routeButton('Open Bills','bills');
+  const amounts=bills.map(normalizedMonthly);const known=amounts.filter(n=>n!==null);const upcoming=nextDates(bills);const changes=[];
+  for(const b of bills){const hist=array(b.scheduleHistory).filter(v=>v?.snapshot);for(let i=hist.length-1;i>0;i--){const a=cents(hist[i-1].snapshot.amount),z=cents(hist[i].snapshot.amount);if(a!==null&&z!==null&&a!==z){changes.push(item(b.name||'Subscription',`Saved schedule change · ${fmtDate(hist[i].effectiveFrom||hist[i].capturedAt)}`,money(a/100,s)+' → '+money(z/100,s),'bill:'+b.id));break;}}}
+  return metrics(metric('Subscription bills',String(bills.length),'Explicit Subscriptions category'),metric('Monthly equivalent',money(known.length?total(known):null,s),`${known.length} of ${bills.length} schedules normalized${known.length<bills.length?' · partial total':''}`))+help('Monthly equivalent normalizes saved weekly, biweekly, monthly, quarterly and annual amounts. It is not a new charge or a cancellation/renewal guarantee.')+panel('Saved subscription schedules',bills.slice(0,50).map(b=>{const next=upcoming.get(b.id);return billItem(b,s,`${b.recurrence||'No recurrence'} · ${next?'Next displayed occurrence: '+fmtDate(next):'Next occurrence unavailable'}`);}).join(''))+(bills.length>50?help('Showing the first 50 subscription bills. Open Bills for the full list.'):'')+panel('Price changes recorded in schedule history',changes.length?changes.join(''):help('No amount changes were found in the saved subscription schedule histories. This is not a scan of merchant prices.'))+note('Trial-end dates, cancellation deadlines and future merchant price notices are not stored by this version. No reminder has been created.')+routeButton('Open Bills','bills');
+ }
+ function reviewIssues(s){
+  const issues=[],add=(title,sub,b)=>issues.push({title,sub,id:b?.id});const regularBills=regular(s),byId=new Map(s.bills.map(b=>[b.id,b])),names=new Map();
+  for(const b of regularBills){
+   if(cents(b.amount)===null)add('Invalid bill amount',b.name||'Unnamed bill',b);
+   if(!date(b.dueDate))add('Missing or invalid due date',b.name||'Unnamed bill',b);
+   if(b.recurrence==='Monthly'&&b.dueDay!=null&&(!Number.isInteger(Number(b.dueDay))||Number(b.dueDay)<1||Number(b.dueDay)>31))add('Invalid monthly due day',b.name||'Unnamed bill',b);
+   const name=String(b.name||'').trim().toLowerCase().replace(/\s+/g,' ');
+   if(name&&cents(b.amount)!==null){const k=JSON.stringify([name,cents(b.amount),b.recurrence||'None',b.dueDay??null,b.dueDate||'']);if(names.has(k))add('Possible duplicate bill',`${b.name} has the same name, amount and stored schedule as another active bill. Compare before changing anything.`,b);else names.set(k,b.id);}
   }
-  const savedRenderMore = renderMore;
-  const STYLE_ID = 'bbmp-style-v1';
-  const DIALOG_ID = 'bbmp-dialog';
-  let active = true;
-  const money = amount => new Intl.NumberFormat('en-US', {
-    style:'currency', currency:'USD', maximumFractionDigits:0
-  }).format(amount);
-  const escape = value => String(value).replace(/[&<>"']/g, c => ({
-    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
-  }[c]));
-  const PATHS = {
-    bank:'M3 10h18M4 10V20M9 10V20M15 10V20M20 10V20M2 21h20M12 3 2 8h20Z',
-    forecast:'m3 17 5-5 4 3 8-10M14 5h6v6',
-    goal:'M20 12a8 8 0 1 1-3-6M16 12a4 4 0 1 1-4-4M12 12l9-9M17 3h4v4',
-    renew:'M20 7v5h-5M4 17v-5h5M5 8a7 7 0 0 1 12-3l3 4M4 15l3 4a7 7 0 0 0 12-3',
-    card:'M3 5h18v14H3ZM3 10h18M7 15h4',
-    review:'M9 3h6v4H9ZM9 5H5v16h14V5h-4M9 12h6M9 16h4',
-    report:'M5 3h10l4 4v14H5ZM14 3v5h5M9 17v-3M12 17v-6M15 17v-4',
-    activity:'M3 12h4l3-7 4 14 3-7h4',
-    sync:'M20 7v5h-5M4 17v-5h5M5 8a7 7 0 0 1 12-3l3 4M4 15l3 4a7 7 0 0 0 12-3',
-    settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',
-    document:'M5 3h10l4 4v14H5ZM14 3v5h5M8 12h8M8 16h6',
-    arrow:'m9 5 7 7-7 7',
-    close:'m6 6 12 12M18 6 6 18',
-    check:'m5 12 4 4L19 6'
-  };
-  function icon(name, size=22) {
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${PATHS[name] || PATHS.document}"/></svg>`;
+  for(const b of s.bills.filter(enabled)){
+   if(b.splitPaymentParentId&&!byId.has(b.splitPaymentParentId))add('Split portion has no active parent',b.name||'Linked portion',b);
+   for(const p of Object.values(b.splitOccurrencePlans||{})){if(!p?.enabled)continue;const ids=array(p.partIds),parts=ids.map(id=>byId.get(id));if(ids.length<2||new Set(ids).size!==ids.length||parts.some(x=>!x)){add('Split schedule needs review',`${b.name}: a linked portion is missing or duplicated.`,b);continue;}const sum=total(parts.map(x=>x.amount));if(sum===null||!Number.isSafeInteger(p.totalCents)||Math.round(sum*100)!==p.totalCents)add('Split total does not match',`${b.name}: linked portions do not match the saved split total.`,b);}
   }
-  const TOOLS = {
-    forecast:{name:'Forecast & What-If', sub:'Explore your next paychecks before making changes.', icon:'forecast', tone:'purple'},
-    goals:{name:'Goals & Sinking Funds', sub:'Build a little at a time for bigger expenses.', icon:'goal', tone:'green'},
-    subscriptions:{name:'Subscriptions & Renewals', sub:'Trials, renewals and upcoming price changes.', icon:'renew', tone:'pink'},
-    cards:{name:'Credit Cards', sub:'Payoff ideas, promotional rates and annual fees.', icon:'card', tone:'blue'},
-    documents:{name:'Bill Documents', sub:'Statements, receipts and cancellation records.', icon:'document', tone:'orange'},
-    review:{name:'Needs Review', sub:'Unconfirmed matches and schedule questions.', icon:'review', tone:'orange'},
-    monthly:{name:'Monthly Review', sub:'See what changed, moved or cost more.', icon:'report', tone:'purple'},
-    connections:{name:'Connections & Sync Health', sub:'A clearer view of bank, household and reminder status.', icon:'sync', tone:'green'}
-  };
-  function row(name, sub, symbol, tone, action, preview=false) {
-    return `<button type="button" class="bbmp-row" data-bbmp-action="${escape(action)}">
-      <span class="bbmp-icon bbmp-${tone}">${icon(symbol)}</span>
-      <span class="bbmp-row-copy"><span class="bbmp-row-title">${escape(name)}</span><span class="bbmp-row-sub">${escape(sub)}</span></span>
-      ${preview ? '<span class="bbmp-tag">Preview</span>' : ''}
-      <span class="bbmp-chevron">${icon('arrow',16)}</span>
-    </button>`;
+  try{if(typeof plaidBankState!=='undefined'){for(const tx of array(plaidBankState.transactions))if(['review','needs-review','needs_review','manual-review','ambiguous','conflict'].includes(String(tx.matchStatus||'').toLowerCase()))issues.push({title:'Bank transaction flagged for review',sub:String(tx.merchantName||'Transaction')+' · '+fmtDate(tx.date),route:'transactions'});}}
+  catch{}
+  return issues;
+ }
+ function reviewHTML(s){const issues=reviewIssues(s);return metrics(metric('Review items',String(issues.length),'Basic local checks'),metric('Active bill definitions',String(regular(s).length),'Excludes installments and split children'))+note('These checks are not the full audit. A possible duplicate is not confirmed, and an unflagged record is not guaranteed correct. No corrections or payment matches are applied.')+(issues.length?panel('Records to inspect',issues.slice(0,100).map(x=>item(x.title,x.sub,'',x.id?'bill:'+x.id:'route:'+(x.route||'bills'))).join('')):empty('No issues found by these checks','No invalid amounts, due dates, basic duplicate definitions, broken split links or loaded bank review flags were found. Other problems may still exist.'))+routeButton('Open existing Activity & Changes','activity');}
+ function monthlyHTML(s){
+  const payments=uniquePayments(s);const posted=payments.filter(p=>paymentActive(p)&&sameMonth(p.paidDate));const reversed=payments.filter(p=>(p.status==='voided'||p.voidedAt)&&sameMonth(p.voidedAt));const changes=s.activity.filter(a=>sameMonth(a.timestamp)).slice().sort((a,b)=>(date(b.timestamp)?.getTime()||0)-(date(a.timestamp)?.getTime()||0));
+  let summary=null;try{if(typeof getDashboardMonthSummary==='function')summary=getDashboardMonthSummary(new Date());}catch{}
+  const names=new Map(s.bills.map(b=>[b.id,b.name]));const amount=total(posted.map(p=>p.amount));
+  return metrics(metric('Payments recorded',money(amount,s),'Active payment records with paidDate this month'),metric('Recorded changes',String(changes.length),monthLabel()))+help('Recorded payments use the payment date. Scheduled and unpaid figures below use the bill occurrence’s due month, so they are not directly comparable totals.')+(summary?panel('Existing Dashboard occurrence summary',detail('Scheduled for this due month',money(num(summary.scheduled),s))+detail('Unpaid in this due month',money(num(summary.remainingTotal),s))+detail('Active payment records this month',String(posted.length))+detail('Reversals recorded this month',String(reversed.length))):note('The existing Dashboard month-summary helper is unavailable; scheduled totals are not estimated from raw bill definitions.'))+panel('Latest recorded payments',posted.length?posted.slice().sort((a,b)=>(date(b.paidDate)?.getTime()||0)-(date(a.paidDate)?.getTime()||0)).slice(0,20).map(p=>item(p.billSnapshot?.name||names.get(p.billId)||'Historical bill',`Recorded ${fmtDate(p.paidDate)} · due ${fmtDate(p.paidForDueDate)}`,money(num(p.amount),s),names.has(p.billId)?'bill:'+p.billId:'')).join(''):help('No active payments with a payment date in this month.'))+panel('Latest activity this month',changes.length?changes.slice(0,25).map(a=>item(a.title||a.action||'Activity',`${fmtDate(a.timestamp)}${a.detail?' · '+a.detail:''}`)).join(''):help('No saved activity entries dated this month.'))+help('Only existing history is shown. Earlier events that were never recorded cannot be reconstructed. Payment records do not prove a bank transfer occurred.')+routeButton('Open complete Activity & Changes','activity');
+ }
+ function connectionsHTML(s){
+  let bank=null;try{if(typeof plaidBankState!=='undefined')bank=plaidBankState;}catch{}
+  const loaded=bank&&(bank.connected===true||array(bank.accounts).length>0||!!bank.lastSyncedAt);let bankStatus=bank?.connected===true?'Connected in loaded app data':loaded?'Connection not reported as active':'Not loaded / not verified in this session';
+  let status=window.billBeaconSyncStatus;const identity=scope();const syncText=status?.conflict?'Conflict reported by app':status?.pending?'Changes pending':status?.ready&&identity.ok?'App reports ready':'Not ready / unavailable';
+  const permission=typeof Notification==='undefined'?'Unsupported in this browser':Notification.permission;
+  return note('Local status snapshot, not a new server check. “Not loaded” does not mean disconnected. “Ready” does not independently prove the latest changes reached the server.')+panel('Bank connection',detail('Loaded status',bankStatus)+detail('Loaded accounts',loaded?String(array(bank.accounts).length):'Not loaded')+detail('Reported last bank timestamp',bank?.lastSyncedAt?fmtDate(bank.lastSyncedAt)+' '+(date(bank.lastSyncedAt)?.toLocaleTimeString()||''):'Not available')+routeButton('Open Banking to verify or sync','transactions'))+panel('Household sync',detail('Current household context',identity.ok?'Ready for signed-in user':'Not ready')+detail('Sync state',syncText)+help('No sync operation or conflict resolution is run by this screen.'))+panel('Notifications',detail('Browser permission',permission)+detail('Server subscription registration','Not verified here')+help('Permission being granted does not prove the server has an active registration for this account. Verify from the existing Notifications settings.')+routeButton('Open Settings','settings'));
+ }
+ function content(key,s){
+  if(!s.ok)return empty('Data not available',s.reason);
+  switch(key){
+   case 'forecast':return forecastHTML(s);
+   case 'subscriptions':return subscriptionsHTML(s);
+   case 'review':return reviewHTML(s);
+   case 'monthly':return monthlyHTML(s);
+   case 'connections':return connectionsHTML(s);
+   case 'goals':return empty('No savings-goal records yet','The current app does not provide a verified goals or sinking-fund data source. Income is not a savings balance, so no goal amounts or progress are invented.')+panel('Already available',detail('Saved income sources',String(s.income.length))+help('Use Forecast & What-If for the income sources and paycheck assignments already in the app. Goal creation and saved contributions need a separate implementation.'))+routeButton('Open income settings','settings');
+   case 'cards':{const bills=regular(s).filter(b=>b.category==='creditcards');return note('These are card-payment bills, not credit-card account balances. Their amounts must not be treated as debt, statement balances or minimum payments unless you entered them that way.')+(bills.length?panel('Saved card-payment bills',bills.map(b=>billItem(b,s,`${b.recurrence||'No recurrence'} · stored due date ${fmtDate(b.dueDate)}`)).join('')):empty('No credit-card payment bills','Bills categorized as Credit Cards will appear here.'))+panel('Not stored yet',help('Card balances, APRs, promotional expiry dates, annual-fee dates and balance history have no verified data model in this version. Payoff scenarios are not calculated.'))+routeButton('Open Bills','bills');}
+   case 'documents':{const notes=regular(s).filter(b=>String(b.notes||'').trim());return empty('Document attachments are not enabled','No statement, receipt or cancellation files are read, uploaded or invented. Secure attachment storage needs a separate implementation.')+(notes.length?panel('Bills with existing notes',notes.slice(0,30).map(b=>item(b.name||'Bill',String(b.notes).slice(0,240)+(String(b.notes).length>240?'…':''),'','bill:'+b.id)).join('')):help('No saved notes on active regular bills.'))+routeButton('Open Bills','bills');}
+   default:return empty('Unavailable','This tool is not available.');
   }
-  function toolRow(key) {
-    const item = TOOLS[key];
-    return row(item.name,item.sub,item.icon,item.tone,'open:'+key,true);
-  }
-  function section(label, content) {
-    return `<section class="bbmp-section"><h2 class="bbmp-section-title">${label}</h2><div class="bbmp-group">${content}</div></section>`;
-  }
-  function previewRenderMore() {
-    return `<div class="nav-bar"><div class="nav-bar-content bbmp-nav"><span></span><div class="nav-title">More</div><span></span></div></div>
-    <div class="main-content fade-in bbmp-page"><div class="content-pad bbmp-content">
-      <div class="bbmp-intro"><div><p class="bbmp-eyebrow">YOUR MONEY TOOLKIT</p><h1>Plan ahead. Stay in control.</h1></div><span class="bbmp-preview-label">Design preview</span></div>
-      <p class="bbmp-intro-note">New tools open with sample data. Your current records stay unchanged.</p>
-      <button type="button" class="bbmp-bank" data-bbmp-action="route:transactions">
-        <span class="bbmp-icon bbmp-purple">${icon('bank',24)}</span><span class="bbmp-row-copy"><span class="bbmp-row-title">Banking</span><span class="bbmp-row-sub">Open your existing transactions</span></span><span class="bbmp-bank-link">View ${icon('arrow',15)}</span>
-      </button>
-      ${section('Planning', toolRow('forecast')+toolRow('goals'))}
-      ${section('Manage', toolRow('subscriptions')+toolRow('cards')+toolRow('documents'))}
-      ${section('Review', toolRow('review')+toolRow('monthly')+row('Activity & Changes','Your existing bill and payment change history.','activity','orange','route:activity'))}
-      ${section('App',toolRow('connections')+row('Settings','Account, appearance, reminders and backups.','settings','purple','route:settings'))}
-      <p class="bbmp-footer">Preview v1 · New feature screens are demonstrations, not live financial tools.</p>
-    </div></div>`;
-  }
-  function metric(label, value, note='') {
-    return `<div class="bbmp-metric"><span>${escape(label)}</span><strong>${escape(value)}</strong>${note?`<small>${escape(note)}</small>`:''}</div>`;
-  }
-  function panel(title, body) {
-    return `<section class="bbmp-panel"><h3>${escape(title)}</h3>${body}</section>`;
-  }
-  function detail(label, value, note='') {
-    return `<div class="bbmp-detail"><div><span>${escape(label)}</span>${note?`<small>${escape(note)}</small>`:''}</div><strong>${escape(value)}</strong></div>`;
-  }
-  function example(title, detailText, value, tone='purple') {
-    return `<div class="bbmp-example"><span class="bbmp-dot bbmp-${tone}"></span><div><strong>${escape(title)}</strong><small>${escape(detailText)}</small></div><span class="bbmp-example-value">${escape(value)}</span></div>`;
-  }
-  function goal(name, saved, total, perPaycheck, tone) {
-    return `<div class="bbmp-goal"><div class="bbmp-goal-heading"><strong>${escape(name)}</strong><span>${money(saved)} / ${money(total)}</span></div><progress max="${total}" value="${saved}" aria-label="${escape(name)} example progress">${Math.round(saved/total*100)}%</progress><small>${money(perPaycheck)} per paycheck · sample contribution</small></div>`;
-  }
-  function content(key) {
-    switch(key) {
-      case 'forecast': return `
-        <div class="bbmp-metric-grid">${metric('Expected income','$4,000','Example month')}${metric('Projected remainder','$300','Before a new scenario')}</div>
-        ${panel('Example monthly plan', detail('Expected income','$4,000')+detail('Scheduled bills','−$2,750')+detail('Living expenses allowance','−$800')+detail('Goal contributions','−$150'))}
-        ${panel('Try a what-if', `<label class="bbmp-field-label" for="bbmp-extra">Add a monthly expense — example USD</label><div class="bbmp-input-wrap"><span aria-hidden="true">$</span><input id="bbmp-extra" type="number" min="0" max="1000000" step="1" value="75" inputmode="decimal" aria-describedby="bbmp-scenario-help"></div><p id="bbmp-scenario-help" class="bbmp-help">Changes only this sample calculation. Nothing is saved.</p><div id="bbmp-scenario-result" class="bbmp-result" aria-live="polite"></div>`)}
-        <p class="bbmp-help">Projected remainder is not a guarantee of money available to spend. These are invented inputs, not your account balances.</p>`;
-      case 'goals': return `
-        <div class="bbmp-metric-grid">${metric('Example funds','$800','Across two sample goals')}${metric('Per paycheck','$75','Planned contributions')}</div>
-        ${panel('Save for less-frequent expenses',goal('Car insurance',450,900,50,'green')+goal('Holiday fund',350,700,25,'purple'))}
-        ${panel('How it would work','<p>Set a target amount and date, then plan a contribution from each paycheck. A fund could link to the bill it is intended to cover.</p><p class="bbmp-help">This preview does not move or reserve money, or deduct a fund from your real paycheck plan.</p>')}`;
-      case 'subscriptions': return `
-        <div class="bbmp-metric-grid">${metric('Monthly equivalent','$18','Example subscriptions')}${metric('Upcoming events','3','Trial, price change and renewal')}</div>
-        ${panel('Upcoming — sample dates',example('Music service','Renews October 25','$12 / month','pink')+example('Cloud storage','Annual renewal November 1','$72 / year','blue')+example('Video trial','Trial ends October 28','Review trial','orange'))}
-        ${panel('Price-change reminder', '<div class="bbmp-callout">Example: music service increases from $12 to $14 next month.</div><p class="bbmp-help">A future version would distinguish a price change you entered from one suggested by a transaction. No price change has been detected or applied here.</p>')}`;
-      case 'cards': return `
-        <div class="bbmp-metric-grid">${metric('Sample balance','$1,200','Fictional card')}${metric('Example payment','$100','Per month')}</div>
-        ${panel('Card overview',detail('Purchase APR','24%','Example rate, not a payoff quote')+detail('Promotional APR expiry','March 31','Example date')+detail('Annual fee','$95','Example upcoming charge'))}
-        ${panel('Payoff scenarios','<p>Compare a fixed monthly payment with a target payoff date. A complete tool would show interest assumptions, fees and whether the payment covers interest.</p><div class="bbmp-callout">Payoff calculation is not implemented in this design preview.</div>')}
-        ${panel('Balance history','<div class="bbmp-history" aria-label="Example balance history"><div style="--level:95%"><i></i><span>Jul</span></div><div style="--level:78%"><i></i><span>Aug</span></div><div style="--level:65%"><i></i><span>Sep</span></div><div style="--level:56%"><i></i><span>Oct</span></div></div><p class="bbmp-help">Illustrative trend only. This is not bank-synced balance history.</p>')}`;
-      case 'documents': return `
-        ${panel('Example document library',example('Electric statement.pdf','Example only · linked to an October bill','PDF','orange')+example('Payment receipt.pdf','Example only · linked to one payment','PDF','green')+example('Cancellation confirmation.pdf','Example only · linked to a subscription','PDF','purple'))}
-        <div class="bbmp-empty">${icon('document',32)}<h3>Keep the proof with the bill</h3><p>A future version could attach statements, receipts and cancellation confirmations to bills or individual payments.</p><small>No documents were read or uploaded. Storage, access controls and deletion are not implemented here.</small></div>`;
-      case 'review': return `
-        <div class="bbmp-callout">3 invented examples — no scan of your bills or transactions has run.</div>
-        ${panel('Example review queue',example('Possible payment match','Electric bill · expected $90, transaction $94','Confirm match','orange')+example('Possible duplicate','Two example bills share a similar name','Compare','purple')+example('Incomplete schedule','Example bill needs a due date','Check schedule','pink'))}
-        ${panel('Resolve, don’t just notify','<p>Each issue would explain the evidence and open a focused review screen. No item should be treated as confirmed until you approve it.</p><p class="bbmp-help">The examples above are not actionable and are not findings about your account.</p>')}`;
-      case 'monthly': return `
-        <div class="bbmp-metric-grid">${metric('Expected payments','$2,750','Sample month')}${metric('Recorded payments','$2,768','Sample month')}</div>
-        ${panel('Example month-end story',example('Electric payment was $18 higher','Expected $90 · recorded $108','+$18','orange')+example('Two payments changed paychecks','One moved earlier; one moved later','2 moves','purple')+example('One bill was split','Two planned payments of $60','$120 total','blue'))}
-        ${panel('What this adds','<p>A readable summary of changes, with links to the underlying bill occurrences and Activity & Changes entries.</p><p class="bbmp-help">Recorded payments alone do not prove all bills were paid. This preview does not calculate your month-end position.</p>')}`;
-      case 'connections': return `
-        <div class="bbmp-callout">Illustrative statuses only — this preview does not check your real connections.</div>
-        ${panel('Example health view',example('Bank connection','Sample status: reconnection needed','Needs attention','orange')+example('Household sync','Sample status: last completed 2 minutes ago','Example only','green')+example('Notification registration','Not checked by this preview','Not checked','purple'))}
-        ${panel('Separate the three systems',`<p>Bank data, household synchronization and notification enrollment should each show their own status and recovery action.</p><button type="button" class="bbmp-outline" data-bbmp-action="route:transactions">Open existing Banking ${icon('arrow',16)}</button>`)}`;
-      default: return '<p>This preview is unavailable.</p>';
-    }
-  }
-  function updateScenario() {
-    const input = document.getElementById('bbmp-extra');
-    const result = document.getElementById('bbmp-scenario-result');
-    if (!input || !result) return;
-    const amount = Number(input.value);
-    if (input.value.trim()==='' || !Number.isFinite(amount) || amount<0 || amount>1000000) {
-      result.textContent='Enter an example amount from $0 to $1,000,000.';
-      result.classList.remove('bbmp-negative');
-      return;
-    }
-    const remainder = 300-amount;
-    result.classList.toggle('bbmp-negative',remainder<0);
-    result.innerHTML=`<span>${remainder<0?'Example projected shortfall':'Example projected remainder'}</span><strong>${money(Math.abs(remainder))}</strong><small>Original remainder $300 − new expense ${money(amount)}. Sample only.</small>`;
-  }
-  function close() {
-    const dialog = document.getElementById(DIALOG_ID);
-    if (!dialog) return;
-    if (dialog.open) dialog.close();
-    dialog.remove();
-  }
-  function open(key) {
-    if (!active || !TOOLS[key]) return;
-    const previousOpener = document.activeElement;
-    close();
-    const focusTarget = previousOpener;
-    const tool=TOOLS[key];
-    const dialog=document.createElement('dialog');
-    dialog.id=DIALOG_ID;
-    dialog.className='bbmp-dialog';
-    dialog.setAttribute('aria-labelledby','bbmp-dialog-title');
-    dialog.setAttribute('aria-describedby','bbmp-preview-notice');
-    dialog.innerHTML=`<header class="bbmp-dialog-header"><div class="bbmp-dialog-heading"><span class="bbmp-icon bbmp-${tool.tone}">${icon(tool.icon)}</span><div><span class="bbmp-eyebrow">TOOL PREVIEW</span><h2 id="bbmp-dialog-title">${escape(tool.name)}</h2></div></div><button type="button" class="bbmp-close" data-bbmp-action="close" aria-label="Close tool preview">${icon('close')}</button></header><div class="bbmp-dialog-body"><p id="bbmp-preview-notice" class="bbmp-sample-notice">Sample data · not your account · new features are not active</p><p class="bbmp-dialog-sub">${escape(tool.sub)}</p>${content(key)}</div>`;
-    dialog.addEventListener('close',()=>{
-      dialog.remove();
-      if(!document.querySelector('#'+DIALOG_ID+'[open]') && focusTarget?.isConnected) focusTarget.focus({preventScroll:true});
-    },{once:true});
-    dialog.addEventListener('click',event=>{
-      if(event.target!==dialog)return;
-      const r=dialog.getBoundingClientRect();
-      if(event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom)close();
-    });
-    dialog.addEventListener('input',event=>{
-      if(event.target.id==='bbmp-extra')updateScenario();
-    });
-    document.body.appendChild(dialog);
-    if(key==='forecast')updateScenario();
-    dialog.showModal();
-    dialog.querySelector('.bbmp-close').focus({preventScroll:true});
-  }
-  function onClick(event) {
-    if (!(event.target instanceof Element))return;
-    const button=event.target.closest('[data-bbmp-action]');
-    if(!button || button.closest('[data-bb-drag-preview],[data-bb-copy-id]'))return;
-    if(!button.closest('.bbmp-page,#'+DIALOG_ID))return;
-    const action=button.dataset.bbmpAction;
-    if(action==='close')close();
-    else if(action.startsWith('open:'))open(action.slice(5));
-    else if(action.startsWith('route:')) {
-      const route=action.slice(6);
-      if(!['transactions','activity','settings'].includes(route))return;
-      close();
-      navigate(route);
-    }
-  }
-  const CSS=String.raw`
-    .bbmp-page,.bbmp-dialog {--bbmp-muted:var(--text-secondary,#b4b4c8);--bbmp-line:var(--border,rgba(192,151,255,.18));--bbmp-panel:var(--surface,#20202b);--bbmp-purple:#c58bff;--bbmp-green:#7bdfbf;--bbmp-blue:#82d3f3;--bbmp-orange:#f4c08c;--bbmp-pink:#ed9bc8;color:var(--text,#f5f4fb)}
-    html[data-theme="light"] .bbmp-page,html[data-theme="light"] .bbmp-dialog {--bbmp-purple:#7542ad;--bbmp-green:#14795b;--bbmp-blue:#176b91;--bbmp-orange:#92521b;--bbmp-pink:#9a326b}
-    .bbmp-page *,.bbmp-dialog * {box-sizing:border-box}
-    .bbmp-nav {display:grid!important;grid-template-columns:44px 1fr 44px!important;align-items:center}
-    .bbmp-nav .nav-title {text-align:center}
-    .bbmp-content {max-width:680px;margin:0 auto;padding-top:16px;padding-bottom:calc(112px + env(safe-area-inset-bottom,0px))!important}
-    .bbmp-intro {display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
-    .bbmp-eyebrow {display:block;margin:0 0 7px;font-size:10px;letter-spacing:1.5px;font-weight:800;color:var(--bbmp-muted);line-height:1.4}
-    .bbmp-intro h1 {font-size:22px;font-weight:800;line-height:1.25;letter-spacing:-.45px;margin:0;max-width:320px}
-    .bbmp-preview-label {flex-shrink:0;display:inline-block;border:1px solid var(--bbmp-line);border-radius:999px;padding:5px 8px;color:var(--bbmp-muted);font-size:10px;font-weight:700;line-height:1.4}
-    .bbmp-intro-note,.bbmp-footer {color:var(--bbmp-muted);font-size:12px;line-height:1.55;margin:10px 0 18px}
-    .bbmp-bank {width:100%;display:flex;align-items:center;gap:12px;padding:18px 16px;border:1px solid rgba(178,117,242,.35);border-radius:20px;color:inherit;background:radial-gradient(ellipse at top right,rgba(172,79,240,.13),transparent 65%),var(--bbmp-panel);font:inherit;text-align:left;cursor:pointer}
-    .bbmp-bank-link {display:flex;align-items:center;gap:4px;font-size:12px;font-weight:750;color:var(--bbmp-purple);white-space:nowrap}
-    .bbmp-section {margin-top:22px}
-    .bbmp-section-title {margin:0 0 10px 2px;color:var(--bbmp-muted);font-size:12px;font-weight:750;letter-spacing:.6px;text-transform:uppercase;line-height:1.4}
-    .bbmp-group {border:1px solid var(--bbmp-line);border-radius:20px;overflow:hidden;background:var(--bbmp-panel)}
-    .bbmp-row {width:100%;display:flex;align-items:center;gap:12px;padding:16px 14px;min-height:84px;background:transparent;color:inherit;border:0;font:inherit;text-align:left;cursor:pointer}
-    .bbmp-row+.bbmp-row {border-top:1px solid var(--bbmp-line)}
-    .bbmp-icon {width:43px;height:43px;flex:0 0 43px;display:grid;place-items:center;border-radius:14px}
-    .bbmp-purple {color:var(--bbmp-purple);background:rgba(153,87,235,.13)}
-    .bbmp-green {color:var(--bbmp-green);background:rgba(69,174,138,.12)}
-    .bbmp-blue {color:var(--bbmp-blue);background:rgba(66,158,208,.12)}
-    .bbmp-orange {color:var(--bbmp-orange);background:rgba(220,143,62,.12)}
-    .bbmp-pink {color:var(--bbmp-pink);background:rgba(211,89,157,.12)}
-    .bbmp-row-copy {display:block;flex:1;min-width:0}
-    .bbmp-row-title {display:block;font-size:14px;font-weight:750;line-height:1.35}
-    .bbmp-row-sub {display:block;margin-top:4px;font-size:12px;line-height:1.45;color:var(--bbmp-muted)}
-    .bbmp-tag {font-size:9px;line-height:1.3;color:var(--bbmp-muted);border:1px solid var(--bbmp-line);padding:4px 5px;border-radius:6px;flex-shrink:0}
-    .bbmp-chevron {display:flex;color:var(--bbmp-muted);flex-shrink:0}
-    .bbmp-footer {text-align:center;margin:22px 6px 0}
-    .bbmp-dialog {position:fixed;inset:0;margin:auto;width:calc(100% - 24px);max-width:580px;height:auto;max-height:calc(100dvh - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));padding:0;border:1px solid var(--bbmp-line);border-radius:24px;background:var(--bg,#15151e);font-family:inherit;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.35)}
-    .bbmp-dialog[open] {display:flex;flex-direction:column}
-    .bbmp-dialog::backdrop {background:rgba(0,0,0,.62)}
-    .bbmp-dialog-header {padding:18px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--bbmp-line);flex:0 0 auto;background:var(--bbmp-panel)}
-    .bbmp-dialog-heading {display:flex;align-items:center;gap:12px;min-width:0}
-    .bbmp-dialog-heading>div {min-width:0}
-    .bbmp-dialog-header .bbmp-eyebrow {font-size:9px;margin-bottom:3px}
-    .bbmp-dialog h2 {font-size:18px;line-height:1.3;font-weight:800;letter-spacing:-.2px;margin:0;overflow-wrap:anywhere}
-    .bbmp-close {display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;padding:0;border:1px solid var(--bbmp-line);border-radius:14px;background:transparent;color:var(--bbmp-muted);cursor:pointer}
-    .bbmp-dialog-body {min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:16px 16px calc(22px + env(safe-area-inset-bottom,0px))}
-    .bbmp-sample-notice {font-size:10px;line-height:1.5;font-weight:750;color:var(--bbmp-purple);margin:0 0 10px;letter-spacing:.2px}
-    .bbmp-dialog-sub {font-size:13px;line-height:1.5;color:var(--bbmp-muted);margin:0 0 18px}
-    .bbmp-metric-grid {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-bottom:14px}
-    .bbmp-metric {display:flex;flex-direction:column;gap:6px;min-width:0;border:1px solid var(--bbmp-line);border-radius:16px;padding:14px 12px;background:var(--bbmp-panel)}
-    .bbmp-metric>span,.bbmp-metric small {font-size:11px;color:var(--bbmp-muted);line-height:1.4}
-    .bbmp-metric strong {font-size:25px;line-height:1.2;letter-spacing:-.5px;font-weight:800}
-    .bbmp-panel {padding:16px 14px;border:1px solid var(--bbmp-line);background:var(--bbmp-panel);border-radius:18px;margin-bottom:14px}
-    .bbmp-panel h3,.bbmp-empty h3 {font-size:14px;line-height:1.4;margin:0 0 12px;font-weight:750}
-    .bbmp-panel p,.bbmp-empty p {font-size:13px;line-height:1.65;margin:0 0 10px;color:var(--bbmp-muted)}
-    .bbmp-panel p:last-child {margin-bottom:0}
-    .bbmp-detail {display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid var(--bbmp-line);font-size:12px;line-height:1.5}
-    .bbmp-detail:last-child {border:0;padding-bottom:0}
-    .bbmp-detail strong {font-weight:750;text-align:right;flex-shrink:0}
-    .bbmp-detail small {display:block;font-size:11px;line-height:1.5;color:var(--bbmp-muted);margin-top:3px}
-    .bbmp-field-label {display:block;font-size:12px;line-height:1.5;font-weight:700;margin-bottom:8px}
-    .bbmp-input-wrap {display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid var(--bbmp-line);border-radius:12px;background:var(--bg,#15151e)}
-    .bbmp-input-wrap input {flex:1;min-width:0;width:100%;border:0;padding:0;margin:0;background:transparent;color:inherit;font:inherit;font-size:18px;min-height:26px;outline-offset:3px}
-    .bbmp-help {font-size:11px!important;line-height:1.6!important;color:var(--bbmp-muted)!important;margin-top:8px!important}
-    .bbmp-result {display:flex;flex-direction:column;gap:6px;margin-top:16px;padding:14px;border:1px solid rgba(69,174,138,.28);border-radius:14px;color:var(--bbmp-green);background:rgba(69,174,138,.06);font-size:12px}
-    .bbmp-result strong {font-size:28px;font-weight:800;line-height:1.2}
-    .bbmp-result small {font-size:10px;line-height:1.5;color:var(--bbmp-muted)}
-    .bbmp-negative {color:var(--overdue,#ef8295);border-color:rgba(220,90,100,.3);background:rgba(220,90,100,.05)}
-    .bbmp-goal+.bbmp-goal {border-top:1px solid var(--bbmp-line);margin-top:18px;padding-top:18px}
-    .bbmp-goal-heading {display:flex;justify-content:space-between;gap:12px;font-size:12px;line-height:1.5}
-    .bbmp-goal-heading>span {color:var(--bbmp-muted);white-space:nowrap}
-    .bbmp-goal progress {display:block;appearance:none;width:100%;height:8px;margin:12px 0;border:0;border-radius:8px;overflow:hidden;background:var(--bbmp-line);accent-color:var(--bbmp-purple)}
-    .bbmp-goal progress::-webkit-progress-bar {background:var(--bbmp-line);border-radius:8px}
-    .bbmp-goal progress::-webkit-progress-value {background:linear-gradient(90deg,#8956d8,#df7bb4);border-radius:8px}
-    .bbmp-goal small {font-size:11px;color:var(--bbmp-muted);line-height:1.4}
-    .bbmp-example {display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-bottom:1px solid var(--bbmp-line)}
-    .bbmp-example:last-child {border:0;padding-bottom:0}
-    .bbmp-example>div {min-width:0;flex:1}
-    .bbmp-example strong {display:block;font-size:12px;line-height:1.5;overflow-wrap:anywhere}
-    .bbmp-example small {display:block;margin-top:4px;font-size:11px;line-height:1.55;color:var(--bbmp-muted)}
-    .bbmp-dot {width:8px;height:8px;margin-top:6px;border-radius:50%;flex:0 0 8px;background:currentColor}
-    .bbmp-example-value {font-size:10px;line-height:1.5;color:var(--bbmp-muted);max-width:90px;text-align:right}
-    .bbmp-callout {padding:12px;border-radius:12px;border:1px solid var(--bbmp-line);background:rgba(153,87,235,.06);font-size:12px;line-height:1.6;color:var(--bbmp-muted);margin-bottom:14px}
-    .bbmp-panel .bbmp-callout:last-child {margin-bottom:0}
-    .bbmp-history {height:130px;display:flex;gap:18px;align-items:flex-end;padding:8px 10px 0}
-    .bbmp-history>div {height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:8px}
-    .bbmp-history i {display:block;width:100%;max-width:60px;height:var(--level);background:linear-gradient(0deg,#7652b2,#ba7bde);border-radius:8px 8px 3px 3px}
-    .bbmp-history span {font-size:10px;color:var(--bbmp-muted)}
-    .bbmp-empty {text-align:center;padding:18px 14px;border:1px dashed var(--bbmp-line);border-radius:18px;color:var(--bbmp-muted)}
-    .bbmp-empty>svg {color:var(--bbmp-purple);margin-bottom:12px}
-    .bbmp-empty small {font-size:11px;line-height:1.6;display:block}
-    .bbmp-outline {width:100%;display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:10px 14px;border:1px solid var(--bbmp-purple);border-radius:999px;background:transparent;color:var(--bbmp-purple);font:inherit;font-size:12px;font-weight:750;cursor:pointer}
-    .bbmp-row:focus-visible,.bbmp-bank:focus-visible,.bbmp-dialog button:focus-visible {outline:2px solid var(--bbmp-purple);outline-offset:-4px}
-    @media(max-width:360px) {.bbmp-row{gap:9px;padding-left:12px;padding-right:12px}.bbmp-row-title{font-size:13px}.bbmp-row-sub{font-size:11px}.bbmp-icon{width:38px;height:38px;flex-basis:38px}.bbmp-tag{font-size:8px;padding:3px}.bbmp-intro{flex-wrap:wrap}.bbmp-intro h1{font-size:21px}.bbmp-dialog h2{font-size:16px}}
-    @media(prefers-reduced-motion:reduce) {.bbmp-page{animation:none!important}}
-  `;
-  function ensureStyle() {
-    if(document.getElementById(STYLE_ID))return;
-    const style=document.createElement('style');
-    style.id=STYLE_ID;style.textContent=CSS;document.head.appendChild(style);
-  }
-  function redrawIfMore() {
-    if(typeof currentRoute!=='undefined' && currentRoute==='more' && typeof render==='function')render();
-  }
-  function uninstall() {
-    if(!active)return;
-    close();active=false;
-    document.removeEventListener('click',onClick);
-    document.removeEventListener('DOMContentLoaded',start);
-    ['billbeacon:signed-out','billbeacon-signed-out'].forEach(name=>window.removeEventListener(name,close));
-    if(renderMore===previewRenderMore)renderMore=savedRenderMore;
-    redrawIfMore();
-    document.getElementById(STYLE_ID)?.remove();
-    delete window.BillBeaconMorePreview;
-  }
-  function start(){if(!active)return;ensureStyle();redrawIfMore();}
-  renderMore=previewRenderMore;
-  document.addEventListener('click',onClick);
-  ['billbeacon:signed-out','billbeacon-signed-out'].forEach(name=>window.addEventListener(name,close));
-  window.BillBeaconMorePreview=Object.freeze({version:'1.0.0',sampleData:true,open,close,uninstall});
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});
-  else start();
+ }
+ function close(){const d=document.getElementById(DIALOG);if(d?.open)d.close();d?.remove();opened=null;openedScope=null;}
+ function updateScenario(){
+  const output=document.getElementById('bbml-result');if(!output)return;const s=snapshot();if(!s.ok||s.scope!==openedScope){close();return;}const f=forecast(s);if(f.error){output.textContent=f.error;return;}
+  const raw=document.getElementById('bbml-extra')?.value??'',amount=num(raw),cycle=document.getElementById('bbml-cycle')?.value==='second'?'second':'first';
+  if(amount===null||amount<0||amount>1000000000||Math.abs(amount*100-Math.round(amount*100))>0.00001){output.textContent='Enter a nonnegative amount with up to two decimal places.';return;}
+  const income=cycle==='first'?f.first:f.second;const scheduled=Number(f.plan[cycle].scheduled);const result=(Math.round(income*100)-Math.round(scheduled*100)-Math.round(amount*100))/100;
+  output.classList.toggle('bbml-negative',result<0);output.innerHTML=`<span>${result<0?'Modeled shortfall':'Modeled income less assigned bills'}</span><strong>${esc(money(result,s))}</strong><small>${esc(money(income,s))} expected income − ${esc(money(scheduled,s))} scheduled bills − ${esc(money(amount,s))} hypothetical expense. Not a spendable balance.</small>`;
+ }
+ function refreshDialog(){const d=document.getElementById(DIALOG);if(!d||!opened)return;const s=snapshot();if(!s.ok||s.scope!==openedScope){close();redraw();return;}const body=d.querySelector('.bbml-dialog-body');body.innerHTML=`<p id="bbml-source" class="bbml-source">Current household snapshot · ${esc(new Date().toLocaleString())}</p>${content(opened,s)}`;if(opened==='forecast')updateScenario();}
+ function open(key){
+  if(!active||!TOOLS[key])return;const target=document.activeElement;close();const s=snapshot();opened=key;openedScope=s.scope||null;const t=TOOLS[key],d=document.createElement('dialog');d.id=DIALOG;d.className='bbml-dialog';d.setAttribute('aria-labelledby','bbml-dialog-title');
+  d.innerHTML=`<header class="bbml-dialog-header"><div class="bbml-dialog-heading"><span class="bbml-icon bbml-${t[3]}">${icon(t[2])}</span><div><span class="bbml-eyebrow">APP-DATA BETA</span><h2 id="bbml-dialog-title">${esc(t[0])}</h2></div></div><div class="bbml-dialog-actions"><button type="button" class="bbml-refresh" data-bbml-action="refresh">Refresh</button><button type="button" class="bbml-close" data-bbml-action="close" aria-label="Close tool">${icon('close')}</button></div></header><div class="bbml-dialog-body"><p id="bbml-source" class="bbml-source">${s.ok?'Current household snapshot · '+esc(new Date().toLocaleString()):'Data unavailable'}</p>${content(key,s)}</div>`;
+  d.addEventListener('close',()=>{d.remove();if(!document.querySelector('#'+DIALOG+'[open]')){opened=null;openedScope=null;if(target?.isConnected)target.focus({preventScroll:true});}},{once:true});
+  d.addEventListener('click',e=>{if(e.target!==d)return;const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();});
+  d.addEventListener('input',e=>{if(['bbml-extra','bbml-cycle'].includes(e.target.id))updateScenario();});d.addEventListener('change',e=>{if(e.target.id==='bbml-cycle')updateScenario();});
+  document.body.append(d);if(key==='forecast')updateScenario();d.showModal();d.querySelector('.bbml-close').focus({preventScroll:true});
+ }
+ function onClick(e){
+  if(!(e.target instanceof Element))return;const b=e.target.closest('[data-bbml-action]');if(!b||b.closest('[data-bb-drag-preview],[data-bb-copy-id]')||!b.closest('.bbml-page,#'+DIALOG))return;const a=b.dataset.bbmlAction;
+  if(a==='close')return close();if(a==='refresh')return refreshDialog();if(a.startsWith('open:'))return open(a.slice(5));
+  if(a.startsWith('route:')){const r=a.slice(6);if(['today','transactions','activity','settings','bills'].includes(r)){close();navigate(r);}return;}
+  if(a.startsWith('bill:')){const s=snapshot();if(!s.ok)return;const id=a.slice(5);if(!s.bills.some(x=>x.id===id))return;close();navigate('detail',{id,returnRoute:'more'});}
+ }
+ function redraw(){if(!active||typeof currentRoute==='undefined'||currentRoute!=='more'||typeof render!=='function')return;const main=document.querySelector('#app .main-content'),y=main?.scrollTop||0,wy=window.scrollY;render();const next=document.querySelector('#app .main-content');if(next)next.scrollTop=y;window.scrollTo(0,wy);}
+ function changed(){if(!active)return;clearTimeout(timer);timer=setTimeout(()=>{if(document.getElementById(DIALOG)){const identity=scope();if(!identity.ok||identity.key!==openedScope)close();else{const label=document.getElementById('bbml-source');if(label)label.textContent='App data changed. Refresh to reload this view (what-if input recalculates from current data).';}}redraw();},80);}
+ function signedOut(){close();changed();}
+ const DATA_EVENTS=['billbeacon:data-changed','billbeacon-data-changed','billbeacon:household-ready','billbeacon-household-ready'];
+ const OUT_EVENTS=['billbeacon:signed-out','billbeacon-signed-out'];
+ const CSS=String.raw`
+ .bbml-page,.bbml-dialog{--ml-muted:var(--text-secondary,#b4b4c8);--ml-line:var(--border,#393447);--ml-panel:var(--surface,#22222e);--ml-purple:#c58bff;--ml-green:#7bdfbf;--ml-blue:#82d3f3;--ml-orange:#f4c08c;--ml-pink:#ed9bc8;color:var(--text,#f5f4fb)}
+ html[data-theme="light"] .bbml-page,html[data-theme="light"] .bbml-dialog{--ml-purple:#7542ad;--ml-green:#14795b;--ml-blue:#176b91;--ml-orange:#92521b;--ml-pink:#9a326b}
+ .bbml-page *,.bbml-dialog *{box-sizing:border-box}.bbml-nav{display:grid!important;grid-template-columns:44px 1fr 44px!important;align-items:center}.bbml-nav .nav-title{text-align:center}.bbml-content{max-width:680px;margin:auto;padding-top:16px;padding-bottom:calc(112px + env(safe-area-inset-bottom,0px))!important}.bbml-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.bbml-eyebrow{display:block;margin:0 0 7px;font-size:10px;letter-spacing:1.5px;font-weight:800;color:var(--ml-muted);line-height:1.4}.bbml-intro h1{font-size:22px;font-weight:800;line-height:1.25;letter-spacing:-.45px;margin:0;max-width:320px}.bbml-badge{flex-shrink:0;border:1px solid var(--ml-line);border-radius:999px;padding:5px 8px;color:var(--ml-muted);font-size:10px;line-height:1.4;font-weight:700}.bbml-intro-note,.bbml-footer{color:var(--ml-muted);font-size:12px;line-height:1.55;margin:10px 0 18px}.bbml-bank{width:100%;display:flex;align-items:center;gap:12px;padding:18px 16px;border:1px solid rgba(178,117,242,.35);border-radius:20px;color:inherit;background:radial-gradient(ellipse at top right,rgba(172,79,240,.13),transparent 65%),var(--ml-panel);font:inherit;text-align:left;cursor:pointer}.bbml-bank-link{display:flex;align-items:center;gap:4px;font-size:12px;font-weight:750;color:var(--ml-purple);white-space:nowrap}.bbml-section{margin-top:22px}.bbml-section>h2{margin:0 0 10px 2px;color:var(--ml-muted);font-size:12px;font-weight:750;letter-spacing:.6px;text-transform:uppercase;line-height:1.4}.bbml-group{border:1px solid var(--ml-line);border-radius:20px;overflow:hidden;background:var(--ml-panel)}.bbml-row{width:100%;display:flex;align-items:center;gap:12px;padding:16px 14px;min-height:84px;background:transparent;color:inherit;border:0;font:inherit;text-align:left;cursor:pointer}.bbml-row+.bbml-row{border-top:1px solid var(--ml-line)}.bbml-icon{width:43px;height:43px;flex:0 0 43px;display:grid;place-items:center;border-radius:14px}.bbml-purple{color:var(--ml-purple);background:rgba(153,87,235,.13)}.bbml-green{color:var(--ml-green);background:rgba(69,174,138,.12)}.bbml-blue{color:var(--ml-blue);background:rgba(66,158,208,.12)}.bbml-orange{color:var(--ml-orange);background:rgba(220,143,62,.12)}.bbml-pink{color:var(--ml-pink);background:rgba(211,89,157,.12)}.bbml-row-copy{display:block;flex:1;min-width:0}.bbml-row-title{display:block;font-size:14px;font-weight:750;line-height:1.35}.bbml-row-sub{display:block;margin-top:4px;font-size:12px;line-height:1.45;color:var(--ml-muted)}.bbml-tag{font-size:9px;line-height:1.3;color:var(--ml-muted);border:1px solid var(--ml-line);padding:4px 5px;border-radius:6px;flex-shrink:0}.bbml-chevron{display:flex;color:var(--ml-muted);flex-shrink:0}.bbml-footer{text-align:center;margin:22px 6px 0}
+ .bbml-dialog{position:fixed;inset:0;margin:auto;width:calc(100% - 24px);max-width:620px;max-height:calc(100dvh - 32px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px));padding:0;border:1px solid var(--ml-line);border-radius:24px;background:var(--bg,#15151e);font-family:inherit;overflow:hidden;box-shadow:0 20px 70px rgba(0,0,0,.35)}.bbml-dialog[open]{display:flex;flex-direction:column}.bbml-dialog::backdrop{background:rgba(0,0,0,.62)}.bbml-dialog-header{padding:18px 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--ml-line);flex:0 0 auto;background:var(--ml-panel)}.bbml-dialog-heading{display:flex;align-items:center;gap:10px;min-width:0}.bbml-dialog-heading>div{min-width:0}.bbml-dialog-header .bbml-eyebrow{font-size:9px;margin-bottom:3px}.bbml-dialog h2{font-size:18px;line-height:1.3;font-weight:800;letter-spacing:-.2px;margin:0;overflow-wrap:anywhere}.bbml-dialog-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}.bbml-close{display:grid;place-items:center;width:40px;height:44px;padding:0;border:1px solid var(--ml-line);border-radius:13px;background:transparent;color:var(--ml-muted);cursor:pointer}.bbml-refresh{min-height:44px;padding:5px 6px;border:0;background:transparent;color:var(--ml-purple);font:inherit;font-size:11px;cursor:pointer}.bbml-dialog-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;padding:16px 14px calc(22px + env(safe-area-inset-bottom,0px))}.bbml-source{font-size:10px;line-height:1.55;font-weight:700;color:var(--ml-purple);margin:0 0 16px}.bbml-metrics{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;margin-bottom:14px}.bbml-metric{display:flex;flex-direction:column;gap:6px;min-width:0;border:1px solid var(--ml-line);border-radius:16px;padding:14px 12px;background:var(--ml-panel)}.bbml-metric>span,.bbml-metric small{font-size:11px;color:var(--ml-muted);line-height:1.4}.bbml-metric strong{font-size:23px;line-height:1.2;letter-spacing:-.5px;font-weight:800;overflow-wrap:anywhere}.bbml-panel{padding:16px 13px;border:1px solid var(--ml-line);background:var(--ml-panel);border-radius:18px;margin-bottom:14px}.bbml-panel h3,.bbml-empty h3{font-size:14px;line-height:1.4;margin:0 0 12px;font-weight:750}.bbml-help,.bbml-empty p{font-size:11px;line-height:1.65;color:var(--ml-muted);margin:8px 0 12px}.bbml-detail{display:flex;justify-content:space-between;align-items:flex-start;gap:14px;padding:10px 0;border-bottom:1px solid var(--ml-line);font-size:12px;line-height:1.5}.bbml-detail:last-child{border:0;padding-bottom:0}.bbml-detail>div{min-width:0}.bbml-detail strong{font-weight:750;text-align:right;max-width:55%;overflow-wrap:anywhere}.bbml-detail small{display:block;font-size:11px;line-height:1.5;color:var(--ml-muted);margin-top:3px}.bbml-field-label{display:block;font-size:12px;line-height:1.5;font-weight:700;margin:12px 0 8px}.bbml-input{width:100%;min-width:0;min-height:46px;border:1px solid var(--ml-line);border-radius:12px;background:var(--bg,#15151e);color:inherit;font:inherit;padding:10px 12px}.bbml-result{display:flex;flex-direction:column;gap:6px;margin-top:16px;padding:14px;border:1px solid rgba(69,174,138,.28);border-radius:14px;color:var(--ml-green);background:rgba(69,174,138,.06);font-size:12px}.bbml-result strong{font-size:27px;font-weight:800;line-height:1.2;overflow-wrap:anywhere}.bbml-result small{font-size:10px;line-height:1.5;color:var(--ml-muted)}.bbml-negative{color:var(--overdue,#ef8295);border-color:rgba(220,90,100,.3);background:rgba(220,90,100,.05)}.bbml-item{display:flex;align-items:flex-start;gap:9px;padding:12px 0;border:0;border-bottom:1px solid var(--ml-line);width:100%;text-align:left;font:inherit;background:transparent;color:inherit}.bbml-item:last-child{border:0}.bbml-item[type=button]{cursor:pointer}.bbml-item-copy{min-width:0;flex:1}.bbml-item strong{display:block;font-size:12px;line-height:1.5;overflow-wrap:anywhere}.bbml-item small{display:block;margin-top:4px;font-size:11px;line-height:1.55;color:var(--ml-muted);overflow-wrap:anywhere}.bbml-dot{width:7px;height:7px;margin-top:6px;border-radius:50%;flex:0 0 7px;background:var(--ml-purple)}.bbml-value{font-size:11px;line-height:1.5;color:var(--ml-muted);max-width:35%;text-align:right;overflow-wrap:anywhere}.bbml-item>svg{flex:0 0 14px;color:var(--ml-muted);margin-top:3px}.bbml-callout{padding:12px;border-radius:12px;border:1px solid var(--ml-line);background:rgba(153,87,235,.06);font-size:12px;line-height:1.65;color:var(--ml-muted);margin-bottom:14px}.bbml-empty{text-align:center;padding:20px 14px;border:1px dashed var(--ml-line);border-radius:18px;color:var(--ml-muted);margin-bottom:14px}.bbml-empty>svg{color:var(--ml-purple);margin-bottom:12px}.bbml-outline{width:100%;display:flex;align-items:center;justify-content:center;gap:8px;min-height:46px;padding:10px 14px;border:1px solid var(--ml-purple);border-radius:999px;background:transparent;color:var(--ml-purple);font:inherit;font-size:12px;font-weight:750;cursor:pointer}.bbml-row:focus-visible,.bbml-bank:focus-visible,.bbml-dialog button:focus-visible{outline:2px solid var(--ml-purple);outline-offset:-4px}
+ @media(max-width:360px){.bbml-row{gap:8px;padding:16px 11px}.bbml-row-title{font-size:13px}.bbml-row-sub{font-size:11px}.bbml-icon{width:36px;height:39px;flex-basis:36px}.bbml-tag{font-size:8px;padding:3px}.bbml-intro{flex-wrap:wrap}.bbml-intro h1{font-size:21px}.bbml-dialog h2{font-size:15px}.bbml-dialog-header{padding:14px 10px;gap:6px}.bbml-dialog-heading{gap:7px}.bbml-dialog .bbml-icon{display:none}.bbml-metric strong{font-size:20px}}
+ @media(prefers-reduced-motion:reduce){.bbml-page{animation:none!important}}
+ `;
+ function init(){if(!active)return;if(!document.getElementById(STYLE)){const style=document.createElement('style');style.id=STYLE;style.textContent=CSS;document.head.append(style);}redraw();}
+ function uninstall(){if(!active)return;close();active=false;clearTimeout(timer);document.removeEventListener('click',onClick);document.removeEventListener('DOMContentLoaded',init);DATA_EVENTS.forEach(x=>window.removeEventListener(x,changed));OUT_EVENTS.forEach(x=>window.removeEventListener(x,signedOut));window.removeEventListener('storage',changed);if(renderMore===main)renderMore=originalMore;document.getElementById(STYLE)?.remove();delete window.BillBeaconMoreLive;delete window.BillBeaconMorePreview;if(typeof currentRoute!=='undefined'&&currentRoute==='more'&&typeof render==='function')render();}
+ renderMore=main;document.addEventListener('click',onClick);DATA_EVENTS.forEach(x=>window.addEventListener(x,changed));OUT_EVENTS.forEach(x=>window.addEventListener(x,signedOut));window.addEventListener('storage',changed);
+ const api=Object.freeze({version:'2.0.0-data-beta',readOnly:true,open,close,refresh:refreshDialog,uninstall});window.BillBeaconMoreLive=api;window.BillBeaconMorePreview=api;
+ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
