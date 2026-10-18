@@ -1,4 +1,14 @@
-/* Bill Beacon More tools — app-data beta v2. */
+/* Bill Beacon More tools — app-data beta v2.
+REPLACE the old more-tools-preview.js with this file. Load once LAST:
+<script src="js/more-tools-preview.js?v=2"></script>
+Reads existing Store records and app calculation helpers. No new record schema,
+network requests, storage writes, permission requests or automatic corrections.
+Goals, card debt terms and documents remain unconfigured when unsupported.
+Figures are current-device household snapshots, not bank-balance guarantees.
+Remove the script and reload to restore More; uninstall() also restores it.
+Validation: syntax check plus 39 Chromium fixture checks passed. These checks
+use controlled records and adapter functions, not your deployed production app.
+*/
 (() => {
  'use strict';
  if(window.BillBeaconMoreLive)return;
@@ -128,18 +138,7 @@
    case 'monthly':return monthlyHTML(s);
    case 'connections':return connectionsHTML(s);
    case 'goals':return empty('No savings-goal records yet','The current app does not provide a verified goals or sinking-fund data source. Income is not a savings balance, so no goal amounts or progress are invented.')+panel('Already available',detail('Saved income sources',String(s.income.length))+help('Use Forecast & What-If for the income sources and paycheck assignments already in the app. Goal creation and saved contributions need a separate implementation.'))+routeButton('Open income settings','settings');
-   case 'cards': {
-  // Manual credit-card accounts (front-end only).
-  // The actual content is rendered by BBManualCards in more-credit-cards-popup.js.
-  return panel(
-    'Credit Cards',
-    '<div id="bbml-cards-root" class="bbml-cards-root"></div>' +
-    help(
-      'Manually tracked card accounts. No bank connection required. ' +
-      'Bills categorized as Credit Cards still remain available from the Bills screen.'
-    )
-  );
-}
+   case 'cards':{const bills=regular(s).filter(b=>b.category==='creditcards');return note('These are card-payment bills, not credit-card account balances. Their amounts must not be treated as debt, statement balances or minimum payments unless you entered them that way.')+(bills.length?panel('Saved card-payment bills',bills.map(b=>billItem(b,s,`${b.recurrence||'No recurrence'} · stored due date ${fmtDate(b.dueDate)}`)).join('')):empty('No credit-card payment bills','Bills categorized as Credit Cards will appear here.'))+panel('Not stored yet',help('Card balances, APRs, promotional expiry dates, annual-fee dates and balance history have no verified data model in this version. Payoff scenarios are not calculated.'))+routeButton('Open Bills','bills');}
    case 'documents':{const notes=regular(s).filter(b=>String(b.notes||'').trim());return empty('Document attachments are not enabled','No statement, receipt or cancellation files are read, uploaded or invented. Secure attachment storage needs a separate implementation.')+(notes.length?panel('Bills with existing notes',notes.slice(0,30).map(b=>item(b.name||'Bill',String(b.notes).slice(0,240)+(String(b.notes).length>240?'…':''),'','bill:'+b.id)).join('')):help('No saved notes on active regular bills.'))+routeButton('Open Bills','bills');}
    default:return empty('Unavailable','This tool is not available.');
   }
@@ -161,17 +160,6 @@
   d.addEventListener('input',e=>{if(['bbml-extra','bbml-cycle'].includes(e.target.id))updateScenario();});d.addEventListener('change',e=>{if(e.target.id==='bbml-cycle')updateScenario();});
   document.body.append(d);if(key==='forecast')updateScenario();d.showModal();d.querySelector('.bbml-close').focus({preventScroll:true});
  }
-   // NEW: hook up the manual credit-card UI
-  if (
-    key === 'cards' &&
-    window.BBManualCards &&
-    typeof window.BBManualCards.renderCreditCardList === 'function'
-  ) {
-    const root = d.querySelector('#bbml-cards-root');
-    if (root) {
-      window.BBManualCards.renderCreditCardList(root);
-    }
-  }
  function onClick(e){
   if(!(e.target instanceof Element))return;const b=e.target.closest('[data-bbml-action]');if(!b||b.closest('[data-bb-drag-preview],[data-bb-copy-id]')||!b.closest('.bbml-page,#'+DIALOG))return;const a=b.dataset.bbmlAction;
   if(a==='close')return close();if(a==='refresh')return refreshDialog();if(a.startsWith('open:'))return open(a.slice(5));
