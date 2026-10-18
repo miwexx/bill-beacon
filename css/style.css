@@ -6282,3 +6282,80 @@ max-height: max(160px, calc(50dvh - 88px));
   height: 7px !important;
   margin-top: 10px !important;
 }
+/* Calendar filters — match Bill Beacon's branded pills */
+.bb-calendar-preview-page .bb-cal-filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* Unselected filters */
+.bb-calendar-preview-page .bb-cal-filters button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+
+  border: 1.5px solid
+    var(--bb-brand-border-strong, var(--border));
+  border-radius: 999px;
+
+  background: var(--surface);
+  color: var(--text-muted);
+
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Selected filter — branded gradient outline */
+.bb-calendar-preview-page
+  .bb-cal-filters button[aria-pressed="true"] {
+  border-color: transparent;
+
+  background:
+    linear-gradient(
+      var(--surface),
+      var(--surface)
+    ) padding-box,
+    var(
+      --bb-brand-gradient,
+      linear-gradient(
+        105deg,
+        #8f36ff 0%,
+        #c44cff 34%,
+        #f64cae 65%,
+        #ff7138 100%
+      )
+    ) border-box;
+
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+
+  color: var(--text);
+  font-weight: 800;
+
+  box-shadow: var(
+    --bb-brand-shadow,
+    0 3px 12px rgba(143, 54, 255, 0.10)
+  );
+}
+
+/* Clear keyboard focus */
+.bb-calendar-preview-page .bb-cal-filters button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
