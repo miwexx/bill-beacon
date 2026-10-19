@@ -83,13 +83,57 @@
   function body(state, html, title = "Credit Cards") {
     if (!alive(state)) return;
 
-    state.dialog.querySelector(
+    const dialog = state.dialog;
+    const swipe = window.BillBeaconMorePopupSwipe;
+
+    state.swipeScreens ||= new Map();
+
+    const cardKey = state.view === "list"
+      ? ""
+      : state.cardId || "";
+
+    const nextKey = `${state.view}:${cardKey}`;
+
+    // Capture the outgoing screen before replacing its contents.
+    if (
+      state.renderedScreenKey &&
+      state.renderedScreenKey !== nextKey &&
+      typeof swipe?.snapshot === "function"
+    ) {
+      const previous = swipe.snapshot(dialog);
+
+      if (previous) {
+        state.swipeScreens.set(
+          state.renderedScreenKey,
+          previous
+        );
+      }
+    }
+
+    dialog.querySelector(
       "#bbml-dialog-title"
     ).textContent = title;
 
-    state.dialog.querySelector(
+    dialog.querySelector(
       ".bbml-dialog-body"
     ).innerHTML = html;
+
+    state.renderedScreenKey = nextKey;
+    dialog.dataset.mccView = state.view;
+
+    dialog.bbSwipeBackPreview = () => {
+      if (!alive(state)) return null;
+
+      const parentKey = state.view === "details"
+        ? `overview:${state.cardId}`
+        : state.view === "overview" || state.view === "form"
+          ? "list:"
+          : null;
+
+      return parentKey
+        ? state.swipeScreens.get(parentKey) || null
+        : null;
+    };
   }
 
   const button = (label, action, id = "") => `
@@ -1275,6 +1319,52 @@
       };
 
       screen = state;
+
+      dialog.classList.add("bbml-manual-cards");
+
+      if (!document.getElementById("mcc-popup-size-style")) {
+        const style = document.createElement("style");
+        style.id = "mcc-popup-size-style";
+
+        style.textContent = `
+          dialog.bbml-dialog.bbml-manual-cards[open] {
+            box-sizing: border-box !important;
+            display: flex !important;
+            flex-direction: column !important;
+
+            height: calc(100vh - 24px) !important;
+            height: calc(
+              100dvh - 24px -
+              env(safe-area-inset-top, 0px) -
+              env(safe-area-inset-bottom, 0px)
+            ) !important;
+
+            max-height: calc(100vh - 24px) !important;
+            max-height: calc(
+              100dvh - 24px -
+              env(safe-area-inset-top, 0px) -
+              env(safe-area-inset-bottom, 0px)
+            ) !important;
+
+            margin: auto !important;
+            overflow: hidden !important;
+          }
+
+          dialog.bbml-manual-cards .bbml-dialog-header {
+            flex: 0 0 auto !important;
+          }
+
+          dialog.bbml-manual-cards .bbml-dialog-body {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+            overscroll-behavior-y: contain;
+            -webkit-overflow-scrolling: touch;
+          }
+        `;
+
+        document.head.appendChild(style);
+      }
 
       dialog.addEventListener("billbeacon:popup-back", event => {
         if (screen !== state || !alive(state)) return;

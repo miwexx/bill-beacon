@@ -22,10 +22,21 @@
   copy.style.setProperty('-webkit-text-size-adjust','100%','important');
   return computed;
  }
- function snapshot(){
-  const app=document.getElementById('app');if(!app)return null;
+ function snapshot(source = document.getElementById('app')){
+  const app=source;if(!app)return null;
   const rect=app.getBoundingClientRect();if(!rect.width||!rect.height)return null;
   const copy=app.cloneNode(true),originals=[app,...app.querySelectorAll('*')],copies=[copy,...copy.querySelectorAll('*')],scrolls=[];
+
+  // Preserve the popup's appearance after its copied ID is removed.
+  const rootStyle = getComputedStyle(app);
+
+  for (const property of rootStyle) {
+    copy.style.setProperty(
+      property,
+      rootStyle.getPropertyValue(property),
+      'important'
+    );
+  }
   for(let i=0;i<copies.length;i++){
    const n=copies[i],o=originals[i];
    // Read styles while the ORIGINAL remains in its normal app context.
@@ -58,7 +69,15 @@
   }
   function reset(){clearTimeout(timer);timer=null;gesture=null;settling=false;restore();}
   function buildStage(){
-   const snap=snapshot();if(!snap)return false;
+   const nestedCardScreen =
+     dialog.dataset.mccView &&
+     dialog.dataset.mccView !== 'list';
+
+   const snap = nestedCardScreen
+     ? dialog.bbSwipeBackPreview?.() || snapshot(dialog)
+     : snapshot();
+
+   if (!snap) return false;
    const r=dialog.getBoundingClientRect(),style=getComputedStyle(dialog);
    const front=document.createElement('div'),back=document.createElement('div'),dim=document.createElement('div');
    front.className='bb-more-swipe-stage-front';back.className='bb-more-swipe-stage-back';dim.className='bb-more-swipe-stage-dim';
@@ -180,6 +199,10 @@
  function interrupt(){for(const c of contexts.values())c.reset();}
  function init(){if(!active)return;const style=document.createElement('style');style.id=STYLE;style.textContent=CSS;document.head.append(style);scan();observer=new MutationObserver(scan);observer.observe(document.body,{childList:true,subtree:true});}
  function uninstall(){if(!active)return;active=false;observer?.disconnect();for(const d of [...contexts.keys()])detach(d);document.getElementById(STYLE)?.remove();document.removeEventListener('DOMContentLoaded',init);document.removeEventListener('visibilitychange',interrupt);window.removeEventListener('resize',interrupt);delete window.BillBeaconMorePopupSwipe;}
- document.addEventListener('visibilitychange',interrupt);window.addEventListener('resize',interrupt);window.BillBeaconMorePopupSwipe=Object.freeze({version:'3.0.0',uninstall});
+ document.addEventListener('visibilitychange',interrupt);window.addEventListener('resize',interrupt);window.BillBeaconMorePopupSwipe=Object.freeze({
+  version:'3.0.0',
+  uninstall,
+  snapshot
+});
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
