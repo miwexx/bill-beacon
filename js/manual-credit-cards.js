@@ -731,15 +731,7 @@
             String(estimate.months)
           )}
 
-          ${row(
-            "Estimated future interest",
-            money(estimate.interestCents, card.currency)
-          )}
-
-          ${row(
-            "Estimated remaining total to pay",
-            money(estimate.totalCents, card.currency)
-          )}
+          
         </section>
       `;
     } else {
@@ -843,12 +835,7 @@
             money(card.openingBalanceCents, card.currency)
           )}
 
-          ${row("Starting balance date", card.balanceAsOf)}
-
-          ${row(
-            "Recorded payments since starting balance",
-            money(totals.paymentsCents, card.currency)
-          )}
+  
 
           ${row(
             "Purchase APR",
@@ -856,7 +843,7 @@
           )}
 
           ${row(
-            "First-month estimated interest",
+            "Estimated interest per payment",
             money(
               Math.round(
                 debtCents * card.aprBasisPoints / 120000
@@ -866,16 +853,9 @@
           )}
 
           ${row(
-            "Planned monthly payment",
-            money(card.plannedPaymentCents, card.currency)
-          )}
-
-          ${row(
             "Current minimum",
             money(card.minimumPaymentCents, card.currency)
           )}
-
-          ${row("Next planned payment date", card.nextDueDate)}
 
           ${
             debtCents > 0 &&
@@ -974,13 +954,6 @@
           ${row("Card", "•••• " + card.last4)}
 
           ${row(
-            "Starting balance",
-            money(card.openingBalanceCents, card.currency)
-          )}
-
-          ${row("Balance as of", card.balanceAsOf)}
-
-          ${row(
             "Purchase APR",
             (card.aprBasisPoints / 100).toFixed(2) + "%"
           )}
@@ -990,10 +963,6 @@
             money(card.minimumPaymentCents, card.currency)
           )}
 
-          ${row(
-            "Planned monthly payment",
-            money(card.plannedPaymentCents, card.currency)
-          )}
 
           ${row("Next payment due", card.nextDueDate)}
 
