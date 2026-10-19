@@ -138,21 +138,22 @@ use controlled records and adapter functions, not your deployed production app.
    case 'monthly':return monthlyHTML(s);
    case 'connections':return connectionsHTML(s);
    case 'goals':return empty('No savings-goal records yet','The current app does not provide a verified goals or sinking-fund data source. Income is not a savings balance, so no goal amounts or progress are invented.')+panel('Already available',detail('Saved income sources',String(s.income.length))+help('Use Forecast & What-If for the income sources and paycheck assignments already in the app. Goal creation and saved contributions need a separate implementation.'))+routeButton('Open income settings','settings');
-   case 'cards': {
+      case 'cards': {
      const bills = regular(s).filter(
        b => b.category === 'creditcards'
      );
 
      return (
        bills.length
-         ? panel(
-             'Credit',
-             bills.map(b => billItem(
-               b,
-               s,
-               `${b.recurrence || 'No recurrence'} · stored due date ${fmtDate(b.dueDate)}`
-             )).join('')
-           )
+         ? `
+             <section class="bbml-panel">
+               ${bills.map(b => billItem(
+                 b,
+                 s,
+                 `${b.recurrence || 'No recurrence'} · Stored Due Date ${fmtDate(b.dueDate)}`
+               )).join('')}
+             </section>
+           `
          : empty(
              'No credit-card payment bills',
              'Bills categorized as Credit Cards will appear here.'
