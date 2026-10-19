@@ -124,11 +124,14 @@
     dialog.bbSwipeBackPreview = () => {
       if (!alive(state)) return null;
 
-      const parentKey = state.view === "details"
-        ? `overview:${state.cardId}`
-        : state.view === "overview" || state.view === "form"
-          ? "list:"
-          : null;
+      const parentKey =
+        state.view === "details" ||
+        state.view === "purchase"
+          ? `overview:${state.cardId}`
+          : state.view === "overview" ||
+            state.view === "form"
+              ? "list:"
+              : null;
 
       return parentKey
         ? state.swipeScreens.get(parentKey) || null
@@ -346,8 +349,329 @@
 
     return target;
   }
+    function cardTotals(card) {
+    const totals = {
+      balanceCents: card.openingBalanceCents,
+      paymentsCents: 0,
+      excluded: 0
+    };
 
-  function showOverview(state, id) {
+    if (!Number.isSafeInteger(totals.balanceCents)) {
+      throw new Error("The starting balance is invalid.");
+    }
+
+    for (const entry of card.transactions || []) {
+      if (entry.voided) continue;
+
+      if (
+        !validDate(entry.date) ||
+        !Number.isSafeInteger(entry.amountCents) ||
+        ![
+          "purchase", "payment", "refund",
+          "interest", "fee", "adjustment"
+        ].includes(entry.type)
+      ) {
+        throw new Error("A saved transaction needs review.");
+      }
+
+      // The starting balance already covers earlier activity.
+      // Future-dated entries do not affect today's balance.
+      if (
+        entry.date < card.balanceAsOf ||
+        entry.date > today()
+      ) {
+        totals.excluded++;
+        continue;
+      }
+
+      const decreasesBalance =
+        entry.type === "payment" ||
+        entry.type === "refund";
+
+      totals.balanceCents += decreasesBalance
+        ? -entry.amountCents
+        : entry.amountCents;
+
+      if (entry.type === "payment") {
+        totals.paymentsCents += entry.amountCents;
+      }
+
+      if (
+        !Number.isSafeInteger(totals.balanceCents) ||
+        !Number.isSafeInteger(totals.paymentsCents)
+      ) {
+        throw new Error("Transaction totals are too large.");
+      }
+    }
+
+    return totals;
+  }
+
+  function addPurchase(state, id) {
+    const card = state.cards.get(id);
+
+    if (!alive(state) || !card || card.archived) return;
+
+    if (writing) {
+      message(state, "A save is still finishing.");
+      return;
+    }
+
+    state.view = "purchase";
+    state.cardId = id;
+    state.serial++;
+
+    body(
+      state,
+      `
+        <p class="bbml-source">
+          ${escape(card.bank)} •••• ${escape(card.last4)}
+        </p>
+
+        <form id="mcc-purchase-form" autocomplete="off">
+          ${field(
+            "Purchase amount",
+            "purchaseAmount",
+            "number",
+            "",
+            'min="0.01" max="10000000000" step="0.01" ' +
+            'inputmode="decimal" required'
+          )}
+
+          ${field(
+            "Purchase date",
+            "purchaseDate",
+            "date",
+            today(),
+            `min="${escape(card.balanceAsOf)}" ` +
+            `max="${today()}" required`
+          )}
+
+          ${field(
+            "Merchant / description — optional",
+            "purchaseDescription",
+            "text",
+            "",
+            'maxlength="500"'
+          )}
+
+          ${note(
+            "Only add purchases that are not already included " +
+            "in your starting balance. The same applies to " +
+            "purchases made on the starting-balance date."
+          )}
+
+          <p id="mcc-message"
+             class="bbml-help"
+             role="status"></p>
+
+          <button type="submit"
+                  class="bbml-outline"
+                  id="mcc-purchase-save">
+            Save Purchase
+          </button>
+
+          <div style="margin-top:12px">
+            ${button("Cancel", "cancel-purchase", id)}
+          </div>
+        </form>
+      `,
+      "Add Purchase"
+    );
+
+    const form = state.dialog.querySelector(
+      "#mcc-purchase-form"
+    );
+
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+
+      if (
+        writing ||
+        !alive(state) ||
+        !form.reportValidity()
+      ) {
+        return;
+      }
+
+      const save = form.querySelector(
+        "#mcc-purchase-save"
+      );
+
+      let attempted = false;
+
+      try {
+        const values = new FormData(form);
+
+        const amountCents = hundredths(
+          values.get("purchaseAmount"),
+          "Purchase amount"
+        );
+
+        const date = String(
+          values.get("purchaseDate") || ""
+        );
+
+        const description = String(
+          values.get("purchaseDescription") || ""
+        ).trim();
+
+        if (amountCents <= 0) {
+          throw new Error("Enter an amount greater than zero.");
+        }
+
+        if (
+          !validDate(date) ||
+          date < card.balanceAsOf ||
+          date > today()
+        ) {
+          throw new Error(
+            "Use a date from the starting-balance date through today."
+          );
+        }
+
+        if (description.length > 500) {
+          throw new Error(
+            "Keep the description within 500 characters."
+          );
+        }
+
+        if (navigator.onLine === false) {
+          throw new Error("Connect before saving a purchase.");
+        }
+
+        writing = true;
+        save.disabled = true;
+        save.textContent = "Saving…";
+
+        const F = await sdk();
+
+        assertSession(state);
+
+        if (
+          state.view !== "purchase" ||
+          !form.isConnected
+        ) {
+          throw new Error("Purchase form closed. Reopen it.");
+        }
+
+        const reference = F.doc(
+          F.collection(
+            state.db,
+            COLLECTION,
+            id,
+            "transactions"
+          )
+        );
+
+        attempted = true;
+
+        await F.setDoc(reference, {
+          type: "purchase",
+          amountCents,
+          date,
+          description,
+          voided: false,
+          voidedAt: null,
+          createdAt: F.serverTimestamp(),
+          updatedAt: F.serverTimestamp()
+        });
+
+        if (alive(state)) {
+          await loadCards(state, id);
+        }
+      } catch (error) {
+        console.error("Manual-card purchase failed:", error);
+
+        message(
+          state,
+          (
+            attempted
+              ? "Save may or may not have completed. " +
+                "Cancel and refresh the card before adding it again. "
+              : ""
+          ) + error.message
+        );
+      } finally {
+        writing = false;
+
+        if (save.isConnected) {
+          save.disabled = attempted;
+          save.textContent = attempted
+            ? "Refresh card to check save"
+            : "Save Purchase";
+        }
+      }
+    });
+  }
+
+  async function reversePurchase(state, entryId) {
+    if (writing || !alive(state)) return;
+
+    const id = state.cardId;
+    const card = state.cards.get(id);
+
+    const entry = card?.transactions?.find(
+      item => item.id === entryId
+    );
+
+    if (
+      !entry ||
+      entry.type !== "purchase" ||
+      entry.voided
+    ) {
+      return;
+    }
+
+    if (!confirm(
+      `Reverse this ${money(entry.amountCents, card.currency)} ` +
+      "purchase? It will remain in history but stop affecting the balance."
+    )) {
+      return;
+    }
+
+    writing = true;
+
+    try {
+      if (navigator.onLine === false) {
+        throw new Error("Connect before reversing a purchase.");
+      }
+
+      const F = await sdk();
+
+      assertSession(state);
+
+      await F.updateDoc(
+        F.doc(
+          state.db,
+          COLLECTION,
+          id,
+          "transactions",
+          entryId
+        ),
+        {
+          voided: true,
+          voidedAt: F.serverTimestamp(),
+          updatedAt: F.serverTimestamp()
+        }
+      );
+
+      if (alive(state)) {
+        await loadCards(state, id);
+      }
+    } catch (error) {
+      console.error("Purchase reversal failed:", error);
+
+      message(
+        state,
+        "Reversal was not confirmed. Refresh before retrying. " +
+        error.message
+      );
+    } finally {
+      writing = false;
+    }
+  }
+    function showOverview(state, id) {
     const card = state.cards.get(id);
 
     if (!card || !alive(state)) return;
@@ -356,110 +680,86 @@
     state.cardId = id;
     state.serial++;
 
-    const estimate = estimateCardPayoff(card);
+    let totals;
 
-    let payoffContent = "";
+    try {
+      totals = cardTotals(card);
+    } catch (error) {
+      body(
+        state,
+        note(error.message) +
+        button("Reload Cards", "list")
+      );
+      return;
+    }
+
+    const debtCents = Math.max(0, totals.balanceCents);
+
+    // Supply the current tracked debt to the existing calculator.
+    // This does NOT change the saved starting balance.
+    const estimate = estimateCardPayoff({
+      ...card,
+      openingBalanceCents: debtCents
+    });
+
+    let payoffContent;
 
     if (estimate.status === "estimated") {
       const usableDate =
         validDate(card.nextDueDate) &&
-        validDate(card.balanceAsOf) &&
-        card.nextDueDate >= card.balanceAsOf &&
-        card.nextDueDate >= today();
+        card.nextDueDate >= today() &&
+        card.nextDueDate >= card.balanceAsOf;
 
-      let payoffDate = "Check next due date";
-
-      if (usableDate) {
-        payoffDate = payoffMonthDate(
-          card.nextDueDate,
-          estimate.months - 1
-        ).toLocaleDateString(undefined, {
-          month: "long",
-          year: "numeric"
-        });
-      }
-
-      const years = Math.floor(
-        estimate.months / 12
-      );
-
-      const months = estimate.months % 12;
-
-      const duration = [
-        years
-          ? `${years} year${years === 1 ? "" : "s"}`
-          : "",
-        months
-          ? `${months} month${months === 1 ? "" : "s"}`
-          : ""
-      ].filter(Boolean).join(" ");
+      const payoffDate = usableDate
+        ? payoffMonthDate(
+            card.nextDueDate,
+            estimate.months - 1
+          ).toLocaleDateString(undefined, {
+            month: "long",
+            year: "numeric"
+          })
+        : "Check next payment date";
 
       payoffContent = `
         <section class="bbml-panel">
-          <h3>Your payoff estimate</h3>
+          <h3>Updated payoff estimate</h3>
 
           ${row("Estimated payoff", payoffDate)}
 
           ${row(
-            "Estimated time",
-            duration
-          )}
-
-          ${row(
-            "Monthly payments",
+            "Estimated payments remaining",
             String(estimate.months)
           )}
 
           ${row(
-            "Estimated interest",
-            money(
-              estimate.interestCents,
-              card.currency
-            )
+            "Estimated future interest",
+            money(estimate.interestCents, card.currency)
           )}
 
           ${row(
-            "Estimated total paid",
-            money(
-              estimate.totalCents,
-              card.currency
-            )
+            "Estimated remaining total to pay",
+            money(estimate.totalCents, card.currency)
           )}
-
-          ${
-            usableDate
-              ? ""
-              : note(
-                  "A payoff date needs a valid upcoming payment " +
-                  "date that is not earlier than the balance date."
-                )
-          }
         </section>
       `;
     } else {
       const explanations = {
-        zero:
-          "The starting balance you entered is zero. " +
-          "There is no balance to project from.",
+        zero: totals.balanceCents < 0
+          ? "The tracked account has a credit balance."
+          : "The tracked balance is zero.",
         "payment-needed":
-          "Enter a planned monthly payment to calculate " +
-          "a payoff estimate.",
+          "A planned monthly payment is needed for a payoff estimate.",
         "too-low":
-          "The planned payment does not exceed the first " +
-          "month’s estimated interest, so this model " +
-          "does not produce a payoff date.",
+          "The planned payment does not exceed the first month's estimated interest.",
         "long-term":
-          "This plan exceeds the calculator’s " +
-          "100-year limit. No payoff date is shown.",
+          "This repayment plan exceeds the calculator's 100-year limit.",
         invalid:
-          "The saved balance, APR or planned payment " +
-          "could not be used for a payoff estimate."
+          "The saved balance, APR or planned payment needs review."
       };
 
       payoffContent = `
         <section class="bbml-panel">
           <h3>Payoff estimate</h3>
-
           ${note(
             explanations[estimate.status] ||
             "Estimate unavailable."
@@ -468,72 +768,87 @@
       `;
     }
 
-    const belowMinimum =
-      card.openingBalanceCents > 0 &&
-      card.plannedPaymentCents <
-        card.minimumPaymentCents;
+    const purchases = (card.transactions || [])
+      .filter(entry => entry.type === "purchase")
+      .sort((a, b) =>
+        b.date.localeCompare(a.date) ||
+        (b.createdAt?.seconds || 0) -
+        (a.createdAt?.seconds || 0) ||
+        a.id.localeCompare(b.id)
+      );
+
+    const history = purchases.map(entry => `
+      <section class="bbml-panel">
+        ${row(
+          entry.voided ? "Reversed purchase" : "Purchase",
+          money(entry.amountCents, card.currency)
+        )}
+
+        ${row("Date", entry.date)}
+
+        ${note(entry.description || "No description")}
+
+        ${
+          entry.voided
+            ? note("Preserved in history; excluded from balance.")
+            : button(
+                "Reverse Purchase",
+                "reverse-purchase",
+                entry.id
+              )
+        }
+      </section>
+    `).join("");
 
     body(
       state,
       `
         <p class="bbml-source">
-          Private · manually tracked
+          Private · manually tracked · not bank-connected
         </p>
 
         <section class="bbml-panel">
-          <h3>
-            ${escape(
-              card.nickname || card.bank
-            )}
-          </h3>
+          <h3>${escape(card.nickname || card.bank)}</h3>
 
-          <p class="bbml-help">
-            ${escape(card.bank)}
-            •••• ${escape(card.last4)}
-          </p>
+          ${note(
+            card.bank + " •••• " + card.last4
+          )}
 
-          <div
-            style="
-              padding:12px 0 18px;
-              border-bottom:1px solid var(--border);
-            "
-          >
-            <div
-              style="
-                color:var(--text-secondary);
-                font-size:12px;
-              "
-            >
-              Balance entered
-            </div>
+          <div style="
+            padding:12px 0 18px;
+            border-bottom:1px solid var(--border);
+          ">
+            <div class="bbml-help">Tracked balance</div>
 
-            <div
-              style="
-                margin-top:6px;
-                font-size:32px;
-                line-height:1.2;
-                font-weight:800;
-                overflow-wrap:anywhere;
-              "
-            >
+            <div style="
+              margin-top:6px;
+              font-size:32px;
+              line-height:1.2;
+              font-weight:800;
+              overflow-wrap:anywhere;
+            ">
               ${escape(
-                money(
-                  card.openingBalanceCents,
-                  card.currency
-                )
+                money(totals.balanceCents, card.currency)
               )}
             </div>
 
-            <div
-              style="
-                margin-top:6px;
-                color:var(--text-secondary);
-                font-size:12px;
-              "
-            >
-              As of ${escape(card.balanceAsOf)}
-            </div>
+            ${note(
+              "Starting balance plus recorded activity through " +
+              today() + ". This is not a verified issuer balance."
+            )}
           </div>
+
+          ${row(
+            "Original starting balance",
+            money(card.openingBalanceCents, card.currency)
+          )}
+
+          ${row("Starting balance date", card.balanceAsOf)}
+
+          ${row(
+            "Recorded payments since starting balance",
+            money(totals.paymentsCents, card.currency)
+          )}
 
           ${row(
             "Purchase APR",
@@ -544,85 +859,88 @@
             "First-month estimated interest",
             money(
               Math.round(
-                card.openingBalanceCents *
-                card.aprBasisPoints /
-                120000
+                debtCents * card.aprBasisPoints / 120000
               ),
               card.currency
             )
           )}
 
           ${row(
-            "Your monthly payment",
-            money(
-              card.plannedPaymentCents,
-              card.currency
-            )
+            "Planned monthly payment",
+            money(card.plannedPaymentCents, card.currency)
           )}
 
           ${row(
             "Current minimum",
-            money(
-              card.minimumPaymentCents,
-              card.currency
-            )
+            money(card.minimumPaymentCents, card.currency)
           )}
 
-          ${row(
-            "Next payment due",
-            card.nextDueDate
-          )}
+          ${row("Next planned payment date", card.nextDueDate)}
 
           ${
-            belowMinimum
+            debtCents > 0 &&
+            card.plannedPaymentCents < card.minimumPaymentCents
               ? note(
-                  "Your planned payment is below " +
-                  "the minimum payment you entered."
+                  "Your planned payment is below the minimum entered."
+                )
+              : ""
+          }
+
+          ${
+            totals.excluded
+              ? note(
+                  totals.excluded +
+                  " active transaction(s) fall before the starting " +
+                  "balance date or after today and are excluded."
                 )
               : ""
           }
         </section>
 
-        ${payoffContent}
+        ${button("Add Purchase", "add-purchase", id)}
 
-        ${button(
-          "Card Details",
-          "card-information",
-          id
-        )}
+        <div style="margin-top:16px">
+          ${payoffContent}
+        </div>
+
+        ${button("Card Details", "card-information", id)}
 
         <div style="margin-top:12px">
-          ${button(
-            "Back to My Cards",
-            "list"
-          )}
+          ${button("Back to My Cards", "list")}
         </div>
+
+        <details style="margin-top:18px">
+          <summary>Purchase history (${purchases.length})</summary>
+          ${history || note("No purchases recorded yet.")}
+        </details>
 
         <details style="margin-top:18px">
           <summary>How this estimate works</summary>
 
           ${note(
-            "This estimate starts with your saved starting " +
-            "balance and assumes the same APR and payment " +
-            "each month, with no new purchases, fees or refunds. " +
-            "Interest is approximated as APR divided by 12, " +
-            "rounded to cents before each payment. " +
-            "The first payment is assigned to your saved " +
-            "next due date. It is not an issuer payoff quote."
+            "The estimate starts from the transaction-adjusted " +
+            "tracked balance. It assumes the same APR and planned " +
+            "payment each month, with no further purchases, fees " +
+            "or refunds. Monthly interest is approximated as " +
+            "APR divided by 12 and rounded to cents."
           )}
 
           ${note(
-            "Purchase and payment tracking has not been " +
-            "added yet. Until then, this screen does not " +
-            "automatically update the balance as time passes."
+            "Projected interest is not posted to the transaction " +
+            "history or automatically added to the tracked balance. " +
+            "Actual interest and fees must be recorded separately. " +
+            "The projection's first payment uses the saved next " +
+            "payment date. This is not an issuer payoff quote."
+          )}
+
+          ${note(
+            "Automatic bill-payment linking is not enabled yet."
           )}
         </details>
 
-        <p
-          id="mcc-message"
-          role="status"
-          class="bbml-help"
-        ></p>
+        <p id="mcc-message"
+           role="status"
+           class="bbml-help"></p>
       `,
       card.bank + " •••• " + card.last4
     );
@@ -696,10 +1014,11 @@
         </section>
 
         ${note(
-          "This step saves the starting information only. " +
-          "Purchase/payment entry, a running balance, payoff estimates, " +
-          "editing and sharing are the next steps. " +
-          "It does not create or update a bill."
+          "These are your saved starting details. " +
+          "Open the Overview for the transaction-adjusted balance, " +
+          "purchase entry and payoff estimate. " +
+          "Automatic bill linking, card editing and sharing controls " +
+          "are not enabled yet."
         )}
 
         ${button("Back to My Cards", "list")}
@@ -759,12 +1078,41 @@
         return;
       }
 
-      state.cards = new Map(
-        result.docs.map(doc => [
-          doc.id,
-          doc.data()
-        ])
-      );
+      const loadedCards = [];
+
+      for (const cardDoc of result.docs) {
+        assertSession(state);
+
+        if (serial !== state.serial) return;
+
+        const card = cardDoc.data();
+
+        const entries = await F.getDocsFromServer(
+          F.collection(
+            state.db,
+            COLLECTION,
+            cardDoc.id,
+            "transactions"
+          )
+        );
+
+        assertSession(state);
+
+        if (serial !== state.serial) return;
+
+        loadedCards.push([
+          cardDoc.id,
+          {
+            ...card,
+            transactions: entries.docs.map(entryDoc => ({
+              ...entryDoc.data(),
+              id: entryDoc.id
+            }))
+          }
+        ]);
+      }
+
+      state.cards = new Map(loadedCards);
 
       if (
         selectedId &&
@@ -800,15 +1148,15 @@
             </small>
 
             <small>
-              Starting balance as of
-              ${escape(card.balanceAsOf)}
+              Tracked balance through
+              ${escape(today())}
             </small>
           </span>
 
           <span class="bbml-value">
             ${escape(
               money(
-                card.openingBalanceCents,
+                cardTotals(card).balanceCents,
                 card.currency
               )
             )}
@@ -1368,7 +1716,20 @@
 
       dialog.addEventListener("billbeacon:popup-back", event => {
         if (screen !== state || !alive(state)) return;
+                if (state.view === "purchase") {
+          event.preventDefault();
 
+          if (writing) {
+            message(state, "Wait for the purchase save to finish.");
+            return;
+          }
+
+          if (confirm("Discard this unsaved purchase form?")) {
+            showOverview(state, state.cardId);
+          }
+
+          return;
+        }
         if (state.view === "details") {
           event.preventDefault();
           showOverview(state, state.cardId);
@@ -1455,14 +1816,17 @@
       event.stopImmediatePropagation();
 
       if (
-        state.view === "form" &&
+        ["form", "purchase"].includes(state.view) &&
         !confirm(
           "Discard this unsaved card form and reload cards?"
         )
       ) {
         return;
       }
-
+      if (writing) {
+        message(state, "Wait for the current save to finish.");
+        return;
+      }
       void loadCards(
         state,
         ["overview", "details"].includes(state.view)
@@ -1495,6 +1859,17 @@
       showDetails(state, id);
     } else if (action === "overview") {
       showOverview(state, id);
+    } else if (action === "add-purchase") {
+      addPurchase(state, id);
+    } else if (action === "cancel-purchase") {
+      if (
+        !writing &&
+        confirm("Discard this unsaved purchase form?")
+      ) {
+        showOverview(state, id);
+      }
+    } else if (action === "reverse-purchase") {
+      void reversePurchase(state, id);
     } else if (action === "archive") {
       void archiveCard(state, id);
     }
