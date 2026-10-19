@@ -720,19 +720,13 @@
           })
         : "Check next payment date";
 
-      payoffContent = `
-        <section class="bbml-panel">
-          <h3>Updated payoff estimate</h3>
+            payoffContent = `
+        ${row("Estimated payoff", payoffDate)}
 
-          ${row("Estimated payoff", payoffDate)}
-
-          ${row(
-            "Estimated payments remaining",
-            String(estimate.months)
-          )}
-
-          
-        </section>
+        ${row(
+          "Estimated payments remaining",
+          String(estimate.months)
+        )}
       `;
     } else {
       const explanations = {
@@ -749,15 +743,10 @@
           "The saved balance, APR or planned payment needs review."
       };
 
-      payoffContent = `
-        <section class="bbml-panel">
-          <h3>Payoff estimate</h3>
-          ${note(
-            explanations[estimate.status] ||
-            "Estimate unavailable."
-          )}
-        </section>
-      `;
+      payoffContent = note(
+        explanations[estimate.status] ||
+        "Estimate unavailable."
+      );
     }
 
     const purchases = (card.transactions || [])
@@ -875,15 +864,24 @@
                 )
               : ""
           }
+          <div style="
+            margin-top:12px;
+            padding-top:12px;
+            border-top:1px solid var(--border);
+          ">
+            ${payoffContent}
+          </div>
         </section>
 
-        ${button("Add Purchase", "add-purchase", id)}
-
-        <div style="margin-top:16px">
-          ${payoffContent}
+        <div style="
+          display:grid;
+          grid-template-columns:minmax(0, 1fr);
+          gap:10px;
+          margin-top:12px;
+        ">
+          ${button("Add Purchase", "add-purchase", id)}
+          ${button("Card Details", "card-information", id)}
         </div>
-
-        ${button("Card Details", "card-information", id)}
 
         <div style="margin-top:12px">
           ${button("Back to My Cards", "list")}
