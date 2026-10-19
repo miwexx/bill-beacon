@@ -78,17 +78,72 @@
    snap.restore();for(const [n,t,l]of scrolls){n.scrollTop=t;n.scrollLeft=l;}
    return true;
   }
-  function finish(complete){
-   if(settling)return;settling=true;const dx=gesture?.dx||0;gesture=null;suppressClick=dx>0;
-   const duration=reduced()?0:complete?180:150;
-   const end=()=>{
-    timer=null;
-    if(complete&&visible(dialog)){const api=dialog.id==='bbml-dialog'?window.BillBeaconMoreLive:window.BillBeaconMorePreview;if(typeof api?.close==='function')api.close();else{dialog.close();dialog.remove();}}
-    restore();settling=false;setTimeout(()=>{suppressClick=false;},0);
-   };
-   if(!stage||!duration){end();return;}
-   stage.front.style.setProperty('transition',`transform ${duration}ms ease-out`,'important');stage.front.style.setProperty('transform',`translate3d(${complete?window.innerWidth:0}px,0,0)`,'important');
-   stage.dim.style.transition=`opacity ${duration}ms ease-out`;stage.dim.style.opacity=complete?'0':'1';timer=setTimeout(end,duration+25);
+  function finish(complete) {
+    if (settling) return;
+
+    settling = true;
+
+    const dx = gesture?.dx || 0;
+    gesture = null;
+    suppressClick = dx > 0;
+
+    const duration = reduced() ? 0 : complete ? 180 : 150;
+
+    const end = () => {
+      timer = null;
+
+      // Restore the real popup before another screen renders.
+      restore();
+
+      if (complete && visible(dialog)) {
+        const back = new CustomEvent("billbeacon:popup-back", {
+          cancelable: true
+        });
+
+        const useDefaultClose = dialog.dispatchEvent(back);
+
+        if (useDefaultClose && visible(dialog)) {
+          const api = dialog.id === "bbml-dialog"
+            ? window.BillBeaconMoreLive
+            : window.BillBeaconMorePreview;
+
+          if (typeof api?.close === "function") {
+            api.close();
+          } else {
+            dialog.close();
+            dialog.remove();
+          }
+        }
+      }
+
+      settling = false;
+
+      setTimeout(() => {
+        suppressClick = false;
+      }, 0);
+    };
+
+    if (!stage || !duration) {
+      end();
+      return;
+    }
+
+    stage.front.style.setProperty(
+      "transition",
+      `transform ${duration}ms ease-out`,
+      "important"
+    );
+
+    stage.front.style.setProperty(
+      "transform",
+      `translate3d(${complete ? window.innerWidth : 0}px,0,0)`,
+      "important"
+    );
+
+    stage.dim.style.transition = `opacity ${duration}ms ease-out`;
+    stage.dim.style.opacity = complete ? "0" : "1";
+
+    timer = setTimeout(end, duration + 25);
   }
   const findTouch=(e,id)=>[...e.touches,...e.changedTouches].find(t=>t.identifier===id);
   function start(e){

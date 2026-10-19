@@ -492,6 +492,23 @@
           </div>
 
           ${row(
+            "Purchase APR",
+            (card.aprBasisPoints / 100).toFixed(2) + "%"
+          )}
+
+          ${row(
+            "First-month estimated interest",
+            money(
+              Math.round(
+                card.openingBalanceCents *
+                card.aprBasisPoints /
+                120000
+              ),
+              card.currency
+            )
+          )}
+
+          ${row(
             "Your monthly payment",
             money(
               card.plannedPaymentCents,
@@ -1258,6 +1275,32 @@
       };
 
       screen = state;
+
+      dialog.addEventListener("billbeacon:popup-back", event => {
+        if (screen !== state || !alive(state)) return;
+
+        if (state.view === "details") {
+          event.preventDefault();
+          showOverview(state, state.cardId);
+          return;
+        }
+
+        if (state.view === "overview") {
+          event.preventDefault();
+          void loadCards(state);
+          return;
+        }
+
+        if (state.view === "form") {
+          event.preventDefault();
+
+          if (confirm("Discard this unsaved card form?")) {
+            void loadCards(state);
+          }
+        }
+
+        // On My Cards, allow the existing close-to-More behavior.
+      });
 
       const eyebrow = dialog.querySelector(
         ".bbml-dialog-header .bbml-eyebrow"
