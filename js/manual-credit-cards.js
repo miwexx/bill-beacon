@@ -1088,8 +1088,19 @@
         return showOverview(state, selectedId);
       }
 
+            const sourceBills = creditCardSourceBills();
+
       const cards = [...state.cards]
-        .filter(([, card]) => !card.archived)
+        .filter(([, card]) =>
+          !card.archived &&
+          (
+            !card.sourceBill ||
+            (
+              card.sourceBill.householdId === state.householdId &&
+              sourceBills.has(card.sourceBill.billId)
+            )
+          )
+        )
         .sort((a, b) =>
           String(a[1].bank).localeCompare(
             String(b[1].bank)
@@ -1138,7 +1149,9 @@
             My Cards · private · no bank connection
           </p>
 
-          ${button("Add Manual Card", "new")}
+                    ${button("Add Manual Card", "new")}
+
+          ${billSetupRows(state)}
 
           <section
             class="bbml-panel"
@@ -1192,7 +1205,163 @@
       );
     }
   }
+  function creditCardSourceBills() {
+    const bills = Store.getBills();
 
+    if (!Array.isArray(bills)) {
+      throw new Error("The bill list could not be read.");
+    }
+
+    return new Map(
+      bills
+        .filter(bill =>
+          bill &&
+          typeof bill.id === "string" &&
+          bill.category === "creditcards" &&
+          !bill.archived &&
+          !bill.archivedAt &&
+          !bill.cancelled &&
+          !bill.cancelledAt &&
+          !bill.installmentPlanId &&
+          !bill.splitPaymentParentId
+        )
+        .map(bill => [bill.id, bill])
+    );
+  }
+
+  function billSetupRows(state) {
+    const linkedBillIds = new Set(
+      [...state.cards.values()]
+        .filter(card =>
+          card.sourceBill?.householdId === state.householdId
+        )
+        .map(card => card.sourceBill.billId)
+    );
+
+    const bills = [...creditCardSourceBills().values()]
+      .filter(bill => !linkedBillIds.has(bill.id))
+      .sort((a, b) =>
+        String(a.name).localeCompare(String(b.name))
+      );
+
+    if (!bills.length) return "";
+
+    return `
+      <section class="bbml-panel" style="margin-top:16px">
+        <h3>From your Bills</h3>
+
+        ${note(
+          "These are shared bill records, not completed card " +
+          "accounts. Finish setup only for cards belonging to " +
+          "the person currently signed in."
+        )}
+
+        ${bills.map(bill => `
+          <div style="
+            padding:14px 0;
+            border-bottom:1px solid var(--border);
+          ">
+            <div style="font-weight:750">
+              ${escape(bill.name || "Credit-card bill")}
+            </div>
+
+            ${note(
+              "Balance and APR not entered. " +
+              "The bill amount is a scheduled payment, not debt."
+            )}
+
+            ${button(
+              "Finish Account Setup",
+              "setup-bill",
+              bill.id
+            )}
+          </div>
+        `).join("")}
+      </section>
+    `;
+  }
+
+  function setupBillCard(state, billId) {
+    if (!alive(state) || writing) return;
+
+    const bill = creditCardSourceBills().get(billId);
+
+    if (!bill) {
+      message(state, "That credit-card bill is no longer active.");
+      return;
+    }
+
+    const alreadyLinked = [...state.cards.values()].some(card =>
+      card.sourceBill?.householdId === state.householdId &&
+      card.sourceBill?.billId === billId
+    );
+
+    if (alreadyLinked) {
+      message(state, "This bill already has a card account.");
+      return;
+    }
+
+    if (!confirm(
+      "This creates a private card owned by the currently " +
+      "signed-in person. Continue only if this is their card."
+    )) {
+      return;
+    }
+
+    newCard(state);
+
+    const form = state.dialog.querySelector("#mcc-form");
+
+    if (!form) return;
+
+    form.dataset.mccBillId = billId;
+    form.dataset.mccBillHouseholdId = state.householdId;
+
+    const set = (name, value) => {
+      const input = form.elements.namedItem(name);
+
+      if (input) input.value = value;
+    };
+
+    set("nickname", String(bill.name || "").slice(0, 80));
+
+    // A scheduled bill payment is not an account balance,
+    // a verified minimum payment, or an APR.
+    set("bank", "");
+    set("last4", "");
+    set("balance", "");
+    set("apr", "");
+    set("minimum", "");
+
+    const amount = Number(bill.amount);
+
+    set(
+      "planned",
+      Number.isFinite(amount) && amount >= 0
+        ? amount.toFixed(2)
+        : ""
+    );
+
+    let due = "";
+
+    try {
+      due = typeof financialDateKey === "function"
+        ? financialDateKey(bill.dueDate)
+        : String(bill.dueDate || "").slice(0, 10);
+    } catch {}
+
+    set("due", validDate(due) ? due : "");
+
+    const information = document.createElement("p");
+    information.className = "bbml-help";
+    information.textContent =
+      "Imported from Bills: " + String(bill.name || "Credit card") +
+      ". The scheduled amount was copied into planned payment. " +
+      "Enter the actual account balance, APR, minimum payment, " +
+      "issuer and last four digits before saving.";
+
+    form.prepend(information);
+  }
   function newCard(state) {
     if (!alive(state)) return;
 
@@ -1384,6 +1553,11 @@
       new FormData(form)
     );
 
+    const sourceBillId = form.dataset.mccBillId || null;
+
+    const sourceHouseholdId =
+      form.dataset.mccBillHouseholdId || null;
+
     let attempted = false;
     let saved = false;
 
@@ -1500,7 +1674,21 @@
         sharedWith: {},
         archived: false
       };
+            if (sourceBillId) {
+        if (
+          sourceHouseholdId !== state.householdId ||
+          !creditCardSourceBills().has(sourceBillId)
+        ) {
+          throw new Error(
+            "The source bill or household changed. Reopen setup."
+          );
+        }
 
+        card.sourceBill = {
+          householdId: sourceHouseholdId,
+          billId: sourceBillId
+        };
+      }
       writing = true;
 
       save.disabled = true;
@@ -1516,17 +1704,82 @@
 
       assertSession(state);
 
-      const reference = F.doc(
-        F.collection(state.db, COLLECTION)
-      );
+      let reference;
 
-      attempted = true;
+      if (sourceBillId) {
+        const identity = JSON.stringify([
+          state.uid,
+          sourceHouseholdId,
+          sourceBillId
+        ]);
 
-      await F.setDoc(reference, {
+        const digest = await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(identity)
+        );
+
+        assertSession(state);
+
+        const stableId = "bill_" + [...new Uint8Array(digest)]
+          .map(value => value.toString(16).padStart(2, "0"))
+          .join("");
+
+        reference = F.doc(state.db, COLLECTION, stableId);
+      } else {
+        reference = F.doc(
+          F.collection(state.db, COLLECTION)
+        );
+      }
+
+      const savedCard = {
         ...card,
         createdAt: F.serverTimestamp(),
         updatedAt: F.serverTimestamp()
-      });
+      };
+
+      attempted = true;
+
+      if (sourceBillId) {
+        await F.runTransaction(state.db, async transaction => {
+          assertSession(state);
+
+          const household = await transaction.get(
+            F.doc(
+              state.db,
+              "households",
+              sourceHouseholdId
+            )
+          );
+
+          assertSession(state);
+
+          const source = household.exists()
+            ? household.data().bills?.find(
+                bill => bill.id === sourceBillId
+              )
+            : null;
+
+          if (
+            !source ||
+            source.category !== "creditcards" ||
+            source.archived ||
+            source.archivedAt ||
+            source.cancelled ||
+            source.cancelledAt ||
+            source.splitPaymentParentId ||
+            source.installmentPlanId
+          ) {
+            throw new Error(
+              "The source bill is not active on the server. " +
+              "Finish household sync and reopen setup."
+            );
+          }
+
+          transaction.set(reference, savedCard);
+        });
+      } else {
+        await F.setDoc(reference, savedCard);
+      }
 
       saved = true;
 
@@ -1818,8 +2071,10 @@
 
     if (action === "list") {
       void loadCards(state);
-    } else if (action === "new") {
+        } else if (action === "new") {
       newCard(state);
+    } else if (action === "setup-bill") {
+      setupBillCard(state, id);
     } else if (action === "details") {
       showOverview(state, id);
     } else if (action === "card-information") {
