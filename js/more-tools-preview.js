@@ -138,27 +138,65 @@ use controlled records and adapter functions, not your deployed production app.
    case 'monthly':return monthlyHTML(s);
    case 'connections':return connectionsHTML(s);
    case 'goals':return empty('No savings-goal records yet','The current app does not provide a verified goals or sinking-fund data source. Income is not a savings balance, so no goal amounts or progress are invented.')+panel('Already available',detail('Saved income sources',String(s.income.length))+help('Use Forecast & What-If for the income sources and paycheck assignments already in the app. Goal creation and saved contributions need a separate implementation.'))+routeButton('Open income settings','settings');
-      case 'cards': {
+         case 'cards': {
      const bills = regular(s).filter(
        b => b.category === 'creditcards'
      );
 
-     return (
-       bills.length
-         ? `
-             <section class="bbml-panel">
-               ${bills.map(b => billItem(
-                 b,
-                 s,
-                 `${b.recurrence || 'No recurrence'} · Stored Due Date ${fmtDate(b.dueDate)}`
-               )).join('')}
-             </section>
-           `
-         : empty(
-             'No credit-card payment bills',
-             'Bills categorized as Credit Cards will appear here.'
-           )
-     ) + routeButton('Open Bills', 'bills');
+     const monthlyAmounts = bills
+       .map(normalizedMonthly)
+       .filter(value => value !== null);
+
+     const partial = monthlyAmounts.length < bills.length;
+
+     const monthlyEquivalent = bills.length === 0
+       ? 0
+       : monthlyAmounts.length
+         ? total(monthlyAmounts)
+         : null;
+
+     const summary = metrics(
+       metric(
+         'Credit cards',
+         String(bills.length),
+         'Active card-payment bills'
+       ),
+       metric(
+         'Monthly equivalent',
+         money(monthlyEquivalent, s),
+         bills.length === 0
+           ? 'No active card-payment bills'
+           : `${monthlyAmounts.length} of ${bills.length} schedules included` +
+             (partial ? ' · partial total' : '')
+       )
+     );
+
+     const list = bills.length
+       ? `
+           <section class="bbml-panel">
+             ${bills.map(b => item(
+               b.name || 'Credit-card bill',
+               `${b.recurrence || 'No recurrence'} · Stored due date ${fmtDate(b.dueDate)}`,
+               money(num(b.amount), s)
+             )).join('')}
+           </section>
+         `
+       : empty(
+           'No credit-card payment bills',
+           'Bills categorized as Credit Cards will appear here.'
+         );
+
+     return summary +
+       list +
+       (
+         partial
+           ? help(
+               'One-time or unsupported schedules are excluded ' +
+               'from the monthly equivalent.'
+             )
+           : ''
+       ) +
+       routeButton('Open Bills', 'bills');
    }
    case 'documents':{const notes=regular(s).filter(b=>String(b.notes||'').trim());return empty('Document attachments are not enabled','No statement, receipt or cancellation files are read, uploaded or invented. Secure attachment storage needs a separate implementation.')+(notes.length?panel('Bills with existing notes',notes.slice(0,30).map(b=>item(b.name||'Bill',String(b.notes).slice(0,240)+(String(b.notes).length>240?'…':''),'','bill:'+b.id)).join('')):help('No saved notes on active regular bills.'))+routeButton('Open Bills','bills');}
    default:return empty('Unavailable','This tool is not available.');
