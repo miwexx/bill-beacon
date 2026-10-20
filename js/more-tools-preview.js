@@ -92,11 +92,67 @@ use controlled records and adapter functions, not your deployed production app.
   }catch{}
   return result;
  }
- function subscriptionsHTML(s){
-  const bills=regular(s).filter(b=>b.category==='subscriptions');if(!bills.length)return empty('No subscription-category bills','Only bills already categorized as Subscriptions appear here. Other recurring bills are not automatically reclassified.')+routeButton('Open Bills','bills');
-  const amounts=bills.map(normalizedMonthly);const known=amounts.filter(n=>n!==null);const upcoming=nextDates(bills);const changes=[];
-  for(const b of bills){const hist=array(b.scheduleHistory).filter(v=>v?.snapshot);for(let i=hist.length-1;i>0;i--){const a=cents(hist[i-1].snapshot.amount),z=cents(hist[i].snapshot.amount);if(a!==null&&z!==null&&a!==z){changes.push(item(b.name||'Subscription',`Saved schedule change · ${fmtDate(hist[i].effectiveFrom||hist[i].capturedAt)}`,money(a/100,s)+' → '+money(z/100,s),'bill:'+b.id));break;}}}
-  return metrics(metric('Subscription bills',String(bills.length),'Explicit Subscriptions category'),metric('Monthly Equivalent',money(known.length?total(known):null,s),`${known.length} of ${bills.length} schedules normalized${known.length<bills.length?' · partial total':''}`))+help('Monthly Equivalent normalizes saved weekly, biweekly, monthly, quarterly and annual amounts. It is not a new charge or a cancellation/renewal guarantee.')+panel('Saved subscription schedules',bills.slice(0,50).map(b=>{const next=upcoming.get(b.id);return billItem(b,s,`${b.recurrence||'No recurrence'} · ${next?'Next displayed occurrence: '+fmtDate(next):'Next occurrence unavailable'}`);}).join(''))+(bills.length>50?help('Showing the first 50 subscription bills. Open Bills for the full list.'):'')+panel('Price changes recorded in schedule history',changes.length?changes.join(''):help('No amount changes were found in the saved subscription schedule histories. This is not a scan of merchant prices.'))+note('Trial-end dates, cancellation deadlines and future merchant price notices are not stored by this version. No reminder has been created.')+routeButton('Open Bills','bills');
+ function subscriptionsHTML(s) {
+   const bills = regular(s).filter(
+     b => b.category === 'subscriptions'
+   );
+
+   if (!bills.length) {
+     return empty(
+       'No subscription-category bills',
+       'Only bills already categorized as Subscriptions appear here. Other recurring bills are not automatically reclassified.'
+     ) + routeButton('Open Bills', 'bills');
+   }
+
+   const amounts = bills.map(normalizedMonthly);
+
+   const known = amounts.filter(
+     value => value !== null
+   );
+
+   const upcoming = nextDates(bills);
+
+   const summary = metrics(
+     metric(
+       'Subscription Bills',
+       String(bills.length),
+       'Explicit Subscriptions Category'
+     ),
+     metric(
+       'Monthly Equivalent',
+       money(known.length ? total(known) : null, s),
+       `${known.length} Of ${bills.length} Schedules Normalized` +
+       (known.length < bills.length ? ' · partial total' : '')
+     )
+   );
+
+   const list = panel(
+     'Saved Subscription Schedules',
+     bills.slice(0, 50).map(b => {
+       const next = upcoming.get(b.id);
+
+       return billItem(
+         b,
+         s,
+         `${b.recurrence || 'No recurrence'} · ${
+           next
+             ? 'Next displayed occurrence: ' + fmtDate(next)
+             : 'Next occurrence unavailable'
+         }`
+       );
+     }).join('')
+   );
+
+   const overflow = bills.length > 50
+     ? help(
+         'Showing the first 50 subscription bills. Open Bills for the full list.'
+       )
+     : '';
+
+   return summary +
+     list +
+     overflow +
+     routeButton('Open Bills', 'bills');
  }
  function reviewIssues(s){
   const issues=[],add=(title,sub,b)=>issues.push({title,sub,id:b?.id});const regularBills=regular(s),byId=new Map(s.bills.map(b=>[b.id,b])),names=new Map();
