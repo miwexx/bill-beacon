@@ -67,8 +67,8 @@ use controlled records and adapter functions, not your deployed production app.
  }
  const group=(title,body)=>`<section class="bbml-section"><h2>${esc(title)}</h2><div class="bbml-group">${body}</div></section>`;
  function main(){
-  const s=snapshot();const tool=k=>{const t=TOOLS[k];return row(t[0],t[1],t[2],t[3],'open:'+k,k==='goals'?'Preview':k==='documents'?'Notes':k==='cards'?'Bills':'Read-only');};
-  return `<div class="nav-bar"><div class="nav-bar-content bbml-nav"><span></span><div class="nav-title">More</div><span></span></div></div><div class="main-content fade-in bbml-page"><div class="content-pad bbml-content"><div class="bbml-intro"><div><p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p><h1>Plan ahead. Stay in control.</h1></div><span class="bbml-badge">App-data beta</span></div><p class="bbml-intro-note">${esc(s.ok?'Your current household records. Read-only tools; no automatic changes.':s.reason)}</p><button type="button" class="bbml-bank" data-bbml-action="route:transactions"><span class="bbml-icon bbml-purple">${icon('bank',24)}</span><span class="bbml-row-copy"><span class="bbml-row-title">Banking</span><span class="bbml-row-sub">Open your existing transactions</span></span><span class="bbml-bank-link">View ${icon('arrow',15)}</span></button>${group('Planning',tool('forecast')+tool('goals'))}${group('Manage',tool('subscriptions')+tool('cards')+tool('documents'))}${group('Review',tool('review')+tool('monthly')+row('Activity & Changes','Your existing bill and payment change history.','activity','orange','route:activity'))}${group('App',tool('connections')+row('Settings','Account, appearance, reminders and backups.','settings','purple','route:settings'))}<p class="bbml-footer">No sample records · projections are not available balances · ${esc(monthLabel())}</p></div></div>`;
+  const s=snapshot();const tool=k=>{const t=TOOLS[k];return row(t[0],t[1],t[2],t[3],'open:'+k,k==='goals'?'Shared':k==='documents'?'Notes':k==='cards'?'Bills':'Read-only');};
+  return `<div class="nav-bar"><div class="nav-bar-content bbml-nav"><span></span><div class="nav-title">More</div><span></span></div></div><div class="main-content fade-in bbml-page"><div class="content-pad bbml-content"><div class="bbml-intro"><div><p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p><h1>Plan ahead. Stay in control.</h1></div><span class="bbml-badge">App-data beta</span></div><p class="bbml-intro-note">${esc(s.ok?'Your household records and shared savings plans.':s.reason)}</p><button type="button" class="bbml-bank" data-bbml-action="route:transactions"><span class="bbml-icon bbml-purple">${icon('bank',24)}</span><span class="bbml-row-copy"><span class="bbml-row-title">Banking</span><span class="bbml-row-sub">Open your existing transactions</span></span><span class="bbml-bank-link">View ${icon('arrow',15)}</span></button>${group('Planning',tool('forecast')+tool('goals'))}${group('Manage',tool('subscriptions')+tool('cards')+tool('documents'))}${group('Review',tool('review')+tool('monthly')+row('Activity & Changes','Your existing bill and payment change history.','activity','orange','route:activity'))}${group('App',tool('connections')+row('Settings','Account, appearance, reminders and backups.','settings','purple','route:settings'))}<p class="bbml-footer">No sample records · projections are not available balances · ${esc(monthLabel())}</p></div></div>`;
  }
  function forecast(s){
   if(!s.income.length)return {error:'No income sources are saved. Add income in Settings before comparing income with bills.'};
@@ -185,14 +185,40 @@ use controlled records and adapter functions, not your deployed production app.
   const permission=typeof Notification==='undefined'?'Unsupported in this browser':Notification.permission;
   return note('Local status snapshot, not a new server check. “Not loaded” does not mean disconnected. “Ready” does not independently prove the latest changes reached the server.')+panel('Bank connection',detail('Loaded status',bankStatus)+detail('Loaded accounts',loaded?String(array(bank.accounts).length):'Not loaded')+detail('Reported last bank timestamp',bank?.lastSyncedAt?fmtDate(bank.lastSyncedAt)+' '+(date(bank.lastSyncedAt)?.toLocaleTimeString()||''):'Not available')+routeButton('Open Banking to verify or sync','transactions'))+panel('Household sync',detail('Current household context',identity.ok?'Ready for signed-in user':'Not ready')+detail('Sync state',syncText)+help('No sync operation or conflict resolution is run by this screen.'))+panel('Notifications',detail('Browser permission',permission)+detail('Server subscription registration','Not verified here')+help('Permission being granted does not prove the server has an active registration for this account. Verify from the existing Notifications settings.')+routeButton('Open Settings','settings'));
  }
-  let savingsPreview = null;
+  let savingsState = null;
 
- function svToday() {
-   const d = new Date();
+  function svToday() {
+   let zone = 'America/New_York';
 
-   return `${d.getFullYear()}-${
-     String(d.getMonth() + 1).padStart(2, '0')
-   }-${String(d.getDate()).padStart(2, '0')}`;
+   try {
+     zone = Store.getSettings().timeZone || zone;
+   } catch {}
+
+   let formatter;
+
+   try {
+     formatter = new Intl.DateTimeFormat('en-CA', {
+       timeZone: zone,
+       year: 'numeric',
+       month: '2-digit',
+       day: '2-digit'
+     });
+   } catch {
+     formatter = new Intl.DateTimeFormat('en-CA', {
+       timeZone: 'America/New_York',
+       year: 'numeric',
+       month: '2-digit',
+       day: '2-digit'
+     });
+   }
+
+   const parts = Object.fromEntries(
+     formatter.formatToParts(new Date())
+       .filter(part => part.type !== 'literal')
+       .map(part => [part.type, part.value])
+   );
+
+   return `${parts.year}-${parts.month}-${parts.day}`;
  }
 
  function svDate(key) {
@@ -268,26 +294,205 @@ use controlled records and adapter functions, not your deployed production app.
    return result;
  }
 
- function svState(s) {
-   const key = JSON.stringify([
-     s.scope,
-     s.settings.currency || 'USD'
-   ]);
-
-   if (!savingsPreview || savingsPreview.key !== key) {
-     savingsPreview = {
-       key,
-       funds: [],
-       entries: [],
-       form: null,
-       expanded: [],
-       message: ''
-     };
-   }
-
-   return savingsPreview;
+  function svDispose() {
+   const previous = savingsState;
+   savingsState = null;
+   previous?.stop?.();
  }
 
+ function svIsCurrent(m) {
+   const identity = scope();
+
+   return savingsState === m &&
+     identity.ok &&
+     identity.key === m.key;
+ }
+
+ function svPaint(m) {
+   if (
+     svIsCurrent(m) &&
+     opened === 'goals' &&
+     document.getElementById(DIALOG)?.open
+   ) {
+     refreshDialog();
+   }
+ }
+
+ function svNotice(m, message) {
+   m.message = message;
+
+   if (!svIsCurrent(m) || opened !== 'goals') {
+     return;
+   }
+
+   const target = document.getElementById(
+     'bbsv-cloud-message'
+   );
+
+   if (target) target.textContent = message;
+ }
+
+ function svApply(m, data) {
+   m.currency = data.currency;
+   m.revision = data.revision;
+   m.writeId = data.writeId;
+   m.funds = data.funds;
+   m.entries = data.entries;
+   m.ready = true;
+   m.error = '';
+ }
+
+ function svState(s) {
+   if (
+     savingsState &&
+     savingsState.key === s.scope
+   ) {
+     return savingsState;
+   }
+
+   svDispose();
+
+   const m = {
+     key: s.scope,
+     currency: s.settings.currency || 'USD',
+     funds: [],
+     entries: [],
+     form: null,
+     expanded: [],
+     message: '',
+     ready: false,
+     connected: false,
+     saving: false,
+     revision: 0,
+     writeId: null,
+     error: '',
+     pendingRemote: null,
+     conflict: false,
+     reloadRequired: false,
+     stop: null
+   };
+
+   savingsState = m;
+
+   const store = window.BillBeaconSavingsStore;
+
+   if (!store) {
+     m.error =
+       'Savings storage did not load. ' +
+       'Check the script order and reload.';
+
+     return m;
+   }
+
+   try {
+     m.stop = store.watch(
+       m.currency,
+
+       data => {
+         if (
+           !svIsCurrent(m) ||
+           m.reloadRequired
+         ) {
+           return;
+         }
+
+         if (m.saving) {
+           m.pendingRemote = data;
+           return;
+         }
+
+         if (
+           m.form &&
+           data.revision !== m.revision
+         ) {
+           m.pendingRemote = data;
+           m.conflict = true;
+
+           svNotice(
+             m,
+             'Shared savings changed on another device. ' +
+             'Your form has not been saved. Cancel it, ' +
+             'review the updated plan, and reopen the action.'
+           );
+
+           return;
+         }
+
+         svApply(m, data);
+
+         svNotice(
+           m,
+           'Shared with your household. ' +
+           'Changes save after server confirmation.'
+         );
+
+         svPaint(m);
+       },
+
+       error => {
+         if (!svIsCurrent(m)) return;
+
+         m.connected = false;
+         m.ready = false;
+         m.error =
+           error.message || 'Savings could not load.';
+
+         if (m.form) {
+           svNotice(
+             m,
+             m.error +
+             ' Cancel the form before reloading.'
+           );
+         } else {
+           svPaint(m);
+         }
+       },
+
+       connected => {
+         if (!svIsCurrent(m)) return;
+
+         m.connected = connected;
+
+         if (m.ready && !connected) {
+           svNotice(
+             m,
+             'Server connection unavailable. ' +
+             'Savings are read-only until reconnected.'
+           );
+         }
+       }
+     );
+   } catch (error) {
+     m.error = error.message;
+   }
+
+   return m;
+ }
+
+ function svSessionChanged() {
+   if (
+     savingsState &&
+     !svIsCurrent(savingsState)
+   ) {
+     svDispose();
+
+     if (opened === 'goals') close();
+   }
+ }
+
+ const savingsSessionEvents = [
+   'billbeacon:authenticated',
+   'billbeacon:household-ready',
+   'billbeacon:sync-status',
+   'billbeacon:signed-out'
+ ];
+
+ savingsSessionEvents.forEach(name => {
+   window.addEventListener(
+     name,
+     svSessionChanged
+   );
+ });
  function svBalance(m, f) {
    return f.opening + m.entries
      .filter(e => e.fund === f.id && !e.voided)
@@ -351,15 +556,27 @@ use controlled records and adapter functions, not your deployed production app.
  }
 
  function svCash(value, s) {
-   return value == null
-     ? 'N/A'
-     : money(value / 100, s);
+   if (value == null) return 'N/A';
+
+   const currency =
+     savingsState?.currency ||
+     s.settings.currency ||
+     'USD';
+
+   return money(value / 100, {
+     ...s,
+     settings: {
+       ...s.settings,
+       currency
+     }
+   });
  }
 
  function svButton(label, action, id = '', slot = '') {
    return `
      <button
        type="button"
+              ${savingsState?.saving ? 'disabled' : ''}
        class="bbml-outline"
        data-bbml-action="savings:${esc(action)}"
        data-sv-id="${esc(id)}"
@@ -474,7 +691,7 @@ use controlled records and adapter functions, not your deployed production app.
        (
          !f
            ? svInput(
-               'Already saved — preview amount',
+               'Already Saved',
                'opening',
                'number',
                '0',
@@ -577,8 +794,8 @@ use controlled records and adapter functions, not your deployed production app.
          'maxlength="200"'
        ) +
        help(
-         'Preview record only. This does not send money ' +
-         'or change a bank balance.'
+                  'This records money you have already moved. ' +
+         'It does not send money or change a bank balance.'
        );
    }
 
@@ -598,7 +815,7 @@ use controlled records and adapter functions, not your deployed production app.
        ></p>
 
        <div class="bbsv-actions">
-         ${svButton('Apply to preview', 'save')}
+         ${svButton('Save', 'save')}
          ${svButton('Cancel', 'cancel')}
        </div>
      </fieldset>
@@ -607,367 +824,25 @@ use controlled records and adapter functions, not your deployed production app.
 
  function savingsHTML(s) {
    const m = svState(s);
-   const today = svToday();
-   const month = today.slice(0, 7);
 
-   const plans = m.funds.flatMap(
-     f => svSchedule(m, f)
-   );
-
-   const upcoming = plans.slice().sort(
-     (a, b) => a.day.localeCompare(b.day)
-   );
-
-   const saved = m.funds.reduce(
-     (sum, f) => sum + svBalance(m, f),
-     0
-   );
-
-   const planned = plans
-     .filter(p => p.day.slice(0, 7) === month)
-     .reduce((sum, p) => sum + p.amount, 0);
-
-   const types = {
-     emergency: 'Emergency fund',
-     sinking: 'Sinking fund',
-     goal: 'Savings goal'
-   };
-
-   const cards = m.funds.map(f => {
-     const balance = svBalance(m, f);
-
-     const remaining = f.target
-       ? Math.max(0, f.target - balance)
-       : null;
-
-     const schedule = plans.filter(
-       p => p.fund === f.id
-     );
-
-     const next = schedule[0];
-
-     const slots = f.deadline
-       ? schedule.filter(p =>
-           p.day >= today &&
-           p.day <= f.deadline
-         ).length
-       : 0;
-
-     const suggested = remaining && slots
-       ? Math.ceil(remaining / slots)
-       : null;
-
-     const status = f.paused
-       ? 'Paused'
-       : f.target && !remaining
-         ? 'Target reached'
-         : f.deadline && f.deadline < today
-           ? 'Deadline passed'
-           : remaining && f.deadline && !slots
-             ? 'No transfer dates left'
-             : suggested && f.amount < suggested
-               ? 'Below target pace'
-               : suggested
-                 ? 'On track at the planned amount'
-                 : 'Saving at your own pace';
-
-     const history = m.entries
-       .filter(e => e.fund === f.id)
-       .slice()
-       .reverse();
-
-     return `
-       <details
-         class="bbml-panel bbsv-fund"
-         data-sv-fund="${esc(f.id)}"
-         ${m.expanded.includes(f.id) ? 'open' : ''}
-       >
-         <summary>
-           <span>
-             <strong>${esc(f.name)}</strong>
-             <small>
-               ${esc(types[f.type])} · ${esc(status)}
-             </small>
-           </span>
-
-           <span class="bbsv-summary-money">
-             ${esc(svCash(balance, s))}
-             <small>Details ▾</small>
-           </span>
-         </summary>
-
-         ${
-           f.target
-             ? `
-               <progress
-                 max="${f.target}"
-                 value="${Math.min(balance, f.target)}"
-                 aria-label="${esc(f.name)} progress"
-               ></progress>
-
-               <p class="bbml-help">
-                 ${esc(svCash(balance, s))}
-                 of ${esc(svCash(f.target, s))}
-               </p>
-             `
-             : ''
-         }
-
-         <div class="bbsv-fund-body">
-           ${detail('Recorded savings', svCash(balance, s))}
-           ${detail('Target', svCash(f.target, s))}
-           ${detail('Still needed', svCash(remaining, s))}
-           ${detail(
-             'Planned contribution',
-             svCash(f.amount, s)
-           )}
-
-           ${detail(
-             'Next transfer',
-             next
-               ? fmtDate(next.day) +
-                 (next.day < today ? ' · overdue' : '')
-               : 'None scheduled'
-           )}
-
-           ${detail(
-             'Goal deadline',
-             f.deadline
-               ? fmtDate(f.deadline)
-               : 'No deadline'
-           )}
-
-           ${
-             f.deadline && remaining
-               ? detail(
-                   'Suggested per remaining transfer',
-                   suggested
-                     ? svCash(suggested, s)
-                     : 'No future dates left'
-                 )
-               : ''
-           }
-
-           ${f.note ? help(f.note) : ''}
-
-           <div class="bbsv-actions">
-             ${svButton(
-               'Add contribution',
-               'contribute',
-               f.id
-             )}
-
-             ${svButton(
-               'Record withdrawal',
-               'withdraw',
-               f.id
-             )}
-
-             ${
-               m.funds.length > 1
-                 ? svButton(
-                     'Move to another fund',
-                     'move',
-                     f.id
-                   )
-                 : ''
-             }
-
-             ${svButton('Edit plan', 'edit', f.id)}
-
-             ${svButton(
-               f.paused
-                 ? 'Resume from today'
-                 : 'Pause plan',
-               'pause',
-               f.id
-             )}
-           </div>
-
-           ${
-             next
-               ? `
-                 <div class="bbsv-actions">
-                   ${svButton(
-                     'Record next transfer',
-                     'contribute',
-                     f.id,
-                     next.key
-                   )}
-
-                   ${svButton(
-                     'Skip next transfer',
-                     'skip',
-                     f.id,
-                     next.key
-                   )}
-
-                   ${svButton(
-                     'Reschedule next',
-                     'reschedule',
-                     f.id,
-                     next.key
-                   )}
-                 </div>
-               `
-               : ''
-           }
-
-           <details class="bbsv-history">
-             <summary>History (${history.length})</summary>
-
-             ${
-               history.length
-                 ? history.map(e => `
-                     <div class="bbml-detail">
-                       <div>
-                         <span>
-                           ${esc(e.kind)}
-                           ${e.voided ? ' · reversed' : ''}
-                         </span>
-
-                         <small>
-                           ${esc(fmtDate(e.date))}
-                           ${e.note ? ' · ' + esc(e.note) : ''}
-                         </small>
-                       </div>
-
-                       <strong>
-                         ${e.delta < 0 ? '−' : '+'}${
-                           esc(svCash(Math.abs(e.delta), s))
-                         }
-                       </strong>
-                     </div>
-
-                     ${
-                       !e.voided
-                         ? svButton(
-                             'Reverse record',
-                             'undo',
-                             e.id
-                           )
-                         : ''
-                     }
-                   `).join('')
-                 : help(
-                     'No contributions or withdrawals recorded.'
-                   )
-             }
-           </details>
-         </div>
-       </details>
-     `;
-   }).join('');
-
-   const dueList = upcoming.slice(0, 6).map(p => {
-     const f = m.funds.find(
-       item => item.id === p.fund
-     );
-
-     return `
-       <div class="bbsv-upcoming">
-         <div>
-           <strong>${esc(f.name)}</strong>
-
-           <small>
-             ${esc(fmtDate(p.day))}
-             ${
-               p.day < today
-                 ? ' · overdue'
-                 : p.day === today
-                   ? ' · today'
-                   : ''
-             }
-             · ${esc(svCash(p.amount, s))}
-           </small>
-         </div>
-
-         ${svButton(
-           'Record',
-           'contribute',
-           f.id,
-           p.key
-         )}
-       </div>
-     `;
-   }).join('');
-
-   return `
-     <div class="bbsv-root">
-       <p class="bbsv-preview">
-         INTERACTIVE PREVIEW · Not saved. Clears on reload,
-         sign-out, or household/currency change.
-         No money is moved.
-       </p>
-
-       ${metrics(
-         metric(
-           'Preview savings',
-           svCash(saved, s),
-           'Amounts entered in this preview'
-         ),
-         metric(
-           'Still planned this month',
-           svCash(planned, s),
-           'Unrecorded, unskipped contributions'
-         )
-       )}
-
-       <div class="bbsv-actions">
-         ${svButton('Create savings fund', 'new')}
-         ${svButton('Load demo example', 'demo')}
-       </div>
-
-       ${
-         m.message
-           ? `
-             <p role="status" class="bbml-help">
-               ${esc(m.message)}
-             </p>
-           `
-           : ''
-       }
-
-       ${svForm(m, s)}
-
-       ${
-         m.funds.length
-           ? cards
-           : empty(
-               'Start your savings plan',
-               'Create a fund or load the clearly labeled ' +
-               'demo example to explore the layout.'
-             )
-       }
-
-       ${
-         m.funds.length
-           ? panel(
-               'Upcoming transfers',
-               dueList ||
-               help('No outstanding transfers scheduled.')
+   if (!m.ready) {
+     return panel(
+       'Savings Plan',
+       help(
+         m.error ||
+         'Loading shared household savings…'
+       ) +
+       (
+         m.error
+           ? svButton(
+               'Reload Savings Plan',
+               'reload-savings'
              )
            : ''
-       }
-
-       <details>
-         <summary>Preview limitations</summary>
-
-         ${help(
-           'Due dates are in-app reminders only. Bank transfers, ' +
-           'system notifications, shared/private storage and ' +
-           'Paycheck Plan integration are not connected. ' +
-           'No Bills, income or existing app records are modified. ' +
-           'Demo amounts are not actual savings balances.'
-         )}
-       </details>
-
-       ${svButton('Clear this preview', 'reset')}
-     </div>
-   `;
- }
-
- function savingsAction(action, button) {
+       )
+     );
+   }
+ function savingsActionLocal(action, button) {
    const s = snapshot();
 
    if (!s.ok) {
@@ -1002,7 +877,7 @@ use controlled records and adapter functions, not your deployed production app.
    try {
      if (
        m.form &&
-       !['save', 'cancel', 'reset'].includes(action)
+       !['save', 'cancel'].includes(action)
      ) {
        throw new Error(
          'Finish or cancel the open form first.'
@@ -1116,78 +991,6 @@ use controlled records and adapter functions, not your deployed production app.
          e.voided = true;
        });
 
-     } else if (action === 'demo') {
-       if (
-         m.funds.length &&
-         !confirm(
-           'Replace the preview with demo examples? ' +
-           'Real app records are unaffected.'
-         )
-       ) {
-         return;
-       }
-
-       m.entries = [];
-       m.expanded = [];
-
-       m.funds = [
-         {
-           name: 'Emergency Fund',
-           type: 'emergency',
-           opening: 75000,
-           target: 200000,
-           amount: 5000,
-           cadence: 'biweekly',
-           first: svShift(svToday(), 3),
-           deadline: ''
-         },
-         {
-           name: 'Car Insurance',
-           type: 'sinking',
-           opening: 30000,
-           target: 90000,
-           amount: 10000,
-           cadence: 'monthly',
-           first: svShift(svToday(), 1, true),
-           deadline: svShift(svToday(), 6, true)
-         },
-         {
-           name: 'Vacation',
-           type: 'goal',
-           opening: 20000,
-           target: 150000,
-           amount: 7500,
-           cadence: 'weekly',
-           first: svShift(svToday(), 7),
-           deadline: svShift(svToday(), 6, true)
-         }
-       ].map(item => ({
-         ...item,
-         id: uuid(),
-         created: svToday(),
-         version: 1,
-         skips: [],
-         moves: {},
-         paused: false,
-         note: 'Demo example — not actual account data'
-       }));
-
-       m.message =
-         'Demo examples loaded. All displayed amounts ' +
-         'are preview data.';
-
-     } else if (action === 'reset') {
-       if (!confirm(
-         'Clear all preview funds and entries? ' +
-         'Real app records are unaffected.'
-       )) {
-         return;
-       }
-
-       m.funds = [];
-       m.entries = [];
-       m.form = null;
-       m.expanded = [];
 
      } else if (action === 'save') {
        const box = document.getElementById('bbsv-form');
@@ -1216,7 +1019,7 @@ use controlled records and adapter functions, not your deployed production app.
        if (['new', 'edit'].includes(draft.mode)) {
          if (!fund && m.funds.length >= 30) {
            throw new Error(
-             'This preview supports up to 30 funds.'
+             'This savings plan supports up to 30 funds.'
            );
          }
 
@@ -1331,7 +1134,7 @@ use controlled records and adapter functions, not your deployed production app.
          ) {
            throw new Error(
              'Choose today or later, no later than the ' +
-             'goal deadline or preview limit.'
+             'goal deadline or supported date range.'
            );
          }
 
@@ -1456,9 +1259,7 @@ use controlled records and adapter functions, not your deployed production app.
 
        m.form = null;
 
-       m.message =
-         'Preview updated. No money was moved or ' +
-         'saved to the app.';
+              m.message = 'Preparing to save…';
      }
 
      refresh();
@@ -1474,6 +1275,192 @@ use controlled records and adapter functions, not your deployed production app.
        m.message = error.message;
        refresh();
      }
+   }
+ }
+  async function savingsAction(action, button) {
+   const s = snapshot();
+
+   if (!s.ok) {
+     close();
+     return;
+   }
+
+   const m = svState(s);
+
+   if (action === 'reload-savings') {
+     if (m.saving) return;
+
+     svDispose();
+     refreshDialog();
+     return;
+   }
+
+   if (m.saving) return;
+
+   if (action === 'cancel') {
+     m.form = null;
+
+     if (m.pendingRemote) {
+       svApply(m, m.pendingRemote);
+       m.pendingRemote = null;
+     }
+
+     m.conflict = false;
+     svPaint(m);
+     return;
+   }
+
+   if (!m.ready || m.reloadRequired) {
+     svNotice(
+       m,
+       'Reload Savings Plan before making another change.'
+     );
+
+     return;
+   }
+
+   if (
+     !m.connected ||
+     navigator.onLine === false
+   ) {
+     svNotice(
+       m,
+       'Connect to the internet before changing shared savings.'
+     );
+
+     return;
+   }
+
+   if (m.conflict) {
+     svNotice(
+       m,
+       'Cancel the open form, review the shared changes, ' +
+       'and reopen the action.'
+     );
+
+     return;
+   }
+
+   const allowed = [
+     'new',
+     'edit',
+     'contribute',
+     'withdraw',
+     'move',
+     'reschedule',
+     'save',
+     'pause',
+     'skip',
+     'undo'
+   ];
+
+   if (!allowed.includes(action)) return;
+
+   const before = JSON.parse(JSON.stringify({
+     funds: m.funds,
+     entries: m.entries
+   }));
+
+   const mutates = [
+     'save',
+     'pause',
+     'skip',
+     'undo'
+   ].includes(action);
+
+   try {
+     savingsActionLocal(action, button);
+
+     if (
+       !mutates ||
+       JSON.stringify(before) ===
+         JSON.stringify({
+           funds: m.funds,
+           entries: m.entries
+         })
+     ) {
+       return;
+     }
+
+     const payload = {
+       currency: m.currency,
+       funds: m.funds,
+       entries: m.entries
+     };
+
+     const revision = m.revision;
+     const writeId = crypto.randomUUID();
+
+     m.saving = true;
+
+     svNotice(
+       m,
+       'Saving to your shared household…'
+     );
+
+     svPaint(m);
+
+     const result =
+       await window.BillBeaconSavingsStore.save(
+         payload,
+         revision,
+         writeId
+       );
+
+     if (!svIsCurrent(m)) return;
+
+     m.saving = false;
+
+     const newest =
+       m.pendingRemote &&
+       m.pendingRemote.revision > result.revision
+         ? m.pendingRemote
+         : result;
+
+     svApply(m, newest);
+
+     m.pendingRemote = null;
+     m.form = null;
+
+     svNotice(
+       m,
+       'Saved to your shared household.'
+     );
+
+     svPaint(m);
+
+   } catch (error) {
+     if (!svIsCurrent(m)) return;
+
+     m.saving = false;
+     m.form = null;
+     m.funds = before.funds;
+     m.entries = before.entries;
+
+     if (
+       error.code === 'savings/conflict' &&
+       error.remote
+     ) {
+       svApply(m, error.remote);
+       m.pendingRemote = null;
+
+       svNotice(
+         m,
+         'Another member changed Savings Plan. ' +
+         'Your change was not applied. Review the current ' +
+         'amounts before trying again.'
+       );
+     } else {
+       m.ready = false;
+       m.reloadRequired = true;
+
+       m.error =
+         'Save was not confirmed. Reload and check ' +
+         'balances/history before repeating the action. ' +
+         error.message;
+     }
+
+     svPaint(m);
    }
  }
  function content(key,s){
@@ -1582,7 +1569,7 @@ use controlled records and adapter functions, not your deployed production app.
  function redraw(){if(!active||typeof currentRoute==='undefined'||currentRoute!=='more'||typeof render!=='function')return;const main=document.querySelector('#app .main-content'),y=main?.scrollTop||0,wy=window.scrollY;render();const next=document.querySelector('#app .main-content');if(next)next.scrollTop=y;window.scrollTo(0,wy);}
  function changed(){if(!active)return;clearTimeout(timer);timer=setTimeout(()=>{if(document.getElementById(DIALOG)){const identity=scope();if(!identity.ok||identity.key!==openedScope)close();else{const label=document.getElementById('bbml-source');if(label)label.textContent='App data changed. Refresh to reload this view (what-if input recalculates from current data).';}}redraw();},80);}
  function signedOut(){
-   savingsPreview = null;
+   savingsState = null;
    close();
    changed();
  }
@@ -1773,7 +1760,7 @@ use controlled records and adapter functions, not your deployed production app.
  @media(prefers-reduced-motion:reduce){.bbml-page{animation:none!important}}
  `;
  function init(){if(!active)return;if(!document.getElementById(STYLE)){const style=document.createElement('style');style.id=STYLE;style.textContent=CSS;document.head.append(style);}redraw();}
- function uninstall(){if(!active)return;close();active=false;clearTimeout(timer);document.removeEventListener('click',onClick);document.removeEventListener('DOMContentLoaded',init);DATA_EVENTS.forEach(x=>window.removeEventListener(x,changed));OUT_EVENTS.forEach(x=>window.removeEventListener(x,signedOut));window.removeEventListener('storage',changed);if(renderMore===main)renderMore=originalMore;document.getElementById(STYLE)?.remove();delete window.BillBeaconMoreLive;delete window.BillBeaconMorePreview;if(typeof currentRoute!=='undefined'&&currentRoute==='more'&&typeof render==='function')render();}
+ function uninstall(){if(!active)return;svDispose();savingsSessionEvents.forEach(name=>window.removeEventListener(name,svSessionChanged));close();active=false;clearTimeout(timer);document.removeEventListener('click',onClick);document.removeEventListener('DOMContentLoaded',init);DATA_EVENTS.forEach(x=>window.removeEventListener(x,changed));OUT_EVENTS.forEach(x=>window.removeEventListener(x,signedOut));window.removeEventListener('storage',changed);if(renderMore===main)renderMore=originalMore;document.getElementById(STYLE)?.remove();delete window.BillBeaconMoreLive;delete window.BillBeaconMorePreview;if(typeof currentRoute!=='undefined'&&currentRoute==='more'&&typeof render==='function')render();}
  renderMore=main;document.addEventListener('click',onClick);DATA_EVENTS.forEach(x=>window.addEventListener(x,changed));OUT_EVENTS.forEach(x=>window.addEventListener(x,signedOut));window.addEventListener('storage',changed);
  const api=Object.freeze({version:'2.0.0-data-beta',readOnly:true,open,close,refresh:refreshDialog,uninstall});window.BillBeaconMoreLive=api;window.BillBeaconMorePreview=api;
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
