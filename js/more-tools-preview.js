@@ -157,16 +157,16 @@ use controlled records and adapter functions, not your deployed production app.
 
      const summary = metrics(
        metric(
-         'Credit cards',
+         'Credit Cards',
          String(bills.length),
-         'Active card-payment bills'
+         'Active Card-Payment Bills'
        ),
        metric(
          'Monthly Equivalent',
          money(monthlyEquivalent, s),
          bills.length === 0
            ? 'No active card-payment bills'
-           : `${monthlyAmounts.length} of ${bills.length} schedules included` +
+           : `${monthlyAmounts.length} of ${bills.length} Schedules Included` +
              (partial ? ' · partial total' : '')
        )
      );
@@ -176,7 +176,7 @@ use controlled records and adapter functions, not your deployed production app.
            <section class="bbml-panel">
              ${bills.map(b => item(
                b.name || 'Credit-card bill',
-               `${b.recurrence || 'No recurrence'} · Stored due date ${fmtDate(b.dueDate)}`,
+               `${b.recurrence || 'No recurrence'} · Stored Due Date ${fmtDate(b.dueDate)}`,
                money(num(b.amount), s)
              )).join('')}
            </section>
