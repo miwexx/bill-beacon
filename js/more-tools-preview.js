@@ -49,7 +49,7 @@ use controlled records and adapter functions, not your deployed production app.
  function uniquePayments(s){const seen=new Set();return s.payments.filter(p=>{if(!p||!p.id)return !!p;if(seen.has(p.id))return false;seen.add(p.id);return true;});}
  const PATHS={bank:'M3 10h18M4 10v10M9 10v10M15 10v10M20 10v10M2 21h20M12 3 2 8h20Z',forecast:'m3 17 5-5 4 3 8-10M14 5h6v6',goal:'M20 12a8 8 0 1 1-3-6M16 12a4 4 0 1 1-4-4M12 12l9-9M17 3h4v4',renew:'M20 7v5h-5M4 17v-5h5M5 8a7 7 0 0 1 12-3l3 4M4 15l3 4a7 7 0 0 0 12-3',card:'M3 5h18v14H3ZM3 10h18M7 15h4',review:'M9 3h6v4H9ZM9 5H5v16h14V5h-4M9 12h6M9 16h4',report:'M5 3h10l4 4v14H5ZM14 3v5h5M9 17v-3M12 17v-6M15 17v-4',activity:'M3 12h4l3-7 4 14 3-7h4',sync:'M20 7v5h-5M4 17v-5h5M5 8a7 7 0 0 1 12-3l3 4M4 15l3 4a7 7 0 0 0 12-3',settings:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',document:'M5 3h10l4 4v14H5ZM14 3v5h5M8 12h8M8 16h6',arrow:'m9 5 7 7-7 7',close:'m6 6 12 12M18 6 6 18'};
  const icon=(name,size=22)=>`<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${PATHS[name]||PATHS.document}"/></svg>`;
- const TOOLS={forecast:['Forecast & What-If','Compare expected income with assigned bills.','forecast','purple'],goals:['Goals & Sinking Funds','A place for future savings targets.','goal','green'],subscriptions:['Subscriptions & Renewals','Your subscription-category bills and saved schedules.','renew','pink'],cards:['Credit Cards','Existing card-payment bills; no invented balances.','card','blue'],documents:['Bill Documents','Your saved bill notes; attachments are not enabled.','document','orange'],review:['Needs Review','Basic checks of the records already in the app.','review','orange'],monthly:['Monthly Review','Recorded payments and changes for this month.','report','purple'],connections:['Connections & Sync Health','What this device currently knows about connections.','sync','green']};
+ const TOOLS={forecast:['Forecast & What-If','Compare expected income with assigned bills.','forecast','purple'],goals:['Savings Plan','Organize goals, emergency funds and planned transfers.','goal','green'],subscriptions:['Subscriptions & Renewals','Your subscription-category bills and saved schedules.','renew','pink'],cards:['Credit Cards','Existing Credit Card Bills.','card','blue'],documents:['Bill Documents','Your saved bill notes; attachments are not enabled.','document','orange'],review:['Needs Review','Basic checks of the records already in the app.','review','orange'],monthly:['Monthly Review','Recorded payments and changes for this month.','report','purple'],connections:['Connections & Sync Health','What this device currently knows about connections.','sync','green']};
  const note=t=>`<div class="bbml-callout">${esc(t)}</div>`;
  const help=t=>`<p class="bbml-help">${esc(t)}</p>`;
  const panel=(t,b)=>`<section class="bbml-panel"><h3>${esc(t)}</h3>${b}</section>`;
@@ -67,7 +67,7 @@ use controlled records and adapter functions, not your deployed production app.
  }
  const group=(title,body)=>`<section class="bbml-section"><h2>${esc(title)}</h2><div class="bbml-group">${body}</div></section>`;
  function main(){
-  const s=snapshot();const tool=k=>{const t=TOOLS[k];return row(t[0],t[1],t[2],t[3],'open:'+k,k==='goals'?'Not set up':k==='documents'?'Notes':k==='cards'?'Bills':'Read-only');};
+  const s=snapshot();const tool=k=>{const t=TOOLS[k];return row(t[0],t[1],t[2],t[3],'open:'+k,k==='goals'?'Preview':k==='documents'?'Notes':k==='cards'?'Bills':'Read-only');};
   return `<div class="nav-bar"><div class="nav-bar-content bbml-nav"><span></span><div class="nav-title">More</div><span></span></div></div><div class="main-content fade-in bbml-page"><div class="content-pad bbml-content"><div class="bbml-intro"><div><p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p><h1>Plan ahead. Stay in control.</h1></div><span class="bbml-badge">App-data beta</span></div><p class="bbml-intro-note">${esc(s.ok?'Your current household records. Read-only tools; no automatic changes.':s.reason)}</p><button type="button" class="bbml-bank" data-bbml-action="route:transactions"><span class="bbml-icon bbml-purple">${icon('bank',24)}</span><span class="bbml-row-copy"><span class="bbml-row-title">Banking</span><span class="bbml-row-sub">Open your existing transactions</span></span><span class="bbml-bank-link">View ${icon('arrow',15)}</span></button>${group('Planning',tool('forecast')+tool('goals'))}${group('Manage',tool('subscriptions')+tool('cards')+tool('documents'))}${group('Review',tool('review')+tool('monthly')+row('Activity & Changes','Your existing bill and payment change history.','activity','orange','route:activity'))}${group('App',tool('connections')+row('Settings','Account, appearance, reminders and backups.','settings','purple','route:settings'))}<p class="bbml-footer">No sample records · projections are not available balances · ${esc(monthLabel())}</p></div></div>`;
  }
  function forecast(s){
@@ -131,14 +131,14 @@ use controlled records and adapter functions, not your deployed production app.
      bills.slice(0, 50).map(b => {
        const next = upcoming.get(b.id);
 
-       return billItem(
-         b,
-         s,
-         `${b.recurrence || 'No recurrence'} · ${
+       return item(
+         b.name || 'Subscription',
+         `${b.recurrence || 'No Recurrence'} · ${
            next
-             ? 'Next displayed occurrence: ' + fmtDate(next)
-             : 'Next occurrence unavailable'
-         }`
+             ? 'Next Displayed Occurrence: ' + fmtDate(next)
+             : 'Next Occurrence Unavailable'
+         }`,
+         money(num(b.amount), s)
        );
      }).join('')
    );
@@ -185,6 +185,1297 @@ use controlled records and adapter functions, not your deployed production app.
   const permission=typeof Notification==='undefined'?'Unsupported in this browser':Notification.permission;
   return note('Local status snapshot, not a new server check. “Not loaded” does not mean disconnected. “Ready” does not independently prove the latest changes reached the server.')+panel('Bank connection',detail('Loaded status',bankStatus)+detail('Loaded accounts',loaded?String(array(bank.accounts).length):'Not loaded')+detail('Reported last bank timestamp',bank?.lastSyncedAt?fmtDate(bank.lastSyncedAt)+' '+(date(bank.lastSyncedAt)?.toLocaleTimeString()||''):'Not available')+routeButton('Open Banking to verify or sync','transactions'))+panel('Household sync',detail('Current household context',identity.ok?'Ready for signed-in user':'Not ready')+detail('Sync state',syncText)+help('No sync operation or conflict resolution is run by this screen.'))+panel('Notifications',detail('Browser permission',permission)+detail('Server subscription registration','Not verified here')+help('Permission being granted does not prove the server has an active registration for this account. Verify from the existing Notifications settings.')+routeButton('Open Settings','settings'));
  }
+  let savingsPreview = null;
+
+ function svToday() {
+   const d = new Date();
+
+   return `${d.getFullYear()}-${
+     String(d.getMonth() + 1).padStart(2, '0')
+   }-${String(d.getDate()).padStart(2, '0')}`;
+ }
+
+ function svDate(key) {
+   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(key))) {
+     return null;
+   }
+
+   const [y, m, d] = key.split('-').map(Number);
+   const value = new Date(y, m - 1, d, 12);
+
+   return value.getFullYear() === y &&
+     value.getMonth() === m - 1 &&
+     value.getDate() === d
+       ? value
+       : null;
+ }
+
+ function svKey(d) {
+   return `${d.getFullYear()}-${
+     String(d.getMonth() + 1).padStart(2, '0')
+   }-${String(d.getDate()).padStart(2, '0')}`;
+ }
+
+ function svShift(key, count, monthly = false) {
+   const d = svDate(key);
+
+   if (!d) throw new Error('Invalid date.');
+
+   if (monthly) {
+     const day = d.getDate();
+
+     d.setDate(1);
+     d.setMonth(d.getMonth() + count);
+
+     const last = new Date(
+       d.getFullYear(),
+       d.getMonth() + 1,
+       0
+     ).getDate();
+
+     d.setDate(Math.min(day, last));
+   } else {
+     d.setDate(d.getDate() + count);
+   }
+
+   return svKey(d);
+ }
+
+ function svAmount(value, optional = false) {
+   const text = String(value ?? '').trim();
+
+   if (!text && optional) return null;
+
+   if (!/^\d+(\.\d{1,2})?$/.test(text)) {
+     throw new Error(
+       'Use a nonnegative amount with up to two decimals.'
+     );
+   }
+
+   const [whole, fraction = ''] = text.split('.');
+
+   const result =
+     Number(whole) * 100 +
+     Number(fraction.padEnd(2, '0'));
+
+   if (
+     !Number.isSafeInteger(result) ||
+     result > 1000000000000
+   ) {
+     throw new Error('Amount is too large.');
+   }
+
+   return result;
+ }
+
+ function svState(s) {
+   const key = JSON.stringify([
+     s.scope,
+     s.settings.currency || 'USD'
+   ]);
+
+   if (!savingsPreview || savingsPreview.key !== key) {
+     savingsPreview = {
+       key,
+       funds: [],
+       entries: [],
+       form: null,
+       expanded: [],
+       message: ''
+     };
+   }
+
+   return savingsPreview;
+ }
+
+ function svBalance(m, f) {
+   return f.opening + m.entries
+     .filter(e => e.fund === f.id && !e.voided)
+     .reduce((sum, e) => sum + e.delta, 0);
+ }
+
+ function svSchedule(m, f) {
+   if (
+     f.paused ||
+     (f.target && svBalance(m, f) >= f.target)
+   ) {
+     return [];
+   }
+
+   const end = f.deadline ||
+     svShift(svToday(), 120, true);
+
+   const done = new Set(
+     m.entries
+       .filter(e =>
+         e.fund === f.id &&
+         !e.voided &&
+         e.slot
+       )
+       .map(e => e.slot)
+   );
+
+   const result = [];
+
+   for (let n = 0; n < 600; n++) {
+     const origin = f.cadence === 'monthly'
+       ? svShift(f.first, n, true)
+       : svShift(
+           f.first,
+           n * (f.cadence === 'weekly' ? 7 : 14)
+         );
+
+     if (origin > end) break;
+
+     const key = `${f.version}:${origin}`;
+     const day = f.moves[key] || origin;
+
+     if (
+       !f.skips.includes(key) &&
+       !done.has(key) &&
+       day <= end
+     ) {
+       result.push({
+         key,
+         day,
+         fund: f.id,
+         amount: f.amount
+       });
+     }
+   }
+
+   return result.sort((a, b) =>
+     a.day.localeCompare(b.day) ||
+     a.key.localeCompare(b.key)
+   );
+ }
+
+ function svCash(value, s) {
+   return value == null
+     ? 'N/A'
+     : money(value / 100, s);
+ }
+
+ function svButton(label, action, id = '', slot = '') {
+   return `
+     <button
+       type="button"
+       class="bbml-outline"
+       data-bbml-action="savings:${esc(action)}"
+       data-sv-id="${esc(id)}"
+       data-sv-slot="${esc(slot)}"
+     >
+       ${esc(label)}
+     </button>
+   `;
+ }
+
+ function svInput(
+   label,
+   name,
+   type = 'text',
+   value = '',
+   extra = ''
+ ) {
+   return `
+     <label
+       class="bbml-field-label"
+       for="bbsv-${name}"
+     >
+       ${esc(label)}
+     </label>
+
+     <input
+       class="bbml-input"
+       id="bbsv-${name}"
+       name="${name}"
+       type="${type}"
+       value="${esc(value)}"
+       ${extra}
+     >
+   `;
+ }
+
+ function svSelect(label, name, options, value) {
+   return `
+     <label
+       class="bbml-field-label"
+       for="bbsv-${name}"
+     >
+       ${esc(label)}
+     </label>
+
+     <select
+       class="bbml-input"
+       id="bbsv-${name}"
+       name="${name}"
+     >
+       ${options.map(([v, t]) => `
+         <option
+           value="${esc(v)}"
+           ${v === value ? 'selected' : ''}
+         >
+           ${esc(t)}
+         </option>
+       `).join('')}
+     </select>
+   `;
+ }
+
+ function svForm(m, s) {
+   const draft = m.form;
+
+   if (!draft) return '';
+
+   const f = m.funds.find(
+     item => item.id === draft.id
+   );
+
+   const dollars = value => value == null
+     ? ''
+     : (value / 100).toFixed(2);
+
+   let title;
+   let fields;
+
+   if (
+     draft.mode === 'new' ||
+     draft.mode === 'edit'
+   ) {
+     title = f
+       ? 'Edit savings plan'
+       : 'Create a savings fund';
+
+     fields =
+       svInput(
+         'Fund name',
+         'name',
+         'text',
+         f?.name || '',
+         'maxlength="80" required'
+       ) +
+       svSelect(
+         'Fund type',
+         'type',
+         [
+           ['emergency', 'Emergency fund'],
+           ['sinking', 'Planned expense / sinking fund'],
+           ['goal', 'Savings goal']
+         ],
+         f?.type || 'goal'
+       ) +
+       svInput(
+         'Target amount — optional',
+         'target',
+         'number',
+         dollars(f?.target),
+         'min="0.01" step="0.01"'
+       ) +
+       (
+         !f
+           ? svInput(
+               'Already saved — preview amount',
+               'opening',
+               'number',
+               '0',
+               'min="0" step="0.01" required'
+             )
+           : ''
+       ) +
+       svInput(
+         'Contribution per transfer',
+         'amount',
+         'number',
+         dollars(f?.amount),
+         'min="0.01" step="0.01" required'
+       ) +
+       svSelect(
+         'Transfer schedule',
+         'cadence',
+         [
+           ['weekly', 'Every week'],
+           ['biweekly', 'Every 2 weeks / payday interval'],
+           ['monthly', 'Every month']
+         ],
+         f?.cadence || 'monthly'
+       ) +
+       svInput(
+         'First transfer date',
+         'first',
+         'date',
+         f?.first || svToday(),
+         'required'
+       ) +
+       svInput(
+         'Goal deadline — optional',
+         'deadline',
+         'date',
+         f?.deadline || ''
+       ) +
+       svInput(
+         'Account label / note — optional',
+         'note',
+         'text',
+         f?.note || '',
+         'maxlength="200"'
+       ) +
+       help(
+         'Use an account nickname only. Do not enter account ' +
+         'numbers. Dates can extend up to 10 years from today. ' +
+         'A biweekly schedule uses your chosen first date; ' +
+         'it does not read payroll records.'
+       );
+   } else if (draft.mode === 'reschedule') {
+     title = 'Reschedule one transfer';
+
+     fields = svInput(
+       'New transfer date',
+       'date',
+       'date',
+       draft.day || svToday(),
+       `min="${svToday()}" required`
+     );
+   } else {
+     title = draft.mode === 'move'
+       ? 'Move savings between funds'
+       : draft.mode === 'withdraw'
+         ? 'Record a withdrawal'
+         : 'Record a contribution';
+
+     fields =
+       (
+         draft.mode === 'move'
+           ? svSelect(
+               'Move to',
+               'destination',
+               m.funds
+                 .filter(item => item.id !== f.id)
+                 .map(item => [item.id, item.name]),
+               ''
+             )
+           : ''
+       ) +
+       svInput(
+         'Amount',
+         'amount',
+         'number',
+         draft.slot ? dollars(f.amount) : '',
+         'min="0.01" step="0.01" required'
+       ) +
+       svInput(
+         'Actual date',
+         'date',
+         'date',
+         svToday(),
+         `min="${f.created}" max="${svToday()}" required`
+       ) +
+       svInput(
+         'Note — optional',
+         'note',
+         'text',
+         '',
+         'maxlength="200"'
+       ) +
+       help(
+         'Preview record only. This does not send money ' +
+         'or change a bank balance.'
+       );
+   }
+
+   return `
+     <fieldset
+       id="bbsv-form"
+       class="bbml-panel bbsv-form"
+     >
+       <legend>${esc(title)}</legend>
+
+       ${fields}
+
+       <p
+         id="bbsv-error"
+         class="bbsv-error"
+         role="alert"
+       ></p>
+
+       <div class="bbsv-actions">
+         ${svButton('Apply to preview', 'save')}
+         ${svButton('Cancel', 'cancel')}
+       </div>
+     </fieldset>
+   `;
+ }
+
+ function savingsHTML(s) {
+   const m = svState(s);
+   const today = svToday();
+   const month = today.slice(0, 7);
+
+   const plans = m.funds.flatMap(
+     f => svSchedule(m, f)
+   );
+
+   const upcoming = plans.slice().sort(
+     (a, b) => a.day.localeCompare(b.day)
+   );
+
+   const saved = m.funds.reduce(
+     (sum, f) => sum + svBalance(m, f),
+     0
+   );
+
+   const planned = plans
+     .filter(p => p.day.slice(0, 7) === month)
+     .reduce((sum, p) => sum + p.amount, 0);
+
+   const types = {
+     emergency: 'Emergency fund',
+     sinking: 'Sinking fund',
+     goal: 'Savings goal'
+   };
+
+   const cards = m.funds.map(f => {
+     const balance = svBalance(m, f);
+
+     const remaining = f.target
+       ? Math.max(0, f.target - balance)
+       : null;
+
+     const schedule = plans.filter(
+       p => p.fund === f.id
+     );
+
+     const next = schedule[0];
+
+     const slots = f.deadline
+       ? schedule.filter(p =>
+           p.day >= today &&
+           p.day <= f.deadline
+         ).length
+       : 0;
+
+     const suggested = remaining && slots
+       ? Math.ceil(remaining / slots)
+       : null;
+
+     const status = f.paused
+       ? 'Paused'
+       : f.target && !remaining
+         ? 'Target reached'
+         : f.deadline && f.deadline < today
+           ? 'Deadline passed'
+           : remaining && f.deadline && !slots
+             ? 'No transfer dates left'
+             : suggested && f.amount < suggested
+               ? 'Below target pace'
+               : suggested
+                 ? 'On track at the planned amount'
+                 : 'Saving at your own pace';
+
+     const history = m.entries
+       .filter(e => e.fund === f.id)
+       .slice()
+       .reverse();
+
+     return `
+       <details
+         class="bbml-panel bbsv-fund"
+         data-sv-fund="${esc(f.id)}"
+         ${m.expanded.includes(f.id) ? 'open' : ''}
+       >
+         <summary>
+           <span>
+             <strong>${esc(f.name)}</strong>
+             <small>
+               ${esc(types[f.type])} · ${esc(status)}
+             </small>
+           </span>
+
+           <span class="bbsv-summary-money">
+             ${esc(svCash(balance, s))}
+             <small>Details ▾</small>
+           </span>
+         </summary>
+
+         ${
+           f.target
+             ? `
+               <progress
+                 max="${f.target}"
+                 value="${Math.min(balance, f.target)}"
+                 aria-label="${esc(f.name)} progress"
+               ></progress>
+
+               <p class="bbml-help">
+                 ${esc(svCash(balance, s))}
+                 of ${esc(svCash(f.target, s))}
+               </p>
+             `
+             : ''
+         }
+
+         <div class="bbsv-fund-body">
+           ${detail('Recorded savings', svCash(balance, s))}
+           ${detail('Target', svCash(f.target, s))}
+           ${detail('Still needed', svCash(remaining, s))}
+           ${detail(
+             'Planned contribution',
+             svCash(f.amount, s)
+           )}
+
+           ${detail(
+             'Next transfer',
+             next
+               ? fmtDate(next.day) +
+                 (next.day < today ? ' · overdue' : '')
+               : 'None scheduled'
+           )}
+
+           ${detail(
+             'Goal deadline',
+             f.deadline
+               ? fmtDate(f.deadline)
+               : 'No deadline'
+           )}
+
+           ${
+             f.deadline && remaining
+               ? detail(
+                   'Suggested per remaining transfer',
+                   suggested
+                     ? svCash(suggested, s)
+                     : 'No future dates left'
+                 )
+               : ''
+           }
+
+           ${f.note ? help(f.note) : ''}
+
+           <div class="bbsv-actions">
+             ${svButton(
+               'Add contribution',
+               'contribute',
+               f.id
+             )}
+
+             ${svButton(
+               'Record withdrawal',
+               'withdraw',
+               f.id
+             )}
+
+             ${
+               m.funds.length > 1
+                 ? svButton(
+                     'Move to another fund',
+                     'move',
+                     f.id
+                   )
+                 : ''
+             }
+
+             ${svButton('Edit plan', 'edit', f.id)}
+
+             ${svButton(
+               f.paused
+                 ? 'Resume from today'
+                 : 'Pause plan',
+               'pause',
+               f.id
+             )}
+           </div>
+
+           ${
+             next
+               ? `
+                 <div class="bbsv-actions">
+                   ${svButton(
+                     'Record next transfer',
+                     'contribute',
+                     f.id,
+                     next.key
+                   )}
+
+                   ${svButton(
+                     'Skip next transfer',
+                     'skip',
+                     f.id,
+                     next.key
+                   )}
+
+                   ${svButton(
+                     'Reschedule next',
+                     'reschedule',
+                     f.id,
+                     next.key
+                   )}
+                 </div>
+               `
+               : ''
+           }
+
+           <details class="bbsv-history">
+             <summary>History (${history.length})</summary>
+
+             ${
+               history.length
+                 ? history.map(e => `
+                     <div class="bbml-detail">
+                       <div>
+                         <span>
+                           ${esc(e.kind)}
+                           ${e.voided ? ' · reversed' : ''}
+                         </span>
+
+                         <small>
+                           ${esc(fmtDate(e.date))}
+                           ${e.note ? ' · ' + esc(e.note) : ''}
+                         </small>
+                       </div>
+
+                       <strong>
+                         ${e.delta < 0 ? '−' : '+'}${
+                           esc(svCash(Math.abs(e.delta), s))
+                         }
+                       </strong>
+                     </div>
+
+                     ${
+                       !e.voided
+                         ? svButton(
+                             'Reverse record',
+                             'undo',
+                             e.id
+                           )
+                         : ''
+                     }
+                   `).join('')
+                 : help(
+                     'No contributions or withdrawals recorded.'
+                   )
+             }
+           </details>
+         </div>
+       </details>
+     `;
+   }).join('');
+
+   const dueList = upcoming.slice(0, 6).map(p => {
+     const f = m.funds.find(
+       item => item.id === p.fund
+     );
+
+     return `
+       <div class="bbsv-upcoming">
+         <div>
+           <strong>${esc(f.name)}</strong>
+
+           <small>
+             ${esc(fmtDate(p.day))}
+             ${
+               p.day < today
+                 ? ' · overdue'
+                 : p.day === today
+                   ? ' · today'
+                   : ''
+             }
+             · ${esc(svCash(p.amount, s))}
+           </small>
+         </div>
+
+         ${svButton(
+           'Record',
+           'contribute',
+           f.id,
+           p.key
+         )}
+       </div>
+     `;
+   }).join('');
+
+   return `
+     <div class="bbsv-root">
+       <p class="bbsv-preview">
+         INTERACTIVE PREVIEW · Not saved. Clears on reload,
+         sign-out, or household/currency change.
+         No money is moved.
+       </p>
+
+       ${metrics(
+         metric(
+           'Preview savings',
+           svCash(saved, s),
+           'Amounts entered in this preview'
+         ),
+         metric(
+           'Still planned this month',
+           svCash(planned, s),
+           'Unrecorded, unskipped contributions'
+         )
+       )}
+
+       <div class="bbsv-actions">
+         ${svButton('Create savings fund', 'new')}
+         ${svButton('Load demo example', 'demo')}
+       </div>
+
+       ${
+         m.message
+           ? `
+             <p role="status" class="bbml-help">
+               ${esc(m.message)}
+             </p>
+           `
+           : ''
+       }
+
+       ${svForm(m, s)}
+
+       ${
+         m.funds.length
+           ? cards
+           : empty(
+               'Start your savings plan',
+               'Create a fund or load the clearly labeled ' +
+               'demo example to explore the layout.'
+             )
+       }
+
+       ${
+         m.funds.length
+           ? panel(
+               'Upcoming transfers',
+               dueList ||
+               help('No outstanding transfers scheduled.')
+             )
+           : ''
+       }
+
+       <details>
+         <summary>Preview limitations</summary>
+
+         ${help(
+           'Due dates are in-app reminders only. Bank transfers, ' +
+           'system notifications, shared/private storage and ' +
+           'Paycheck Plan integration are not connected. ' +
+           'No Bills, income or existing app records are modified. ' +
+           'Demo amounts are not actual savings balances.'
+         )}
+       </details>
+
+       ${svButton('Clear this preview', 'reset')}
+     </div>
+   `;
+ }
+
+ function savingsAction(action, button) {
+   const s = snapshot();
+
+   if (!s.ok) {
+     close();
+     return;
+   }
+
+   const m = svState(s);
+   const id = button.dataset.svId;
+   const slot = button.dataset.svSlot;
+
+   m.expanded = [
+     ...document.querySelectorAll(
+       '#bbml-dialog [data-sv-fund][open]'
+     )
+   ].map(node => node.dataset.svFund);
+
+   const f = m.funds.find(
+     item => item.id === id
+   );
+
+   const uuid = () => crypto.randomUUID();
+
+   const refresh = () => {
+     refreshDialog();
+
+     document.getElementById(
+       'bbsv-form'
+     )?.scrollIntoView({block: 'start'});
+   };
+
+   try {
+     if (
+       m.form &&
+       !['save', 'cancel', 'reset'].includes(action)
+     ) {
+       throw new Error(
+         'Finish or cancel the open form first.'
+       );
+     }
+
+     m.message = '';
+
+     if (action === 'new') {
+       m.form = {mode: 'new'};
+
+     } else if (action === 'cancel') {
+       m.form = null;
+
+     } else if ([
+       'edit',
+       'contribute',
+       'withdraw',
+       'move',
+       'reschedule'
+     ].includes(action)) {
+       if (!f) {
+         throw new Error('Fund no longer exists.');
+       }
+
+       const occurrence = slot
+         ? svSchedule(m, f).find(p => p.key === slot)
+         : null;
+
+       if (slot && !occurrence) {
+         throw new Error(
+           'That scheduled transfer has changed.'
+         );
+       }
+
+       m.form = {
+         mode: action,
+         id,
+         slot,
+         day: occurrence?.day
+       };
+
+     } else if (action === 'pause') {
+       if (!f) {
+         throw new Error('Fund no longer exists.');
+       }
+
+       if (f.paused) {
+         f.first = svToday();
+         f.version++;
+         f.skips = [];
+         f.moves = {};
+
+         m.message =
+           'Plan resumed with a new schedule starting today.';
+       }
+
+       f.paused = !f.paused;
+
+     } else if (action === 'skip') {
+       if (
+         !f ||
+         !svSchedule(m, f).some(p => p.key === slot)
+       ) {
+         throw new Error('Transfer no longer scheduled.');
+       }
+
+       if (!confirm(
+         'Skip this planned contribution? ' +
+         'Recorded savings will not change.'
+       )) {
+         return;
+       }
+
+       f.skips.push(slot);
+
+     } else if (action === 'undo') {
+       const original = m.entries.find(
+         e => e.id === id && !e.voided
+       );
+
+       if (!original) {
+         throw new Error('Record already reversed.');
+       }
+
+       const group = m.entries.filter(
+         e => !e.voided && e.group === original.group
+       );
+
+       for (const fund of m.funds) {
+         const impact = group
+           .filter(e => e.fund === fund.id)
+           .reduce((sum, e) => sum + e.delta, 0);
+
+         if (svBalance(m, fund) - impact < 0) {
+           throw new Error(
+             'Reverse later withdrawals or moves first; ' +
+             'this would make a fund negative.'
+           );
+         }
+       }
+
+       if (!confirm(
+         'Reverse this record? Both sides of a move ' +
+         'are reversed together.'
+       )) {
+         return;
+       }
+
+       group.forEach(e => {
+         e.voided = true;
+       });
+
+     } else if (action === 'demo') {
+       if (
+         m.funds.length &&
+         !confirm(
+           'Replace the preview with demo examples? ' +
+           'Real app records are unaffected.'
+         )
+       ) {
+         return;
+       }
+
+       m.entries = [];
+       m.expanded = [];
+
+       m.funds = [
+         {
+           name: 'Emergency Fund',
+           type: 'emergency',
+           opening: 75000,
+           target: 200000,
+           amount: 5000,
+           cadence: 'biweekly',
+           first: svShift(svToday(), 3),
+           deadline: ''
+         },
+         {
+           name: 'Car Insurance',
+           type: 'sinking',
+           opening: 30000,
+           target: 90000,
+           amount: 10000,
+           cadence: 'monthly',
+           first: svShift(svToday(), 1, true),
+           deadline: svShift(svToday(), 6, true)
+         },
+         {
+           name: 'Vacation',
+           type: 'goal',
+           opening: 20000,
+           target: 150000,
+           amount: 7500,
+           cadence: 'weekly',
+           first: svShift(svToday(), 7),
+           deadline: svShift(svToday(), 6, true)
+         }
+       ].map(item => ({
+         ...item,
+         id: uuid(),
+         created: svToday(),
+         version: 1,
+         skips: [],
+         moves: {},
+         paused: false,
+         note: 'Demo example — not actual account data'
+       }));
+
+       m.message =
+         'Demo examples loaded. All displayed amounts ' +
+         'are preview data.';
+
+     } else if (action === 'reset') {
+       if (!confirm(
+         'Clear all preview funds and entries? ' +
+         'Real app records are unaffected.'
+       )) {
+         return;
+       }
+
+       m.funds = [];
+       m.entries = [];
+       m.form = null;
+       m.expanded = [];
+
+     } else if (action === 'save') {
+       const box = document.getElementById('bbsv-form');
+       const draft = m.form;
+
+       if (!box || !draft) return;
+
+       for (const input of box.querySelectorAll(
+         'input,select'
+       )) {
+         if (!input.reportValidity()) return;
+       }
+
+       const values = Object.fromEntries(
+         [...box.querySelectorAll('[name]')]
+           .map(input => [input.name, input.value])
+       );
+
+       const fund = m.funds.find(
+         item => item.id === draft.id
+       );
+
+       const today = svToday();
+       const limit = svShift(today, 120, true);
+
+       if (['new', 'edit'].includes(draft.mode)) {
+         if (!fund && m.funds.length >= 30) {
+           throw new Error(
+             'This preview supports up to 30 funds.'
+           );
+         }
+
+         const name = values.name.trim();
+         const target = svAmount(values.target, true);
+         const amount = svAmount(values.amount);
+
+         if (
+           !name ||
+           name.length > 80 ||
+           !['goal', 'sinking', 'emergency']
+             .includes(values.type)
+         ) {
+           throw new Error(
+             'Enter a name and valid fund type.'
+           );
+         }
+
+         if (
+           !amount ||
+           target === 0 ||
+           !['weekly', 'biweekly', 'monthly']
+             .includes(values.cadence)
+         ) {
+           throw new Error(
+             'Contribution and any target must be ' +
+             'greater than zero.'
+           );
+         }
+
+         const changed = !fund ||
+           fund.first !== values.first ||
+           fund.cadence !== values.cadence;
+
+         if (
+           !svDate(values.first) ||
+           values.first > limit ||
+           (changed && values.first < today)
+         ) {
+           throw new Error(
+             'A new schedule must start today or later, ' +
+             'within 10 years.'
+           );
+         }
+
+         if (
+           values.deadline &&
+           (
+             !svDate(values.deadline) ||
+             values.deadline > limit ||
+             values.deadline < values.first
+           )
+         ) {
+           throw new Error(
+             'Use a valid deadline on or after the first ' +
+             'transfer, within 10 years.'
+           );
+         }
+
+         const fields = {
+           name,
+           type: values.type,
+           target,
+           amount,
+           cadence: values.cadence,
+           first: values.first,
+           deadline: values.deadline,
+           note: values.note.trim()
+         };
+
+         if (fund) {
+           Object.assign(fund, fields);
+
+           if (changed) {
+             fund.version++;
+             fund.skips = [];
+             fund.moves = {};
+           }
+         } else {
+           m.funds.push({
+             ...fields,
+             id: uuid(),
+             opening: svAmount(values.opening),
+             created: today,
+             version: 1,
+             skips: [],
+             moves: {},
+             paused: false
+           });
+         }
+
+       } else if (draft.mode === 'reschedule') {
+         if (
+           !fund ||
+           !svSchedule(m, fund).some(
+             p => p.key === draft.slot
+           )
+         ) {
+           throw new Error(
+             'Transfer no longer scheduled.'
+           );
+         }
+
+         if (
+           !svDate(values.date) ||
+           values.date < today ||
+           values.date > limit ||
+           (
+             fund.deadline &&
+             values.date > fund.deadline
+           )
+         ) {
+           throw new Error(
+             'Choose today or later, no later than the ' +
+             'goal deadline or preview limit.'
+           );
+         }
+
+         fund.moves[draft.slot] = values.date;
+
+       } else {
+         if (!fund) {
+           throw new Error('Fund no longer exists.');
+         }
+
+         const amount = svAmount(values.amount);
+
+         if (
+           !amount ||
+           !svDate(values.date) ||
+           values.date < fund.created ||
+           values.date > today
+         ) {
+           throw new Error(
+             'Use a positive amount and an actual date ' +
+             'from fund creation through today.'
+           );
+         }
+
+         if (
+           draft.slot &&
+           !svSchedule(m, fund).some(
+             p => p.key === draft.slot
+           )
+         ) {
+           throw new Error(
+             'That transfer was already recorded or changed.'
+           );
+         }
+
+         const destination = draft.mode === 'move'
+           ? m.funds.find(
+               item =>
+                 item.id === values.destination &&
+                 item.id !== fund.id
+             )
+           : null;
+
+         if (
+           draft.mode === 'move' &&
+           (
+             !destination ||
+             values.date < destination.created
+           )
+         ) {
+           throw new Error(
+             'Choose another fund and a date on or ' +
+             'after its creation.'
+           );
+         }
+
+         if (
+           draft.mode !== 'contribute' &&
+           amount > svBalance(m, fund)
+         ) {
+           throw new Error(
+             'This exceeds the recorded savings in that fund.'
+           );
+         }
+
+         if (
+           draft.mode === 'contribute' &&
+           svBalance(m, fund) + amount > 1000000000000
+         ) {
+           throw new Error(
+             'Fund balance would exceed the preview limit.'
+           );
+         }
+
+         if (
+           destination &&
+           svBalance(m, destination) + amount >
+             1000000000000
+         ) {
+           throw new Error(
+             'Destination balance would exceed the preview limit.'
+           );
+         }
+
+         const group = uuid();
+
+         const base = {
+           date: values.date,
+           note: values.note.trim(),
+           group,
+           voided: false
+         };
+
+         m.entries.push({
+           ...base,
+           id: uuid(),
+           fund: fund.id,
+           delta: draft.mode === 'contribute'
+             ? amount
+             : -amount,
+           kind: draft.mode === 'move'
+             ? 'Move out'
+             : draft.mode === 'withdraw'
+               ? 'Withdrawal'
+               : 'Contribution',
+           slot: draft.mode === 'contribute'
+             ? draft.slot || ''
+             : ''
+         });
+
+         if (destination) {
+           m.entries.push({
+             ...base,
+             id: uuid(),
+             fund: destination.id,
+             delta: amount,
+             kind: 'Move in',
+             slot: ''
+           });
+         }
+       }
+
+       m.form = null;
+
+       m.message =
+         'Preview updated. No money was moved or ' +
+         'saved to the app.';
+     }
+
+     refresh();
+
+   } catch (error) {
+     const target = document.getElementById(
+       'bbsv-error'
+     );
+
+     if (target) {
+       target.textContent = error.message;
+     } else {
+       m.message = error.message;
+       refresh();
+     }
+   }
+ }
  function content(key,s){
   if(!s.ok)return empty('Data not available',s.reason);
   switch(key){
@@ -193,8 +1484,8 @@ use controlled records and adapter functions, not your deployed production app.
    case 'review':return reviewHTML(s);
    case 'monthly':return monthlyHTML(s);
    case 'connections':return connectionsHTML(s);
-   case 'goals':return empty('No savings-goal records yet','The current app does not provide a verified goals or sinking-fund data source. Income is not a savings balance, so no goal amounts or progress are invented.')+panel('Already available',detail('Saved income sources',String(s.income.length))+help('Use Forecast & What-If for the income sources and paycheck assignments already in the app. Goal creation and saved contributions need a separate implementation.'))+routeButton('Open income settings','settings');
-         case 'cards': {
+   case 'goals':return savingsHTML(s);
+   case 'cards': {
      const bills = regular(s).filter(
        b => b.category === 'creditcards'
      );
@@ -277,16 +1568,200 @@ use controlled records and adapter functions, not your deployed production app.
  }
  function onClick(e){
   if(!(e.target instanceof Element))return;const b=e.target.closest('[data-bbml-action]');if(!b||b.closest('[data-bb-drag-preview],[data-bb-copy-id]')||!b.closest('.bbml-page,#'+DIALOG))return;const a=b.dataset.bbmlAction;
+
+  if (a.startsWith('savings:')) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    savingsAction(a.slice(8), b);
+    return;
+  }
   if(a==='close')return close();if(a==='refresh')return refreshDialog();if(a.startsWith('open:'))return open(a.slice(5));
   if(a.startsWith('route:')){const r=a.slice(6);if(['today','transactions','activity','settings','bills'].includes(r)){close();navigate(r);}return;}
   if(a.startsWith('bill:')){const s=snapshot();if(!s.ok)return;const id=a.slice(5);if(!s.bills.some(x=>x.id===id))return;close();navigate('detail',{id,returnRoute:'more'});}
  }
  function redraw(){if(!active||typeof currentRoute==='undefined'||currentRoute!=='more'||typeof render!=='function')return;const main=document.querySelector('#app .main-content'),y=main?.scrollTop||0,wy=window.scrollY;render();const next=document.querySelector('#app .main-content');if(next)next.scrollTop=y;window.scrollTo(0,wy);}
  function changed(){if(!active)return;clearTimeout(timer);timer=setTimeout(()=>{if(document.getElementById(DIALOG)){const identity=scope();if(!identity.ok||identity.key!==openedScope)close();else{const label=document.getElementById('bbml-source');if(label)label.textContent='App data changed. Refresh to reload this view (what-if input recalculates from current data).';}}redraw();},80);}
- function signedOut(){close();changed();}
+ function signedOut(){
+   savingsPreview = null;
+   close();
+   changed();
+ }
  const DATA_EVENTS=['billbeacon:data-changed','billbeacon-data-changed','billbeacon:household-ready','billbeacon-household-ready'];
  const OUT_EVENTS=['billbeacon:signed-out','billbeacon-signed-out'];
  const CSS=String.raw`
+  .bbsv-root .bbsv-actions {
+   display: grid;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+   gap: 9px;
+   margin: 14px 0 18px;
+ }
+
+ .bbsv-root .bbsv-actions .bbml-outline {
+   min-width: 0;
+   min-height: 44px;
+   padding: 10px;
+   font-size: 11px;
+   line-height: 1.4;
+ }
+
+ .bbsv-preview {
+   margin: 0 0 16px;
+   padding-left: 10px;
+   border-left: 3px solid var(--ml-purple);
+   color: var(--ml-muted);
+   font-size: 10px;
+   line-height: 1.65;
+ }
+
+ .bbsv-form {
+   min-width: 0;
+   margin: 0 0 18px;
+ }
+
+ .bbsv-form legend {
+   padding: 0 6px;
+   font-size: 14px;
+   font-weight: 750;
+ }
+
+ .bbsv-error {
+   color: var(--overdue, #ef8295);
+   font-size: 12px;
+   line-height: 1.6;
+ }
+
+ .bbsv-fund {
+   padding: 16px;
+ }
+
+ .bbsv-fund > summary {
+   display: flex;
+   align-items: flex-start;
+   justify-content: space-between;
+   gap: 12px;
+   cursor: pointer;
+   list-style: none;
+ }
+
+ .bbsv-fund > summary::-webkit-details-marker {
+   display: none;
+ }
+
+ .bbsv-fund > summary::marker {
+   content: "";
+ }
+
+ .bbsv-fund > summary strong {
+   display: block;
+   font-size: 15px;
+   line-height: 1.4;
+   overflow-wrap: anywhere;
+ }
+
+ .bbsv-fund > summary small {
+   display: block;
+   margin-top: 5px;
+   color: var(--ml-muted);
+   font-size: 10px;
+   line-height: 1.6;
+ }
+
+ .bbsv-summary-money {
+   flex-shrink: 0;
+   max-width: 45%;
+   color: var(--ml-purple);
+   text-align: right;
+   font-size: 17px;
+   font-weight: 800;
+   overflow-wrap: anywhere;
+ }
+
+ .bbsv-fund progress {
+   display: block;
+   width: 100%;
+   height: 7px;
+   margin-top: 16px;
+   accent-color: var(--ml-purple);
+ }
+
+ .bbsv-fund-body {
+   margin-top: 12px;
+   padding-top: 6px;
+   border-top: 1px solid var(--ml-line);
+ }
+
+ .bbsv-history {
+   margin-top: 16px;
+   padding-top: 14px;
+   border-top: 1px solid var(--ml-line);
+ }
+
+ .bbsv-history > summary,
+ .bbsv-root > details > summary {
+   cursor: pointer;
+   color: var(--ml-muted);
+   font-size: 12px;
+   line-height: 1.6;
+ }
+
+ .bbsv-history > .bbml-outline {
+   min-height: 36px;
+   margin: 8px 0 14px;
+   font-size: 10px;
+ }
+
+ .bbsv-upcoming {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 12px;
+   padding: 12px 0;
+   border-bottom: 1px solid var(--ml-line);
+ }
+
+ .bbsv-upcoming:last-child {
+   border-bottom: 0;
+ }
+
+ .bbsv-upcoming > div {
+   min-width: 0;
+ }
+
+ .bbsv-upcoming strong {
+   display: block;
+   font-size: 12px;
+   overflow-wrap: anywhere;
+ }
+
+ .bbsv-upcoming small {
+   display: block;
+   margin-top: 5px;
+   color: var(--ml-muted);
+   font-size: 10px;
+   line-height: 1.6;
+ }
+
+ .bbsv-upcoming > button {
+   flex: 0 0 auto;
+   width: auto;
+   min-height: 38px;
+   padding: 8px 13px;
+   font-size: 11px;
+ }
+
+ .bbsv-root > .bbml-outline {
+   margin-top: 18px;
+ }
+
+ @media (max-width: 350px) {
+   .bbsv-root .bbsv-actions {
+     grid-template-columns: minmax(0, 1fr);
+   }
+
+   .bbsv-summary-money {
+     font-size: 15px;
+   }
+ }
   #bbml-dialog #bbml-source {
    display: none;
  }
