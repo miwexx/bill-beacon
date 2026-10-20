@@ -822,7 +822,7 @@ use controlled records and adapter functions, not your deployed production app.
    `;
  }
 
- function savingsHTML(s) {
+  function savingsHTML(s) {
    const m = svState(s);
 
    if (!m.ready) {
@@ -842,6 +842,378 @@ use controlled records and adapter functions, not your deployed production app.
        )
      );
    }
+
+   const today = svToday();
+   const month = today.slice(0, 7);
+
+   const plans = m.funds.flatMap(
+     f => svSchedule(m, f)
+   );
+
+   const upcoming = plans.slice().sort(
+     (a, b) => a.day.localeCompare(b.day)
+   );
+
+   const saved = m.funds.reduce(
+     (sum, f) => sum + svBalance(m, f),
+     0
+   );
+
+   const planned = plans
+     .filter(p => p.day.slice(0, 7) === month)
+     .reduce((sum, p) => sum + p.amount, 0);
+
+   const types = {
+     emergency: 'Emergency fund',
+     sinking: 'Sinking fund',
+     goal: 'Savings goal'
+   };
+
+   const cards = m.funds.map(f => {
+     const balance = svBalance(m, f);
+
+     const remaining = f.target
+       ? Math.max(0, f.target - balance)
+       : null;
+
+     const schedule = plans.filter(
+       p => p.fund === f.id
+     );
+
+     const next = schedule[0];
+
+     const slots = f.deadline
+       ? schedule.filter(p =>
+           p.day >= today &&
+           p.day <= f.deadline
+         ).length
+       : 0;
+
+     const suggested = remaining && slots
+       ? Math.ceil(remaining / slots)
+       : null;
+
+     const status = f.paused
+       ? 'Paused'
+       : f.target && !remaining
+         ? 'Target reached'
+         : f.deadline && f.deadline < today
+           ? 'Deadline passed'
+           : remaining && f.deadline && !slots
+             ? 'No transfer dates left'
+             : suggested && f.amount < suggested
+               ? 'Below target pace'
+               : suggested
+                 ? 'On track at the planned amount'
+                 : 'Saving at your own pace';
+
+     const history = m.entries
+       .filter(e => e.fund === f.id)
+       .slice()
+       .reverse();
+
+     return `
+       <details
+         class="bbml-panel bbsv-fund"
+         data-sv-fund="${esc(f.id)}"
+         ${m.expanded.includes(f.id) ? 'open' : ''}
+       >
+         <summary>
+           <span>
+             <strong>${esc(f.name)}</strong>
+             <small>
+               ${esc(types[f.type])} · ${esc(status)}
+             </small>
+           </span>
+
+           <span class="bbsv-summary-money">
+             ${esc(svCash(balance, s))}
+             <small>Details ▾</small>
+           </span>
+         </summary>
+
+         ${
+           f.target
+             ? `
+               <progress
+                 max="${f.target}"
+                 value="${Math.min(balance, f.target)}"
+                 aria-label="${esc(f.name)} progress"
+               ></progress>
+
+               <p class="bbml-help">
+                 ${esc(svCash(balance, s))}
+                 of ${esc(svCash(f.target, s))}
+               </p>
+             `
+             : ''
+         }
+
+         <div class="bbsv-fund-body">
+           ${detail(
+             'Recorded savings',
+             svCash(balance, s)
+           )}
+
+           ${detail(
+             'Target',
+             svCash(f.target, s)
+           )}
+
+           ${detail(
+             'Still needed',
+             svCash(remaining, s)
+           )}
+
+           ${detail(
+             'Planned contribution',
+             svCash(f.amount, s)
+           )}
+
+           ${detail(
+             'Next transfer',
+             next
+               ? fmtDate(next.day) +
+                 (next.day < today ? ' · overdue' : '')
+               : 'None scheduled'
+           )}
+
+           ${detail(
+             'Goal deadline',
+             f.deadline
+               ? fmtDate(f.deadline)
+               : 'No deadline'
+           )}
+
+           ${
+             f.deadline && remaining
+               ? detail(
+                   'Suggested per remaining transfer',
+                   suggested
+                     ? svCash(suggested, s)
+                     : 'No future dates left'
+                 )
+               : ''
+           }
+
+           ${f.note ? help(f.note) : ''}
+
+           <div class="bbsv-actions">
+             ${svButton(
+               'Add contribution',
+               'contribute',
+               f.id
+             )}
+
+             ${svButton(
+               'Record withdrawal',
+               'withdraw',
+               f.id
+             )}
+
+             ${
+               m.funds.length > 1
+                 ? svButton(
+                     'Move to another fund',
+                     'move',
+                     f.id
+                   )
+                 : ''
+             }
+
+             ${svButton(
+               'Edit plan',
+               'edit',
+               f.id
+             )}
+
+             ${svButton(
+               f.paused
+                 ? 'Resume from today'
+                 : 'Pause plan',
+               'pause',
+               f.id
+             )}
+           </div>
+
+           ${
+             next
+               ? `
+                 <div class="bbsv-actions">
+                   ${svButton(
+                     'Record next transfer',
+                     'contribute',
+                     f.id,
+                     next.key
+                   )}
+
+                   ${svButton(
+                     'Skip next transfer',
+                     'skip',
+                     f.id,
+                     next.key
+                   )}
+
+                   ${svButton(
+                     'Reschedule next',
+                     'reschedule',
+                     f.id,
+                     next.key
+                   )}
+                 </div>
+               `
+               : ''
+           }
+
+           <details class="bbsv-history">
+             <summary>
+               History (${history.length})
+             </summary>
+
+             ${
+               history.length
+                 ? history.map(e => `
+                     <div class="bbml-detail">
+                       <div>
+                         <span>
+                           ${esc(e.kind)}
+                           ${e.voided ? ' · reversed' : ''}
+                         </span>
+
+                         <small>
+                           ${esc(fmtDate(e.date))}
+                           ${
+                             e.note
+                               ? ' · ' + esc(e.note)
+                               : ''
+                           }
+                         </small>
+                       </div>
+
+                       <strong>
+                         ${e.delta < 0 ? '−' : '+'}${
+                           esc(
+                             svCash(
+                               Math.abs(e.delta),
+                               s
+                             )
+                           )
+                         }
+                       </strong>
+                     </div>
+
+                     ${
+                       !e.voided
+                         ? svButton(
+                             'Reverse record',
+                             'undo',
+                             e.id
+                           )
+                         : ''
+                     }
+                   `).join('')
+                 : help(
+                     'No contributions or withdrawals recorded.'
+                   )
+             }
+           </details>
+         </div>
+       </details>
+     `;
+   }).join('');
+
+   const dueList = upcoming.slice(0, 6).map(p => {
+     const f = m.funds.find(
+       item => item.id === p.fund
+     );
+
+     return `
+       <div class="bbsv-upcoming">
+         <div>
+           <strong>${esc(f.name)}</strong>
+
+           <small>
+             ${esc(fmtDate(p.day))}
+             ${
+               p.day < today
+                 ? ' · overdue'
+                 : p.day === today
+                   ? ' · today'
+                   : ''
+             }
+             · ${esc(svCash(p.amount, s))}
+           </small>
+         </div>
+
+         ${svButton(
+           'Record',
+           'contribute',
+           f.id,
+           p.key
+         )}
+       </div>
+     `;
+   }).join('');
+
+   return `
+     <div class="bbsv-root">
+       ${metrics(
+         metric(
+           'Recorded savings',
+           svCash(saved, s),
+           'Shared household savings'
+         ),
+         metric(
+           'Still planned this month',
+           svCash(planned, s),
+           'Unrecorded, unskipped contributions'
+         )
+       )}
+
+       <div class="bbsv-actions">
+         ${svButton(
+           'Create savings fund',
+           'new'
+         )}
+       </div>
+
+       <p
+         id="bbsv-cloud-message"
+         role="status"
+         class="bbml-help"
+       >${esc(m.message)}</p>
+
+       ${svForm(m, s)}
+
+       ${
+         m.funds.length
+           ? cards
+           : empty(
+               'Start your savings plan',
+               'Create a fund to organize your household savings.'
+             )
+       }
+
+       ${
+         m.funds.length
+           ? panel(
+               'Upcoming transfers',
+               dueList ||
+               help(
+                 'No outstanding transfers scheduled.'
+               )
+             )
+           : ''
+       }
+
+       ${help(
+         'Shared savings records do not move money ' +
+         'or change your bill totals. Automatic savings ' +
+         'notifications are not enabled yet.'
+       )}
+     </div>
+   `;
+ }
  function savingsActionLocal(action, button) {
    const s = snapshot();
 
@@ -1205,7 +1577,7 @@ use controlled records and adapter functions, not your deployed production app.
            svBalance(m, fund) + amount > 1000000000000
          ) {
            throw new Error(
-             'Fund balance would exceed the preview limit.'
+             'Fund balance would exceed the supported limit.'
            );
          }
 
@@ -1215,7 +1587,7 @@ use controlled records and adapter functions, not your deployed production app.
              1000000000000
          ) {
            throw new Error(
-             'Destination balance would exceed the preview limit.'
+             'Destination balance would exceed the supported limit.'
            );
          }
 
@@ -1568,8 +1940,8 @@ use controlled records and adapter functions, not your deployed production app.
  }
  function redraw(){if(!active||typeof currentRoute==='undefined'||currentRoute!=='more'||typeof render!=='function')return;const main=document.querySelector('#app .main-content'),y=main?.scrollTop||0,wy=window.scrollY;render();const next=document.querySelector('#app .main-content');if(next)next.scrollTop=y;window.scrollTo(0,wy);}
  function changed(){if(!active)return;clearTimeout(timer);timer=setTimeout(()=>{if(document.getElementById(DIALOG)){const identity=scope();if(!identity.ok||identity.key!==openedScope)close();else{const label=document.getElementById('bbml-source');if(label)label.textContent='App data changed. Refresh to reload this view (what-if input recalculates from current data).';}}redraw();},80);}
- function signedOut(){
-   savingsState = null;
+ function signedOut() {
+   svDispose();
    close();
    changed();
  }
