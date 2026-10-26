@@ -281,12 +281,12 @@ use controlled records and adapter functions, not your deployed production app.
 
      metrics(
        metric(
-         'Paycheck 1 model',
+         'Paycheck 1 Model',
          money(first, s),
          label
        ),
        metric(
-         'Paycheck 2 model',
+         'Paycheck 2 Model',
          money(second, s),
          label
        )
@@ -296,29 +296,29 @@ use controlled records and adapter functions, not your deployed production app.
        'Paycheck plan · ' + label,
 
        detail(
-         'Paycheck 1 expected income',
+         'Paycheck 1 Expected Income',
          money(f.first, s)
        ) +
 
        detail(
-         'Paycheck 1 scheduled bills',
+         'Paycheck 1 Scheduled Bills',
          money(p.first.scheduled, s)
        ) +
 
        detail(
-         'Paycheck 2 expected income',
+         'Paycheck 2 Expected Income',
          money(f.second, s)
        ) +
 
        detail(
-         'Paycheck 2 scheduled bills',
+         'Paycheck 2 Scheduled Bills',
          money(p.second.scheduled, s)
        ) +
 
        (
          p.previous
            ? detail(
-               'Previous-paycheck scheduled bills',
+               'Previous-Paycheck Scheduled Bills',
                money(p.previous.scheduled, s),
                'Separate funding bucket; excluded ' +
                'from the two comparisons above.'
@@ -337,14 +337,14 @@ use controlled records and adapter functions, not your deployed production app.
      ) +
 
      panel(
-       'Try a hypothetical change',
+       'Try A Hypothetical Change',
 
        `
          <label
            for="bbml-cycle"
            class="bbml-field-label"
          >
-           Apply to paycheck
+           Apply To Paycheck
          </label>
 
          <select
@@ -359,7 +359,7 @@ use controlled records and adapter functions, not your deployed production app.
            for="bbml-extra"
            class="bbml-field-label"
          >
-           Additional expense
+           Additional Expense
            (${esc(s.settings.currency || 'USD')})
          </label>
 
