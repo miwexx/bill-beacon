@@ -70,18 +70,329 @@ use controlled records and adapter functions, not your deployed production app.
   const s=snapshot();const tool=k=>{const t=TOOLS[k];return row(t[0],t[1],t[2],t[3],'open:'+k,k==='goals'?'Shared':k==='documents'?'Notes':k==='cards'?'Bills':'Read-only');};
   return `<div class="nav-bar"><div class="nav-bar-content bbml-nav"><span></span><div class="nav-title">More</div><span></span></div></div><div class="main-content fade-in bbml-page"><div class="content-pad bbml-content"><div class="bbml-intro"><div><p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p><h1>Plan ahead. Stay in control.</h1></div><span class="bbml-badge">App-data beta</span></div><p class="bbml-intro-note">${esc(s.ok?'Your household records and shared savings plans.':s.reason)}</p><button type="button" class="bbml-bank" data-bbml-action="route:transactions"><span class="bbml-icon bbml-purple">${icon('bank',24)}</span><span class="bbml-row-copy"><span class="bbml-row-title">Banking</span><span class="bbml-row-sub">Open your existing transactions</span></span><span class="bbml-bank-link">View ${icon('arrow',15)}</span></button>${group('Planning',tool('forecast')+tool('goals'))}${group('Manage',tool('subscriptions')+tool('cards')+tool('documents'))}${group('Review',tool('review')+tool('monthly')+row('Activity & Changes','Your existing bill and payment change history.','activity','orange','route:activity'))}${group('App',tool('connections')+row('Settings','Account, appearance, reminders and backups.','settings','purple','route:settings'))}<p class="bbml-footer">No sample records · projections are not available balances · ${esc(monthLabel())}</p></div></div>`;
  }
- function forecast(s){
-  if(!s.income.length)return {error:'No income sources are saved. Add income in Settings before comparing income with bills.'};
-  if(typeof getPaycheckPlan!=='function'||typeof getTotalIncomeForPayCycle!=='function')return {error:'The existing paycheck calculation helpers are unavailable. No substitute totals were invented.'};
-  try{const p=getPaycheckPlan(new Date());const first=num(getTotalIncomeForPayCycle('first')),second=num(getTotalIncomeForPayCycle('second'));
-   if(first===null||second===null||!p?.first||!p?.second||cents(p.first.scheduled)===null||cents(p.second.scheduled)===null)throw new Error();
-   return {plan:p,first,second};
-  }catch{return {error:'The app paycheck plan could not be calculated. Check Needs Review and the existing Dashboard.'};}
+  let forecastView = {
+   scope: null,
+   year: null,
+   month: null
+ };
+
+ function forecastReference(s) {
+   if (forecastView.scope !== s.scope) {
+     const today = svToday();
+     const [year, month] = today.split('-').map(Number);
+
+     forecastView = {
+       scope: s.scope,
+       year,
+       month: month - 1
+     };
+   }
+
+   return new Date(
+     forecastView.year,
+     forecastView.month,
+     1,
+     12
+   );
  }
- function forecastHTML(s){
-  const f=forecast(s);if(f.error)return empty('Forecast not available',f.error)+routeButton('Open Settings','settings');
-  const p=f.plan;const first=f.first-Number(p.first.scheduled),second=f.second-Number(p.second.scheduled);
-  return note('Current-month funding model: full expected income minus all assigned scheduled bills, including paid bills. This is not a bank balance or money left to spend.')+metrics(metric('Paycheck 1 model',money(first,s),monthLabel()),metric('Paycheck 2 model',money(second,s),monthLabel()))+panel('Existing paycheck plan',detail('Paycheck 1 expected income',money(f.first,s))+detail('Paycheck 1 scheduled bills',money(p.first.scheduled,s))+detail('Paycheck 2 expected income',money(f.second,s))+detail('Paycheck 2 scheduled bills',money(p.second.scheduled,s))+(p.previous?detail('Previous-paycheck scheduled bills',money(p.previous.scheduled,s),'Separate funding bucket; excluded from the two comparisons above.'):'') )+help('Uses the app’s current income-estimate and paycheck-assignment rules. Variable/manual income, everyday spending, savings, older overdue bills and actual account balances may not be included. No money is reserved.')+panel('Try a hypothetical change',`<label for="bbml-cycle" class="bbml-field-label">Apply to paycheck</label><select id="bbml-cycle" class="bbml-input"><option value="first">Paycheck 1</option><option value="second">Paycheck 2</option></select><label for="bbml-extra" class="bbml-field-label">Additional expense (${esc(s.settings.currency||'USD')})</label><input id="bbml-extra" class="bbml-input" type="number" min="0" max="1000000000" step="0.01" inputmode="decimal" value="0"><div id="bbml-result" class="bbml-result" aria-live="polite"></div>${help('This adjustment exists only in this open screen. It does not add a bill or change your paycheck plan.')}`)+routeButton('Open Dashboard paycheck plan','today');
+
+ function forecastMonthLabel(s) {
+   return forecastReference(s).toLocaleDateString(
+     undefined,
+     {
+       month: 'long',
+       year: 'numeric'
+     }
+   );
+ }
+
+ function forecastMonthNavigation(s) {
+   return `
+     <div class="bbml-forecast-month">
+       <button
+         type="button"
+         class="bbml-outline"
+         data-bbml-action="forecast-month:previous"
+         aria-label="Previous forecast month"
+       >
+         &#8249;
+       </button>
+
+       <span
+         class="bbml-forecast-month-label"
+         aria-live="polite"
+       >
+         ${esc(forecastMonthLabel(s))}
+       </span>
+
+       <button
+         type="button"
+         class="bbml-outline"
+         data-bbml-action="forecast-month:next"
+         aria-label="Next forecast month"
+       >
+         &#8250;
+       </button>
+     </div>
+
+     <button
+       type="button"
+       class="bbml-forecast-today"
+       data-bbml-action="forecast-month:today"
+     >
+       This month
+     </button>
+   `;
+ }
+
+ function changeForecastMonth(action) {
+   const s = snapshot();
+
+   if (!s.ok) {
+     close();
+     return;
+   }
+
+   const reference = forecastReference(s);
+
+   let next;
+
+   if (action === 'today') {
+     const [year, month] = svToday()
+       .split('-')
+       .map(Number);
+
+     next = new Date(year, month - 1, 1, 12);
+   } else if (
+     action === 'previous' ||
+     action === 'next'
+   ) {
+     next = new Date(
+       reference.getFullYear(),
+       reference.getMonth() +
+         (action === 'next' ? 1 : -1),
+       1,
+       12
+     );
+   } else {
+     return;
+   }
+
+   if (
+     next.getFullYear() < 1900 ||
+     next.getFullYear() > 9999
+   ) {
+     return;
+   }
+
+   forecastView.year = next.getFullYear();
+   forecastView.month = next.getMonth();
+
+   refreshDialog();
+ }
+ function forecast(s) {
+   if (!s.income.length) {
+     return {
+       error:
+         'No income sources are saved. Add income ' +
+         'in Settings before comparing income with bills.'
+     };
+   }
+
+   if (
+     typeof getPaycheckPlan !== 'function' ||
+     typeof getTotalIncomeForPayCycle !== 'function'
+   ) {
+     return {
+       error:
+         'The existing paycheck calculation helpers ' +
+         'are unavailable. No substitute totals were invented.'
+     };
+   }
+
+   try {
+     const reference = forecastReference(s);
+
+     const plan = getPaycheckPlan(reference);
+
+     const first = num(
+       getTotalIncomeForPayCycle('first')
+     );
+
+     const second = num(
+       getTotalIncomeForPayCycle('second')
+     );
+
+     if (
+       first === null ||
+       second === null ||
+       !plan?.first ||
+       !plan?.second ||
+       cents(plan.first.scheduled) === null ||
+       cents(plan.second.scheduled) === null
+     ) {
+       throw new Error(
+         'Invalid paycheck calculation.'
+       );
+     }
+
+     return {
+       plan,
+       first,
+       second,
+       reference
+     };
+   } catch {
+     return {
+       error:
+         'The app paycheck plan could not be calculated ' +
+         'for this month. Check Needs Review and the ' +
+         'existing Dashboard.'
+     };
+   }
+ }
+  function forecastHTML(s) {
+   const navigation = forecastMonthNavigation(s);
+   const f = forecast(s);
+
+   if (f.error) {
+     return navigation +
+       empty('Forecast not available', f.error) +
+       routeButton('Open Settings', 'settings');
+   }
+
+   const p = f.plan;
+   const label = forecastMonthLabel(s);
+
+   const first =
+     f.first - Number(p.first.scheduled);
+
+   const second =
+     f.second - Number(p.second.scheduled);
+
+   return navigation +
+
+     note(
+       'Selected-month funding model: expected income ' +
+       'minus assigned scheduled bills, including paid ' +
+       'bills. This is not a bank balance or money left ' +
+       'to spend.'
+     ) +
+
+     metrics(
+       metric(
+         'Paycheck 1 model',
+         money(first, s),
+         label
+       ),
+       metric(
+         'Paycheck 2 model',
+         money(second, s),
+         label
+       )
+     ) +
+
+     panel(
+       'Paycheck plan · ' + label,
+
+       detail(
+         'Paycheck 1 expected income',
+         money(f.first, s)
+       ) +
+
+       detail(
+         'Paycheck 1 scheduled bills',
+         money(p.first.scheduled, s)
+       ) +
+
+       detail(
+         'Paycheck 2 expected income',
+         money(f.second, s)
+       ) +
+
+       detail(
+         'Paycheck 2 scheduled bills',
+         money(p.second.scheduled, s)
+       ) +
+
+       (
+         p.previous
+           ? detail(
+               'Previous-paycheck scheduled bills',
+               money(p.previous.scheduled, s),
+               'Separate funding bucket; excluded ' +
+               'from the two comparisons above.'
+             )
+           : ''
+       )
+     ) +
+
+     help(
+       'Uses your current expected-income estimate for ' +
+       'each paycheck and the selected month’s assigned ' +
+       'bills. It does not reconstruct historical income ' +
+       'or separately count extra paydays. Variable/manual ' +
+       'income, everyday spending, savings, older overdue ' +
+       'bills and actual account balances may not be included.'
+     ) +
+
+     panel(
+       'Try a hypothetical change',
+
+       `
+         <label
+           for="bbml-cycle"
+           class="bbml-field-label"
+         >
+           Apply to paycheck
+         </label>
+
+         <select
+           id="bbml-cycle"
+           class="bbml-input"
+         >
+           <option value="first">Paycheck 1</option>
+           <option value="second">Paycheck 2</option>
+         </select>
+
+         <label
+           for="bbml-extra"
+           class="bbml-field-label"
+         >
+           Additional expense
+           (${esc(s.settings.currency || 'USD')})
+         </label>
+
+         <input
+           id="bbml-extra"
+           class="bbml-input"
+           type="number"
+           min="0"
+           max="1000000000"
+           step="0.01"
+           inputmode="decimal"
+           value="0"
+         >
+
+         <div
+           id="bbml-result"
+           class="bbml-result"
+           aria-live="polite"
+         ></div>
+
+         ${help(
+           'Applies only to the selected forecast month. ' +
+           'Switching months resets this hypothetical ' +
+           'expense to zero. No bill or paycheck record ' +
+           'is changed.'
+         )}
+       `
+     ) +
+
+     routeButton(
+       'Open Dashboard paycheck plan',
+       'today'
+     );
  }
  function normalizedMonthly(b){const n=num(b.amount);if(n===null||n<0)return null;return ({Weekly:n*52/12,'Every 2 Weeks':n*26/12,Monthly:n,Quarterly:n/3,Yearly:n/12})[b.recurrence]??null;}
  function nextDates(bills){
@@ -1927,7 +2238,16 @@ use controlled records and adapter functions, not your deployed production app.
  }
  function onClick(e){
   if(!(e.target instanceof Element))return;const b=e.target.closest('[data-bbml-action]');if(!b||b.closest('[data-bb-drag-preview],[data-bb-copy-id]')||!b.closest('.bbml-page,#'+DIALOG))return;const a=b.dataset.bbmlAction;
+  if (a.startsWith('forecast-month:')) {
+    e.preventDefault();
+    e.stopImmediatePropagation();
 
+    changeForecastMonth(
+      a.slice('forecast-month:'.length)
+    );
+
+    return;
+  }
   if (a.startsWith('savings:')) {
     e.preventDefault();
     e.stopImmediatePropagation();
@@ -1948,6 +2268,54 @@ use controlled records and adapter functions, not your deployed production app.
  const DATA_EVENTS=['billbeacon:data-changed','billbeacon-data-changed','billbeacon:household-ready','billbeacon-household-ready'];
  const OUT_EVENTS=['billbeacon:signed-out','billbeacon-signed-out'];
  const CSS=String.raw`
+
+  .bbml-forecast-month {
+   display: grid;
+   grid-template-columns: 44px minmax(0, 1fr) 44px;
+   align-items: center;
+   gap: 12px;
+   margin: 0 0 6px;
+ }
+
+ .bbml-forecast-month > .bbml-outline {
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   width: 44px;
+   min-height: 44px;
+   margin: 0;
+   padding: 0;
+   border-radius: 14px;
+   font-size: 28px;
+   line-height: 1;
+ }
+
+ .bbml-forecast-month-label {
+   color: var(--ml-text, inherit);
+   text-align: center;
+   font-size: 17px;
+   font-weight: 800;
+   line-height: 1.4;
+ }
+
+ .bbml-forecast-today {
+   display: block;
+   min-height: 36px;
+   margin: 0 auto 18px;
+   padding: 6px 12px;
+   border: 0;
+   border-radius: 10px;
+   background: transparent;
+   color: var(--ml-purple);
+   font: inherit;
+   font-size: 11px;
+   cursor: pointer;
+ }
+
+ .bbml-forecast-today:focus-visible {
+   outline: 2px solid var(--ml-purple);
+   outline-offset: 2px;
+ }
   .bbsv-root .bbsv-actions {
    display: grid;
    grid-template-columns: repeat(2, minmax(0, 1fr));
