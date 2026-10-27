@@ -967,23 +967,23 @@ use controlled records and adapter functions, not your deployed production app.
    let fields;
 
    if (
-     draft.mode === 'new' ||
-     draft.mode === 'edit'
+     draft.mode === 'New' ||
+     draft.mode === 'Edit'
    ) {
      title = f
-       ? 'Edit savings plan'
-       : 'Create a savings fund';
+       ? 'Edit Savings Plan'
+       : 'Create A Savings Fund';
 
      fields =
        svInput(
-         'Fund name',
+         'Fund Name',
          'name',
          'text',
          f?.name || '',
          'maxlength="80" required'
        ) +
        svSelect(
-         'Fund type',
+         'Fund Type',
          'type',
          [
            ['emergency', 'Emergency fund'],
@@ -993,7 +993,7 @@ use controlled records and adapter functions, not your deployed production app.
          f?.type || 'goal'
        ) +
        svInput(
-         'Target amount — optional',
+         'Target Amount — Optional',
          'target',
          'number',
          dollars(f?.target),
@@ -1011,14 +1011,14 @@ use controlled records and adapter functions, not your deployed production app.
            : ''
        ) +
        svInput(
-         'Contribution per transfer',
+         'Contribution Per Transfer',
          'amount',
          'number',
          dollars(f?.amount),
          'min="0.01" step="0.01" required'
        ) +
        svSelect(
-         'Transfer schedule',
+         'Transfer Schedule',
          'cadence',
          [
            ['weekly', 'Every week'],
@@ -1028,20 +1028,20 @@ use controlled records and adapter functions, not your deployed production app.
          f?.cadence || 'monthly'
        ) +
        svInput(
-         'First transfer date',
+         'First Transfer Date',
          'first',
          'date',
          f?.first || svToday(),
          'required'
        ) +
        svInput(
-         'Goal deadline — optional',
+         'Goal Deadline — Optional',
          'deadline',
          'date',
          f?.deadline || ''
        ) +
        svInput(
-         'Account label / note — optional',
+         'Account Label / Note — Optional',
          'note',
          'text',
          f?.note || '',
@@ -1262,7 +1262,7 @@ use controlled records and adapter functions, not your deployed production app.
 
          <div class="bbsv-fund-body">
            ${detail(
-             'Recorded savings',
+             'Recorded Savings',
              svCash(balance, s)
            )}
 
@@ -1272,37 +1272,37 @@ use controlled records and adapter functions, not your deployed production app.
            )}
 
            ${detail(
-             'Still needed',
+             'Still Needed',
              svCash(remaining, s)
            )}
 
            ${detail(
-             'Planned contribution',
+             'Planned Contribution',
              svCash(f.amount, s)
            )}
 
            ${detail(
-             'Next transfer',
+             'Next Transfer',
              next
                ? fmtDate(next.day) +
-                 (next.day < today ? ' · overdue' : '')
-               : 'None scheduled'
+                 (next.day < today ? ' · Overdue' : '')
+               : 'None Scheduled'
            )}
 
            ${detail(
-             'Goal deadline',
+             'Goal Deadline',
              f.deadline
                ? fmtDate(f.deadline)
-               : 'No deadline'
+               : 'No Deadline'
            )}
 
            ${
              f.deadline && remaining
                ? detail(
-                   'Suggested per remaining transfer',
+                   'Suggested Per Remaining Transfer',
                    suggested
                      ? svCash(suggested, s)
-                     : 'No future dates left'
+                     : 'No Future Dates Left'
                  )
                : ''
            }
@@ -1311,38 +1311,38 @@ use controlled records and adapter functions, not your deployed production app.
 
            <div class="bbsv-actions">
              ${svButton(
-               'Add contribution',
-               'contribute',
+               'Add Contribution',
+               'Contribute',
                f.id
              )}
 
              ${svButton(
-               'Record withdrawal',
-               'withdraw',
+               'Record Withdrawal',
+               'Withdraw',
                f.id
              )}
 
              ${
                m.funds.length > 1
                  ? svButton(
-                     'Move to another fund',
-                     'move',
+                     'Move To Another Fund',
+                     'Move',
                      f.id
                    )
                  : ''
              }
 
              ${svButton(
-               'Edit plan',
-               'edit',
+               'Edit Plan',
+               'Edit',
                f.id
              )}
 
              ${svButton(
                f.paused
-                 ? 'Resume from today'
-                 : 'Pause plan',
-               'pause',
+                 ? 'Resume From Today'
+                 : 'Pause Plan',
+               'Pause',
                f.id
              )}
            </div>
@@ -1352,22 +1352,22 @@ use controlled records and adapter functions, not your deployed production app.
                ? `
                  <div class="bbsv-actions">
                    ${svButton(
-                     'Record next transfer',
+                     'Record Next Transfer',
                      'contribute',
                      f.id,
                      next.key
                    )}
 
                    ${svButton(
-                     'Skip next transfer',
+                     'Skip Next Transfer',
                      'skip',
                      f.id,
                      next.key
                    )}
 
                    ${svButton(
-                     'Reschedule next',
-                     'reschedule',
+                     'Reschedule Next',
+                     'Reschedule',
                      f.id,
                      next.key
                    )}
@@ -1388,7 +1388,7 @@ use controlled records and adapter functions, not your deployed production app.
                        <div>
                          <span>
                            ${esc(e.kind)}
-                           ${e.voided ? ' · reversed' : ''}
+                           ${e.voided ? ' · Reversed' : ''}
                          </span>
 
                          <small>
@@ -1483,7 +1483,7 @@ use controlled records and adapter functions, not your deployed production app.
 
        <div class="bbsv-actions">
          ${svButton(
-           'Create savings fund',
+           'Create Savings Fund',
            'new'
          )}
        </div>
@@ -1519,7 +1519,7 @@ use controlled records and adapter functions, not your deployed production app.
 
        ${help(
          'Shared savings records do not move money ' +
-         'or change your bill totals. Automatic savings ' 
+         'or change your bill totals.' 
        )}
      </div>
    `;
