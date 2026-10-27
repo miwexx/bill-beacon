@@ -986,9 +986,9 @@ use controlled records and adapter functions, not your deployed production app.
          'Fund Type',
          'type',
          [
-           ['emergency', 'Emergency fund'],
-           ['sinking', 'Planned expense / sinking fund'],
-           ['goal', 'Savings goal']
+           ['emergency', 'Emergency Fund'],
+           ['sinking', 'Planned Expense / Sinking Fund'],
+           ['goal', 'Savings Goal']
          ],
          f?.type || 'goal'
        ) +
@@ -1141,7 +1141,7 @@ use controlled records and adapter functions, not your deployed production app.
        'Savings Plan',
        help(
          m.error ||
-         'Loading shared household savings…'
+         'Loading shared Household Savings…'
        ) +
        (
          m.error
@@ -1508,10 +1508,10 @@ use controlled records and adapter functions, not your deployed production app.
        ${
          m.funds.length
            ? panel(
-               'Upcoming transfers',
+               'Upcoming Transfers',
                dueList ||
                help(
-                 'No outstanding transfers scheduled.'
+                 'No Outstanding Transfers Scheduled.'
                )
              )
            : ''
