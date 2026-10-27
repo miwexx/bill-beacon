@@ -1,13 +1,7 @@
-/* Bill Beacon More tools — app-data beta v2.
-REPLACE the old more-tools-preview.js with this file. Load once LAST:
-<script src="js/more-tools-preview.js?v=2"></script>
-Reads existing Store records and app calculation helpers. No new record schema,
-network requests, storage writes, permission requests or automatic corrections.
-Goals, card debt terms and documents remain unconfigured when unsupported.
-Figures are current-device household snapshots, not bank-balance guarantees.
-Remove the script and reload to restore More; uninstall() also restores it.
-Validation: syntax check plus 39 Chromium fixture checks passed. These checks
-use controlled records and adapter functions, not your deployed production app.
+/* Bill Beacon More tools — savings target calculator update.
+   Based on the supplied current More script; retains Forecast month navigation.
+   Savings planning uses the existing household store and ledger schema.
+   This file does not move bank money or deploy notification services.
 */
 (() => {
  'use strict';
@@ -855,7 +849,9 @@ use controlled records and adapter functions, not your deployed production app.
          key,
          day,
          fund: f.id,
-         amount: f.amount
+         amount: f.target
+           ? Math.min(f.amount, Math.max(0, f.target - svBalance(m, f)))
+           : f.amount
        });
      }
    }
@@ -950,6 +946,94 @@ use controlled records and adapter functions, not your deployed production app.
    `;
  }
 
+
+ function svPlanCalculation(m, fund, values) {
+   const today = svToday();
+   const limit = svShift(today, 120, true);
+   const target = svAmount(values.target, true);
+   if (!target) throw new Error('Enter the total amount you want to save.');
+   if (!['weekly', 'biweekly', 'monthly'].includes(values.cadence)) {
+     throw new Error('Choose a contribution schedule.');
+   }
+   if (!values.deadline || !svDate(values.deadline)) {
+     throw new Error('Choose a deadline to calculate your contribution.');
+   }
+   const changed = !fund || fund.first !== values.first || fund.cadence !== values.cadence;
+   if (!svDate(values.first) || values.first > limit || (changed && values.first < today)) {
+     throw new Error('Choose a first contribution date from today through the next 10 years.');
+   }
+   if (values.deadline < values.first || values.deadline < today || values.deadline > limit) {
+     throw new Error('The deadline must be on or after the first contribution and today, within 10 years.');
+   }
+   const saved = fund ? svBalance(m, fund) : svAmount(values.opening);
+   if (!Number.isSafeInteger(saved) || saved < 0) throw new Error('Recorded savings are invalid.');
+   const remaining = Math.max(0, target - saved);
+   if (!remaining) {
+     throw new Error('This target is already reached. Increase the target or keep a manual contribution.');
+   }
+   const candidate = {
+     ...(fund || {}),
+     id: fund?.id || '__unsaved_savings_fund__',
+     opening: fund?.opening ?? saved,
+     target: null,
+     amount: 1,
+     first: values.first,
+     deadline: values.deadline,
+     cadence: values.cadence,
+     version: fund ? fund.version + (changed ? 1 : 0) : 1,
+     skips: changed ? [] : fund.skips,
+     moves: changed ? {} : fund.moves,
+     paused: false
+   };
+   const dates = svSchedule(m, candidate).filter(p => p.day >= today);
+   if (!dates.length) throw new Error('No contribution dates remain before this deadline.');
+   const amount = Math.floor((remaining - 1) / dates.length) + 1;
+   const used = Math.ceil(remaining / amount);
+   return {
+     target, saved, remaining, count: dates.length, amount,
+     used,
+     finalAmount: remaining - amount * (used - 1),
+     finalDate: dates[used - 1].day
+   };
+ }
+
+ function svUpdateCalculator() {
+   const m = savingsState;
+   const box = document.getElementById('bbsv-form');
+   if (!m?.form || !['new', 'edit'].includes(m.form.mode) || !box) return;
+   const fields = Object.fromEntries([...box.querySelectorAll('[name]')].map(el => [el.name, el]));
+   if (!fields.calculation || !fields.amount) return;
+   const automatic = fields.calculation.value === 'auto';
+   fields.amount.readOnly = automatic;
+   fields.amount.required = !automatic;
+   fields.target.required = automatic;
+   fields.deadline.required = automatic;
+   const result = box.querySelector('#bbsv-calculation');
+   if (!result) return;
+   result.hidden = !automatic;
+   if (!automatic) return;
+   const values = Object.fromEntries(Object.entries(fields).map(([name, el]) => [name, el.value]));
+   const f = m.funds.find(item => item.id === m.form.id);
+   const s = {settings: {currency: m.currency}};
+   try {
+     const plan = svPlanCalculation(m, f, values);
+     fields.amount.value = (plan.amount / 100).toFixed(2);
+     const label = values.cadence === 'monthly' ? 'Save each month'
+       : values.cadence === 'biweekly' ? 'Save every 2 weeks' : 'Save each week';
+     result.innerHTML =
+       detail('Still needed', svCash(plan.remaining, s)) +
+       detail('Contribution dates available', String(plan.count)) +
+       detail(label, svCash(plan.amount, s)) +
+       detail('Estimated final contribution', svCash(plan.finalAmount, s), fmtDate(plan.finalDate)) +
+       help('Uses actual scheduled dates, not an approximate number of months. ' +
+         'Amounts are rounded up to the nearest cent. The final recorded contribution can be smaller. ' +
+         'Saving applies this amount; later changes require you to review and save a recalculation.');
+   } catch (error) {
+     fields.amount.value = '';
+     result.innerHTML = help(error.message);
+   }
+ }
+
  function svForm(m, s) {
    const draft = m.form;
 
@@ -975,84 +1059,34 @@ use controlled records and adapter functions, not your deployed production app.
        : 'Create a savings fund';
 
      fields =
-       svInput(
-         'Fund name',
-         'name',
-         'text',
-         f?.name || '',
-         'maxlength="80" required'
-       ) +
-       svSelect(
-         'Fund type',
-         'type',
-         [
-           ['emergency', 'Emergency fund'],
-           ['sinking', 'Planned expense / sinking fund'],
-           ['goal', 'Savings goal']
-         ],
-         f?.type || 'goal'
-       ) +
-       svInput(
-         'Target amount — optional',
-         'target',
-         'number',
-         dollars(f?.target),
-         'min="0.01" step="0.01"'
-       ) +
-       (
-         !f
-           ? svInput(
-               'Already Saved',
-               'opening',
-               'number',
-               '0',
-               'min="0" step="0.01" required'
-             )
-           : ''
-       ) +
-       svInput(
-         'Contribution per transfer',
-         'amount',
-         'number',
-         dollars(f?.amount),
-         'min="0.01" step="0.01" required'
-       ) +
-       svSelect(
-         'Transfer schedule',
-         'cadence',
-         [
-           ['weekly', 'Every week'],
-           ['biweekly', 'Every 2 weeks / payday interval'],
-           ['monthly', 'Every month']
-         ],
-         f?.cadence || 'monthly'
-       ) +
-       svInput(
-         'First transfer date',
-         'first',
-         'date',
-         f?.first || svToday(),
-         'required'
-       ) +
-       svInput(
-         'Goal deadline — optional',
-         'deadline',
-         'date',
-         f?.deadline || ''
-       ) +
-       svInput(
-         'Account label / note — optional',
-         'note',
-         'text',
-         f?.note || '',
-         'maxlength="200"'
-       ) +
-       help(
-         'Use an account nickname only. Do not enter account ' +
-         'numbers. Dates can extend up to 10 years from today. ' +
-         'A biweekly schedule uses your chosen first date; ' +
-         'it does not read payroll records.'
-       );
+       svInput('Fund name', 'name', 'text', f?.name || '', 'maxlength="80" required') +
+       svSelect('Fund type', 'type', [
+         ['emergency', 'Emergency fund'],
+         ['sinking', 'Planned expense / sinking fund'],
+         ['goal', 'Savings goal']
+       ], f?.type || 'goal') +
+       svSelect('Contribution amount', 'calculation', [
+         ['auto', 'Calculate from my target and deadline'],
+         ['manual', 'Enter my own contribution amount']
+       ], f ? 'manual' : 'auto') +
+       svInput('Total amount to save', 'target', 'number', dollars(f?.target), 'min="0.01" step="0.01"') +
+       (!f
+         ? svInput('Already saved', 'opening', 'number', '0', 'min="0" step="0.01" required')
+         : detail('Already saved', svCash(svBalance(m, f), s), 'Recorded starting balance and savings history.')) +
+       svInput('Goal deadline', 'deadline', 'date', f?.deadline || '') +
+       svSelect('Save how often?', 'cadence', [
+         ['monthly', 'Every month'],
+         ['biweekly', 'Every 2 weeks'],
+         ['weekly', 'Every week']
+       ], f?.cadence || 'monthly') +
+       svInput('First contribution date', 'first', 'date', f?.first || svToday(), 'required') +
+       svInput('Contribution per transfer', 'amount', 'number', dollars(f?.amount),
+         'min="0.01" step="0.01"' + (f ? ' required' : ' readonly')) +
+       '<div id="bbsv-calculation" class="bbsv-calculation" role="status" aria-live="polite"></div>' +
+       svInput('Account label / note — optional', 'note', 'text', f?.note || '', 'maxlength="200"') +
+       help('Automatic calculation requires a target and deadline. Manual plans can leave them blank. ' +
+         'Every 2 weeks means every 14 days from the first contribution date, not twice a month. ' +
+         'Use an account nickname only, never an account number. No money is transferred automatically.');
    } else if (draft.mode === 'reschedule') {
      title = 'Reschedule one transfer';
 
@@ -1087,7 +1121,7 @@ use controlled records and adapter functions, not your deployed production app.
          'Amount',
          'amount',
          'number',
-         draft.slot ? dollars(f.amount) : '',
+         draft.slot ? dollars(svSchedule(m, f).find(p => p.key === draft.slot)?.amount ?? f.amount) : '',
          'min="0.01" step="0.01" required'
        ) +
        svInput(
@@ -1519,8 +1553,8 @@ use controlled records and adapter functions, not your deployed production app.
 
        ${help(
          'Shared savings records do not move money ' +
-         'or change your bill totals. Automatic savings ' +
-         'notifications are not enabled yet.'
+         'or change your bill totals. Scheduled reminders ' +
+         'depend on your notification setup.'
        )}
      </div>
    `;
@@ -1681,6 +1715,8 @@ use controlled records and adapter functions, not your deployed production app.
 
        if (!box || !draft) return;
 
+       svUpdateCalculator();
+
        for (const input of box.querySelectorAll(
          'input,select'
        )) {
@@ -1708,7 +1744,9 @@ use controlled records and adapter functions, not your deployed production app.
 
          const name = values.name.trim();
          const target = svAmount(values.target, true);
-         const amount = svAmount(values.amount);
+         const amount = values.calculation === 'auto'
+           ? svPlanCalculation(m, fund, values).amount
+           : svAmount(values.amount);
 
          if (
            !name ||
@@ -2227,14 +2265,14 @@ use controlled records and adapter functions, not your deployed production app.
   const income=cycle==='first'?f.first:f.second;const scheduled=Number(f.plan[cycle].scheduled);const result=(Math.round(income*100)-Math.round(scheduled*100)-Math.round(amount*100))/100;
   output.classList.toggle('bbml-negative',result<0);output.innerHTML=`<span>${result<0?'Modeled shortfall':'Modeled Income Less Assigned Bills'}</span><strong>${esc(money(result,s))}</strong><small>${esc(money(income,s))} expected income − ${esc(money(scheduled,s))} scheduled bills − ${esc(money(amount,s))} hypothetical expense. Not a spendable balance.</small>`;
  }
- function refreshDialog(){const d=document.getElementById(DIALOG);if(!d||!opened)return;const s=snapshot();if(!s.ok||s.scope!==openedScope){close();redraw();return;}const body=d.querySelector('.bbml-dialog-body');body.innerHTML=`<p id="bbml-source" class="bbml-source">Current household snapshot · ${esc(new Date().toLocaleString())}</p>${content(opened,s)}`;if(opened==='forecast')updateScenario();}
+ function refreshDialog(){const d=document.getElementById(DIALOG);if(!d||!opened)return;const s=snapshot();if(!s.ok||s.scope!==openedScope){close();redraw();return;}const body=d.querySelector('.bbml-dialog-body');body.innerHTML=`<p id="bbml-source" class="bbml-source">Current household snapshot · ${esc(new Date().toLocaleString())}</p>${content(opened,s)}`;if(opened==='forecast')updateScenario();if(opened==='goals')svUpdateCalculator();}
  function open(key){
   if(!active||!TOOLS[key])return;const target=document.activeElement;close();const s=snapshot();opened=key;openedScope=s.scope||null;const t=TOOLS[key],d=document.createElement('dialog');d.id=DIALOG;d.className='bbml-dialog';d.setAttribute('aria-labelledby','bbml-dialog-title');
   d.innerHTML=`<header class="bbml-dialog-header"><div class="bbml-dialog-heading"><span class="bbml-icon bbml-${t[3]}">${icon(t[2])}</span><div><span class="bbml-eyebrow">APP-DATA BETA</span><h2 id="bbml-dialog-title">${esc(t[0])}</h2></div></div><div class="bbml-dialog-actions"><button type="button" class="bbml-close" data-bbml-action="close" aria-label="Close tool">${icon('close')}</button></div></header><div class="bbml-dialog-body"><p id="bbml-source" class="bbml-source">${s.ok?'Current household snapshot · '+esc(new Date().toLocaleString()):'Data unavailable'}</p>${content(key,s)}</div>`;
   d.addEventListener('close',()=>{d.remove();if(!document.querySelector('#'+DIALOG+'[open]')){opened=null;openedScope=null;if(target?.isConnected)target.focus({preventScroll:true});}},{once:true});
   d.addEventListener('click',e=>{if(e.target!==d)return;const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();});
-  d.addEventListener('input',e=>{if(['bbml-extra','bbml-cycle'].includes(e.target.id))updateScenario();});d.addEventListener('change',e=>{if(e.target.id==='bbml-cycle')updateScenario();});
-  document.body.append(d);if(key==='forecast')updateScenario();d.showModal();d.querySelector('.bbml-close').focus({preventScroll:true});
+  d.addEventListener('input',e=>{if(['bbml-extra','bbml-cycle'].includes(e.target.id))updateScenario();if(e.target.closest('#bbsv-form'))svUpdateCalculator();});d.addEventListener('change',e=>{if(e.target.id==='bbml-cycle')updateScenario();if(e.target.closest('#bbsv-form'))svUpdateCalculator();});
+  document.body.append(d);if(key==='forecast')updateScenario();d.showModal();if(key==='goals')svUpdateCalculator();d.querySelector('.bbml-close').focus({preventScroll:true});
  }
  function onClick(e){
   if(!(e.target instanceof Element))return;const b=e.target.closest('[data-bbml-action]');if(!b||b.closest('[data-bb-drag-preview],[data-bb-copy-id]')||!b.closest('.bbml-page,#'+DIALOG))return;const a=b.dataset.bbmlAction;
@@ -2268,6 +2306,20 @@ use controlled records and adapter functions, not your deployed production app.
  const DATA_EVENTS=['billbeacon:data-changed','billbeacon-data-changed','billbeacon:household-ready','billbeacon-household-ready'];
  const OUT_EVENTS=['billbeacon:signed-out','billbeacon-signed-out'];
  const CSS=String.raw`
+ .bbsv-calculation {
+   margin: 16px 0 10px;
+   padding: 12px 14px;
+   border: 1px solid var(--ml-line);
+   border-radius: 16px;
+   background: rgba(153, 87, 235, .06);
+ }
+ .bbsv-calculation[hidden] { display: none; }
+ #bbsv-amount[readonly] {
+   color: var(--ml-purple);
+   border-color: var(--ml-purple);
+   font-weight: 800;
+ }
+
 
   .bbml-forecast-month {
    display: grid;
