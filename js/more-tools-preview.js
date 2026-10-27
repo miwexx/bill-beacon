@@ -1015,6 +1015,8 @@
    if (!fields.calculation || !fields.amount) return;
    const automatic = fields.calculation.value === 'auto';
    fields.amount.readOnly = automatic; fields.amount.required = !automatic;
+   const manualBox = box.querySelector('#bbsv-manual-contribution');
+   if (manualBox) manualBox.hidden = automatic;
    fields.target.required = automatic; fields.deadline.required = automatic;
    const result = box.querySelector('#bbsv-calculation');
    if (!result) return;
@@ -1062,14 +1064,16 @@
      fields =
        svInput('Fund name', 'name', 'text', f?.name || '', 'maxlength="80" required') +
        svSelect('Fund type', 'type', [['emergency', 'Emergency fund'], ['sinking', 'Planned expense / sinking fund'], ['goal', 'Savings goal']], f?.type || 'goal') +
-       svSelect('Contribution amount', 'calculation', [['auto', 'Calculate from my target and deadline'], ['manual', 'Enter my own contribution amount']], f ? 'manual' : 'auto') +
+       svSelect('Contribution amount', 'calculation', [['auto', 'Calculate from my target and deadline'], ['manual', 'Enter my own contribution amount']], (!f || (f.target && f.deadline && f.deadline >= svToday() && svBalance(m, f) < f.target)) ? 'auto' : 'manual') +
        svInput('Total amount to save', 'target', 'number', dollars(f?.target), 'min="0.01" step="0.01"') +
        (!f ? svInput('Already saved', 'opening', 'number', '0', 'min="0" step="0.01" required')
          : detail('Already saved', svCash(svBalance(m, f), s), 'Recorded starting balance and savings history.')) +
        svInput('Goal deadline', 'deadline', 'date', f?.deadline || '') +
        svSelect('Save how often?', 'cadence', [['monthly', 'Every month'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Every week']], f?.cadence || 'monthly') +
        svInput('First contribution date', 'first', 'date', f?.first || svToday(), 'required') +
+       '<div id="bbsv-manual-contribution">' +
        svInput('Contribution per transfer', 'amount', 'number', dollars(f?.amount), 'min="0.01" step="0.01"' + (f ? ' required' : ' readonly')) +
+       '</div>' +
        '<div id="bbsv-calculation" class="bbsv-calculation" role="status" aria-live="polite"></div>' +
        svInput('Account label / note — optional', 'note', 'text', f?.note || '', 'maxlength="200"') +
        help('Automatic calculation requires a target and deadline. Manual plans can leave them blank. Every 2 weeks means every 14 days, not twice a month. Use an account nickname only. No money is transferred automatically.');
@@ -1298,7 +1302,8 @@
            )}
 
            ${detail(
-             'Planned contribution',
+             f.cadence === 'monthly' ? 'Save each month'
+               : f.cadence === 'biweekly' ? 'Save every 2 weeks' : 'Save each week',
              svCash(f.amount, s)
            )}
 
@@ -2328,6 +2333,8 @@
  const DATA_EVENTS=['billbeacon:data-changed','billbeacon-data-changed','billbeacon:household-ready','billbeacon-household-ready'];
  const OUT_EVENTS=['billbeacon:signed-out','billbeacon-signed-out'];
  const CSS=String.raw`
+ #bbsv-manual-contribution[hidden] {display:none!important}
+
  .bbsv-archived>summary {cursor:pointer;color:var(--ml-muted);font-size:13px}
  .bbsv-archived-item {margin-top:16px;padding-top:14px;border-top:1px solid var(--ml-line)}
 
