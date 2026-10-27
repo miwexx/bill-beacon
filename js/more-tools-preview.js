@@ -1,7 +1,6 @@
-/* Bill Beacon More tools — savings target calculator update.
-   Based on the supplied current More script; retains Forecast month navigation.
-   Savings planning uses the existing household store and ledger schema.
-   This file does not move bank money or deploy notification services.
+/* Bill Beacon More tools — savings calculator and plan management.
+   Shared storage handles writes. Archiving preserves savings history and balances.
+   Requires the matching preserveHistory update in savings-store.js for unused-fund deletion.
 */
 (() => {
  'use strict';
@@ -798,6 +797,35 @@
      svSessionChanged
    );
  });
+
+ function svCanDelete(m, f) {
+   return Boolean(f) && f.opening === 0 && !m.entries.some(e => e.fund === f.id);
+ }
+ function svArchivedHTML(m, s) {
+   const funds = m.funds.filter(f => f.archivedAt);
+   if (!funds.length) return '';
+   return `<details class="bbml-panel bbsv-archived">
+     <summary>Archived plans (${funds.length})</summary>
+     ${funds.map(f => {
+       const history = m.entries.filter(e => e.fund === f.id).slice().reverse();
+       return `<section class="bbsv-archived-item">
+         <h3>${esc(f.name)}</h3>
+         ${detail('Recorded savings', svCash(svBalance(m, f), s))}
+         ${help('This balance remains included in total recorded savings. No future contributions are scheduled while archived.')}
+         <div class="bbsv-actions">
+           ${svButton('Restore plan', 'restore', f.id)}
+           ${svCanDelete(m, f) ? svButton('Delete unused plan', 'delete', f.id) : ''}
+         </div>
+         <details class="bbsv-history"><summary>History (${history.length})</summary>
+           ${history.length ? history.map(e => detail(e.kind + (e.voided ? ' · reversed' : ''),
+             (e.delta < 0 ? '−' : '+') + svCash(Math.abs(e.delta), s),
+             fmtDate(e.date) + (e.note ? ' · ' + e.note : ''))).join('') : help('No savings activity recorded.')}
+         </details>
+       </section>`;
+     }).join('')}
+   </details>`;
+ }
+
  function svBalance(m, f) {
    return f.opening + m.entries
      .filter(e => e.fund === f.id && !e.voided)
@@ -806,6 +834,7 @@
 
  function svSchedule(m, f) {
    if (
+     f.archivedAt ||
      f.paused ||
      (f.target && svBalance(m, f) >= f.target)
    ) {
@@ -948,16 +977,11 @@
 
 
  function svPlanCalculation(m, fund, values) {
-   const today = svToday();
-   const limit = svShift(today, 120, true);
+   const today = svToday(), limit = svShift(today, 120, true);
    const target = svAmount(values.target, true);
    if (!target) throw new Error('Enter the total amount you want to save.');
-   if (!['weekly', 'biweekly', 'monthly'].includes(values.cadence)) {
-     throw new Error('Choose a contribution schedule.');
-   }
-   if (!values.deadline || !svDate(values.deadline)) {
-     throw new Error('Choose a deadline to calculate your contribution.');
-   }
+   if (!['weekly', 'biweekly', 'monthly'].includes(values.cadence)) throw new Error('Choose a contribution schedule.');
+   if (!values.deadline || !svDate(values.deadline)) throw new Error('Choose a deadline to calculate your contribution.');
    const changed = !fund || fund.first !== values.first || fund.cadence !== values.cadence;
    if (!svDate(values.first) || values.first > limit || (changed && values.first < today)) {
      throw new Error('Choose a first contribution date from today through the next 10 years.');
@@ -968,46 +992,30 @@
    const saved = fund ? svBalance(m, fund) : svAmount(values.opening);
    if (!Number.isSafeInteger(saved) || saved < 0) throw new Error('Recorded savings are invalid.');
    const remaining = Math.max(0, target - saved);
-   if (!remaining) {
-     throw new Error('This target is already reached. Increase the target or keep a manual contribution.');
-   }
+   if (!remaining) throw new Error('This target is already reached. Increase the target or keep a manual contribution.');
    const candidate = {
-     ...(fund || {}),
-     id: fund?.id || '__unsaved_savings_fund__',
-     opening: fund?.opening ?? saved,
-     target: null,
-     amount: 1,
-     first: values.first,
-     deadline: values.deadline,
-     cadence: values.cadence,
+     ...(fund || {}), id: fund?.id || '__unsaved_savings_fund__',
+     opening: fund?.opening ?? saved, target: null, amount: 1,
+     first: values.first, deadline: values.deadline, cadence: values.cadence,
      version: fund ? fund.version + (changed ? 1 : 0) : 1,
-     skips: changed ? [] : fund.skips,
-     moves: changed ? {} : fund.moves,
+     skips: changed ? [] : fund.skips, moves: changed ? {} : fund.moves,
      paused: false
    };
    const dates = svSchedule(m, candidate).filter(p => p.day >= today);
    if (!dates.length) throw new Error('No contribution dates remain before this deadline.');
    const amount = Math.floor((remaining - 1) / dates.length) + 1;
    const used = Math.ceil(remaining / amount);
-   return {
-     target, saved, remaining, count: dates.length, amount,
-     used,
-     finalAmount: remaining - amount * (used - 1),
-     finalDate: dates[used - 1].day
-   };
+   return {target, saved, remaining, count: dates.length, amount, used,
+     finalAmount: remaining - amount * (used - 1), finalDate: dates[used - 1].day};
  }
-
  function svUpdateCalculator() {
-   const m = savingsState;
-   const box = document.getElementById('bbsv-form');
+   const m = savingsState, box = document.getElementById('bbsv-form');
    if (!m?.form || !['new', 'edit'].includes(m.form.mode) || !box) return;
    const fields = Object.fromEntries([...box.querySelectorAll('[name]')].map(el => [el.name, el]));
    if (!fields.calculation || !fields.amount) return;
    const automatic = fields.calculation.value === 'auto';
-   fields.amount.readOnly = automatic;
-   fields.amount.required = !automatic;
-   fields.target.required = automatic;
-   fields.deadline.required = automatic;
+   fields.amount.readOnly = automatic; fields.amount.required = !automatic;
+   fields.target.required = automatic; fields.deadline.required = automatic;
    const result = box.querySelector('#bbsv-calculation');
    if (!result) return;
    result.hidden = !automatic;
@@ -1018,20 +1026,13 @@
    try {
      const plan = svPlanCalculation(m, f, values);
      fields.amount.value = (plan.amount / 100).toFixed(2);
-     const label = values.cadence === 'monthly' ? 'Save each month'
-       : values.cadence === 'biweekly' ? 'Save every 2 weeks' : 'Save each week';
-     result.innerHTML =
-       detail('Still needed', svCash(plan.remaining, s)) +
-       detail('Contribution dates available', String(plan.count)) +
-       detail(label, svCash(plan.amount, s)) +
+     const label = values.cadence === 'monthly' ? 'Save each month' : values.cadence === 'biweekly' ? 'Save every 2 weeks' : 'Save each week';
+     result.innerHTML = detail('Still needed', svCash(plan.remaining, s)) +
+       detail('Contribution dates available', String(plan.count)) + detail(label, svCash(plan.amount, s)) +
        detail('Estimated final contribution', svCash(plan.finalAmount, s), fmtDate(plan.finalDate)) +
-       help('Uses actual scheduled dates, not an approximate number of months. ' +
-         'Amounts are rounded up to the nearest cent. The final recorded contribution can be smaller. ' +
-         'Saving applies this amount; later changes require you to review and save a recalculation.');
-   } catch (error) {
-     fields.amount.value = '';
-     result.innerHTML = help(error.message);
-   }
+       help('Uses actual scheduled dates. Amounts are rounded up to the nearest cent; the final recorded contribution can be smaller. ' +
+         'Later changes require you to review and save a recalculation.');
+   } catch (error) {fields.amount.value = ''; result.innerHTML = help(error.message);}
  }
 
  function svForm(m, s) {
@@ -1060,33 +1061,18 @@
 
      fields =
        svInput('Fund name', 'name', 'text', f?.name || '', 'maxlength="80" required') +
-       svSelect('Fund type', 'type', [
-         ['emergency', 'Emergency fund'],
-         ['sinking', 'Planned expense / sinking fund'],
-         ['goal', 'Savings goal']
-       ], f?.type || 'goal') +
-       svSelect('Contribution amount', 'calculation', [
-         ['auto', 'Calculate from my target and deadline'],
-         ['manual', 'Enter my own contribution amount']
-       ], f ? 'manual' : 'auto') +
+       svSelect('Fund type', 'type', [['emergency', 'Emergency fund'], ['sinking', 'Planned expense / sinking fund'], ['goal', 'Savings goal']], f?.type || 'goal') +
+       svSelect('Contribution amount', 'calculation', [['auto', 'Calculate from my target and deadline'], ['manual', 'Enter my own contribution amount']], f ? 'manual' : 'auto') +
        svInput('Total amount to save', 'target', 'number', dollars(f?.target), 'min="0.01" step="0.01"') +
-       (!f
-         ? svInput('Already saved', 'opening', 'number', '0', 'min="0" step="0.01" required')
+       (!f ? svInput('Already saved', 'opening', 'number', '0', 'min="0" step="0.01" required')
          : detail('Already saved', svCash(svBalance(m, f), s), 'Recorded starting balance and savings history.')) +
        svInput('Goal deadline', 'deadline', 'date', f?.deadline || '') +
-       svSelect('Save how often?', 'cadence', [
-         ['monthly', 'Every month'],
-         ['biweekly', 'Every 2 weeks'],
-         ['weekly', 'Every week']
-       ], f?.cadence || 'monthly') +
+       svSelect('Save how often?', 'cadence', [['monthly', 'Every month'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Every week']], f?.cadence || 'monthly') +
        svInput('First contribution date', 'first', 'date', f?.first || svToday(), 'required') +
-       svInput('Contribution per transfer', 'amount', 'number', dollars(f?.amount),
-         'min="0.01" step="0.01"' + (f ? ' required' : ' readonly')) +
+       svInput('Contribution per transfer', 'amount', 'number', dollars(f?.amount), 'min="0.01" step="0.01"' + (f ? ' required' : ' readonly')) +
        '<div id="bbsv-calculation" class="bbsv-calculation" role="status" aria-live="polite"></div>' +
        svInput('Account label / note — optional', 'note', 'text', f?.note || '', 'maxlength="200"') +
-       help('Automatic calculation requires a target and deadline. Manual plans can leave them blank. ' +
-         'Every 2 weeks means every 14 days from the first contribution date, not twice a month. ' +
-         'Use an account nickname only, never an account number. No money is transferred automatically.');
+       help('Automatic calculation requires a target and deadline. Manual plans can leave them blank. Every 2 weeks means every 14 days, not twice a month. Use an account nickname only. No money is transferred automatically.');
    } else if (draft.mode === 'reschedule') {
      title = 'Reschedule one transfer';
 
@@ -1111,7 +1097,7 @@
                'Move to',
                'destination',
                m.funds
-                 .filter(item => item.id !== f.id)
+                 .filter(item => item.id !== f.id && !item.archivedAt)
                  .map(item => [item.id, item.name]),
                ''
              )
@@ -1188,10 +1174,11 @@
      );
    }
 
+   const activeFunds = m.funds.filter(f => !f.archivedAt);
    const today = svToday();
    const month = today.slice(0, 7);
 
-   const plans = m.funds.flatMap(
+   const plans = activeFunds.flatMap(
      f => svSchedule(m, f)
    );
 
@@ -1214,7 +1201,7 @@
      goal: 'Savings goal'
    };
 
-   const cards = m.funds.map(f => {
+   const cards = activeFunds.map(f => {
      const balance = svBalance(m, f);
 
      const remaining = f.target
@@ -1357,7 +1344,7 @@
              )}
 
              ${
-               m.funds.length > 1
+               activeFunds.length > 1
                  ? svButton(
                      'Move to another fund',
                      'move',
@@ -1377,6 +1364,11 @@
                  ? 'Resume from today'
                  : 'Pause plan',
                'pause',
+               f.id
+             )}
+             ${svButton(
+               svCanDelete(m, f) ? 'Delete plan' : 'Archive plan',
+               svCanDelete(m, f) ? 'delete' : 'archive',
                f.id
              )}
            </div>
@@ -1531,7 +1523,7 @@
        ${svForm(m, s)}
 
        ${
-         m.funds.length
+         activeFunds.length
            ? cards
            : empty(
                'Start your savings plan',
@@ -1540,7 +1532,7 @@
        }
 
        ${
-         m.funds.length
+         activeFunds.length
            ? panel(
                'Upcoming transfers',
                dueList ||
@@ -1550,6 +1542,8 @@
              )
            : ''
        }
+
+       ${svArchivedHTML(m, s)}
 
        ${help(
          'Shared savings records do not move money ' +
@@ -1601,6 +1595,10 @@
        );
      }
 
+     if (f?.archivedAt && !['restore', 'delete'].includes(action)) {
+       throw new Error('Restore this archived plan before changing it.');
+     }
+
      m.message = '';
 
      if (action === 'new') {
@@ -1636,6 +1634,23 @@
          slot,
          day: occurrence?.day
        };
+
+     } else if (['delete', 'archive', 'restore'].includes(action)) {
+       if (!f) throw new Error('Fund no longer exists.');
+       if (action === 'delete') {
+         if (!svCanDelete(m, f)) throw new Error('This plan has savings or history. Archive it instead.');
+         if (!confirm(`Delete "${f.name}" for your shared household? This unused $0 plan will be permanently removed.`)) return;
+         m.funds = m.funds.filter(item => item.id !== f.id);
+       } else if (action === 'archive') {
+         if (!confirm(`Archive "${f.name}" for your shared household? Future contributions and reminders stop. Its recorded savings and history remain, and its balance stays in the total.`)) return;
+         f.archivedAt = new Date().toISOString();
+         f.paused = true;
+       } else {
+         if (!f.archivedAt) throw new Error('This plan is not archived.');
+         if (!confirm(`Restore "${f.name}" for your shared household? It will remain paused until you review and resume it.`)) return;
+         delete f.archivedAt;
+         f.paused = true;
+       }
 
      } else if (action === 'pause') {
        if (!f) {
@@ -1895,7 +1910,8 @@
            ? m.funds.find(
                item =>
                  item.id === values.destination &&
-                 item.id !== fund.id
+                 item.id !== fund.id &&
+                 !item.archivedAt
              )
            : null;
 
@@ -2072,7 +2088,10 @@
      'save',
      'pause',
      'skip',
-     'undo'
+     'undo',
+     'delete',
+     'archive',
+     'restore'
    ];
 
    if (!allowed.includes(action)) return;
@@ -2086,7 +2105,10 @@
      'save',
      'pause',
      'skip',
-     'undo'
+     'undo',
+     'delete',
+     'archive',
+     'restore'
    ].includes(action);
 
    try {
@@ -2306,19 +2328,12 @@
  const DATA_EVENTS=['billbeacon:data-changed','billbeacon-data-changed','billbeacon:household-ready','billbeacon-household-ready'];
  const OUT_EVENTS=['billbeacon:signed-out','billbeacon-signed-out'];
  const CSS=String.raw`
- .bbsv-calculation {
-   margin: 16px 0 10px;
-   padding: 12px 14px;
-   border: 1px solid var(--ml-line);
-   border-radius: 16px;
-   background: rgba(153, 87, 235, .06);
- }
- .bbsv-calculation[hidden] { display: none; }
- #bbsv-amount[readonly] {
-   color: var(--ml-purple);
-   border-color: var(--ml-purple);
-   font-weight: 800;
- }
+ .bbsv-archived>summary {cursor:pointer;color:var(--ml-muted);font-size:13px}
+ .bbsv-archived-item {margin-top:16px;padding-top:14px;border-top:1px solid var(--ml-line)}
+
+ .bbsv-calculation {margin:16px 0 10px;padding:12px 14px;border:1px solid var(--ml-line);border-radius:16px;background:rgba(153,87,235,.06)}
+ .bbsv-calculation[hidden] {display:none}
+ #bbsv-amount[readonly] {color:var(--ml-purple);border-color:var(--ml-purple);font-weight:800}
 
 
   .bbml-forecast-month {
