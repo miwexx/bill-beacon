@@ -2164,6 +2164,210 @@ async function handlePersonalNotificationRequest(request, env, origin) {
     return json({ok:false,error:"Notification preferences/status could not be loaded or saved. Check Worker logs."},500,origin);
   }
 }
+
+// Savings reminders: one scheduled-day summary; amounts remain ledger-only.
+function savingsReminderDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d, 12));
+  return y >= 1900 && y <= 9999 && date.getUTCFullYear() === y &&
+    date.getUTCMonth() === m - 1 && date.getUTCDate() === d ? date : null;
+}
+
+function savingsReminderShift(key, count, monthly) {
+  const date = savingsReminderDate(key);
+  if (!date) throw new Error("Invalid savings schedule date.");
+  if (monthly) {
+    const day = date.getUTCDate();
+    date.setUTCDate(1);
+    date.setUTCMonth(date.getUTCMonth() + count);
+    const last = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
+    date.setUTCDate(Math.min(day, last));
+  } else {
+    date.setUTCDate(date.getUTCDate() + count);
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function savingsDueToday(plan, today) {
+  if (!plan) return [];
+  if (plan.schemaVersion !== 1 || !savingsReminderDate(today) ||
+      !Array.isArray(plan.funds) || !Array.isArray(plan.entries) ||
+      plan.funds.length > 100 || plan.entries.length > 10000) {
+    throw new Error("Unsupported savings plan; reminder evaluation stopped.");
+  }
+  const ids = new Set();
+  const balances = new Map();
+  const completed = new Set();
+  const entryIds = new Set();
+  const amount = v => Number.isSafeInteger(v) && v >= 0 && v <= 1000000000000;
+  for (const f of plan.funds) {
+    if (!f || typeof f.id !== "string" || !f.id || ids.has(f.id) ||
+        !amount(f.opening) || !amount(f.amount) || f.amount === 0 ||
+        !(f.target === null || amount(f.target) && f.target > 0) ||
+        !savingsReminderDate(f.first) || !Number.isSafeInteger(f.version) || f.version < 1 ||
+        !["weekly", "biweekly", "monthly"].includes(f.cadence) ||
+        typeof f.paused !== "boolean" || !Array.isArray(f.skips) ||
+        !f.moves || typeof f.moves !== "object" || Array.isArray(f.moves) ||
+        (f.deadline && (!savingsReminderDate(f.deadline) || f.deadline < f.first))) {
+      throw new Error("Invalid savings fund; reminder evaluation stopped.");
+    }
+    ids.add(f.id);
+    balances.set(f.id, f.opening);
+  }
+  for (const e of plan.entries) {
+    if (!e || !ids.has(e.fund) || typeof e.id !== "string" || entryIds.has(e.id) ||
+        typeof e.voided !== "boolean" || !Number.isSafeInteger(e.delta) ||
+        Math.abs(e.delta) > 1000000000000 || e.delta === 0) {
+      throw new Error("Invalid savings history; reminder evaluation stopped.");
+    }
+    entryIds.add(e.id);
+    if (e.voided) continue;
+    const balance = balances.get(e.fund) + e.delta;
+    if (!Number.isSafeInteger(balance)) throw new Error("Invalid savings balance.");
+    balances.set(e.fund, balance);
+    if (e.slot) completed.add(JSON.stringify([e.fund, e.slot]));
+  }
+  const due = [];
+  for (const f of plan.funds) {
+    const balance = balances.get(f.id);
+    if (!amount(balance)) throw new Error("Invalid savings balance.");
+    if (f.paused || f.target && balance >= f.target) continue;
+    for (let n = 0; n < 600; n++) {
+      const origin = savingsReminderShift(f.first,
+        f.cadence === "monthly" ? n : n * (f.cadence === "weekly" ? 7 : 14),
+        f.cadence === "monthly");
+      if (f.deadline && origin > f.deadline) break;
+      const slot = `${f.version}:${origin}`;
+      const effective = Object.prototype.hasOwnProperty.call(f.moves, slot) ? f.moves[slot] : origin;
+      if (!savingsReminderDate(effective)) throw new Error("Invalid rescheduled savings date.");
+      if (effective !== today || f.deadline && effective > f.deadline ||
+          f.skips.includes(slot) || completed.has(JSON.stringify([f.id, slot]))) continue;
+      due.push({fundId: f.id, slot});
+    }
+  }
+  return due;
+}
+
+function savingsReminderPresentation(uid, householdId, today, count) {
+  return {
+    notificationId: `reminders:${uid}:savings:${householdId}:${today}:0`,
+    recipientUid: uid,
+    title: "Savings Plan",
+    body: count === 1
+      ? "Don’t forget your savings plan. You have a contribution scheduled for today."
+      : `Don’t forget your savings plan. You have ${count} contributions scheduled for today.`,
+    url: "/?notification=savings",
+    billId: null,
+    installmentPlanId: null,
+    occurrenceDueDate: today,
+    dueDate: today,
+    offsetDays: 0,
+    kind: "savings-reminder",
+    entityType: "savings"
+  };
+}
+
+async function processSavingsReminder(env, uid, householdId, accessToken, now) {
+  const outcomes = {eligible: 0, sent: 0, skipped: 0, noSubscriptions: 0, removed: 0, failures: 0};
+  const subscriptions = await getUserSubscriptions(env, uid);
+  if (!subscriptions.length) return outcomes;
+  const homePath = `households/${encodeURIComponent(householdId)}`;
+  const planPath = `${homePath}/savingsPlans/main`;
+  const userPath = `users/${encodeURIComponent(uid)}`;
+  const memberPath = `${homePath}/members/${encodeURIComponent(uid)}`;
+  const devices = await Promise.all(subscriptions.map(async item => ({
+    ...item, hash: await sha256Hex(item.record.subscription.endpoint)
+  })));
+
+  const claim = await bcTransaction(accessToken, async tx => {
+    const profile = await tx.get(userPath);
+    const member = await tx.get(memberPath);
+    const home = await tx.get(homePath);
+    const plan = await tx.get(planPath);
+    if (profile?.householdId !== householdId || !home || home.retiredAt ||
+        !member || !["owner", "member"].includes(member.role) || member.uid && member.uid !== uid) return null;
+    const zone = validatedReminderTimeZone(home.settings?.timeZone);
+    const today = dateKeyInTimeZone(now, zone);
+    const due = savingsDueToday(plan, today);
+    if (!due.length) return null;
+    const notification = savingsReminderPresentation(uid, householdId, today, due.length);
+    const path = `${homePath}/savingsReminderDeliveries/${encodeURIComponent(notification.notificationId)}`;
+    const existing = await tx.get(path);
+    const attempts = {...(existing?.attempts || {})};
+    const claimed = [];
+    for (const device of devices) {
+      const previous = attempts[device.hash];
+      if (previous && previous.state !== "retryable") continue;
+      const attemptId = crypto.randomUUID();
+      attempts[device.hash] = {state: "attempting", attemptId, at: new Date().toISOString()};
+      claimed.push({...device, attemptId});
+    }
+    if (claimed.length) tx.set(path, {
+      schemaVersion: 1, recipientUid: uid, householdId, scheduledDate: today,
+      notificationId: notification.notificationId, attempts, updatedAt: new Date().toISOString()
+    }, !existing);
+    return {notification, path, devices: claimed};
+  });
+  if (!claim) return outcomes;
+  outcomes.eligible = 1;
+  if (!claim.devices.length) {outcomes.skipped = 1; return outcomes;}
+
+  const recordResult = async (device, state) => bcTransaction(accessToken, async tx => {
+    const ledger = await tx.get(claim.path);
+    if (ledger?.attempts?.[device.hash]?.attemptId !== device.attemptId) return;
+    tx.patch(claim.path, {
+      attempts: {...ledger.attempts, [device.hash]: {
+        ...ledger.attempts[device.hash], state, at: new Date().toISOString()
+      }},
+      updatedAt: new Date().toISOString()
+    });
+  });
+
+  try {
+    await prepareInboxPush(householdId, claim.notification, accessToken);
+  } catch (error) {
+    for (const device of claim.devices) await recordResult(device, "retryable").catch(() => {});
+    throw error;
+  }
+  for (const device of claim.devices) {
+    let state = "unknown";
+    try {
+      await sendPushNotification(device.record.subscription, claim.notification, env);
+      state = "delivered";
+      outcomes.sent++;
+    } catch (error) {
+      const detail = String(error?.body || error?.message || "");
+      const invalid = error?.status === 404 || error?.status === 410 ||
+        error?.status === 400 && detail.includes("VapidPkHashMismatch") ||
+        detail.includes("Incorrect auth length");
+      if (invalid) {
+        state = "removed";
+        await env.NOTIFICATIONSKV.delete(device.key).catch(() => {});
+        outcomes.removed++;
+      } else {
+        state = error?.status === 429 || error?.status >= 500 && error?.status <= 599
+          ? "retryable" : "unknown";
+        outcomes.failures++;
+        console.warn("Savings push not confirmed.", {uid, state, status: error?.status || null});
+      }
+    }
+    try { await recordResult(device, state); }
+    catch (error) {
+      outcomes.failures++;
+      console.warn("Savings delivery receipt not confirmed; no automatic resend.", {uid, message: error.message});
+    }
+  }
+  if (outcomes.sent) {
+    try { await markInboxDelivered(householdId, claim.notification.notificationId, accessToken); }
+    catch (error) {
+      outcomes.failures++;
+      console.warn("Savings inbox delivery status not confirmed.", {uid, message: error.message});
+    }
+  }
+  return outcomes;
+}
+
 async function processUserReminders(env, uid, accessToken, now) {
   const profile = await getUserProfile(uid, accessToken);
 
@@ -2380,6 +2584,17 @@ if (
     }
   }
 
+  try {
+    const savings = await processSavingsReminder(env, uid, householdId, accessToken, now);
+    outcomes.savings = savings;
+    for (const key of ["eligible", "sent", "skipped", "noSubscriptions", "removed", "failures"]) {
+      outcomes[key] += savings[key] || 0;
+    }
+  } catch (error) {
+    outcomes.failures++;
+    console.error("Savings reminder evaluation failed; existing bill processing was retained.",
+      {uid, message: error.message});
+  }
   return outcomes;
 }
 

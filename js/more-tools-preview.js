@@ -1519,8 +1519,7 @@ use controlled records and adapter functions, not your deployed production app.
 
        ${help(
          'Shared savings records do not move money ' +
-         'or change your bill totals. Automatic savings ' +
-         'notifications are not enabled yet.'
+         'or change your bill totals. Automatic savings ' 
        )}
      </div>
    `;
@@ -2225,7 +2224,7 @@ use controlled records and adapter functions, not your deployed production app.
   const raw=document.getElementById('bbml-extra')?.value??'',amount=num(raw),cycle=document.getElementById('bbml-cycle')?.value==='second'?'second':'first';
   if(amount===null||amount<0||amount>1000000000||Math.abs(amount*100-Math.round(amount*100))>0.00001){output.textContent='Enter a nonnegative amount with up to two decimal places.';return;}
   const income=cycle==='first'?f.first:f.second;const scheduled=Number(f.plan[cycle].scheduled);const result=(Math.round(income*100)-Math.round(scheduled*100)-Math.round(amount*100))/100;
-  output.classList.toggle('bbml-negative',result<0);output.innerHTML=`<span>${result<0?'Modeled shortfall':'Modeled income less assigned bills'}</span><strong>${esc(money(result,s))}</strong><small>${esc(money(income,s))} expected income − ${esc(money(scheduled,s))} scheduled bills − ${esc(money(amount,s))} hypothetical expense. Not a spendable balance.</small>`;
+  output.classList.toggle('bbml-negative',result<0);output.innerHTML=`<span>${result<0?'Modeled shortfall':'Modeled Income Less Assigned Bills'}</span><strong>${esc(money(result,s))}</strong><small>${esc(money(income,s))} expected income − ${esc(money(scheduled,s))} scheduled bills − ${esc(money(amount,s))} hypothetical expense. Not a spendable balance.</small>`;
  }
  function refreshDialog(){const d=document.getElementById(DIALOG);if(!d||!opened)return;const s=snapshot();if(!s.ok||s.scope!==openedScope){close();redraw();return;}const body=d.querySelector('.bbml-dialog-body');body.innerHTML=`<p id="bbml-source" class="bbml-source">Current household snapshot · ${esc(new Date().toLocaleString())}</p>${content(opened,s)}`;if(opened==='forecast')updateScenario();}
  function open(key){

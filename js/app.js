@@ -3014,6 +3014,19 @@ function openTransactionDetails(transactionId) {
     "Bank transaction data. Bill Beacon does not send payments."
   ].join("\n"));
 }
+function isSavingsNotification(notification) {
+  return notification?.type === "savings-reminder" || notification?.entityType === "savings";
+}
+
+function openSavingsPlanFromNotification() {
+  closeNotificationCenter();
+  navigate("more");
+  const button = document.querySelector('#app [data-bbml-action="open:goals"]') ||
+    document.querySelector('[data-bbml-action="open:goals"]');
+  if (!button) throw new Error("Savings Plan has not loaded. Open More → Savings Plan after updating the app.");
+  button.click();
+}
+
 function getNotificationDeepLink() {
   const params = new URLSearchParams(window.location.search);
 
@@ -3021,6 +3034,10 @@ function getNotificationDeepLink() {
   const billId = params.get('billId');
   const planId = params.get('planId');
   const dueDate = params.get('dueDate');
+
+  if (notificationType === 'savings') {
+    return {route: 'more', params: {}, savings: true};
+  }
 
   if (!notificationType || !billId) {
     return null;
@@ -3069,11 +3086,14 @@ function consumeNotificationDeepLink() {
     try {
       const id = url.searchParams.get("notificationId");
       if (id) await markNotificationRead(id, true);
-      if (notificationContext()?.generation !== context.generation) return;
+      const currentContext = notificationContext();
+      if (!currentContext || currentContext.generation !== context.generation ||
+          currentContext.uid !== context.uid || currentContext.householdId !== context.householdId) return;
+      if (destination.savings) openSavingsPlanFromNotification();
+      else navigate(destination.route, destination.params);
       for (const key of ["notification", "billId", "planId", "dueDate", "notificationId", "householdId"])
         url.searchParams.delete(key);
       window.history.replaceState({}, document.title, url.pathname + url.search + url.hash);
-      navigate(destination.route, destination.params);
     } catch (error) {
       notificationDeepLinkFailed = url.href;
       console.error("External notification could not be marked read:", error);
@@ -19259,6 +19279,19 @@ function returnToNotificationCenter() {
 }
 
 async function openNotificationRecord(notification) {
+  if (isSavingsNotification(notification)) {
+    try {
+      const context = captureNotificationAction();
+      await markNotificationRead(notification.id, true);
+      const current = notificationContext();
+      if (!current || current.uid !== context.uid ||
+          current.householdId !== context.householdId || current.generation !== context.generation) return;
+      openSavingsPlanFromNotification();
+    } catch (error) {
+      alert(`Could not open Savings Plan: ${error.message}`);
+    }
+    return;
+  }
   if (!notification?.billId) return;
 
   try {
@@ -19468,7 +19501,7 @@ function renderNotificationCenterContent() {
       );
 
       const dueLabel = due
-        ? `Due ${formatDate(due, "short")}`
+        ? `${isSavingsNotification(notification) ? "Scheduled" : "Due"} ${formatDate(due, "short")}`
         : "";
 
       const received = validDate
@@ -19536,7 +19569,7 @@ function renderNotificationCenterContent() {
             type="button"
             class="bbn-arrow"
             data-open-notification="${escapeHtml(notification.id)}"
-            ${!notification.billId ? "disabled" : ""}
+            ${!notification.billId && !isSavingsNotification(notification) ? "disabled" : ""}
             aria-label="${escapeHtml(
               `View details: ${notification.title}`
             )}"
