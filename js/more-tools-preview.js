@@ -1063,21 +1063,104 @@
        : 'Create a savings fund — Goal calculator v3';
 
      fields =
-       svInput('Fund name', 'name', 'text', f?.name || '', 'maxlength="80" required') +
-       svSelect('Fund type', 'type', [['emergency', 'Emergency fund'], ['sinking', 'Planned expense / sinking fund'], ['goal', 'Savings goal']], f?.type || 'goal') +
-       svSelect('How should the deposit amount be set?', 'calculation', [['auto', 'Automatically calculate from my goal and deadline'], ['manual', 'Set an amount myself (optional)']], 'auto') +
-       svInput('Total amount to save', 'target', 'number', dollars(f?.target), 'min="0.01" step="0.01"') +
-       (!f ? svInput('Already saved', 'opening', 'number', '0', 'min="0" step="0.01" required')
-         : detail('Already saved', svCash(svBalance(m, f), s), 'Recorded starting balance and savings history.')) +
-       svInput('Goal deadline', 'deadline', 'date', f?.deadline || '') +
-       svSelect('Save how often?', 'cadence', [['monthly', 'Every month'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Every week']], f?.cadence || 'monthly') +
-       svInput('First deposit date', 'first', 'date', f?.first || svToday(), 'required') +
-       '<div id="bbsv-manual-contribution" hidden>' +
-       svInput('My manual deposit amount', 'amount', 'number', dollars(f?.amount), 'min="0.01" step="0.01" readonly') +
+       svInput(
+         'Fund name',
+         'name',
+         'text',
+         f?.name || '',
+         'maxlength="80" required'
+       ) +
+
+       svSelect(
+         'Fund type',
+         'type',
+         [
+           ['emergency', 'Emergency fund'],
+           ['sinking', 'Planned expense / sinking fund'],
+           ['goal', 'Savings goal']
+         ],
+         f?.type || 'goal'
+       ) +
+
+       '<input type="hidden" ' +
+         'id="bbsv-calculation-mode" ' +
+         'name="calculation" value="auto">' +
+
+       svInput(
+         'Total amount to save',
+         'target',
+         'number',
+         dollars(f?.target),
+         'min="0.01" step="0.01" required'
+       ) +
+
+       (
+         !f
+           ? svInput(
+               'Already saved',
+               'opening',
+               'number',
+               '0',
+               'min="0" step="0.01" required'
+             )
+           : detail(
+               'Already saved',
+               svCash(svBalance(m, f), s),
+               'Recorded starting balance and savings history.'
+             )
+       ) +
+
+       svInput(
+         'When do you need this money?',
+         'deadline',
+         'date',
+         f?.deadline || '',
+         'required'
+       ) +
+
+       svSelect(
+         'How often will you deposit?',
+         'cadence',
+         [
+           ['monthly', 'Every month'],
+           ['biweekly', 'Every 2 weeks'],
+           ['weekly', 'Every week']
+         ],
+         f?.cadence || 'monthly'
+       ) +
+
+       svInput(
+         'First deposit date',
+         'first',
+         'date',
+         f?.first || svToday(),
+         'required'
+       ) +
+
+       '<input type="hidden" ' +
+         'id="bbsv-amount" name="amount" value="">' +
+
+       '<div ' +
+         'id="bbsv-calculation" ' +
+         'class="bbsv-calculation" ' +
+         'role="status" ' +
+         'aria-live="polite">' +
        '</div>' +
-       '<div id="bbsv-calculation" class="bbsv-calculation" role="status" aria-live="polite"></div>' +
-       svInput('Account label / note — optional', 'note', 'text', f?.note || '', 'maxlength="200"') +
-       help('Automatic calculation requires a target and deadline. Manual plans can leave them blank. Every 2 weeks means every 14 days, not twice a month. Use an account nickname only. No money is transferred automatically.');
+
+       svInput(
+         'Account label / note — optional',
+         'note',
+         'text',
+         f?.note || '',
+         'maxlength="200"'
+       ) +
+
+       help(
+         'Your deposit amount is calculated from the amount ' +
+         'still needed and the scheduled deposit dates through ' +
+         'your deadline. Every 2 weeks means every 14 days. ' +
+         'This plan records savings; it does not move money.'
+       );
    } else if (draft.mode === 'reschedule') {
      title = 'Reschedule one transfer';
 
