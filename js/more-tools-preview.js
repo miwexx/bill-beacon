@@ -1015,6 +1015,7 @@
    if (!fields.calculation || !fields.amount) return;
    const automatic = fields.calculation.value === 'auto';
    fields.amount.readOnly = automatic; fields.amount.required = !automatic;
+   fields.amount.disabled = automatic;
    const manualBox = box.querySelector('#bbsv-manual-contribution');
    if (manualBox) manualBox.hidden = automatic;
    fields.target.required = automatic; fields.deadline.required = automatic;
@@ -1030,7 +1031,7 @@
      fields.amount.value = (plan.amount / 100).toFixed(2);
      const label = values.cadence === 'monthly' ? 'Save each month' : values.cadence === 'biweekly' ? 'Save every 2 weeks' : 'Save each week';
      result.innerHTML = detail('Still needed', svCash(plan.remaining, s)) +
-       detail('Contribution dates available', String(plan.count)) + detail(label, svCash(plan.amount, s)) +
+       detail('Deposits available before your deadline', String(plan.count)) + detail(label, svCash(plan.amount, s)) +
        detail('Estimated final contribution', svCash(plan.finalAmount, s), fmtDate(plan.finalDate)) +
        help('Uses actual scheduled dates. Amounts are rounded up to the nearest cent; the final recorded contribution can be smaller. ' +
          'Later changes require you to review and save a recalculation.');
@@ -1058,21 +1059,21 @@
      draft.mode === 'edit'
    ) {
      title = f
-       ? 'Edit savings plan'
-       : 'Create a savings fund';
+       ? 'Edit savings plan — Goal calculator v3'
+       : 'Create a savings fund — Goal calculator v3';
 
      fields =
        svInput('Fund name', 'name', 'text', f?.name || '', 'maxlength="80" required') +
        svSelect('Fund type', 'type', [['emergency', 'Emergency fund'], ['sinking', 'Planned expense / sinking fund'], ['goal', 'Savings goal']], f?.type || 'goal') +
-       svSelect('Contribution amount', 'calculation', [['auto', 'Calculate from my target and deadline'], ['manual', 'Enter my own contribution amount']], (!f || (f.target && f.deadline && f.deadline >= svToday() && svBalance(m, f) < f.target)) ? 'auto' : 'manual') +
+       svSelect('How should the deposit amount be set?', 'calculation', [['auto', 'Automatically calculate from my goal and deadline'], ['manual', 'Set an amount myself (optional)']], 'auto') +
        svInput('Total amount to save', 'target', 'number', dollars(f?.target), 'min="0.01" step="0.01"') +
        (!f ? svInput('Already saved', 'opening', 'number', '0', 'min="0" step="0.01" required')
          : detail('Already saved', svCash(svBalance(m, f), s), 'Recorded starting balance and savings history.')) +
        svInput('Goal deadline', 'deadline', 'date', f?.deadline || '') +
        svSelect('Save how often?', 'cadence', [['monthly', 'Every month'], ['biweekly', 'Every 2 weeks'], ['weekly', 'Every week']], f?.cadence || 'monthly') +
-       svInput('First contribution date', 'first', 'date', f?.first || svToday(), 'required') +
-       '<div id="bbsv-manual-contribution">' +
-       svInput('Contribution per transfer', 'amount', 'number', dollars(f?.amount), 'min="0.01" step="0.01"' + (f ? ' required' : ' readonly')) +
+       svInput('First deposit date', 'first', 'date', f?.first || svToday(), 'required') +
+       '<div id="bbsv-manual-contribution" hidden>' +
+       svInput('My manual deposit amount', 'amount', 'number', dollars(f?.amount), 'min="0.01" step="0.01" readonly') +
        '</div>' +
        '<div id="bbsv-calculation" class="bbsv-calculation" role="status" aria-live="polite"></div>' +
        svInput('Account label / note — optional', 'note', 'text', f?.note || '', 'maxlength="200"') +
@@ -2576,6 +2577,6 @@
  function init(){if(!active)return;if(!document.getElementById(STYLE)){const style=document.createElement('style');style.id=STYLE;style.textContent=CSS;document.head.append(style);}redraw();}
  function uninstall(){if(!active)return;svDispose();savingsSessionEvents.forEach(name=>window.removeEventListener(name,svSessionChanged));close();active=false;clearTimeout(timer);document.removeEventListener('click',onClick);document.removeEventListener('DOMContentLoaded',init);DATA_EVENTS.forEach(x=>window.removeEventListener(x,changed));OUT_EVENTS.forEach(x=>window.removeEventListener(x,signedOut));window.removeEventListener('storage',changed);if(renderMore===main)renderMore=originalMore;document.getElementById(STYLE)?.remove();delete window.BillBeaconMoreLive;delete window.BillBeaconMorePreview;if(typeof currentRoute!=='undefined'&&currentRoute==='more'&&typeof render==='function')render();}
  renderMore=main;document.addEventListener('click',onClick);DATA_EVENTS.forEach(x=>window.addEventListener(x,changed));OUT_EVENTS.forEach(x=>window.addEventListener(x,signedOut));window.addEventListener('storage',changed);
- const api=Object.freeze({version:'2.0.0-data-beta',readOnly:true,open,close,refresh:refreshDialog,uninstall});window.BillBeaconMoreLive=api;window.BillBeaconMorePreview=api;
+ const api=Object.freeze({version:'savings-goal-calculator-v3',readOnly:true,open,close,refresh:refreshDialog,uninstall});window.BillBeaconMoreLive=api;window.BillBeaconMorePreview=api;
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
 })();
