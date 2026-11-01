@@ -4501,35 +4501,15 @@ function renderDashboardPaycheckPlan(
         </button>
       </div>
 
-     ${
-  selectedDashboardPaycheckMonth
-    ? `
-      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-        <button
-          type="button"
-          onclick="resetDashboardPaycheckMonth()"
-          aria-label="Return to the automatic paycheck planning month"
-          style="
-            display:inline-flex;
-            align-items:center;
-            justify-content:center;
-            min-height:36px;
-            padding:6px 10px;
-            border:0;
-            background:transparent;
-            color:var(--text-muted);
-            font:inherit;
-            font-size:var(--text-xs);
-            font-weight:650;
-            cursor:pointer;
-          "
-        >
-          Reset view
-        </button>
-      </div>
-    `
-    : ""
-}
+      ${selectedDashboardPaycheckMonth ? `
+        <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+          <button type="button" onclick="resetDashboardPaycheckMonth()"
+            aria-label="Return to the automatic paycheck planning month"
+            style="display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 10px;border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:var(--text-xs);font-weight:650;cursor:pointer;">
+            Reset view
+          </button>
+        </div>
+      ` : ""}
       <div
         style="
           display:grid;
@@ -4675,7 +4655,6 @@ function renderDashboardPaycheckPlan(
     </div>
   `;
 }
-
 function setDashboardPaycheck(paycheckKey) {
   capturePaycheckInlineView();
   selectedDashboardPaycheck =
@@ -5487,239 +5466,55 @@ function getDashboardSeparatedStatus(referenceDate = new Date()) {
   };
   return { bills: makeGroup(false), installments: makeGroup(true) };
 }
-
-
 function renderDashboardSeparatedStatus(referenceDate = new Date()) {
   const groups = getDashboardSeparatedStatus(referenceDate);
-
-  const month = escapeHtml(
-    formatDate(referenceDate, "monthYear")
-  );
-  const installmentRemainingCents =
-    groups.installments.unpaid.reduce((total, item) => {
-      const amount = Number(item.amount);
-
-      return total + (
-        Number.isFinite(amount)
-          ? Math.round(amount * 100)
-          : 0
-      );
-    }, 0);
-
-  const installmentRemainingThisMonth =
-    installmentRemainingCents / 100;
-  const unpaidInstallments = getUnpaidPaymentPlanInstallments();
-
-  const activePlanCount = new Set(
-    unpaidInstallments.map(item => item.planId)
-  ).size;
-
-  const pill = (group, status, count, label, color) => `
-    <button
-      type="button"
-      class="dashboard-status-card"
-      onclick="openDashboardSeparatedStatus('${group}', '${status}')"
-      aria-label="View ${group} ${label.toLowerCase()}"
-    >
-      <div class="dashboard-status-number ${color}">
-        ${count}
-      </div>
-
-      <div class="dashboard-status-label">
-        ${label}
-      </div>
-    </button>
-  `;
-  const hasInstallmentPlans = Store.getBills().some(
-    bill => Boolean(bill.installmentPlanId)
-  );
-
-  if (!hasInstallmentPlans) {
-    return `
-      <section class="dashboard-separated-status">
-        <div class="section-header">
-          Bill Status &middot; ${month}
-        </div>
-
-        <div class="dashboard-status-row">
-          ${pill(
-            "bills",
-            "paid",
-            groups.bills.paid.length,
-            "Paid",
-            "text-paid"
-          )}
-
-          ${pill(
-            "bills",
-            "due",
-            groups.bills.due.length,
-            "Due",
-            "text-upcoming"
-          )}
-
-          ${pill(
-            "bills",
-            "overdue",
-            groups.bills.overdue.length,
-            "Overdue",
-            "text-overdue"
-          )}
-        </div>
-      </section>
-    `;
-  }
+  const hasInstallments = Store.getBills().some(bill => Boolean(bill.installmentPlanId)) ||
+    groups.installments.totalCount > 0;
+  const monthLabel = formatDate(referenceDate, "monthYear");
+  const statuses = [
+    {key:"paid", label:"Paid", color:"var(--paid)"},
+    {key:"due", label:"Due", color:"var(--upcoming)"},
+    {key:"overdue", label:"Overdue", color:"var(--overdue)"}
+  ];
+  const row = (key, label) => `
+    <div class="bb-month-status-grid bb-month-status-row" role="row">
+      <div role="rowheader" style="font-size:var(--text-sm);font-weight:750;">${label}</div>
+      ${statuses.map(status => {
+        const count = groups[key][status.key].length;
+        return `<div role="cell"><button type="button" class="bb-month-status-count"
+          onclick="openDashboardSeparatedStatus('${key}','${status.key}')"
+          aria-label="${escapeHtml(`View ${count} ${status.label.toLowerCase()} ${label.toLowerCase()}, ${monthLabel}`)}"
+          style="color:${status.color};">${count}</button></div>`;
+      }).join("")}
+    </div>`;
   return `
-    <section class="dashboard-separated-status">
-      <div class="section-header">
-        Bill Status &middot; ${month}
+    <div style="margin-top:16px;padding-top:10px;border-top:1px solid var(--border);">
+      <style>
+        .dashboard-month-card .bb-month-status-grid {display:grid;grid-template-columns:minmax(0,1.25fr) repeat(3,minmax(0,1fr));align-items:center;gap:4px;}
+        .dashboard-month-card .bb-month-status-head {min-height:24px;text-align:center;color:var(--text-muted);font-size:11px;font-weight:650;}
+        .dashboard-month-card .bb-month-status-row {min-height:48px;}
+        .dashboard-month-card .bb-month-status-row + .bb-month-status-row {border-top:1px solid var(--border);}
+        .dashboard-month-card .bb-month-status-count {display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;padding:4px 0;border:0;background:transparent;font:inherit;font-size:23px;font-weight:850;line-height:1.2;font-variant-numeric:tabular-nums;cursor:pointer;}
+        .dashboard-month-card .bb-month-plans {display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:44px;margin-top:4px;padding:9px 0;border:0;border-top:1px solid var(--border);background:transparent;color:var(--text);font:inherit;font-size:var(--text-xs);font-weight:650;text-align:left;cursor:pointer;}
+        .dashboard-month-card .bb-month-status-count:focus-visible,
+        .dashboard-month-card .bb-month-plans:focus-visible {outline:2px solid var(--accent);outline-offset:-2px;border-radius:8px;}
+        @media(max-width:350px) {.dashboard-month-card .bb-month-status-grid {grid-template-columns:minmax(0,1.15fr) repeat(3,minmax(0,1fr));gap:2px;} .dashboard-month-card .bb-month-status-count {font-size:21px;}}
+      </style>
+      <div role="table" aria-label="${escapeHtml(`Payment status for ${monthLabel}`)}">
+        <div class="bb-month-status-grid bb-month-status-head" role="row">
+          <span role="columnheader" aria-label="Payment type"></span>
+          ${statuses.map(status => `<span role="columnheader">${status.label}</span>`).join("")}
+        </div>
+        ${row("bills", "Bills")}
+        ${hasInstallments ? row("installments", "Installments") : ""}
       </div>
-
-      <div class="dashboard-status-row">
-        ${pill(
-          "bills",
-          "paid",
-          groups.bills.paid.length,
-          "Paid",
-          "text-paid"
-        )}
-
-        ${pill(
-          "bills",
-          "due",
-          groups.bills.due.length,
-          "Due",
-          "text-upcoming"
-        )}
-
-        ${pill(
-          "bills",
-          "overdue",
-          groups.bills.overdue.length,
-          "Overdue",
-          "text-overdue"
-        )}
-      </div>
-    </section>
-
-    <section
-      class="dashboard-installments-combined"
-      aria-labelledby="dashboardInstallmentsTitle"
-    >
-      <button
-  type="button"
-  class="dashboard-installments-combined-header"
-  onclick="navigate('payment-plans', { returnRoute: 'today' })"
-  aria-label="Open Installments. ${formatCurrency(
-    installmentRemainingThisMonth
-  )} remaining for ${month}"
->
-  <span class="dashboard-installments-heading-block">
-    <span
-      class="dashboard-installments-heading-title"
-      id="dashboardInstallmentsTitle"
-    >
-      Installments
-    </span>
-
-    <span class="dashboard-installments-heading-month">
-      ${month}
-    </span>
-  </span>
-
-  <span class="dashboard-installments-heading-balance">
-    <span class="dashboard-installments-heading-amount">
-      ${formatCurrency(installmentRemainingThisMonth)}
-    </span>
-
-    <span class="dashboard-installments-heading-caption">
-      Remaining
-    </span>
-  </span>
-
-  <span
-    class="dashboard-installments-heading-arrow"
-    aria-hidden="true"
-  >
-    ${svgIcon("chevronRight", 20)}
-  </span>
-</button>
-
-      <div class="dashboard-installments-combined-statuses">
-        <button
-          type="button"
-          class="dashboard-installments-combined-status"
-          onclick="openDashboardSeparatedStatus('installments', 'paid')"
-          aria-label="View ${
-            groups.installments.paid.length
-          } paid installment payments for ${month}"
-        >
-          <span
-            class="dashboard-installments-combined-number text-paid"
-          >
-            ${groups.installments.paid.length}
-          </span>
-
-          <span class="dashboard-installments-combined-label">
-            Paid
-          </span>
-        </button>
-
-        <button
-          type="button"
-          class="dashboard-installments-combined-status"
-          onclick="openDashboardSeparatedStatus('installments', 'unpaid')"
-          aria-label="View ${
-            groups.installments.unpaid.length
-          } unpaid installment payments for ${month}"
-        >
-          <span
-            class="dashboard-installments-combined-number text-upcoming"
-          >
-            ${groups.installments.unpaid.length}
-          </span>
-
-          <span class="dashboard-installments-combined-label">
-            Due
-          </span>
-        </button>
-      </div>
-
-      ${
-        groups.installments.overdue.length
-          ? `
-            <button
-              type="button"
-              class="dashboard-installments-combined-warning"
-                            onclick="openDashboardSeparatedStatus('installments', 'overdue')"
-                                        >
-              <span>
-                ${groups.installments.overdue.length}
-                overdue installment ${
-                  groups.installments.overdue.length === 1
-                    ? "payment"
-                    : "payments"
-                }
-
-                ${
-                  groups.installments.olderOverdue.length
-                    ? `&middot; ${groups.installments.olderOverdue.length} from earlier months`
-                    : ""
-                }
-              </span>
-
-              <span aria-hidden="true">
-                ${svgIcon("chevronRight", 16)}
-              </span>
-            </button>
-          `
-          : ""
-      }
-    </section>
+      ${hasInstallments ? `<button type="button" class="bb-month-plans"
+        onclick="navigate('payment-plans',{returnRoute:'today'})">
+        <span>View Installment Plans</span><span aria-hidden="true">${svgIcon("chevronRight",16)}</span>
+      </button>` : ""}
+    </div>
   `;
 }
-
-
 function openDashboardSeparatedStatus(groupName, status) {
   closeDashboardStatusSheet();
   const now = getDashboardReportMonth();
@@ -5860,108 +5655,34 @@ function resetDashboardReportMonth() {
 
 function renderDashboardReportMonthNavigation() {
   const date = getDashboardReportMonth();
-
   return `
-    <div
-      style="
-        display:grid;
-        grid-template-columns:44px minmax(0,1fr) 44px;
-        align-items:center;
-        gap:8px;
-      "
-    >
-      <button
-        type="button"
-        class="bb-outline-pill"
-        aria-label="Previous snapshot month"
+    <div style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;">
+      <button type="button" class="bb-outline-pill" aria-label="Previous reporting month"
         onclick="changeDashboardReportMonth(-1)"
-        style="
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          width:44px;
-          min-height:44px;
-          padding:0;
-          box-sizing:border-box;
-        "
-      >
+        style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;padding:0;box-sizing:border-box;">
         ${svgIcon("chevronLeft", 20)}
       </button>
-
-      <div
-        aria-live="polite"
-        style="
-          min-width:0;
-          text-align:center;
-          font-size:var(--text-base);
-          font-weight:800;
-          line-height:1.3;
-        "
-      >
+      <div aria-live="polite" style="min-width:0;text-align:center;font-size:var(--text-base);font-weight:800;line-height:1.3;">
         ${formatDate(date, "monthYear")}
       </div>
-
-      <button
-        type="button"
-        class="bb-outline-pill"
-        aria-label="Next snapshot month"
+      <button type="button" class="bb-outline-pill" aria-label="Next reporting month"
         onclick="changeDashboardReportMonth(1)"
-        style="
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          width:44px;
-          min-height:44px;
-          padding:0;
-          box-sizing:border-box;
-        "
-      >
+        style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;padding:0;box-sizing:border-box;">
         ${svgIcon("chevronRight", 20)}
       </button>
     </div>
   `;
 }
 function renderDashboardReportResetAction() {
-  const displayed = getDashboardReportMonth();
+  const date = getDashboardReportMonth();
   const now = new Date();
-
-  const isCurrentMonth =
-    displayed.getFullYear() === now.getFullYear() &&
-    displayed.getMonth() === now.getMonth();
-
-  if (isCurrentMonth) return "";
-
-  return `
-    <div
-      style="
-        display:flex;
-        justify-content:center;
-        margin-top:8px;
-      "
-    >
-      <button
-        type="button"
-        onclick="resetDashboardReportMonth()"
-        aria-label="Return to the current calendar month"
-        style="
-          display:inline-flex;
-          align-items:center;
-          justify-content:center;
-          min-height:36px;
-          padding:6px 12px;
-          border:0;
-          background:transparent;
-          color:var(--text-muted);
-          font:inherit;
-          font-size:var(--text-xs);
-          font-weight:650;
-          cursor:pointer;
-        "
-      >
-        Back to ${formatDate(now, "monthYear")}
-      </button>
-    </div>
-  `;
+  if (date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth()) return "";
+  return `<div style="display:flex;justify-content:center;margin-top:4px;">
+    <button type="button" onclick="resetDashboardReportMonth()"
+      style="display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:var(--text-xs);font-weight:650;cursor:pointer;">
+      Back to ${formatDate(now, "monthYear")}
+    </button>
+  </div>`;
 }
 window.addEventListener("billbeacon:signed-out", () => {
   selectedDashboardReportMonth = null;
@@ -5969,8 +5690,6 @@ window.addEventListener("billbeacon:signed-out", () => {
 window.addEventListener("billbeacon:household-ready", () => {
   selectedDashboardReportMonth = null;
 });
-
-// REPLACE THE ENTIRE EXISTING renderToday FUNCTION WITH THIS:
 function renderToday() {
   const now = new Date();
   const reportMonth = getDashboardReportMonth();
@@ -6141,7 +5860,7 @@ function renderToday() {
             padding:18px 20px;
             text-align:left;
           "
-          aria-label="Monthly bills and installments summary"
+          aria-label="Monthly bills and installments summary and payment status"
         >
           ${renderDashboardReportMonthNavigation()}
 
@@ -6261,10 +5980,9 @@ function renderToday() {
               "
             ></div>
           </div>
+          ${renderDashboardSeparatedStatus(reportMonth)}
           ${renderDashboardReportResetAction()}
         </section>
-
-        ${renderDashboardSeparatedStatus(reportMonth)}
           ${renderDashboardPaycheckPlan()}
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">
@@ -6310,6 +6028,7 @@ function renderToday() {
     </div>
   `;
 }
+
 function getCycleForBill(bill) {
   if (bill.payCycle === 'first') return 'early';
   if (bill.payCycle === 'second') return 'late';
