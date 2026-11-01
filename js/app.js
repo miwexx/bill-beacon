@@ -2109,7 +2109,83 @@ function renderLegacyPaymentReviewNotice(billId = null) {
       onclick="navigate('history')">View Payment History</button>
   </div>`;
 }
+function renderPaycheckIncomeComparison(selected) {
+  if (!selected || !["first", "second"].includes(selected.id)) return "";
 
+  const sources = Store.getIncomeSources();
+  const supported = ["Weekly", "Biweekly", "Twice monthly", "Monthly"];
+  const estimatedSources = sources.filter(source => supported.includes(source.frequency));
+  const excludedCount = sources.length - estimatedSources.length;
+  const validAmount = value => value !== null && value !== undefined &&
+    String(value).trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
+  const settingsLink = `
+    <button type="button" class="bb-outline-pill"
+      onclick="closePaycheckPlanSheet();navigate('settings',{returnRoute:'today'})"
+      style="min-height:40px;padding:8px 12px;margin-top:10px;">
+      Open income settings
+    </button>`;
+  let content;
+
+  if (!sources.length) {
+    content = `<p style="margin:0;line-height:1.5;">Add an income source in Settings to compare expected income with this paycheck’s assigned bills.</p>${settingsLink}`;
+  } else if (!estimatedSources.length) {
+    content = `<p style="margin:0;line-height:1.5;">Your saved income sources do not have a supported recurring income estimate. Manual or irregular income is not treated as zero income.</p>${settingsLink}`;
+  } else if (sources.some(source => !validAmount(source.expectedAmount))) {
+    content = `<p role="status" style="margin:0;line-height:1.5;">An income source has a missing or invalid expected amount. Review income settings before using this comparison.</p>${settingsLink}`;
+  } else {
+    const expected = Number(getTotalIncomeForPayCycle(selected.id));
+    const assigned = Number(selected.scheduled);
+    const expectedCents = Math.round(expected * 100);
+    const assignedCents = Math.round(assigned * 100);
+    const differenceCents = expectedCents - assignedCents;
+    if (![expectedCents, assignedCents, differenceCents].every(Number.isSafeInteger) ||
+        !Number.isFinite(expected) || expected < 0 ||
+        !Number.isFinite(assigned) || assigned < 0) {
+      content = `<p role="status" style="margin:0;line-height:1.5;">Income comparison is unavailable because an amount could not be calculated safely.</p>`;
+    } else {
+      const line = (label, amount, color = "var(--text)") => `
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;">
+          <span style="min-width:0;">${label}</span>
+          <span style="flex-shrink:0;font-weight:750;font-variant-numeric:tabular-nums;color:${color};">${formatCurrency(amount)}</span>
+        </div>`;
+      const payday = new Date(selected.payday);
+      const now = new Date();
+      const historical = payday.getFullYear() * 12 + payday.getMonth() <
+        now.getFullYear() * 12 + now.getMonth();
+      content = `
+        <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:6px;">
+          ${selected.id === "first" ? "Paycheck 1" : "Paycheck 2"} · ${escapeHtml(formatDate(selected.payday, "monthYear"))}
+        </div>
+        ${line("Expected paycheck income", expectedCents / 100)}
+        ${line("Total assigned bills", assignedCents / 100)}
+        <div style="border-top:1px solid var(--border);margin-top:4px;">
+          ${line("Difference", differenceCents / 100,
+            differenceCents < 0 ? "var(--overdue)" : "var(--text)")}
+        </div>
+        <p style="margin:10px 0 0;color:var(--text-muted);font-size:var(--text-xs);line-height:1.5;">
+          Assigned bills include paid and unpaid items. Estimate only—not your account balance or spending allowance.
+        </p>
+        ${excludedCount ? `<p role="status" style="margin:8px 0 0;color:var(--upcoming);font-size:var(--text-xs);line-height:1.5;">Partial income estimate: ${excludedCount} manual, irregular, or unsupported source(s) excluded.</p>` : ""}
+        <details style="margin-top:10px;">
+          <summary style="min-height:36px;display:list-item;cursor:pointer;color:var(--text-muted);font-size:var(--text-xs);padding:8px 0;">How this is calculated</summary>
+          <p style="margin:4px 0 0;color:var(--text-muted);font-size:var(--text-xs);line-height:1.5;">
+            Uses your current saved income estimates and this displayed paycheck’s assigned bills.
+            Weekly and biweekly income are averaged across two monthly planning buckets, not counted by actual payday dates.
+            Monthly income is assigned to Paycheck 1 by the existing income model.
+            Everyday spending and savings are not deducted.
+            ${historical ? "This is not a reconstruction of historical earnings." : "This is an estimate, not a verified payroll amount."}
+          </p>
+        </details>`;
+    }
+  }
+
+  return `
+    <details data-bb-income-comparison
+      style="margin-top:14px;padding:12px 14px;border-top:1px solid var(--border);color:var(--text);font-size:var(--text-sm);">
+      <summary style="min-height:40px;padding:10px 0;box-sizing:border-box;font-weight:750;cursor:pointer;">Income comparison</summary>
+      <div style="padding-top:6px;">${content}</div>
+    </details>`;
+}
 function bankMatchIsEligibleBill(bill) {
   if (!bill || typeof bill !== "object") return false;
   const status = String(bill.status || "").toLowerCase().replace(/[ _]/g, "-");
@@ -4809,7 +4885,6 @@ function openPaycheckSheetBill(button, billId, dueDate) {
   navigate("detail", {id:billId, occurrenceDueDate:dueDate, returnRoute:"today",
     returnParams:{...routeParams, paycheckInlineReturn:inline, paycheckSheetReturn:saved}});
 }
-
 function openPaycheckPlanSheet(paycheckKey) {
   const plan = getPaycheckPlan(
     getDashboardPaycheckMonth()
@@ -4935,6 +5010,7 @@ function openPaycheckPlanSheet(paycheckKey) {
           >
             <div class="paycheck-bills-scroll">
               ${billsHtml}
+              ${renderPaycheckIncomeComparison(selected)}
             </div>
           </div>
         </div>
@@ -4964,7 +5040,6 @@ function openPaycheckPlanSheet(paycheckKey) {
       ?.classList.add("show");
   });
 }
-
 function closePaycheckPlanSheet() {
   if (routeParams) delete routeParams.paycheckSheetReturn;
   const container = document.getElementById(
