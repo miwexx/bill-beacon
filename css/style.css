@@ -1165,13 +1165,9 @@ a { color: var(--accent); text-decoration: none; }
 /* ============================================
    ANIMATIONS
    ============================================ */
+/* Keep page content stable when screens render or update. */
 .fade-in {
-  animation: fadeIn 300ms ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  animation: none;
 }
 
 /* ============================================
