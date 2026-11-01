@@ -3318,21 +3318,49 @@ function getDashboardPaycheckMonth() {
 }
 function getDashboardPaycheckDefaultCycle() {
   const displayedMonth = getDashboardPaycheckMonth();
-  const now = new Date();
 
-  const displayedMonthIndex =
-    displayedMonth.getFullYear() * 12 +
-    displayedMonth.getMonth();
+  try {
+    const bills = getPaycheckFundingBills(
+      displayedMonth
+    );
 
-  const currentMonthIndex =
-    now.getFullYear() * 12 +
-    now.getMonth();
+    const hasUnpaidBills = cycle =>
+      bills.some(bill => {
+        const funding = getOccurrenceFunding(bill);
 
-  if (displayedMonthIndex > currentMonthIndex) {
+        return (
+          funding?.paycheck === cycle &&
+          !isOccurrencePaid(
+            bill,
+            new Date(bill.dueDate)
+          )
+        );
+      });
+
+    // Keep the first paycheck selected while it
+    // still has unpaid assigned bills.
+    if (hasUnpaidBills("first")) {
+      return "first";
+    }
+
+    // Select the second paycheck only when the
+    // first has no unpaid assigned bills and
+    // the second still does.
+    if (hasUnpaidBills("second")) {
+      return "second";
+    }
+
+    // Empty or completed display months start
+    // on the first paycheck.
+    return "first";
+  } catch (error) {
+    console.error(
+      "Could not determine the default paycheck.",
+      error
+    );
+
     return "first";
   }
-
-  return getDashboardPaycheckDefaultCycle();
 }
 function changeDashboardPaycheckMonth(offset) {
   if (offset !== -1 && offset !== 1) return;
@@ -4392,11 +4420,10 @@ function renderDashboardPaycheckPlan(
     referenceDate.getFullYear() === now.getFullYear() &&
     referenceDate.getMonth() === now.getMonth();
 
-  if (!selectedDashboardPaycheck) {
+    if (!selectedDashboardPaycheck) {
     selectedDashboardPaycheck =
-      getDefaultDashboardPaycheck(now);
+      getDashboardPaycheckDefaultCycle();
   }
-
   const selectedKey =
     selectedDashboardPaycheck === "second" ? "second" : "first";
 
