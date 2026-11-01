@@ -3265,6 +3265,7 @@ function renderDashboardUpcomingBill(bill) {
 }
 let selectedDashboardPaycheck = null;
 let selectedDashboardPaycheckMonth = null;
+let dashboardPaycheckSelectionMonthKey = null;
 
 function getDashboardPaycheckMonth() {
   // A manually selected month always wins.
@@ -4420,9 +4421,22 @@ function renderDashboardPaycheckPlan(
     referenceDate.getFullYear() === now.getFullYear() &&
     referenceDate.getMonth() === now.getMonth();
 
-    if (!selectedDashboardPaycheck) {
+    const displayedMonthKey =
+    `${referenceDate.getFullYear()}-` +
+    String(referenceDate.getMonth() + 1).padStart(2, "0");
+
+  const displayedMonthChanged =
+    dashboardPaycheckSelectionMonthKey !== displayedMonthKey;
+
+  if (
+    displayedMonthChanged ||
+    !selectedDashboardPaycheck
+  ) {
     selectedDashboardPaycheck =
       getDashboardPaycheckDefaultCycle();
+
+    dashboardPaycheckSelectionMonthKey =
+      displayedMonthKey;
   }
   const selectedKey =
     selectedDashboardPaycheck === "second" ? "second" : "first";
