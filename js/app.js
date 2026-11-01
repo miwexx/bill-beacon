@@ -4729,8 +4729,6 @@ function renderDashboardPaycheckPlan(
                <span>${formatCurrency(selected.paid)} Paid</span>
         <span>${formatCurrency(selected.scheduled)} Scheduled</span>
       </div>
-
-      ${renderPaycheckInlineRows(selected)}
       ${renderPaycheckInlineRows(selected)}
 ${renderPaycheckIncomeComparison(selected)}
     </div>
