@@ -5342,7 +5342,7 @@ function fitBillListSheet(sheetId, fixedChildren = 1) {
 }
 function openDashboardPaidSheet() {
   closeDashboardPaidSheet();
-  const summary = getDashboardMonthSummary(new Date());
+  const summary = getDashboardMonthSummary(getDashboardReportMonth());
   const activePaid = summary.paid.filter(item => !item.removed);
   const removedPaid = summary.paid.filter(item => item.removed);
 
@@ -5398,7 +5398,7 @@ function openDashboardPaidSheet() {
     <div class="sheet-overlay show" id="dashboardPaidOverlay"
       onclick="closeDashboardPaidSheet()"></div>
     <div class="sheet show" id="dashboardPaidSheet" role="dialog"
-      aria-modal="true" aria-label="Paid bills this month">
+      aria-modal="true" aria-label="Paid bills for ${escapeHtml(formatDate(getDashboardReportMonth(), "monthYear"))}">
       <div class="sheet-handle"></div>
       <div class="sheet-nav">
         <button type="button" class="nav-button"
@@ -5406,7 +5406,7 @@ function openDashboardPaidSheet() {
           style="color:var(--text);">
           ${svgIcon("chevronLeft", 22)}
         </button>
-        <div class="sheet-title">Paid Bills</div>
+        <div class="sheet-title">Paid · ${formatDate(getDashboardReportMonth(), "monthYear")}</div>
         <div style="width:54px;"></div>
       </div>
       <div class="sheet-body">
@@ -5444,6 +5444,7 @@ function openDashboardPaidSheet() {
   fitBillListSheet("dashboardPaidSheet", 1);
 
 }
+
 function dashboardIsInstallment(item) {
   return Boolean(
     item?.installmentPlanId || item?.bill?.installmentPlanId ||
@@ -5453,23 +5454,27 @@ function dashboardIsInstallment(item) {
 
 function getDashboardSeparatedStatus(referenceDate = new Date()) {
   const summary = getDashboardMonthSummary(referenceDate);
-  const monthStart = new Date(referenceDate.getFullYear(), referenceDate.getMonth(), 1);
-  const overdue = getAllOverdueBillOccurrences(referenceDate);
   const makeGroup = installment => {
     const matches = item => dashboardIsInstallment(item) === installment;
     const paid = summary.paid.filter(matches);
     const unpaid = summary.unpaid.filter(matches);
+    const overdue = unpaid.filter(bill =>
+      getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
+    );
     return {
       paid,
       unpaid,
       totalCount: paid.length + unpaid.length,
-      due: unpaid.filter(bill => getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming"),
-      overdue: overdue.filter(matches),
-      olderOverdue: overdue.filter(bill => matches(bill) && new Date(bill.dueDate) < monthStart)
+      due: unpaid.filter(bill =>
+        getOccurrenceStatus(bill, new Date(bill.dueDate)) === "upcoming"
+      ),
+      overdue,
+      olderOverdue: []
     };
   };
   return { bills: makeGroup(false), installments: makeGroup(true) };
 }
+
 
 function renderDashboardSeparatedStatus(referenceDate = new Date()) {
   const groups = getDashboardSeparatedStatus(referenceDate);
@@ -5704,14 +5709,14 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
 
 function openDashboardSeparatedStatus(groupName, status) {
   closeDashboardStatusSheet();
-  const now = new Date();
+  const now = getDashboardReportMonth();
   const installment = groupName === "installments";
   const group = getDashboardSeparatedStatus(now)[installment ? "installments" : "bills"];
   const items = group[status] || [];
   const paid = status === "paid";
   const label = installment ? "Installment Payments" : "Bills";
   const statusLabel = paid ? "Paid" : status === "overdue" ? "Overdue" : "Due";
-  const period = status === "overdue" ? "All dates" : formatDate(now, "monthYear");
+  const period = formatDate(now, "monthYear");
   const title = `${statusLabel} ${label}`;
   const total = dashboardMoneyTotal(items.map(item => item.amount));
   const rows = items.map(item => {
@@ -5818,10 +5823,71 @@ function openDashboardSeparatedStatus(groupName, status) {
   document.body.appendChild(container);
   fitBillListSheet("dashboardStatusSheet", 1);
 }
+
+let selectedDashboardReportMonth = null;
+
+function getDashboardReportMonth() {
+  const date = selectedDashboardReportMonth || new Date();
+  return new Date(date.getFullYear(), date.getMonth(), 1, 12);
+}
+
+function changeDashboardReportMonth(offset) {
+  if (offset !== -1 && offset !== 1) return;
+  const date = getDashboardReportMonth();
+  selectedDashboardReportMonth = new Date(
+    date.getFullYear(), date.getMonth() + offset, 1, 12
+  );
+  render();
+}
+
+function resetDashboardReportMonth() {
+  selectedDashboardReportMonth = null;
+  render();
+}
+
+function renderDashboardReportMonthNavigation() {
+  const date = getDashboardReportMonth();
+  const now = new Date();
+  const isCurrentMonth = date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth();
+  return `
+    <div style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;">
+      <button type="button" class="bb-outline-pill"
+        aria-label="Previous snapshot month" onclick="changeDashboardReportMonth(-1)"
+        style="width:44px;min-height:44px;padding:0;justify-content:center;">
+        ${svgIcon("chevronLeft", 20)}
+      </button>
+      <div aria-live="polite" style="min-width:0;text-align:center;">
+        <div style="font-size:var(--text-base);font-weight:800;">${formatDate(date, "monthYear")}</div>
+        <div style="margin-top:3px;font-size:var(--text-xs);color:var(--text-muted);">Monthly Snapshot</div>
+      </div>
+      <button type="button" class="bb-outline-pill"
+        aria-label="Next snapshot month" onclick="changeDashboardReportMonth(1)"
+        style="width:44px;min-height:44px;padding:0;justify-content:center;">
+        ${svgIcon("chevronRight", 20)}
+      </button>
+    </div>
+    ${!isCurrentMonth ? `
+      <div style="text-align:center;margin-top:10px;">
+        <button type="button" class="bb-outline-pill" onclick="resetDashboardReportMonth()"
+          style="min-height:36px;padding:0 14px;">Current Month</button>
+      </div>` : ""}
+  `;
+}
+
+window.addEventListener("billbeacon:signed-out", () => {
+  selectedDashboardReportMonth = null;
+});
+window.addEventListener("billbeacon:household-ready", () => {
+  selectedDashboardReportMonth = null;
+});
+
+// REPLACE THE ENTIRE EXISTING renderToday FUNCTION WITH THIS:
 function renderToday() {
   const now = new Date();
-  const summary = getDashboardMonthSummary(now);
-  const billCounts = getDashboardSeparatedStatus(now).bills;
+  const reportMonth = getDashboardReportMonth();
+  const summary = getDashboardMonthSummary(reportMonth);
+  const billCounts = getDashboardSeparatedStatus(reportMonth).bills;
 
   const currentDateLabel = new Intl.DateTimeFormat(undefined, {
     weekday: "short",
@@ -5989,29 +6055,7 @@ function renderToday() {
           "
           aria-label="Monthly bills and installments summary"
         >
-          <div
-  class="dashboard-card-topline"
-  style="
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    height:20px;
-    min-height:0;
-    padding:0;
-    margin:0;
-    text-align:center;
-  "
->
-  <span style="
-    font-size:16px;
-    font-weight:800;
-    line-height:20px;
-    white-space:nowrap;
-    color:#fff;
-  ">
-    ${formatDate(now, "monthYear")} · Monthly Snapshot
-  </span>
-</div>
+          ${renderDashboardReportMonthNavigation()}
 
           <div style="
             display:grid;
@@ -6131,7 +6175,7 @@ function renderToday() {
           </div>
         </section>
 
-        ${renderDashboardSeparatedStatus(now)}
+        ${renderDashboardSeparatedStatus(reportMonth)}
           ${renderDashboardPaycheckPlan()}
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">
@@ -7967,10 +8011,12 @@ function closeCycleBillsSheet() {
 }, 300);
 }
 function openDashboardStatusSheet(status) {
-  const now = new Date();
+  const now = getDashboardReportMonth();
 
   const monthBills = getCalendarBillsForMonth(now);
-  const allOverdue = getAllOverdueBillOccurrences(now);
+  const allOverdue = monthBills.filter(bill =>
+    getOccurrenceStatus(bill, new Date(bill.dueDate)) === "overdue"
+  );
   const outstandingByKey = new Map();
   for (const bill of [...allOverdue, ...monthBills]) {
     outstandingByKey.set(`${getBillPaymentId(bill)}:${getLocalDateKey(bill.dueDate)}`, bill);
@@ -8096,7 +8142,7 @@ function openDashboardStatusSheet(status) {
   ${svgIcon("chevronLeft", 22)}
 </button>
 
-        <div class="sheet-title">${title}</div>
+        <div class="sheet-title">${title} · ${formatDate(now, "monthYear")}</div>
         <div style="width:54px"></div>
       </div>
 
@@ -8264,7 +8310,6 @@ function openDashboardStatusSheet(status) {
   fitBillListSheet("dashboardStatusSheet", trackingReviewBills.length && status !== "paid" ? 2 : 1);
 
 }
-
 function getMonthlySpendingLimit() {
   const settings = Store.getSettings();
   return Number(settings.monthlySpendingLimit || 0);
