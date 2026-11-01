@@ -8850,31 +8850,31 @@ function renderPaymentPlans() {
   const total = dashboardMoneyTotal(active.map(plan => plan.remaining));
   const cards = active.map(plan => {
     const overdue = getOccurrenceStatus(plan.next,new Date(plan.next.dueDate)) === "overdue";
-    return `<button type="button" class="card card-pad" style="width:100%;text-align:left;color:var(--text);font:inherit;cursor:pointer;border:1px solid var(--border);" onclick="openPaymentPlanDetails('${escapeInlineString(plan.id)}')" aria-label="View ${escapeHtml(plan.name)} plan details">
+    return `<button type="button" class="bb-plan-list-row" style="display:block;width:100%;padding:18px;text-align:left;color:var(--text);background:transparent;font:inherit;cursor:pointer;border:0;" onclick="openPaymentPlanDetails('${escapeInlineString(plan.id)}')" aria-label="View ${escapeHtml(plan.name)} plan details">
       <span style="display:flex;align-items:flex-start;gap:12px;">
         ${paymentPlanVisual(plan.provider,40)}
         <span style="min-width:0;flex:1;"><span style="display:block;font-weight:800;overflow-wrap:anywhere;">${escapeHtml(plan.name)}</span>
           <span style="display:block;margin-top:4px;color:var(--text-muted);font-size:var(--text-sm);">${escapeHtml(plan.provider)}</span></span>
         <span style="text-align:right;flex-shrink:0;"><span style="display:block;font-weight:800;">${formatCurrency(plan.remaining)}</span>
-          <span style="display:block;margin-top:4px;color:var(--text-muted);font-size:var(--text-xs);">remaining</span></span>
+          <span style="display:block;margin-top:4px;color:var(--text-muted);font-size:var(--text-xs);">Remaining</span></span>
       </span>
-      <span style="display:block;margin-top:15px;color:${overdue?'var(--overdue)':'var(--text)'};font-size:var(--text-sm);font-weight:650;">${overdue?'Overdue':'Next payment'}: ${formatCurrency(plan.next.amount)} · ${escapeHtml(formatDate(plan.next.dueDate,"short"))}</span>
+      <span style="display:block;margin-top:15px;color:${overdue?'var(--overdue)':'var(--text)'};font-size:var(--text-sm);font-weight:650;">${overdue?'Overdue':'Next Payment'}: ${formatCurrency(plan.next.amount)} · ${escapeHtml(formatDate(plan.next.dueDate,"short"))}</span>
       ${renderInstallmentProgressBar(plan.paid,plan.bills.length)}
-      <span style="display:flex;justify-content:space-between;gap:12px;margin-top:9px;font-size:var(--text-xs);color:var(--text-muted);"><span>${plan.paid} of ${plan.bills.length} payments paid</span><span>View plan ›</span></span>
+      <span style="display:flex;justify-content:space-between;gap:12px;margin-top:9px;font-size:var(--text-xs);color:var(--text-muted);"><span>${plan.paid} of ${plan.bills.length} Payments Paid</span><span>View Plan ›</span></span>
     </button>`;
   }).join("");
-  return `${renderBillsAndPlansHeader("plans")}${renderBillsAndPlansNavigation("plans")}
+  return `<style>.bb-plan-group>.bb-plan-list-row+.bb-plan-list-row{border-top:1px solid var(--border)!important;}.bb-plan-list-row:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;}</style>${renderBillsAndPlansHeader("plans")}${renderBillsAndPlansNavigation("plans")}
     <div class="main-content"><div class="content-pad content-gap">
       <section class="card card-pad" aria-label="Total remaining plan balance" style="text-align:center;">
         <div style="color:var(--text-muted);font-size:var(--text-sm);">Remaining Balance</div>
         <div style="margin-top:8px;font-size:clamp(32px,10vw,48px);font-weight:850;line-height:1.15;overflow-wrap:anywhere;">${formatCurrency(total)}</div>
-        <div style="margin-top:10px;color:var(--text-muted);font-size:var(--text-sm);">Across ${active.length} active ${active.length===1?'plan':'plans'}</div>
-        <div style="margin-top:5px;color:var(--text-muted);font-size:var(--text-xs);">All remaining payments, not just this month</div>
+        <div style="margin-top:10px;color:var(--text-muted);font-size:var(--text-sm);">Across ${active.length} Active ${active.length===1?'Plan':'Plans'}</div>
+        <div style="margin-top:5px;color:var(--text-muted);font-size:var(--text-xs);">All Remaining Payments, Not Just This Month</div>
       </section>
-      <section aria-labelledby="bbActivePlansTitle"><div class="section-header" id="bbActivePlansTitle">Active Plans</div>
-        <div class="content-gap">${cards || `<div class="card card-pad" style="text-align:center;"><div style="font-weight:750;">${completed.length?'All plans completed':'No active plans'}</div><p style="color:var(--text-muted);font-size:var(--text-sm);">${completed.length?'Your completed plans are available below.':'Add a plan to track its balance and payments.'}</p><button type="button" class="btn-primary" onclick="openInstallmentPlanForm()">Add payment plan</button></div>`}</div>
+      <section aria-labelledby="bbActivePlansTitle"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;"><div class="section-header" id="bbActivePlansTitle" style="margin:0;">Active Plans</div>${completed.length ? `<button type="button" onclick="openCompletedPlansHistory()" style="min-height:44px;padding:8px 0 8px 12px;border:0;background:transparent;color:var(--accent);font:inherit;font-size:var(--text-sm);font-weight:700;cursor:pointer;">Completed Plans · ${completed.length} ›</button>` : ''}</div>
+        <div class="card bb-plan-group" style="overflow:hidden;">${cards || `<div class="card card-pad" style="text-align:center;"><div style="font-weight:750;">${completed.length?'All Plans Completed':'No Active Plans'}</div><p style="color:var(--text-muted);font-size:var(--text-sm);">${completed.length?'Your completed plans are available below.':'Add a plan to track its balance and payments.'}</p><button type="button" class="btn-primary" onclick="openInstallmentPlanForm()">Add Payment Plan</button></div>`}</div>
       </section>
-      ${completed.length ? `<button type="button" class="btn-secondary" style="width:100%;min-height:48px;" onclick="openCompletedPlansHistory()">Completed plans · ${completed.length}</button>` : ''}
+      
     </div></div>`;
 }
 function showMoreActivePaymentPlans() {
@@ -9247,166 +9247,36 @@ function getCompletedPaymentPlans() {
 
 function openCompletedPlansHistory() {
   document.getElementById("completed-plans-history")?.remove();
-
-  const completedPlans = getCompletedPaymentPlans();
-
-  const renderHistoryCard = (plan) => {
-  const title = plan.storeName || plan.provider;
-
-  return `
-    <button
-      type="button"
-      onclick="closeCompletedPlansHistory(); openPaymentPlanDetails('${escapeInlineString(plan.id)}')"
-      style="
-        display:flex;
-        width:100%;
-        align-items:center;
-        flex-wrap:wrap;
-        gap:var(--space-3);
-        padding:var(--space-4);
-        text-align:left;
-        color:inherit;
-        cursor:pointer;
-        background:var(--surface);
-        border:1px solid rgba(192, 151, 255, 0.18);
-        border-radius:16px;
-      "
-      aria-label="View completed payment plan for ${escapeHtml(title)}"
-    >
-      ${paymentPlanVisual(plan.provider, 42)}
-
-      <div style="min-width:0; flex:1;">
-        <div
-          style="
-            overflow:hidden;
-            font-size:var(--text-base);
-            font-weight:800;
-            text-overflow:ellipsis;
-            white-space:nowrap;
-          "
-        >
-          ${escapeHtml(title)}
-        </div>
-
-        <div
-          style="
-            margin-top:4px;
-            font-size:var(--text-sm);
-            color:var(--text-muted);
-          "
-        >
-          Paid in full
-        </div>
-      </div>
-
-      <div
-        style="
-          font-size:var(--text-base);
-          font-weight:800;
-          white-space:nowrap;
-        "
-      >
-        ${formatCurrency(plan.totalAmount)} paid
-      </div>
-      <div style="flex:0 0 100%;min-width:0;">
-        ${renderInstallmentProgressBar(plan.paidCount, plan.installmentCount)}
-        <div style="margin-top:8px;font-size:var(--text-xs);color:var(--text-muted);">${plan.paidCount} of ${plan.installmentCount} payments complete</div>
-      </div>
-    </button>
-  `;
-};
+  const plans = getCompletedPaymentPlans();
+  const rows = plans.map(plan => {
+    const title = plan.storeName || plan.provider;
+    return `<button type="button" class="bb-completed-row" onclick="closeCompletedPlansHistory();openPaymentPlanDetails('${escapeInlineString(plan.id)}');" aria-label="View ${escapeHtml(title)} Completed Plan">
+      <span style="display:flex;gap:12px;align-items:center;">${paymentPlanVisual(plan.provider,38)}
+        <span style="min-width:0;flex:1;"><span style="display:block;font-weight:800;overflow-wrap:anywhere;">${escapeHtml(title)}</span><span style="display:block;margin-top:4px;font-size:var(--text-sm);color:var(--text-muted);">${escapeHtml(plan.provider)} · Paid In Full</span></span>
+        <span style="text-align:right;flex-shrink:0;font-weight:800;">${formatCurrency(plan.totalAmount)}<span style="display:block;margin-top:4px;font-size:var(--text-xs);color:var(--paid);">Paid ✓</span></span></span>
+      <span style="display:flex;justify-content:space-between;gap:12px;margin-top:12px;font-size:var(--text-xs);color:var(--text-muted);"><span>${plan.paidCount} Of ${plan.installmentCount} Payments Paid</span><span>View Plan ›</span></span>
+    </button>`;
+  }).join("");
   const container = document.createElement("div");
   container.id = "completed-plans-history";
-
-  container.innerHTML = `
-    <div
-      style="
-        position:fixed;
-        inset:0;
-        z-index:1000;
-        overflow-y:auto;
-        background:var(--bg, #09090c);
-        color:var(--text, #f7f5fa);
-      "
-      role="dialog"
-      aria-modal="true"
-      aria-label="Completed Installments"
-    >
-      <div class="nav-bar">
-        <div class="nav-bar-content">
-          <div class="nav-button" aria-hidden="true"></div>
-
-          <div class="nav-title">Completed plans</div>
-
-          <button
-            type="button"
-            class="nav-button"
-            onclick="closeCompletedPlansHistory()"
-            aria-label="Close completed plans history"
-            style="color:#b45cff;"
-          >
-            ${svgIcon("close", 22)}
-          </button>
-        </div>
-      </div>
-
-      <div class="main-content fade-in">
-        <div class="content-pad content-gap">
-          <div
-            style="
-              padding:var(--space-2) 0 var(--space-1);
-              color:var(--text-muted);
-              font-size:var(--text-sm);
-            "
-          >
-            ${completedPlans.length} Completed ${
-              completedPlans.length === 1 ? "Plan" : "Plans"
-            }
-          </div>
-
-          <div
-            style="
-              font-size:var(--text-2xl);
-              font-weight:900;
-              letter-spacing:-0.03em;
-            "
-          >
-            Payment History
-          </div>
-
-          <div
-            style="
-              margin-top:6px;
-              color:var(--text-muted);
-              font-size:var(--text-sm);
-              line-height:1.5;
-            "
-          >
-            Review installment plans you have paid in full.
-          </div>
-
-          <div class="content-gap" style="margin-top:var(--space-4);">
-            ${
-              completedPlans.length
-                ? completedPlans.map(renderHistoryCard).join("")
-                : `
-                  <div class="empty-state">
-                    <div class="empty-state-icon">
-                      ${svgIcon("creditcard", 44)}
-                    </div>
-                    <div class="empty-state-title">No Completed Plans</div>
-                    <div class="empty-state-text">
-                      Completed payment plans will appear here.
-                    </div>
-                  </div>
-                `
-            }
-          </div>
-        </div>
-      </div>
+  container.innerHTML = `<style>
+    #bbCompletedPlansDialog{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;overflow:hidden;height:100%;height:100dvh;box-sizing:border-box;background:var(--bg,#09090c);color:var(--text,#f7f5fa);}
+    #bbCompletedPlansDialog .bb-completed-header{flex:0 0 auto;position:relative;z-index:1;box-sizing:border-box;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px;border-bottom:1px solid var(--border);background:var(--bg,#09090c);}
+    #bbCompletedPlansDialog .bb-completed-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:20px 16px calc(24px + env(safe-area-inset-bottom,0px));}
+    #bbCompletedPlansDialog .bb-completed-row{display:block;width:100%;padding:18px;border:0;background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer;}
+    #bbCompletedPlansDialog .bb-completed-row+.bb-completed-row{border-top:1px solid var(--border);}
+    #bbCompletedPlansDialog button:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;}
+  </style>
+  <section id="bbCompletedPlansDialog" role="dialog" aria-modal="true" aria-labelledby="bbCompletedPlansTitle">
+    <header class="bb-completed-header"><div style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;">
+      <span aria-hidden="true"></span><h2 id="bbCompletedPlansTitle" style="margin:0;text-align:center;font-size:var(--text-lg);font-weight:800;">Completed Plans</h2>
+      <button type="button" onclick="closeCompletedPlansHistory()" aria-label="Close Completed Plans" style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;border:0;background:transparent;color:var(--text);cursor:pointer;">${svgIcon("close",22)}</button>
+    </div></header>
+    <div class="bb-completed-scroll" tabindex="0" role="region" aria-label="Completed Plans List">
+      <div style="margin-bottom:16px;color:var(--text-muted);font-size:var(--text-sm);">${plans.length} Completed ${plans.length===1?'Plan':'Plans'}</div>
+      ${plans.length ? `<div class="card" style="overflow:hidden;">${rows}</div>` : `<div class="card card-pad" style="text-align:center;"><div style="font-weight:750;">No Completed Plans</div><p style="color:var(--text-muted);">Completed Payment Plans Will Appear Here.</p></div>`}
     </div>
-  `;
-
+  </section>`;
   document.body.appendChild(container);
 }
 
@@ -9492,9 +9362,9 @@ function openPaymentPlanDetails(planId) {
     return `<div class="bb-plan-row">
       <div style="min-width:0;"><div style="font-weight:750;">Payment ${escapeHtml(bill.installmentNumber || index+1)} of ${bills.length}</div>
         <div style="margin-top:5px;color:${color};font-size:var(--text-sm);">${payment?'Paid ✓':late?'Overdue':'Due'} · ${escapeHtml(formatDate(payment ? payment.paidDate : bill.dueDate,"short"))}</div>
-        ${payment ? `<div style="margin-top:4px;color:var(--text-muted);font-size:var(--text-xs);">Originally due ${escapeHtml(formatDate(bill.dueDate,"short"))}</div>` : ''}</div>
+        ${payment ? `<div style="margin-top:4px;color:var(--text-muted);font-size:var(--text-xs);">Originally Due ${escapeHtml(formatDate(bill.dueDate,"short"))}</div>` : ''}</div>
       <div style="font-weight:800;text-align:right;">${formatCurrency(bill.amount)}</div>
-      <div class="bb-plan-action"><button type="button" class="bb-outline-pill" style="min-height:44px;justify-content:center;" onclick="${payment?'bbPlanOpenPaymentDetails':'bbPlanRecordInstallment'}('${plan}','${escapeInlineString(bill.id)}'${payment?'':',this'})" aria-label="${payment?'View details for':'Mark paid:'} payment ${index+1}">${payment?'Details':'Mark paid'}</button></div>
+      <div class="bb-plan-action"><button type="button" class="bb-outline-pill" style="min-height:44px;justify-content:center;" onclick="${payment?'bbPlanOpenPaymentDetails':'bbPlanRecordInstallment'}('${plan}','${escapeInlineString(bill.id)}'${payment?'':',this'})" aria-label="${payment?'View details for':'Mark paid:'} payment ${index+1}">${payment?'Details':'Mark Paid'}</button></div>
     </div>`;
   }).join("");
   document.getElementById("paymentPlanDetailsContainer")?.remove();
@@ -9513,28 +9383,32 @@ function openPaymentPlanDetails(planId) {
     <section class="sheet" id="paymentPlanDetailsSheet" role="dialog" aria-modal="true" aria-labelledby="bbPlanDetailsTitle">
       <div class="sheet-handle"></div><div class="sheet-nav">
         <button type="button" class="nav-button" onclick="closePaymentPlanDetails()" aria-label="Close plan details">${svgIcon("close",22)}</button>
-        <div class="sheet-title" id="bbPlanDetailsTitle">Plan details</div>
-        <button type="button" class="nav-button" onclick="closePaymentPlanDetails();openPaymentPlanActions('${plan}');" aria-label="More plan actions">${svgIcon("moreVertical",22)}</button>
+        <div class="sheet-title" id="bbPlanDetailsTitle">Plan Details</div>
+        <span aria-hidden="true" style="width:44px;"></span>
       </div>
       <div class="sheet-body content-gap">
         <div class="card card-pad"><div style="display:flex;gap:14px;align-items:center;">${paymentPlanVisual(provider,44)}
           <div style="min-width:0;"><div style="font-size:var(--text-lg);font-weight:850;overflow-wrap:anywhere;">${escapeHtml(name)}</div><div style="margin-top:4px;color:var(--text-muted);font-size:var(--text-sm);">${escapeHtml(provider)}</div></div></div>
-          <div style="margin-top:20px;color:var(--text-muted);font-size:var(--text-sm);">Remaining balance</div>
+          <div style="margin-top:20px;color:var(--text-muted);font-size:var(--text-sm);">Remaining Balance</div>
           <div style="margin-top:5px;font-size:clamp(28px,8vw,38px);font-weight:850;overflow-wrap:anywhere;">${formatCurrency(remaining)}</div>
           ${renderInstallmentProgressBar(paidCount,bills.length)}
-          <div style="margin-top:9px;color:var(--text-muted);font-size:var(--text-sm);">${paidCount} of ${bills.length} payments paid</div>
-        </div>
-        ${next ? `<div class="card card-pad"><div style="font-weight:700;color:${overdue?'var(--overdue)':'var(--text-muted)'};">${overdue?'Overdue payment':'Next payment'}</div>
+          <div style="margin-top:9px;color:var(--text-muted);font-size:var(--text-sm);">${paidCount} of ${bills.length} Payments Paid</div>
+        ${next ? `<div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border);"><div style="font-weight:700;color:${overdue?'var(--overdue)':'var(--text-muted)'};">${overdue?'Overdue Payment':'Next Payment'}</div>
           <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline;margin-top:8px;"><span style="font-size:var(--text-xl);font-weight:800;">${formatCurrency(next.amount)}</span><span style="color:var(--text-muted);font-size:var(--text-sm);">Due ${escapeHtml(formatDate(next.dueDate,"full"))}</span></div>
-          <button type="button" class="btn-primary" style="width:100%;min-height:48px;margin:18px 0 0;" onclick="bbPlanRecordInstallment('${plan}','${escapeInlineString(next.id)}',this)">Mark ${overdue?'overdue':'next'} payment paid</button>
-          <button type="button" class="btn-secondary" style="width:100%;min-height:48px;margin:10px 0 0;white-space:normal;" onclick="payPaymentPlanInFull('${plan}')">Record full payoff · ${formatCurrency(remaining)}</button>
+          <button type="button" class="btn-primary" style="width:100%;min-height:48px;margin:18px 0 0;" onclick="bbPlanRecordInstallment('${plan}','${escapeInlineString(next.id)}',this)">Mark ${overdue?'Overdue':'Next'} Payment Paid</button>
+          <button type="button" class="btn-secondary" style="width:100%;min-height:48px;margin:10px 0 0;white-space:normal;" onclick="payPaymentPlanInFull('${plan}')">Pay In Full · ${formatCurrency(remaining)}</button>
           <p style="margin:12px 0 0;color:var(--text-muted);font-size:var(--text-xs);line-height:1.5;">Record a payment you already made. Bill Beacon does not send money.</p></div>`
-          : `<div class="card card-pad" style="color:var(--paid);font-weight:750;">${svgIcon("checkCircle",20)} All payments recorded. This plan is complete.</div>`}
+          : `<div style="margin-top:18px;color:var(--paid);font-weight:750;">${svgIcon("checkCircle",20)} All Payments Recorded. This Plan Is Complete.</div>`}
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+          ${next ? `<button type="button" class="btn-secondary" style="flex:1 1 180px;min-height:46px;white-space:normal;" onclick="openExistingPaymentPlanEditor('${plan}')">Edit Next Payment</button>` : ''}
+          <button type="button" class="btn-danger" style="flex:1 1 140px;min-height:46px;" onclick="confirmDeletePaymentPlan('${plan}')">Delete Plan</button>
+        </div>
+        </div>
         <div><div class="section-header">Payments</div><div class="card" style="overflow:hidden;">${rows}</div></div>
-        <details class="card card-pad"><summary style="cursor:pointer;min-height:44px;font-weight:750;">Purchase summary</summary>
-          ${detailRow("Total scheduled",formatCurrency(total))}
-          ${detailRow("Recorded paid",formatCurrency(dashboardMoneyTotal(bills.filter(bill => isOccurrencePaid(bill,new Date(bill.dueDate))).map(bill => bill.amount))))}
-          ${detailRow("Remaining",formatCurrency(remaining))}${detailRow("Payments remaining",String(unpaid.length))}
+        <details class="card card-pad"><summary style="cursor:pointer;min-height:44px;font-weight:750;">Purchase Summary</summary>
+          ${detailRow("Total Scheduled",formatCurrency(total))}
+          ${detailRow("Recorded Paid",formatCurrency(dashboardMoneyTotal(bills.filter(bill => isOccurrencePaid(bill,new Date(bill.dueDate))).map(bill => bill.amount))))}
+          ${detailRow("Remaining",formatCurrency(remaining))}${detailRow("Payments Remaining",String(unpaid.length))}
         </details>
       </div></section>`;
   document.body.appendChild(container);
@@ -9545,6 +9419,7 @@ function openPaymentPlanDetails(planId) {
     container.querySelector("#paymentPlanDetailsSheet")?.classList.add("show");
   });
 }
+
 async function bbPlanRecordInstallment(planId, billId, button) {
   if (document.getElementById("bbLeftoverFundingDialog")) return;
   const container = document.getElementById("paymentPlanDetailsContainer");
@@ -9767,13 +9642,14 @@ function confirmDeletePaymentPlan(planId) {
 
   const confirmed = window.confirm(
     `Delete ${storeName}?\n\n` +
-      `This removes all ${installments.length} installments` +
+      `This removes all ${installments.length} installments.\n\n` +
       `Payment and activity history should remain available.`
   );
 
   if (!confirmed) return;
 
   closePaymentPlanActions();
+  closePaymentPlanDetails();
 
 window.setTimeout(() => {
   archivePaymentPlan(planId);
