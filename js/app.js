@@ -4662,39 +4662,11 @@ function renderBillsAndPlansNavigation(activeSection) {
     return `
       <button
         type="button"
+        class="bb-bills-plans-option ${
+          selected ? "is-selected" : ""
+        }"
         ${selected ? 'aria-current="page"' : ""}
         onclick="${action}"
-        style="
-          display:flex;
-          align-items:center;
-          justify-content:center;
-          min-width:0;
-          min-height:42px;
-          padding:10px 8px;
-          margin:0;
-          border:1px solid ${
-            selected
-              ? "rgba(180,92,255,.32)"
-              : "transparent"
-          };
-          border-radius:11px;
-          background:${
-            selected
-              ? "rgba(180,92,255,.12)"
-              : "transparent"
-          };
-          color:${
-            selected
-              ? "var(--text)"
-              : "var(--text-muted)"
-          };
-          font:inherit;
-          font-size:var(--text-sm);
-          font-weight:${selected ? "800" : "650"};
-          line-height:1.25;
-          text-align:center;
-          cursor:pointer;
-        "
       >
         ${label}
       </button>
@@ -4703,19 +4675,8 @@ function renderBillsAndPlansNavigation(activeSection) {
 
   return `
     <nav
+      class="bb-bills-plans-switch"
       aria-label="Bills and installment plans"
-      style="
-        display:grid;
-        grid-template-columns:1fr 1fr;
-        align-items:stretch;
-        gap:4px;
-        margin:12px 16px 16px;
-        padding:4px;
-        border:1px solid var(--border);
-        border-radius:15px;
-        background:var(--surface-2);
-        box-sizing:border-box;
-      "
     >
       ${item(
         "bills",
@@ -6987,8 +6948,9 @@ function renderBills() {
 
   return `
     ${renderBillsAndPlansHeader("bills")}
-        <div class="main-content fade-in bills-page-content">
-      ${renderBillsAndPlansNavigation("bills")}
+    ${renderBillsAndPlansNavigation("bills")}
+
+    <div class="main-content bills-page-content">
       ${
         bills.length === 0
           ? `
@@ -8991,8 +8953,9 @@ function renderPaymentPlans() {
 
   return `
     ${renderBillsAndPlansHeader("plans")}
-    <div class="main-content fade-in">
-      ${renderBillsAndPlansNavigation("plans")}
+    ${renderBillsAndPlansNavigation("plans")}
+
+    <div class="main-content">
       <div class="content-pad content-gap">
         ${
           !plans.length
