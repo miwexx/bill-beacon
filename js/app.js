@@ -2109,83 +2109,7 @@ function renderLegacyPaymentReviewNotice(billId = null) {
       onclick="navigate('history')">View Payment History</button>
   </div>`;
 }
-function renderPaycheckIncomeComparison(selected) {
-  if (!selected || !["first", "second"].includes(selected.id)) return "";
 
-  const sources = Store.getIncomeSources();
-  const supported = ["Weekly", "Biweekly", "Twice monthly", "Monthly"];
-  const estimatedSources = sources.filter(source => supported.includes(source.frequency));
-  const excludedCount = sources.length - estimatedSources.length;
-  const validAmount = value => value !== null && value !== undefined &&
-    String(value).trim() !== "" && Number.isFinite(Number(value)) && Number(value) >= 0;
-  const settingsLink = `
-    <button type="button" class="bb-outline-pill"
-      onclick="closePaycheckPlanSheet();navigate('settings',{returnRoute:'today'})"
-      style="min-height:40px;padding:8px 12px;margin-top:10px;">
-      Open income settings
-    </button>`;
-  let content;
-
-  if (!sources.length) {
-    content = `<p style="margin:0;line-height:1.5;">Add an income source in Settings to compare expected income with this paycheck’s assigned bills.</p>${settingsLink}`;
-  } else if (!estimatedSources.length) {
-    content = `<p style="margin:0;line-height:1.5;">Your saved income sources do not have a supported recurring income estimate. Manual or irregular income is not treated as zero income.</p>${settingsLink}`;
-  } else if (sources.some(source => !validAmount(source.expectedAmount))) {
-    content = `<p role="status" style="margin:0;line-height:1.5;">An income source has a missing or invalid expected amount. Review income settings before using this comparison.</p>${settingsLink}`;
-  } else {
-    const expected = Number(getTotalIncomeForPayCycle(selected.id));
-    const assigned = Number(selected.scheduled);
-    const expectedCents = Math.round(expected * 100);
-    const assignedCents = Math.round(assigned * 100);
-    const differenceCents = expectedCents - assignedCents;
-    if (![expectedCents, assignedCents, differenceCents].every(Number.isSafeInteger) ||
-        !Number.isFinite(expected) || expected < 0 ||
-        !Number.isFinite(assigned) || assigned < 0) {
-      content = `<p role="status" style="margin:0;line-height:1.5;">Income comparison is unavailable because an amount could not be calculated safely.</p>`;
-    } else {
-      const line = (label, amount, color = "var(--text)") => `
-        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;">
-          <span style="min-width:0;">${label}</span>
-          <span style="flex-shrink:0;font-weight:750;font-variant-numeric:tabular-nums;color:${color};">${formatCurrency(amount)}</span>
-        </div>`;
-      const payday = new Date(selected.payday);
-      const now = new Date();
-      const historical = payday.getFullYear() * 12 + payday.getMonth() <
-        now.getFullYear() * 12 + now.getMonth();
-      content = `
-        <div style="font-size:var(--text-xs);color:var(--text-muted);margin-bottom:6px;">
-          ${selected.id === "first" ? "Paycheck 1" : "Paycheck 2"} · ${escapeHtml(formatDate(selected.payday, "monthYear"))}
-        </div>
-        ${line("Expected paycheck income", expectedCents / 100)}
-        ${line("Total assigned bills", assignedCents / 100)}
-        <div style="border-top:1px solid var(--border);margin-top:4px;">
-          ${line("Difference", differenceCents / 100,
-            differenceCents < 0 ? "var(--overdue)" : "var(--text)")}
-        </div>
-        <p style="margin:10px 0 0;color:var(--text-muted);font-size:var(--text-xs);line-height:1.5;">
-          Assigned bills include paid and unpaid items. Estimate only—not your account balance or spending allowance.
-        </p>
-        ${excludedCount ? `<p role="status" style="margin:8px 0 0;color:var(--upcoming);font-size:var(--text-xs);line-height:1.5;">Partial income estimate: ${excludedCount} manual, irregular, or unsupported source(s) excluded.</p>` : ""}
-        <details style="margin-top:10px;">
-          <summary style="min-height:36px;display:list-item;cursor:pointer;color:var(--text-muted);font-size:var(--text-xs);padding:8px 0;">How this is calculated</summary>
-          <p style="margin:4px 0 0;color:var(--text-muted);font-size:var(--text-xs);line-height:1.5;">
-            Uses your current saved income estimates and this displayed paycheck’s assigned bills.
-            Weekly and biweekly income are averaged across two monthly planning buckets, not counted by actual payday dates.
-            Monthly income is assigned to Paycheck 1 by the existing income model.
-            Everyday spending and savings are not deducted.
-            ${historical ? "This is not a reconstruction of historical earnings." : "This is an estimate, not a verified payroll amount."}
-          </p>
-        </details>`;
-    }
-  }
-
-  return `
-    <details data-bb-income-comparison
-      style="margin-top:14px;padding:12px 14px;border-top:1px solid var(--border);color:var(--text);font-size:var(--text-sm);">
-      <summary style="min-height:40px;padding:10px 0;box-sizing:border-box;font-weight:750;cursor:pointer;">Income comparison</summary>
-      <div style="padding-top:6px;">${content}</div>
-    </details>`;
-}
 function bankMatchIsEligibleBill(bill) {
   if (!bill || typeof bill !== "object") return false;
   const status = String(bill.status || "").toLowerCase().replace(/[ _]/g, "-");
@@ -4650,62 +4574,7 @@ function renderDashboardPaycheckPlan(
         </button>
       </div>
 
-      <div
-        style="
-          display:flex;
-          justify-content:space-between;
-          align-items:flex-start;
-          gap:var(--space-3);
-        "
-      >
-        <div>
-          <div
-            style="
-              font-size:var(--text-sm);
-              color:var(--text-muted);
-            "
-          >
-              ${formatDate(selected.startDate, "short")}–${formatDate(
-              selected.endDate,
-              "short"
-            )}
-          </div>
-
-          <div
-            style="
-              margin-top:4px;
-              font-size:var(--text-xs);
-              color:var(--text-muted);
-            "
-          >
-            ${selected.paidBills.length} of ${selected.bills.length} ${
-  selected.bills.length === 1 ? "Bill" : "Bills"
-} Paid
-          </div>
-        </div>
-
-        <div style="text-align:right;">
-          <div
-            style="
-              font-size:var(--text-xs);
-              color:var(--text-muted);
-            "
-          >
-            Remaining
-          </div>
-
-          <div
-            class="text-upcoming"
-            style="
-              margin-top:3px;
-              font-size:var(--text-xl);
-              font-weight:800;
-            "
-          >
-            ${formatCurrency(selected.remaining)}
-          </div>
-        </div>
-      </div>
+      ${renderPaycheckDueAndLeftover(selected)}
 
       <div
         class="dashboard-progress-track"
@@ -4729,8 +4598,71 @@ function renderDashboardPaycheckPlan(
                <span>${formatCurrency(selected.paid)} Paid</span>
         <span>${formatCurrency(selected.scheduled)} Scheduled</span>
       </div>
+
       ${renderPaycheckInlineRows(selected)}
-${renderPaycheckIncomeComparison(selected)}
+    </div>
+  `;
+}
+function getPaycheckLeftoverEstimate(selected) {
+  const sources = Store.getIncomeSources();
+  const supported = ["Weekly", "Biweekly", "Twice monthly", "Monthly"];
+  const unavailable = reason => ({available:false, reason});
+  if (!sources.length) return unavailable("Add an income source in Settings to calculate an estimate.");
+  const included = sources.filter(source => supported.includes(source.frequency));
+  if (!included.length) return unavailable("Manual or irregular income has no recurring estimate in the current model. It is not treated as zero income.");
+  if (sources.some(source => source.expectedAmount === null || source.expectedAmount === undefined ||
+      String(source.expectedAmount).trim() === "" || !Number.isFinite(Number(source.expectedAmount)) || Number(source.expectedAmount) < 0)) {
+    return unavailable("Review missing or invalid income amounts in Settings.");
+  }
+  const income = Number(getTotalIncomeForPayCycle(selected.id));
+  const assigned = Number(selected.scheduled);
+  const incomeCents = Math.round(income * 100);
+  const assignedCents = Math.round(assigned * 100);
+  const differenceCents = incomeCents - assignedCents;
+  if (!Number.isFinite(income) || income < 0 || !Number.isFinite(assigned) || assigned < 0 ||
+      ![incomeCents, assignedCents, differenceCents].every(Number.isSafeInteger)) {
+    return unavailable("The estimate could not be calculated safely. Review your saved income and assigned bills.");
+  }
+  return {
+    available:true,
+    income:incomeCents / 100,
+    assigned:assignedCents / 100,
+    difference:differenceCents / 100,
+    partial:included.length !== sources.length
+  };
+}
+
+function renderPaycheckDueAndLeftover(selected) {
+  const estimate = getPaycheckLeftoverEstimate(selected);
+  const shortfall = estimate.available && estimate.difference < 0;
+  const label = shortfall ? "Shortfall" : "Leftover";
+  const caption = estimate.available
+    ? (estimate.partial ? "Partial estimate" : "Estimate")
+    : "Income setup needed";
+  const help = estimate.available
+    ? `${selected.id === "second" ? "Paycheck 2" : "Paycheck 1"} · ${formatDate(selected.payday, "monthYear")}\n\n` +
+      `Expected income: ${formatCurrency(estimate.income)}\n` +
+      `All assigned bills: ${formatCurrency(estimate.assigned)}\n\n` +
+      "Expected income minus all assigned bills, including paid items. Everyday spending and savings are not deducted. This is not your current account balance or spending allowance.\n\n" +
+      "Uses current saved income estimates, not historical earnings. Weekly and biweekly income are averaged across two monthly planning buckets, not actual payday dates. Monthly income is assigned to Paycheck 1. Past-due bills outside this paycheck are not included." +
+      (estimate.partial ? "\n\nPartial estimate: manual, irregular, or unsupported income sources are excluded." : "")
+    : estimate.reason;
+  return `
+    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:12px;">
+      <div style="min-width:0;">
+        <div style="min-height:36px;display:flex;align-items:center;font-size:var(--text-xs);color:var(--text-muted);">Due</div>
+        <div class="text-upcoming" style="font-size:clamp(19px,5.5vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${formatCurrency(selected.remaining)}</div>
+      </div>
+      <div style="min-width:0;text-align:right;">
+        <div style="display:flex;align-items:center;justify-content:flex-end;min-height:36px;gap:2px;">
+          <span style="font-size:var(--text-xs);color:var(--text-muted);">${label}</span>
+          <button type="button" onclick="alert('${escapeInlineString(help)}')"
+            aria-label="Explain ${label.toLowerCase()} estimate"
+            style="display:inline-flex;align-items:center;justify-content:center;width:36px;min-height:36px;padding:0;border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:15px;cursor:pointer;">&#9432;</button>
+        </div>
+        <div style="font-size:clamp(19px,5.5vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:${shortfall ? 'var(--overdue)' : 'var(--text)'};">${estimate.available ? formatCurrency(Math.abs(estimate.difference)) : '&mdash;'}</div>
+        <div style="margin-top:4px;font-size:var(--text-xs);line-height:1.3;color:${estimate.available && estimate.partial ? 'var(--upcoming)' : 'var(--text-muted)'};">${caption}</div>
+      </div>
     </div>
   `;
 }
@@ -5010,7 +4942,7 @@ function openPaycheckPlanSheet(paycheckKey) {
           >
             <div class="paycheck-bills-scroll">
               ${billsHtml}
-              ${renderPaycheckIncomeComparison(selected)}
+              
             </div>
           </div>
         </div>
