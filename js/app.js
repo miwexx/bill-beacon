@@ -4655,6 +4655,24 @@ function renderDashboardPaycheckPlan(
     </div>
   `;
 }
+function renderBillsAndPlansNavigation(activeSection) {
+  const item = (key, label, action) => {
+    const selected = activeSection === key;
+    return `<button type="button" ${selected ? 'aria-current="page"' : ""}
+      onclick="${action}"
+      style="display:flex;align-items:center;justify-content:center;min-width:0;min-height:44px;padding:10px 8px;border:1px solid ${selected ? 'var(--accent)' : 'var(--border)'};border-radius:12px;background:${selected ? 'var(--accent-dim)' : 'transparent'};color:var(--text);font:inherit;font-size:var(--text-sm);font-weight:750;line-height:1.25;cursor:pointer;">
+      ${label}
+    </button>`;
+  };
+  return `<nav aria-label="Bills and installment plans"
+    style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 16px 16px;">
+    ${item("bills", "Bills", "navigate('bills')")}
+    ${item("plans", "Installment Plans", "navigate('payment-plans', {returnRoute:'bills'})")}
+  </nav>`;
+}
+
+
+
 function setDashboardPaycheck(paycheckKey) {
   capturePaycheckInlineView();
   selectedDashboardPaycheck =
@@ -6821,7 +6839,7 @@ function renderBills() {
   return `
     <div class="nav-bar">
       <div class="nav-bar-content">
-        <div class="nav-title bb-centered-page-title">Bills</div>
+        <div class="nav-title bb-centered-page-title">Bills &amp; Plans</div>
 
         <button
   class="nav-button"
@@ -6834,6 +6852,7 @@ function renderBills() {
     </div>
 
         <div class="main-content fade-in bills-page-content">
+      ${renderBillsAndPlansNavigation("bills")}
       ${
         bills.length === 0
           ? `
@@ -8479,17 +8498,14 @@ function renderInstallmentProgressBar(paidCount, installmentCount) {
     <div style="display:block;box-sizing:border-box;width:${progress.percent}%;height:6px;min-height:6px;border-radius:inherit;background:${progress.complete ? 'var(--paid, #34c759)' : 'linear-gradient(105deg, #8f36ff 0%, #c44cff 34%, #f64cae 65%, #ff7138 100%)'};transition:width 180ms ease;"></div>
   </div>`;
 }
-
 function renderPaymentPlans() {
-      const installmentsBackRoute =
-    routeParams.returnRoute === "insights"
-      ? "insights"
-      : "today";
+  const installmentsBackRoute = ["bills", "insights"].includes(routeParams.returnRoute)
+    ? routeParams.returnRoute
+    : "today";
 
-  const installmentsBackLabel =
-    installmentsBackRoute === "insights"
-      ? "Insights"
-      : "Dashboard";
+  const installmentsBackLabel = installmentsBackRoute === "bills"
+    ? "Bills & Plans"
+    : installmentsBackRoute === "insights" ? "Insights" : "Dashboard";
   const installmentBills = Store.getBills().filter((bill) =>
     Boolean(bill.installmentPlanId)
   );
@@ -8903,6 +8919,7 @@ function renderPaymentPlans() {
   </div>
 </div>
     <div class="main-content fade-in">
+      ${renderBillsAndPlansNavigation("plans")}
       <div class="content-pad content-gap">
         ${
           !plans.length
@@ -9080,7 +9097,6 @@ function renderPaymentPlans() {
     </div>
   `;
 }
-
 function showMoreActivePaymentPlans() {
   const extraPlans = document.getElementById("extra-active-payment-plans");
   const toggleButton = document.getElementById("toggle-active-payment-plans");
