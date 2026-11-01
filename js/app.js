@@ -3316,7 +3316,24 @@ function getDashboardPaycheckMonth() {
 
   return currentMonth;
 }
+function getDashboardPaycheckDefaultCycle() {
+  const displayedMonth = getDashboardPaycheckMonth();
+  const now = new Date();
 
+  const displayedMonthIndex =
+    displayedMonth.getFullYear() * 12 +
+    displayedMonth.getMonth();
+
+  const currentMonthIndex =
+    now.getFullYear() * 12 +
+    now.getMonth();
+
+  if (displayedMonthIndex > currentMonthIndex) {
+    return "first";
+  }
+
+  return getDashboardPaycheckDefaultCycle();
+}
 function changeDashboardPaycheckMonth(offset) {
   if (offset !== -1 && offset !== 1) return;
 

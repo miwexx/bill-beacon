@@ -214,24 +214,71 @@
     });
   };
 
-  renderOccurrenceFundingAction=function(bill) {
-    const root=holderFor(before.funding(bill));stripNotes(root);
-    const source=record(getBillPaymentId(bill));
-    const context=source?noteContext(source.id,bill.dueDate):null;
-    const buttons=[...root.querySelectorAll("button")];
-    const move=buttons.find(button=>/\bopenMoveOccurrencePaycheck\s*\(/.test(button.getAttribute("onclick")||""));
-    const split=buttons.find(button=>text(button)==="Split This Payment");
-    if(context?.plan) {
-      return (move?`<div data-bb-clean-funding style="margin-top:12px;">${move.outerHTML}</div>`:"")+scheduleMarkup(context);
+    renderOccurrenceFundingAction = function (bill) {
+    const root = holderFor(before.funding(bill));
+    stripNotes(root);
+
+    const source = record(getBillPaymentId(bill));
+
+    const context = source
+      ? noteContext(source.id, bill.dueDate)
+      : null;
+
+    const buttons = [
+      ...root.querySelectorAll("button")
+    ];
+
+    const moves = buttons.filter(button =>
+      /\bopenMoveOccurrencePaycheck\s*\(/.test(
+        button.getAttribute("onclick") || ""
+      )
+    );
+
+    const split = buttons.find(button =>
+      text(button) === "Split This Payment"
+    );
+
+    if (context?.plan) {
+      const moveMarkup = moves.length
+        ? `
+          <div
+            data-bb-clean-funding
+            style="margin-top:12px;"
+          >
+            ${moves.map(button => button.outerHTML).join("")}
+          </div>
+        `
+        : "";
+
+      return moveMarkup + scheduleMarkup(context);
     }
-    if(move) {
-      const actions=[move];if(split&&!source?.splitPaymentParentId)actions.push(split);
-      return `<div data-bb-clean-funding style="margin-top:12px;">${actions.map(button=>button.outerHTML).join("")}</div>`;
+
+    if (moves.length) {
+      const actions = [...moves];
+
+      if (split && !source?.splitPaymentParentId) {
+        actions.push(split);
+      }
+
+      return `
+        <div
+          data-bb-clean-funding
+          style="margin-top:12px;"
+        >
+          ${actions.map(button => button.outerHTML).join("")}
+        </div>
+      `;
     }
-    // No active split: keep any existing actions, but never duplicate notes.
-    root.querySelectorAll("button").forEach(button=>{
-      if(text(button)==="View Original Bill & Split Notes")button.remove();
+
+    root.querySelectorAll("button").forEach(button => {
+      if (
+        text(button) ===
+        "View Original Bill & Split Notes"
+      ) {
+        button.remove();
+      }
     });
+
     return root.innerHTML;
   };
 
@@ -343,7 +390,12 @@
       manage.insertAdjacentElement("afterend", move);
 
       move.classList.add("bb-outline-pill");
-        move.textContent = "Move To Next Paycheck";
+        move.textContent =
+  /\bprevious\b/i.test(
+    move.getAttribute("onclick") || ""
+  )
+    ? "Move To Previous Paycheck"
+    : "Move To Next Paycheck";
       const styles = {
   width: "100%",
   "min-height": "40px",
@@ -421,7 +473,12 @@
         return;
       }
 
-      button.textContent = "Move To Next Paycheck";
+      button.textContent =
+  /\bprevious\b/i.test(
+    button.getAttribute("onclick") || ""
+  )
+    ? "Move To Previous Paycheck"
+    : "Move To Next Paycheck";
       button.classList.add("bb-outline-pill");
 
       const styles = {
