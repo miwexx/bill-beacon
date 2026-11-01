@@ -4635,7 +4635,7 @@ function getPaycheckLeftoverEstimate(selected) {
 function renderPaycheckDueAndLeftover(selected) {
   const estimate = getPaycheckLeftoverEstimate(selected);
   const shortfall = estimate.available && estimate.difference < 0;
-  const label = shortfall ? "Shortfall" : "Leftover";
+  const label = shortfall ? "Shortfall" : "Safe To Spend";
     const caption = estimate.available
     ? (estimate.partial ? "Partial estimate" : "")
     : "Income setup needed";
