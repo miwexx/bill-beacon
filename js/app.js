@@ -5848,33 +5848,112 @@ function resetDashboardReportMonth() {
 function renderDashboardReportMonthNavigation() {
   const date = getDashboardReportMonth();
   const now = new Date();
-  const isCurrentMonth = date.getFullYear() === now.getFullYear() &&
+
+  const isCurrentMonth =
+    date.getFullYear() === now.getFullYear() &&
     date.getMonth() === now.getMonth();
+
   return `
-    <div style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;">
-      <button type="button" class="bb-outline-pill"
-        aria-label="Previous snapshot month" onclick="changeDashboardReportMonth(-1)"
-        style="width:44px;min-height:44px;padding:0;justify-content:center;">
+    <div
+      style="
+        display:grid;
+        grid-template-columns:44px minmax(0,1fr) 44px;
+        align-items:center;
+        gap:8px;
+      "
+    >
+      <button
+        type="button"
+        class="bb-outline-pill"
+        aria-label="Previous snapshot month"
+        onclick="changeDashboardReportMonth(-1)"
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          width:44px;
+          min-height:44px;
+          padding:0;
+          box-sizing:border-box;
+        "
+      >
         ${svgIcon("chevronLeft", 20)}
       </button>
-      <div aria-live="polite" style="min-width:0;text-align:center;">
-        <div style="font-size:var(--text-base);font-weight:800;">${formatDate(date, "monthYear")}</div>
-        <div style="margin-top:3px;font-size:var(--text-xs);color:var(--text-muted);">Monthly Snapshot</div>
+
+      <div
+        aria-live="polite"
+        style="
+          min-width:0;
+          text-align:center;
+          font-size:var(--text-base);
+          font-weight:800;
+          line-height:1.3;
+        "
+      >
+        ${formatDate(date, "monthYear")}
       </div>
-      <button type="button" class="bb-outline-pill"
-        aria-label="Next snapshot month" onclick="changeDashboardReportMonth(1)"
-        style="width:44px;min-height:44px;padding:0;justify-content:center;">
+
+      <button
+        type="button"
+        class="bb-outline-pill"
+        aria-label="Next snapshot month"
+        onclick="changeDashboardReportMonth(1)"
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          width:44px;
+          min-height:44px;
+          padding:0;
+          box-sizing:border-box;
+        "
+      >
         ${svgIcon("chevronRight", 20)}
       </button>
     </div>
-    ${!isCurrentMonth ? `
-      <div style="text-align:center;margin-top:10px;">
-        <button type="button" class="bb-outline-pill" onclick="resetDashboardReportMonth()"
-          style="min-height:36px;padding:0 14px;">Current Month</button>
-      </div>` : ""}
+
+    ${
+      !isCurrentMonth
+        ? `
+          <div
+            style="
+              display:flex;
+              justify-content:center;
+              margin:12px 0 6px;
+            "
+          >
+            <button
+              type="button"
+              class="bb-outline-pill"
+              onclick="resetDashboardReportMonth()"
+              aria-label="Return to the current calendar month"
+              style="
+                display:inline-flex !important;
+                align-items:center !important;
+                justify-content:center !important;
+                flex:0 0 auto !important;
+                width:auto !important;
+                min-width:132px !important;
+                height:auto !important;
+                min-height:36px !important;
+                margin:0 !important;
+                padding:8px 16px !important;
+                box-sizing:border-box !important;
+                font-size:13px !important;
+                font-weight:700 !important;
+                line-height:1.2 !important;
+                white-space:nowrap !important;
+                text-align:center !important;
+              "
+            >
+              Current Month
+            </button>
+          </div>
+        `
+        : ""
+    }
   `;
 }
-
 window.addEventListener("billbeacon:signed-out", () => {
   selectedDashboardReportMonth = null;
 });
