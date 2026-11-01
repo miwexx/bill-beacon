@@ -8879,7 +8879,7 @@ function renderPaymentPlans() {
         <div><div style="font-size:var(--text-sm);color:var(--text-muted);">Remaining Balance</div><div style="margin-top:4px;font-size:var(--text-xs);color:var(--text-muted);">${active.length} Active ${active.length===1?'Plan':'Plans'}</div></div>
         <div style="font-size:clamp(26px,7vw,34px);font-weight:850;overflow-wrap:anywhere;">${formatCurrency(total)}</div>
       </div>
-      <div style="margin-top:6px;color:var(--text-muted);font-size:var(--text-xs);">All Remaining Payments, Not Just This Month</div>
+     
     </section>
     <section class="bb-plan-list-section" aria-labelledby="bbActivePlansTitle">
       <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
