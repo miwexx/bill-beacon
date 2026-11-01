@@ -4731,6 +4731,8 @@ function renderDashboardPaycheckPlan(
       </div>
 
       ${renderPaycheckInlineRows(selected)}
+      ${renderPaycheckInlineRows(selected)}
+${renderPaycheckIncomeComparison(selected)}
     </div>
   `;
 }
