@@ -404,58 +404,201 @@ updatePayment(paymentId, updates) {
   const payments = this.getPayments();
 
   const index = payments.findIndex(
-    (payment) => payment.id === paymentId
+    payment => payment.id === paymentId
   );
 
   if (index === -1) return null;
 
-  const previousPayment = { ...payments[index] };
+  const previous = payments[index];
 
-  payments[index] = {
-    ...payments[index],
+  const updated = {
+    ...previous,
     ...updates,
+    id: previous.id,
+    billId: previous.billId
   };
 
-  this.savePayments(payments);
+  if (previous.billSnapshot) {
+    updated.billSnapshot = previous.billSnapshot;
+  }
 
-  const updatedPayment = payments[index];
+  payments[index] = updated;
 
-  const isNewlyVoided =
-    previousPayment.status !== "voided" &&
-    updatedPayment.status === "voided";
+  const newlyVoided =
+    String(previous.status || "active").toLowerCase() !== "voided" &&
+    String(updated.status || "active").toLowerCase() === "voided";
 
-  if (isNewlyVoided) {
-    const bill = this.getBill(updatedPayment.billId);
+  const bills = this.getBills();
 
+  const bill = bills.find(
+    item => item.id === updated.billId
+  );
+
+  const planId =
+    bill?.installmentPlanId ||
+    updated.paymentPlanId ||
+    updated.billSnapshot?.installmentPlanId;
+
+  const now = new Date().toISOString();
+
+  if (newlyVoided && !updated.voidedAt) {
+    updated.voidedAt = now;
+  }
+
+  let reopened = false;
+  let nextBills = bills;
+
+  if (newlyVoided && planId) {
+    const planBills = bills.filter(item =>
+      item.installmentPlanId === planId &&
+      !item.archived &&
+      !item.archivedAt &&
+      !item.cancelled &&
+      !item.cancelledAt &&
+      !["archived", "cancelled", "canceled"].includes(
+        String(item.status || "").toLowerCase()
+      )
+    );
+
+    const hasUnpaidInstallment = planBills.some(item => {
+      const dueKey = financialDateKey(item.dueDate);
+
+      if (!dueKey) {
+        throw new Error(
+          "Invalid installment date. Reversal was not saved."
+        );
+      }
+
+      return !payments.some(payment =>
+        payment.billId === item.id &&
+        isFinancialPaymentActive(payment) &&
+        getPaymentOccurrenceDateKey(payment) === dueKey
+      );
+    });
+
+    if (hasUnpaidInstallment) {
+      reopened = true;
+
+      nextBills = bills.map(item =>
+        item.installmentPlanId === planId
+          ? {
+              ...item,
+              paidInFullAt: null,
+              paidInFullAmount: null,
+              updatedAt: now
+            }
+          : item
+      );
+    }
+  }
+
+  const entries = this.getActivityLog();
+
+  if (newlyVoided) {
     const dueDate =
-      updatedPayment.paidForDueDate ||
-      bill?.dueDate ||
-      new Date().toISOString();
+      updated.paidForDueDate ||
+      updated.billSnapshot?.dueDate ||
+      bill?.dueDate;
 
-    this.addActivity({
+    entries.push({
+      id: uid(),
+      timestamp: now,
       action: "payment_voided",
-      entityType: bill?.installmentPlanId ? "payment_plan" : "bill",
-      entityId: bill?.installmentPlanId || updatedPayment.billId,
-      title: `${bill?.name || "Bill"} Payment Reversed`,
-      detail: `${formatCurrency(
-        updatedPayment.amount
-      )} · Due ${formatDate(dueDate, "short")}`,
+      entityType: planId ? "payment_plan" : "bill",
+      entityId: planId || updated.billId,
+
+      title:
+        `${bill?.name || updated.billSnapshot?.name || "Bill"} ` +
+        "Payment Reversed",
+
+      detail:
+        `${formatCurrency(updated.amount)}` +
+        (
+          dueDate
+            ? ` · Due ${formatDate(dueDate, "short")}`
+            : ""
+        ),
+
       before: {
-        paymentId: previousPayment.id,
-        status: previousPayment.status,
-        amount: parseFloat(previousPayment.amount) || 0,
-        paidDate: previousPayment.paidDate,
+        paymentId: previous.id,
+        status: previous.status,
+        amount: previous.amount,
+        paidDate: previous.paidDate,
         dueDate,
+        paidInFullAt: bill?.paidInFullAt || null
       },
+
       after: {
-        paymentId: updatedPayment.id,
-        status: updatedPayment.status,
-        voidedAt: updatedPayment.voidedAt || new Date().toISOString(),
-      },
+        paymentId: updated.id,
+        status: updated.status,
+        voidedAt: updated.voidedAt,
+        planReopened: reopened
+      }
     });
   }
 
-  return updatedPayment;
+  // Preserve existing payment snapshots.
+  const savedPayments = payments.map(payment =>
+    payment.billSnapshot
+      ? payment
+      : attachPaymentBillSnapshot(payment, true)
+  );
+
+  const writes = {
+    payments: JSON.stringify(savedPayments),
+
+    ...(reopened
+      ? { bills: JSON.stringify(nextBills) }
+      : {}),
+
+    ...(newlyVoided
+      ? { activityLog: JSON.stringify(entries) }
+      : {})
+  };
+
+  const before = Object.fromEntries(
+    Object.keys(writes).map(key => [
+      key,
+      localStorage.getItem(key)
+    ])
+  );
+
+  try {
+    for (const [key, value] of Object.entries(writes)) {
+      localStorage.setItem(key, value);
+    }
+  } catch (error) {
+    let restored = true;
+
+    for (const [key, value] of Object.entries(before)) {
+      try {
+        if (value === null) {
+          localStorage.removeItem(key);
+        } else {
+          localStorage.setItem(key, value);
+        }
+      } catch (rollbackError) {
+        restored = false;
+      }
+    }
+
+    throw new Error(
+      restored
+        ? "Reversal could not be saved. Nothing was changed."
+        : (
+            "Storage failed and rollback was incomplete. " +
+            "Reload and review your payments before retrying."
+          )
+    );
+  }
+
+  window.dispatchEvent(
+    new CustomEvent("billbeacon:data-changed")
+  );
+
+  return savedPayments.find(
+    payment => payment.id === paymentId
+  );
 },
   getPaymentsForBill(billId) {
     return this.getPayments().filter(p => p.billId === billId).sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
@@ -2284,129 +2427,286 @@ function showPaymentUndoToast(payment, billName) {
 
   paymentUndoTimer = setTimeout(dismissPaymentUndoToast, 3000);
 }
-function markBillPaid(billId) {
-  const bill = Store.getBill(billId);
+function bbLFValid(funding) {
+  return Boolean(funding && /^\d{4}-(0[1-9]|1[0-2])$/.test(funding.month) &&
+    ["first", "second"].includes(funding.paycheck));
+}
+function bbLFSame(a, b) {
+  return bbLFValid(a) && bbLFValid(b) && a.month === b.month && a.paycheck === b.paycheck;
+}
+function bbLFForDate(value = new Date()) {
+  const raw = value instanceof Date
+    ? (
+        Number.isFinite(value.getTime())
+          ? value.toISOString()
+          : ""
+      )
+    : value;
 
-  if (!bill) {
-    alert("Bill not found.");
-    return;
+  const key = financialDateKey(raw);
+
+  if (!key) {
+    throw new Error("Invalid payment date.");
   }
 
+  return {
+    month: key.slice(0, 7),
+    paycheck:
+      Number(key.slice(8, 10)) < 15
+        ? "first"
+        : "second"
+  };
+}
+function bbLFNormalize(funding) {
+  return bbLFForDate(occurrenceFundingDate(funding));
+}
+function bbLFCents(value) {
+  if (value == null || String(value).trim() === "") throw new Error("Missing payment amount.");
+  const amount = Number(value), cents = Math.round(amount * 100);
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(cents)) {
+    throw new Error("Invalid payment amount.");
+  }
+  return cents;
+}
+function bbLFKey(billId, dueDate) {
+  const day = financialDateKey(dueDate);
+  if (!billId || !day) throw new Error("Payment is missing its occurrence date.");
+  return JSON.stringify([billId, day]);
+}
+function bbLFSession() {
+  const context = window.getBillBeaconHouseholdContext?.();
+  return JSON.stringify([window.getBillBeaconFirebaseUser?.()?.uid || null,
+    context?.householdId || null, context?.generation ?? null, context?.ready ?? null]);
+}
+function bbLFCapture() {
+  return {session:bbLFSession(), raw:Object.fromEntries(
+    ["bills", "payments", "activityLog"].map(key => [key, localStorage.getItem(key)]))};
+}
+function bbLFAssert(capture) {
+  if (capture.session !== bbLFSession() || Object.entries(capture.raw).some(
+    ([key, value]) => localStorage.getItem(key) !== value)) {
+    throw new Error("Your data or account changed while this popup was open. Nothing was saved. Reopen the payment and try again.");
+  }
+}
+function bbLFOccurrence(billId, dueDate) {
+  const bill = Store.getBill(billId);
+  if (!bill || bill.archived || bill.archivedAt || bill.cancelled || bill.cancelledAt ||
+      ["archived", "cancelled", "canceled"].includes(String(bill.status || "").toLowerCase())) {
+    throw new Error("This bill is no longer active.");
+  }
+  const occurrence = resolveCalendarBillOccurrence(billId, dueDate);
+  if (!occurrence || occurrence.isArchivedHistory) throw new Error("This occurrence is no longer scheduled.");
+  if (isOccurrencePaid(occurrence, new Date(occurrence.dueDate))) {
+    throw new Error("This occurrence is already marked as paid.");
+  }
+  bbLFCents(occurrence.amount);
+  bbLFKey(billId, occurrence.dueDate);
+  return occurrence;
+}
+function bbLFPaymentFunding(payment) {
+  const explicit = payment.leftoverFunding;
+  if (bbLFValid(explicit?.selected)) return explicit.selected;
+  // Legacy full payoffs: release only reservations in later planning periods.
+  if (payment.paymentType !== "paid-in-full") return null;
+  const source = Store.getBill(payment.billId) || payment.billSnapshot;
+  const dueDate = payment.paidForDueDate || payment.billSnapshot?.dueDate;
+  if (!source || !financialDateKey(dueDate) || !financialDateKey(payment.paidDate)) return null;
+  const occurrence = {...source, id:payment.billId, sourceBillId:payment.billId,
+    isOccurrence:true, dueDate, originalDueDate:payment.originalDueDate || dueDate};
+  const scheduled = bbLFNormalize(getOccurrenceFunding(occurrence));
+  const paid = bbLFForDate(payment.paidDate);
+  return financialDateKey(payment.paidDate) < financialDateKey(occurrenceFundingDate(scheduled).toISOString())
+    ? paid : null;
+}
+function bbLFActivePayments() {
+  const seen = new Set();
+  return [...Store.getPayments()].filter(isFinancialPaymentActive)
+    .sort((a,b) => new Date(b.paidDate) - new Date(a.paidDate))
+    .filter(payment => {
+      const dueDate = payment.paidForDueDate || payment.billSnapshot?.dueDate;
+      if (!payment.billId || !financialDateKey(dueDate)) return false;
+      const key = bbLFKey(payment.billId, dueDate);
+      if (seen.has(key)) return false;
+      seen.add(key); return true;
+    });
+}
+function bbLFExpenses(selected) {
+  const target = bbLFForDate(selected.payday);
+  const active = bbLFActivePayments();
+  const byKey = new Map(active.map(payment => [bbLFKey(payment.billId,
+    payment.paidForDueDate || payment.billSnapshot?.dueDate), payment]));
+  const baseKeys = new Set();
+  let released = 0, broughtForward = 0;
+  for (const bill of selected.bills) {
+    const key = bbLFKey(getBillPaymentId(bill), bill.dueDate);
+    if (baseKeys.has(key)) continue;
+    baseKeys.add(key);
+    const payment = byKey.get(key);
+    const funding = payment && bbLFPaymentFunding(payment);
+    if (funding && !bbLFSame(funding, target)) released += bbLFCents(bill.amount);
+  }
+  for (const payment of active) {
+    const funding = bbLFPaymentFunding(payment);
+    if (!funding || !bbLFSame(funding, target)) continue;
+    const key = bbLFKey(payment.billId, payment.paidForDueDate || payment.billSnapshot?.dueDate);
+    if (!baseKeys.has(key)) broughtForward += bbLFCents(payment.amount);
+  }
+  const scheduled = bbLFCents(selected.scheduled);
+  const assigned = scheduled - released + broughtForward;
+  if (![released,broughtForward,assigned].every(Number.isSafeInteger) || assigned < 0) {
+    throw new Error("The paycheck estimate could not be calculated safely.");
+  }
+  return {assigned:assigned/100, released:released/100, broughtForward:broughtForward/100};
+}
+function bbLFChoose({title, description, options, defaultFunding, confirmLabel}) {
+  if (document.getElementById("bbLeftoverFundingDialog")) return Promise.resolve(null);
+  return new Promise(resolve => {
+    const previousFocus = document.activeElement;
+    const dialog = document.createElement("dialog");
+    dialog.id = "bbLeftoverFundingDialog";
+    dialog.setAttribute("aria-labelledby", "bbLFTitle");
+    dialog.setAttribute("aria-describedby", "bbLFDescription");
+    dialog.style.cssText = "position:fixed;inset:0;margin:auto;width:min(92vw,440px);max-height:85dvh;overflow:auto;box-sizing:border-box;padding:24px;border:1px solid var(--border);border-radius:20px;background:var(--surface,#20202b);color:var(--text,#fff);";
+    const style = document.createElement("style");
+    style.textContent = "#bbLeftoverFundingDialog::backdrop{background:rgba(0,0,0,.65)}";
+    dialog.appendChild(style);
+    const body = document.createElement("div");
+    body.innerHTML = `<h2 id="bbLFTitle" style="margin:0 0 12px;font-size:20px;">${escapeHtml(title)}</h2>
+      <p id="bbLFDescription" style="white-space:pre-line;line-height:1.5;color:var(--text-muted);">${escapeHtml(description)}</p>
+      <fieldset style="border:0;padding:0;margin:20px 0;"><legend style="margin-bottom:12px;">Which paycheck covers this payment?</legend>
+      ${options.map((funding,index) => `<label style="display:flex;align-items:center;gap:12px;min-height:48px;padding:8px;border:1px solid var(--border);border-radius:12px;margin-top:8px;cursor:pointer;">
+        <input type="radio" name="bbLFFunding" value="${index}" ${bbLFSame(funding,defaultFunding)?"checked":""}>
+        <span>${escapeHtml(occurrenceFundingLabel(funding))}</span></label>`).join("")}</fieldset>
+      <p style="font-size:13px;color:var(--text-muted);">Changes the Leftover estimate only. Original due dates and payment history stay intact.</p>
+      <div style="display:flex;gap:12px;margin-top:20px;">
+        <button type="button" data-cancel class="btn-secondary" style="flex:1;min-height:46px;">Cancel</button>
+        <button type="button" data-save class="btn-primary" style="flex:1;min-height:46px;">${escapeHtml(confirmLabel)}</button></div>`;
+    dialog.appendChild(body);
+    let finished = false;
+    const finish = value => {
+      if (finished) return;
+      finished = true;
+      window.removeEventListener("billbeacon:signed-out", cancel);
+      window.removeEventListener("billbeacon:household-ready", cancel);
+      if (dialog.open) dialog.close();
+      dialog.remove();
+      if (previousFocus?.isConnected) previousFocus.focus();
+      resolve(value);
+    };
+    const cancel = () => finish(null);
+    dialog.querySelector("[data-cancel]").onclick = cancel;
+    dialog.querySelector("[data-save]").onclick = () => {
+      const input = dialog.querySelector('input[name="bbLFFunding"]:checked');
+      if (!input) return;
+      finish(options[Number(input.value)]);
+    };
+    dialog.addEventListener("cancel", event => {event.preventDefault();cancel();});
+    dialog.addEventListener("close", cancel);
+    window.addEventListener("billbeacon:signed-out", cancel);
+    window.addEventListener("billbeacon:household-ready", cancel);
+    document.body.appendChild(dialog);
+    try { dialog.showModal(); } catch (error) { cancel(); alert("Could not open the payment confirmation. Nothing was saved."); }
+  });
+}
+function bbLFOptions(occurrences, fullPayoff = false) {
+  const current = bbLFForDate();
+  const options = fullPayoff ? [
+    {month:current.month,paycheck:"first"}, {month:current.month,paycheck:"second"}
+  ] : [current];
+  if (!fullPayoff) occurrences.forEach(occurrence => options.push(bbLFNormalize(getOccurrenceFunding(occurrence))));
+  const seen = new Set();
+  return options.filter(funding => {
+    const key = JSON.stringify(funding);
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+}
+function bbLFCommit(capture, occurrences, funding, planId = null) {
+  bbLFAssert(capture);
+  const now = new Date().toISOString();
+  const payments = Store.getPayments();
+  const bills = Store.getBills();
+  const fresh = occurrences.map(item => bbLFOccurrence(getBillPaymentId(item), item.dueDate));
+  const added = fresh.map(occurrence => {
+    const billId = getBillPaymentId(occurrence);
+    const payment = {id:uid(),billId,paidDate:now,amount:bbLFCents(occurrence.amount)/100,
+      paidForDueDate:occurrence.dueDate,originalDueDate:occurrence.originalDueDate || occurrence.dueDate,
+      status:"active",voidedAt:null};
+    if (funding) payment.leftoverFunding = {version:1,selected:{...funding},
+      original:bbLFNormalize(getOccurrenceFunding(occurrence)),chosenAt:now};
+    if (planId) Object.assign(payment,{paymentPlanId:planId,paymentType:"paid-in-full",paidInFullAt:now});
+    payment.billSnapshot = createPaymentBillSnapshot(payment, occurrence);
+    return payment;
+  });
+  const totalCents = added.reduce((sum,payment) => sum + bbLFCents(payment.amount),0);
+  if (!Number.isSafeInteger(totalCents)) throw new Error("The payoff amount is too large.");
+  const amount = totalCents / 100;
+  const updatedBills = planId ? bills.map(bill => bill.installmentPlanId === planId
+    ? {...bill,paidInFullAt:now,paidInFullAmount:amount,updatedAt:now} : bill) : bills;
+  const activity = {id:uid(),timestamp:now,
+    action:planId ? "payment_plan_paid_in_full" : "bill_paid",
+    entityType:planId ? "paymentplan" : "bill",entityId:planId || added[0].billId,
+    title:planId ? `${fresh[0].name} paid in full` : `${fresh[0].name} marked as paid`,
+    detail:`${formatCurrency(amount)}${funding ? ` · Covered by ${occurrenceFundingLabel(funding)}` : ""}`,
+    before:{occurrences:fresh.map(item => ({billId:getBillPaymentId(item),dueDate:item.dueDate,amount:item.amount}))},
+    after:{paymentIds:added.map(item => item.id),amount,funding:funding || null,planId}};
+  const next = {bills:JSON.stringify(updatedBills),payments:JSON.stringify([...payments,...added]),
+    activityLog:JSON.stringify([...Store.getActivityLog(),activity])};
+  bbLFAssert(capture);
+  try {
+    for (const [key,value] of Object.entries(next)) localStorage.setItem(key,value);
+  } catch (error) {
+    let restored = true;
+    for (const [key,value] of Object.entries(capture.raw)) {
+      try { if (value === null) localStorage.removeItem(key); else localStorage.setItem(key,value); }
+      catch (rollbackError) { restored = false; }
+    }
+    throw new Error(restored ? "Payment could not be saved. Nothing was changed. Check device storage and retry."
+      : "Payment storage failed and rollback was incomplete. Reload and review payments before retrying.");
+  }
+  window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
+  return added;
+}
+async function bbLFPayOccurrence(billId, dueDate) {
+  if (document.getElementById("bbLeftoverFundingDialog")) return false;
+  try {
+    const occurrence = bbLFOccurrence(billId,dueDate);
+    if (!confirmUnlinkedPaymentReview(billId)) return false;
+    const capture = bbLFCapture();
+    const original = bbLFNormalize(getOccurrenceFunding(occurrence));
+    const today = financialDateKey(new Date().toISOString());
+    const starts = financialDateKey(occurrenceFundingDate(original).toISOString());
+    let funding = null;
+    if (today < starts) {
+      funding = await bbLFChoose({title:"Confirm early payment",
+        description:`${occurrence.name}\n${formatCurrency(occurrence.amount)} · Due ${formatDate(occurrence.dueDate,"full")}`,
+        options:bbLFOptions([occurrence]),defaultFunding:bbLFForDate(),confirmLabel:"Mark paid"});
+      if (!funding) return false;
+    }
+    const [payment] = bbLFCommit(capture,[occurrence],funding);
+    render();
+    showPaymentUndoToast(payment,occurrence.name);
+    return true;
+  } catch (error) { alert(error.message || "Could not record payment."); return false; }
+}
+
+async function markBillPaid(billId) {
+  const bill = Store.getBill(billId);
+  if (!bill) { alert("Bill not found."); return false; }
   if (isRecurringBill(bill) || bill.scheduleHistory?.length) {
     const occurrence = getCurrentCalendarBillOccurrence(bill);
-    if (!occurrence) { alert("No occurrence is scheduled this month. Choose a date in Calendar."); return; }
-    confirmMarkPaidOccurrence(billId, occurrence.dueDate);
-    return;
+    if (!occurrence) { alert("No occurrence is scheduled this month. Choose a date in Calendar."); return false; }
+    return confirmMarkPaidOccurrence(billId,occurrence.dueDate);
   }
-
-  if (!confirmUnlinkedPaymentReview(billId)) return;
-  const today = new Date();
-
-  const dueDate = isRecurringBill(bill)
-    ? getOccurrenceDueDate(
-        bill,
-        today.getFullYear(),
-        today.getMonth()
-      )
-    : bill.dueDate;
-
-  const occurrenceBill = {
-    ...bill,
-    sourceBillId: bill.id,
-    dueDate,
-    isOccurrence: isRecurringBill(bill),
-  };
-
-  if (isOccurrencePaid(occurrenceBill, new Date(dueDate))) {
-    alert("This bill is already marked as paid.");
-    return;
-  }
-
-  const paidAt = new Date().toISOString();
-
-  const payment = {
-    id: uid(),
-    billId: bill.id,
-    paidDate: paidAt,
-    amount: Number(bill.amount || 0),
-    paidForDueDate: dueDate,
-    status: "active",
-    voidedAt: null,
-  };
-
-  Store.addPayment(payment);
-
-  recordActivity({
-    action: "bill_paid",
-    entityType: bill.installmentPlanId ? "paymentplan" : "bill",
-    entityId: bill.installmentPlanId || bill.id,
-    title: `${bill.name} Marked as Paid`,
-    detail: `${formatCurrency(payment.amount)} · due ${formatDate(
-      dueDate,
-      "short"
-    )}`,
-    before: {
-      billId: bill.id,
-      dueDate,
-      paymentStatus: "unpaid",
-      amount: Number(bill.amount || 0),
-    },
-    after: {
-      paymentId: payment.id,
-      billId: bill.id,
-      dueDate,
-      paidDate: payment.paidDate,
-      paymentStatus: "active",
-      amount: payment.amount,
-      paymentPlanId: bill.installmentPlanId || null,
-    },
-  });
-
-  render();
-  showPaymentUndoToast(payment, bill.name);
+  return bbLFPayOccurrence(billId,bill.dueDate);
 }
-function markSelectedPlanInstallmentPaid(planId) {
-  const select = document.getElementById(
-    "paymentPlanInstallmentSelect"
-  );
-
-  const installmentId = select?.value;
-
-  if (!installmentId) {
-    alert("Choose a payment first.");
-    return;
-  }
-
-  const installment = Store.getBill(installmentId);
-
-  if (!installment || installment.installmentPlanId !== planId) {
-    alert("That payment could not be found.");
-    return;
-  }
-
-  const dueDate = new Date(installment.dueDate);
-
-  if (isOccurrencePaid(installment, dueDate)) {
-    alert("This payment is already marked as paid.");
-    return;
-  }
-
-  const paymentNumber = installment.installmentNumber || "";
-  const paymentTotal = installment.installmentTotal || "";
-
-  const confirmed = confirm(
-    `Mark Payment ${paymentNumber} of ${paymentTotal} as paid?\n\n` +
-    `${formatCurrency(installment.amount)} due ` +
-    `${formatDate(installment.dueDate, "full")}`
-  );
-
-  if (!confirmed) {
-    return;
-  }
-
-  closePaymentPlanDetails();
-  markBillPaid(installment.id);
+async function markSelectedPlanInstallmentPaid(planId) {
+  const installmentId = document.getElementById("paymentPlanInstallmentSelect")?.value;
+  const bill = Store.getBill(installmentId);
+  if (!bill || bill.installmentPlanId !== planId) { alert("Choose an available payment first."); return; }
+  if (await markBillPaid(bill.id)) closePaymentPlanDetails();
 }
+
 function markBillUnpaid(billId) {
   const bill = Store.getBill(billId);
 
@@ -2496,49 +2796,9 @@ function markBillUnpaid(billId) {
 
   render();
 }
-function confirmMarkPaidOccurrence(billId, dueDate) {
-  const bill = Store.getBill(billId);
-  if (!bill) {
-    alert("This bill is archived or no longer active.");
-    return;
-  }
-  const occurrence = resolveCalendarBillOccurrence(billId, dueDate);
-  if (!occurrence || occurrence.isArchivedHistory) {
-    alert("This occurrence is no longer scheduled. Reopen Calendar and select its date.");
-    return;
-  }
-  if (isOccurrencePaid(occurrence, new Date(occurrence.dueDate))) {
-    alert("This occurrence is already marked as paid.");
-    return;
-  }
-  if (!confirmUnlinkedPaymentReview(billId)) return;
-  const payment = {
-    id: uid(),
-    billId,
-    paidDate: new Date().toISOString(),
-    amount: Number(occurrence.amount || 0),
-    paidForDueDate: occurrence.dueDate,
-    originalDueDate: occurrence.originalDueDate || occurrence.dueDate,
-    status: "active",
-    voidedAt: null
-  };
-  payment.billSnapshot = createPaymentBillSnapshot(payment, occurrence);
-  Store.addPayment(payment);
-  recordActivity({
-    action: "bill_paid",
-    entityType: bill.installmentPlanId ? "paymentplan" : "bill",
-    entityId: bill.installmentPlanId || billId,
-    title: `${occurrence.name} marked as paid`,
-    detail: `${formatCurrency(payment.amount)} due ${formatDate(occurrence.dueDate, "short")}`,
-    before: {billId, dueDate: occurrence.dueDate, paymentStatus: "unpaid", amount: payment.amount},
-    after: {paymentId: payment.id, billId, dueDate: occurrence.dueDate,
-      paidDate: payment.paidDate, paymentStatus: "active", amount: payment.amount}
-  });
-  render();
-  showPaymentUndoToast(payment, occurrence.name);
+async function confirmMarkPaidOccurrence(billId, dueDate) {
+  return bbLFPayOccurrence(billId,dueDate);
 }
-
-
 function markBillOccurrenceUnpaid(billId, dueDate) {
   const bill = Store.getBill(billId);
 
@@ -4605,45 +4865,41 @@ function renderDashboardPaycheckPlan(
 }
 function getPaycheckLeftoverEstimate(selected) {
   const sources = Store.getIncomeSources();
-  const supported = ["Weekly", "Biweekly", "Twice monthly", "Monthly"];
-  const unavailable = reason => ({available:false, reason});
+  const supported = ["Weekly","Biweekly","Twice monthly","Monthly"];
+  const unavailable = reason => ({available:false,reason});
   if (!sources.length) return unavailable("Add an income source in Settings to calculate an estimate.");
   const included = sources.filter(source => supported.includes(source.frequency));
   if (!included.length) return unavailable("Manual or irregular income has no recurring estimate in the current model. It is not treated as zero income.");
-  if (sources.some(source => source.expectedAmount === null || source.expectedAmount === undefined ||
-      String(source.expectedAmount).trim() === "" || !Number.isFinite(Number(source.expectedAmount)) || Number(source.expectedAmount) < 0)) {
+  if (sources.some(source => source.expectedAmount == null || String(source.expectedAmount).trim() === "" ||
+      !Number.isFinite(Number(source.expectedAmount)) || Number(source.expectedAmount) < 0)) {
     return unavailable("Review missing or invalid income amounts in Settings.");
   }
-  const income = Number(getTotalIncomeForPayCycle(selected.id));
-  const assigned = Number(selected.scheduled);
-  const incomeCents = Math.round(income * 100);
-  const assignedCents = Math.round(assigned * 100);
-  const differenceCents = incomeCents - assignedCents;
-  if (!Number.isFinite(income) || income < 0 || !Number.isFinite(assigned) || assigned < 0 ||
-      ![incomeCents, assignedCents, differenceCents].every(Number.isSafeInteger)) {
-    return unavailable("The estimate could not be calculated safely. Review your saved income and assigned bills.");
+  try {
+    const incomeCents = bbLFCents(getTotalIncomeForPayCycle(selected.id));
+    const expenses = bbLFExpenses(selected);
+    const assignedCents = bbLFCents(expenses.assigned);
+    const differenceCents = incomeCents - assignedCents;
+    if (!Number.isSafeInteger(differenceCents)) throw new Error("Invalid estimate.");
+    return {available:true,income:incomeCents/100,...expenses,difference:differenceCents/100,
+      partial:included.length !== sources.length};
+  } catch (error) {
+    return unavailable("The estimate could not be calculated safely. Review your saved income, assigned bills and payment dates.");
   }
-  return {
-    available:true,
-    income:incomeCents / 100,
-    assigned:assignedCents / 100,
-    difference:differenceCents / 100,
-    partial:included.length !== sources.length
-  };
 }
-
 function renderPaycheckDueAndLeftover(selected) {
   const estimate = getPaycheckLeftoverEstimate(selected);
   const shortfall = estimate.available && estimate.difference < 0;
-  const label = shortfall ? "Shortfall" : "Safe To Spend";
+  const label = shortfall ? "Shortfall" : "Leftover";
     const caption = estimate.available
     ? (estimate.partial ? "Partial estimate" : "")
     : "Income setup needed";
   const help = estimate.available
     ? `${selected.id === "second" ? "Paycheck 2" : "Paycheck 1"} · ${formatDate(selected.payday, "monthYear")}\n\n` +
       `Expected income: ${formatCurrency(estimate.income)}\n` +
-      `All assigned bills: ${formatCurrency(estimate.assigned)}\n\n` +
-      "Expected income minus all assigned bills, including paid items. Everyday spending and savings are not deducted. This is not your current account balance or spending allowance.\n\n" +
+      `Assigned paycheck costs: ${formatCurrency(estimate.assigned)}\n` +
+      `Already covered by another paycheck: ${formatCurrency(estimate.released)}\n` +
+      `Payments brought into this paycheck: ${formatCurrency(estimate.broughtForward)}\n\n` +
+      "Expected income minus costs covered by this paycheck, including its paid items. Early payments and full payoffs use the paycheck chosen at payment. Older full payoffs release later-period reservations using their recorded payment date as a planning assumption, not a known funding source. Due and Scheduled are unchanged. Everyday spending and savings are not deducted. This is not your current account balance or spending allowance.\n\n" +
       "Uses current saved income estimates, not historical earnings. Weekly and biweekly income are averaged across two monthly planning buckets, not actual payday dates. Monthly income is assigned to Paycheck 1. Past-due bills outside this paycheck are not included." +
       (estimate.partial ? "\n\nPartial estimate: manual, irregular, or unsupported income sources are excluded." : "")
     : estimate.reason;
@@ -7806,68 +8062,11 @@ overflow:hidden;
 
   document.body.appendChild(container);
 };
-window.markCalendarBillPaid = function (billId, dateString) {
-  const bill = Store.getBill(billId);
-
-  if (!bill) {
-    alert("Bill not found.");
-    return;
+window.markCalendarBillPaid = async function (billId, dateString) {
+  if (await confirmMarkPaidOccurrence(billId,dateString)) {
+    closeCalendarDay();
+    navigate("recurring");
   }
-if (!confirmUnlinkedPaymentReview(billId)) return;
-const confirmed = confirm(
-  `Mark ${bill.name} as paid for ${formatDate(dateString, "full")}?\n\n` +
-  `${formatCurrency(bill.amount)} will be recorded as paid for this occurrence.`
-);
-
-if (!confirmed) {
-  return;
-}
-  const dueDate = new Date(dateString);
-
-  if (Number.isNaN(dueDate.getTime())) {
-    alert("This bill occurrence has an invalid due date.");
-    return;
-  }
-
-  const occurrenceDueDate = new Date(
-    dueDate.getFullYear(),
-    dueDate.getMonth(),
-    dueDate.getDate(),
-    12,
-    0,
-    0
-  ).toISOString();
-
-  const occurrenceBill = {
-    ...bill,
-    sourceBillId: bill.id,
-    dueDate: occurrenceDueDate,
-    isOccurrence: true
-  };
-
-  if (isOccurrencePaid(occurrenceBill, new Date(occurrenceDueDate))) {
-    alert("This bill occurrence is already marked as paid.");
-    return;
-  }
-
-    const payment = {
-    id: uid(),
-    billId: bill.id,
-    paidDate: new Date().toISOString(),
-    amount: bill.amount,
-    paidForDueDate: occurrenceDueDate,
-    status: 'active',
-    voidedAt: null
-  };
-
-  Store.addPayment(payment);
-  showPaymentUndoToast(payment, bill.name);
-
-  closeCalendarDay();
-
-setTimeout(() => {
-  navigate("recurring");
-}, 320);
 };
 function closeDashboardStatusSheet() {
   document.getElementById('dashboardStatusContainer')?.remove();
@@ -10345,61 +10544,30 @@ function archivePaymentPlan(planId) {
 
   render();
 }
-function payPaymentPlanInFull(planId) {
-  const paidInFullAt = new Date().toISOString();
-
-  const installments = Store.getBills().filter(
-    (bill) => bill.installmentPlanId === planId
-  );
-
-  const unpaidInstallments = installments.filter(
-    (bill) => !isOccurrencePaid(bill, new Date(bill.dueDate))
-  );
-
-  if (!unpaidInstallments.length) {
+async function payPaymentPlanInFull(planId) {
+  if (document.getElementById("bbLeftoverFundingDialog")) return;
+  try {
+    const installments = Store.getBills().filter(bill => bill.installmentPlanId === planId);
+    const unpaid = installments.filter(bill => !isOccurrencePaid(bill,new Date(bill.dueDate)));
+    if (!unpaid.length) { alert("This payment plan is already paid in full."); return; }
+    for (const bill of unpaid) {
+      bbLFOccurrence(bill.id,bill.dueDate);
+      if (!confirmUnlinkedPaymentReview(bill.id)) return;
+    }
+    const capture = bbLFCapture();
+    const totalCents = unpaid.reduce((sum,bill) => sum + bbLFCents(bill.amount),0);
+    if (!Number.isSafeInteger(totalCents)) throw new Error("Invalid payoff total.");
+    const funding = await bbLFChoose({title:"Pay this plan in full?",
+      description:`${unpaid[0].installmentStore || unpaid[0].name}\nRemaining balance: ${formatCurrency(totalCents/100)}\nCovers ${unpaid.length} remaining installment${unpaid.length===1?"":"s"}.\nYour choice applies to the entire payoff.`,
+      options:bbLFOptions(unpaid,true),defaultFunding:bbLFForDate(),confirmLabel:"Confirm payoff"});
+    if (!funding) return;
+    bbLFCommit(capture,unpaid,funding,planId);
     closePaymentPlanActions();
-    alert("This payment plan is already paid in full.");
-    return;
-  }
-
-  const payoffAmount = unpaidInstallments.reduce(
-    (sum, bill) => sum + (parseFloat(bill.amount) || 0),
-    0
-  );
-
-  const confirmed = confirm(
-    `Pay off ${formatCurrency(payoffAmount)}?\n\n` +
-    `This will mark ${unpaidInstallments.length} remaining scheduled ` +
-    `payment${unpaidInstallments.length === 1 ? "" : "s"} as paid.`
-  );
-
-  if (!confirmed) return;
-
-  unpaidInstallments.forEach((bill) => {
-    Store.addPayment({
-      id: uid(),
-      billId: bill.id,
-      paidDate: paidInFullAt,
-      amount: parseFloat(bill.amount) || 0,
-      paidForDueDate: bill.dueDate,
-      status: "active",
-      voidedAt: null,
-      paymentPlanId: planId,
-      paymentType: "paid-in-full",
-      paidInFullAt,
-    });
-  });
-
-  installments.forEach((bill) => {
-    Store.updateBill(bill.id, {
-      paidInFullAt,
-      paidInFullAmount: payoffAmount,
-    });
-  });
-
-  closePaymentPlanActions();
-  render();
+    closePaymentPlanDetails();
+    render();
+  } catch (error) { alert(error.message || "Could not record payoff."); }
 }
+
 function openExistingPaymentPlanEditor(planId) {
   const installments = Store.getBills()
     .filter(bill =>
@@ -15040,13 +15208,10 @@ function openBillPaymentLink(billId) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-
-function confirmMarkPaid(billId) {
-  if (confirm('Mark this bill as paid?')) {
-    markBillPaid(billId);
+async function confirmMarkPaid(billId) {
+  if (await markBillPaid(billId)) {
     closeDashboardStatusSheet();
-navigate('today');
-    render();
+    navigate("today");
   }
 }
 
