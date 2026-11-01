@@ -2118,15 +2118,18 @@ function bankMatchIsEligibleBill(bill) {
       ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status)) return false;
   return !getUnlinkedPaymentsForBill(getBillPaymentId(bill), true).length;
 }
-
 function getActivePaymentForOccurrence(bill, referenceDate = new Date()) {
   const billId = getBillPaymentId(bill);
-  const dueDateKey = financialDateKey(getBillOccurrenceDueDate(bill, referenceDate));
+  const dueDateKey = financialDateKey(
+    getBillOccurrenceDueDate(bill, referenceDate)
+  );
   if (!billId || !dueDateKey) return null;
-  return Store.getPaymentsForBill(billId)
-    .filter(isFinancialPaymentActive)
-    .sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate))
-    .find(payment => getPaymentOccurrenceDateKey(payment) === dueDateKey) || null;
+
+  // Store.getPaymentsForBill already returns newest-paid-date first.
+  return Store.getPaymentsForBill(billId).find(payment =>
+    isFinancialPaymentActive(payment) &&
+    getPaymentOccurrenceDateKey(payment) === dueDateKey
+  ) || null;
 }
 
 function isOccurrencePaid(bill, referenceDate = new Date()) {
@@ -5575,8 +5578,10 @@ function dashboardIsInstallment(item) {
   );
 }
 
-function getDashboardSeparatedStatus(referenceDate = new Date()) {
-  const summary = getDashboardMonthSummary(referenceDate);
+function getDashboardSeparatedStatus(
+  referenceDate = new Date(),
+  summary = getDashboardMonthSummary(referenceDate)
+) {
   const makeGroup = installment => {
     const matches = item => dashboardIsInstallment(item) === installment;
     const paid = summary.paid.filter(matches);
@@ -5597,8 +5602,12 @@ function getDashboardSeparatedStatus(referenceDate = new Date()) {
   };
   return { bills: makeGroup(false), installments: makeGroup(true) };
 }
-function renderDashboardSeparatedStatus(referenceDate = new Date()) {
-  const groups = getDashboardSeparatedStatus(referenceDate);
+
+function renderDashboardSeparatedStatus(
+  referenceDate = new Date(),
+  summary = getDashboardMonthSummary(referenceDate)
+) {
+  const groups = getDashboardSeparatedStatus(referenceDate, summary);
   const hasInstallments = Store.getBills().some(bill => Boolean(bill.installmentPlanId)) ||
     groups.installments.totalCount > 0;
   const monthLabel = formatDate(referenceDate, "monthYear");
@@ -5822,7 +5831,6 @@ function renderToday() {
   const now = new Date();
   const reportMonth = getDashboardReportMonth();
   const summary = getDashboardMonthSummary(reportMonth);
-  const billCounts = getDashboardSeparatedStatus(reportMonth).bills;
 
   const currentDateLabel = new Intl.DateTimeFormat(undefined, {
     weekday: "short",
@@ -5830,11 +5838,6 @@ function renderToday() {
     day: "numeric"
   }).format(now);
 
-  const upcomingGroups = getDashboardUpcomingGroups(now);
-  const upcomingBills = [
-    ...(upcomingGroups.overdue || []),
-    ...(upcomingGroups.upcoming || [])
-  ];
 
   const allBillsById = new Map(
     getArchivedBills().map(bill => [bill.id, bill])
@@ -6108,7 +6111,7 @@ function renderToday() {
               "
             ></div>
           </div>
-          ${renderDashboardSeparatedStatus(reportMonth)}
+          ${renderDashboardSeparatedStatus(reportMonth, summary)}
           ${renderDashboardReportResetAction()}
         </section>
           ${renderDashboardPaycheckPlan()}
@@ -6156,7 +6159,6 @@ function renderToday() {
     </div>
   `;
 }
-
 function getCycleForBill(bill) {
   if (bill.payCycle === 'first') return 'early';
   if (bill.payCycle === 'second') return 'late';
