@@ -419,13 +419,31 @@
   };
   window.render=render;
   // Original paycheck inline list and popup layouts are unchanged.
-  getPaycheckMoveContext=function(id,date) {
-    const context=original.moveContext(id,date);
-    return context?{...context,splitSession:session()}:context;
+  getPaycheckMoveContext = function(
+    id,
+    date,
+    direction = "next"
+  ) {
+    const context = original.moveContext(
+      id,
+      date,
+      direction
+    );
+
+    return context
+      ? {
+          ...context,
+          splitSession: session()
+        }
+      : context;
   };
   saveOccurrenceFundingMove=function(id,date,expected) {
     assertSession(expected.splitSession || session());
-    const context=getPaycheckMoveContext(id,date);
+    const context = getPaycheckMoveContext(
+      id,
+      date,
+      expected.direction || "next"
+    );
     if(!context||context.key!==expected.key||JSON.stringify(context.from)!==JSON.stringify(expected.from)||JSON.stringify(context.to)!==JSON.stringify(expected.to)||JSON.stringify(context.source)!==JSON.stringify(expected.source))
       throw new Error("This occurrence changed. Close and reopen the move sheet.");
     const bills=allBills(),i=bills.findIndex(b=>b.id===id),at=new Date().toISOString();

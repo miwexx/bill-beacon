@@ -3267,14 +3267,54 @@ let selectedDashboardPaycheck = null;
 let selectedDashboardPaycheckMonth = null;
 
 function getDashboardPaycheckMonth() {
-  const date = selectedDashboardPaycheckMonth || new Date();
+  // A manually selected month always wins.
+  if (selectedDashboardPaycheckMonth) {
+    return new Date(
+      selectedDashboardPaycheckMonth.getFullYear(),
+      selectedDashboardPaycheckMonth.getMonth(),
+      1,
+      12
+    );
+  }
 
-  return new Date(
-    date.getFullYear(),
-    date.getMonth(),
+  const now = new Date();
+
+  const currentMonth = new Date(
+    now.getFullYear(),
+    now.getMonth(),
     1,
     12
   );
+
+  try {
+    const bills = getPaycheckFundingBills(currentMonth);
+
+    // An empty month is not treated as a completed month.
+    const fullyPaid =
+      bills.length > 0 &&
+      bills.every(bill =>
+        isOccurrencePaid(
+          bill,
+          new Date(bill.dueDate)
+        )
+      );
+
+    if (fullyPaid) {
+      return new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() + 1,
+        1,
+        12
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Could not determine the default paycheck month.",
+      error
+    );
+  }
+
+  return currentMonth;
 }
 
 function changeDashboardPaycheckMonth(offset) {
@@ -3389,24 +3429,159 @@ function getPaycheckFundingBills(referenceDate) {
       return !bill.isArchivedHistory || isOccurrencePaid(bill, new Date(bill.dueDate));
     });
 }
-function getPaycheckMoveContext(billId, dueDate) {
+function previousOccurrenceFunding(funding) {
+  if (
+    !funding ||
+    !/^\d{4}-(0[1-9]|1[0-2])$/.test(funding.month) ||
+    !["first", "second", "previous"].includes(
+      funding.paycheck
+    )
+  ) {
+    throw new Error("Invalid paycheck assignment.");
+  }
+
+  if (funding.paycheck === "second") {
+    return {
+      month: funding.month,
+      paycheck: "first"
+    };
+  }
+
+  const date = paycheckMonthDate(funding.month);
+
+  date.setMonth(date.getMonth() - 1);
+
+  // The legacy "previous" assignment represents the
+  // previous month's second paycheck.
+  if (funding.paycheck === "previous") {
+    return {
+      month: paycheckMonthKey(date),
+      paycheck: "first"
+    };
+  }
+
+  return {
+    month: paycheckMonthKey(date),
+    paycheck: "second"
+  };
+}
+
+function getPaycheckMoveContext(
+  billId,
+  dueDate,
+  direction = "next"
+) {
+  if (!["previous", "next"].includes(direction)) {
+    throw new Error("Invalid paycheck move direction.");
+  }
+
   const source = Store.getBill(billId);
+
   if (!source || source.archivedAt) return null;
-  const bill = resolveCalendarBillOccurrence(billId, dueDate);
-  if (!bill) return null;
+
+  const bill = resolveCalendarBillOccurrence(
+    billId,
+    dueDate
+  );
+
+  if (!bill || bill.isArchivedHistory) return null;
+
+  // Paid history must not be reassigned through this action.
+  if (
+    isOccurrencePaid(
+      bill,
+      new Date(bill.dueDate)
+    )
+  ) {
+    return null;
+  }
+
   const from = getOccurrenceFunding(bill);
-  return {source, bill, from, to:nextOccurrenceFunding(from),
-    key:paycheckOccurrenceKey(bill.originalDueDate || bill.dueDate)};
+
+  return {
+    source,
+    bill,
+    from,
+    to: direction === "previous"
+      ? previousOccurrenceFunding(from)
+      : nextOccurrenceFunding(from),
+    direction,
+    key: paycheckOccurrenceKey(
+      bill.originalDueDate || bill.dueDate
+    )
+  };
 }
 function renderOccurrenceFundingAction(bill) {
   const id = getBillPaymentId(bill);
   const funding = getOccurrenceFunding(bill);
-  return `<div style="margin-top:var(--space-3);">
-    <div style="font-size:var(--text-sm);color:var(--text-muted);">Due ${escapeHtml(formatDate(bill.dueDate, "full"))}<br>Funded by ${escapeHtml(occurrenceFundingLabel(funding))}</div>
-    ${renderOccurrenceMoveNote(bill)}
-    <button type="button" onclick="openMoveOccurrencePaycheck('${escapeInlineString(id)}','${escapeInlineString(bill.dueDate)}')" style="display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:16px 0;background:transparent;border:0;border-bottom:1px solid var(--border);color:var(--text);font:inherit;text-align:left;cursor:pointer;">
-      <span>Move To Next Paycheck</span>${svgIcon("chevronRight", 18)}
-    </button></div>`;
+
+  const paid = isOccurrencePaid(
+    bill,
+    new Date(bill.dueDate)
+  );
+
+  const moveButton = (direction, label) => `
+    <button
+      type="button"
+      onclick="openMoveOccurrencePaycheck(
+        '${escapeInlineString(id)}',
+        '${escapeInlineString(bill.dueDate)}',
+        '${direction}'
+      )"
+      style="
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:12px;
+        width:100%;
+        padding:16px 0;
+        background:transparent;
+        border:0;
+        border-bottom:1px solid var(--border);
+        color:var(--text);
+        font:inherit;
+        text-align:left;
+        cursor:pointer;
+      "
+    >
+      <span>${label}</span>
+      ${svgIcon("chevronRight", 18)}
+    </button>
+  `;
+
+  return `
+    <div style="margin-top:var(--space-3);">
+      <div
+        style="
+          font-size:var(--text-sm);
+          color:var(--text-muted);
+        "
+      >
+        Due ${escapeHtml(
+          formatDate(bill.dueDate, "full")
+        )}
+        <br>
+        Funded by ${escapeHtml(
+          occurrenceFundingLabel(funding)
+        )}
+      </div>
+
+      ${renderOccurrenceMoveNote(bill)}
+
+      ${
+        !paid
+          ? moveButton(
+              "previous",
+              "Move To Previous Paycheck"
+            ) +
+            moveButton(
+              "next",
+              "Move To Next Paycheck"
+            )
+          : ""
+      }
+    </div>
+  `;
 }
 function closeMoveOccurrencePaycheck() {
   const dialog = document.getElementById("moveOccurrencePaycheckDialog");
@@ -3415,38 +3590,227 @@ function closeMoveOccurrencePaycheck() {
   dialog.remove();
   document.getElementById("moveOccurrencePaycheckStyle")?.remove();
 }
-function openMoveOccurrencePaycheck(billId, dueDate) {
-  const context = getPaycheckMoveContext(billId, dueDate);
-  if (!context) return;
+function openMoveOccurrencePaycheck(
+  billId,
+  dueDate,
+  direction = "next"
+) {
+  let context;
+
+  try {
+    context = getPaycheckMoveContext(
+      billId,
+      dueDate,
+      direction
+    );
+  } catch (error) {
+    alert(error.message);
+    return;
+  }
+
+  if (!context) {
+    alert(
+      "This occurrence is paid or no longer available " +
+      "for a paycheck move."
+    );
+    return;
+  }
+
   closeMoveOccurrencePaycheck();
+
   const {bill, from, to} = context;
+
+  const title = direction === "previous"
+    ? "Move To Previous Paycheck?"
+    : "Move To Next Paycheck?";
+
   const style = document.createElement("style");
+
   style.id = "moveOccurrencePaycheckStyle";
-  style.textContent = `#moveOccurrencePaycheckDialog::backdrop{background:rgba(0,0,0,.58)}#moveOccurrencePaycheckDialog button{min-height:46px}#moveOccurrencePaycheckDialog:focus{outline:none}`;
+
+  style.textContent = `
+    #moveOccurrencePaycheckDialog::backdrop {
+      background:rgba(0,0,0,.58);
+    }
+
+    #moveOccurrencePaycheckDialog button {
+      min-height:46px;
+    }
+
+    #moveOccurrencePaycheckDialog:focus {
+      outline:none;
+    }
+  `;
+
   document.head.appendChild(style);
+
   const dialog = document.createElement("dialog");
+
   dialog.id = "moveOccurrencePaycheckDialog";
   dialog.setAttribute("role", "dialog");
   dialog.setAttribute("aria-modal", "true");
-  dialog.setAttribute("aria-labelledby", "moveOccurrencePaycheckTitle");
-  dialog.setAttribute("aria-describedby", "moveOccurrencePaycheckScope");
-  dialog.style.cssText = "position:fixed;inset:auto 0 0;margin:0 auto;width:min(100%,540px);max-width:100%;max-height:85dvh;overflow:auto;box-sizing:border-box;padding:24px 20px calc(24px + env(safe-area-inset-bottom));border:1px solid var(--border);border-radius:22px 22px 0 0;background:var(--surface,#20202b);color:var(--text,#fff);";
-  dialog.innerHTML = `<h2 id="moveOccurrencePaycheckTitle" style="font-size:20px;margin:0 0 20px;">Move To Next Paycheck?</h2>
-    <div style="font-weight:700;">${escapeHtml(bill.name)} · ${formatCurrency(bill.amount)}</div>
-    <div style="margin-top:6px;color:var(--text-muted);">Due ${escapeHtml(formatDate(bill.dueDate,"full"))}</div>
-    <div style="display:grid;grid-template-columns:44px 1fr;gap:14px;margin:24px 0;"><span>From</span><span>${escapeHtml(occurrenceFundingLabel(from))}</span><span>To</span><span>${escapeHtml(occurrenceFundingLabel(to))}</span></div>
-   
-    ${paycheckOccurrenceKey(occurrenceFundingDate(to)) > paycheckOccurrenceKey(bill.dueDate) ? `<p style="line-height:1.5;">This paycheck arrives after the bill’s due date. Moving it does not extend the due date.</p>` : ""}
-    <p data-move-error role="alert" style="color:var(--overdue);" hidden></p>
-    <div style="display:flex;gap:12px;margin-top:24px;"><button type="button" class="btn-secondary" style="flex:1;" onclick="closeMoveOccurrencePaycheck()">Cancel</button><button type="button" class="btn-primary" data-confirm-move style="flex:1;">Move bill</button></div>`;
-  dialog.querySelector("[data-confirm-move]").onclick = () => commitMoveOccurrencePaycheck(billId, dueDate, context);
-  dialog.addEventListener("cancel", event => {event.preventDefault();closeMoveOccurrencePaycheck();});
-  dialog.addEventListener("click", event => {if(event.target === dialog){const r=dialog.getBoundingClientRect();if(event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom)closeMoveOccurrencePaycheck();}});
+
+  dialog.setAttribute(
+    "aria-labelledby",
+    "moveOccurrencePaycheckTitle"
+  );
+
+  dialog.setAttribute(
+    "aria-describedby",
+    "moveOccurrencePaycheckScope"
+  );
+
+  dialog.style.cssText = `
+    position:fixed;
+    inset:auto 0 0;
+    margin:0 auto;
+    width:min(100%,540px);
+    max-width:100%;
+    max-height:85dvh;
+    overflow:auto;
+    box-sizing:border-box;
+    padding:24px 20px calc(
+      24px + env(safe-area-inset-bottom)
+    );
+    border:1px solid var(--border);
+    border-radius:22px 22px 0 0;
+    background:var(--surface,#20202b);
+    color:var(--text,#fff);
+  `;
+
+  const afterDueDate =
+    paycheckOccurrenceKey(
+      occurrenceFundingDate(to)
+    ) > paycheckOccurrenceKey(bill.dueDate);
+
+  dialog.innerHTML = `
+    <h2
+      id="moveOccurrencePaycheckTitle"
+      style="font-size:20px;margin:0 0 20px;"
+    >
+      ${title}
+    </h2>
+
+    <div style="font-weight:700;">
+      ${escapeHtml(bill.name)}
+      · ${formatCurrency(bill.amount)}
+    </div>
+
+    <div
+      style="margin-top:6px;color:var(--text-muted);"
+    >
+      Due ${escapeHtml(
+        formatDate(bill.dueDate, "full")
+      )}
+    </div>
+
+    <div
+      style="
+        display:grid;
+        grid-template-columns:44px 1fr;
+        gap:14px;
+        margin:24px 0;
+      "
+    >
+      <span>From</span>
+      <span>${escapeHtml(
+        occurrenceFundingLabel(from)
+      )}</span>
+
+      <span>To</span>
+      <span>${escapeHtml(
+        occurrenceFundingLabel(to)
+      )}</span>
+    </div>
+
+    <p
+      id="moveOccurrencePaycheckScope"
+      style="line-height:1.5;color:var(--text-muted);"
+    >
+      Only this occurrence changes paycheck assignment.
+      Its due date and payment status stay unchanged.
+    </p>
+
+    ${
+      afterDueDate
+        ? `
+          <p style="line-height:1.5;">
+            This paycheck arrives after the bill’s due
+            date. Moving it does not extend the due date.
+          </p>
+        `
+        : ""
+    }
+
+    <p
+      data-move-error
+      role="alert"
+      style="color:var(--overdue);"
+      hidden
+    ></p>
+
+    <div
+      style="display:flex;gap:12px;margin-top:24px;"
+    >
+      <button
+        type="button"
+        class="btn-secondary"
+        style="flex:1;"
+        onclick="closeMoveOccurrencePaycheck()"
+      >
+        Cancel
+      </button>
+
+      <button
+        type="button"
+        class="btn-primary"
+        data-confirm-move
+        style="flex:1;"
+      >
+        Move bill
+      </button>
+    </div>
+  `;
+
+  dialog.querySelector(
+    "[data-confirm-move]"
+  ).onclick = () => {
+    commitMoveOccurrencePaycheck(
+      billId,
+      dueDate,
+      context
+    );
+  };
+
+  dialog.addEventListener("cancel", event => {
+    event.preventDefault();
+    closeMoveOccurrencePaycheck();
+  });
+
+  dialog.addEventListener("click", event => {
+    if (event.target !== dialog) return;
+
+    const rect = dialog.getBoundingClientRect();
+
+    if (
+      event.clientX < rect.left ||
+      event.clientX > rect.right ||
+      event.clientY < rect.top ||
+      event.clientY > rect.bottom
+    ) {
+      closeMoveOccurrencePaycheck();
+    }
+  });
+
   document.body.appendChild(dialog);
   dialog.showModal();
 }
 function saveOccurrenceFundingMove(billId, dueDate, expected) {
-  const context = getPaycheckMoveContext(billId, dueDate);
+    const context = getPaycheckMoveContext(
+    billId,
+    dueDate,
+    expected.direction || "next"
+  );
   if (!context || JSON.stringify(context.from) !== JSON.stringify(expected.from) ||
     JSON.stringify(context.to) !== JSON.stringify(expected.to) || context.key !== expected.key ||
     Number(context.bill.amount) !== Number(expected.bill.amount)) {
