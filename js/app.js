@@ -4658,20 +4658,172 @@ function renderDashboardPaycheckPlan(
 function renderBillsAndPlansNavigation(activeSection) {
   const item = (key, label, action) => {
     const selected = activeSection === key;
-    return `<button type="button" ${selected ? 'aria-current="page"' : ""}
-      onclick="${action}"
-      style="display:flex;align-items:center;justify-content:center;min-width:0;min-height:44px;padding:10px 8px;border:1px solid ${selected ? 'var(--accent)' : 'var(--border)'};border-radius:12px;background:${selected ? 'var(--accent-dim)' : 'transparent'};color:var(--text);font:inherit;font-size:var(--text-sm);font-weight:750;line-height:1.25;cursor:pointer;">
-      ${label}
-    </button>`;
+
+    return `
+      <button
+        type="button"
+        ${selected ? 'aria-current="page"' : ""}
+        onclick="${action}"
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:center;
+          min-width:0;
+          min-height:42px;
+          padding:10px 8px;
+          margin:0;
+          border:1px solid ${
+            selected
+              ? "rgba(180,92,255,.32)"
+              : "transparent"
+          };
+          border-radius:11px;
+          background:${
+            selected
+              ? "rgba(180,92,255,.12)"
+              : "transparent"
+          };
+          color:${
+            selected
+              ? "var(--text)"
+              : "var(--text-muted)"
+          };
+          font:inherit;
+          font-size:var(--text-sm);
+          font-weight:${selected ? "800" : "650"};
+          line-height:1.25;
+          text-align:center;
+          cursor:pointer;
+        "
+      >
+        ${label}
+      </button>
+    `;
   };
-  return `<nav aria-label="Bills and installment plans"
-    style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 16px 16px;">
-    ${item("bills", "Bills", "navigate('bills')")}
-    ${item("plans", "Installment Plans", "navigate('payment-plans', {returnRoute:'bills'})")}
-  </nav>`;
+
+  return `
+    <nav
+      aria-label="Bills and installment plans"
+      style="
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        align-items:stretch;
+        gap:4px;
+        margin:12px 16px 16px;
+        padding:4px;
+        border:1px solid var(--border);
+        border-radius:15px;
+        background:var(--surface-2);
+        box-sizing:border-box;
+      "
+    >
+      ${item(
+        "bills",
+        "Bills",
+        "navigate('bills')"
+      )}
+
+      ${item(
+        "plans",
+        "Installment Plans",
+        "navigate('payment-plans', {returnRoute:'bills'})"
+      )}
+    </nav>
+  `;
 }
+function renderBillsAndPlansHeader(activeSection) {
+  const isPlans = activeSection === "plans";
 
+  const backRoute =
+    routeParams.returnRoute === "insights"
+      ? "insights"
+      : "today";
 
+  const showBack =
+    isPlans &&
+    routeParams.returnRoute !== "bills";
+
+  const backLabel =
+    backRoute === "insights"
+      ? "Insights"
+      : "Dashboard";
+
+  return `
+    <div class="nav-bar">
+      <div
+        class="nav-bar-content"
+        style="
+          display:grid;
+          grid-template-columns:44px minmax(0,1fr) 44px;
+          align-items:center;
+          gap:8px;
+          min-height:60px;
+        "
+      >
+        ${
+          showBack
+            ? `
+              <button
+                type="button"
+                class="nav-button"
+                onclick="navigate('${backRoute}')"
+                aria-label="Back to ${backLabel}"
+                style="
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+                  width:44px;
+                  height:44px;
+                  padding:0;
+                  color:var(--text);
+                "
+              >
+                ${svgIcon("chevronLeft", 22)}
+              </button>
+            `
+            : '<div aria-hidden="true" style="width:44px;height:44px;"></div>'
+        }
+
+        <div
+          class="nav-title"
+          style="
+            min-width:0;
+            text-align:center;
+            white-space:nowrap;
+          "
+        >
+          Bills &amp; Plans
+        </div>
+
+        <button
+          type="button"
+          class="nav-button"
+          onclick="${
+            isPlans
+              ? "openInstallmentPlanForm()"
+              : "openBillForm()"
+          }"
+          aria-label="${
+            isPlans
+              ? "Add an installment plan"
+              : "Add a bill"
+          }"
+          style="
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            width:44px;
+            height:44px;
+            padding:0;
+            color:var(--accent);
+          "
+        >
+          ${svgIcon("plus", 22)}
+        </button>
+      </div>
+    </div>
+  `;
+}
 
 function setDashboardPaycheck(paycheckKey) {
   capturePaycheckInlineView();
@@ -5526,10 +5678,7 @@ function renderDashboardSeparatedStatus(referenceDate = new Date()) {
         ${row("bills", "Bills")}
         ${hasInstallments ? row("installments", "Installments") : ""}
       </div>
-      ${hasInstallments ? `<button type="button" class="bb-month-plans"
-        onclick="navigate('payment-plans',{returnRoute:'today'})">
-        <span>View Installment Plans</span><span aria-hidden="true">${svgIcon("chevronRight",16)}</span>
-      </button>` : ""}
+      
     </div>
   `;
 }
@@ -6837,20 +6986,7 @@ function renderBills() {
   }
 
   return `
-    <div class="nav-bar">
-      <div class="nav-bar-content">
-        <div class="nav-title bb-centered-page-title">Bills &amp; Plans</div>
-
-        <button
-  class="nav-button"
-  onclick="openBillForm()"
-  aria-label="Add a bill"
->
-  ${svgIcon("plus", 18)}
-</button>
-      </div>
-    </div>
-
+    ${renderBillsAndPlansHeader("bills")}
         <div class="main-content fade-in bills-page-content">
       ${renderBillsAndPlansNavigation("bills")}
       ${
@@ -8499,13 +8635,7 @@ function renderInstallmentProgressBar(paidCount, installmentCount) {
   </div>`;
 }
 function renderPaymentPlans() {
-  const installmentsBackRoute = ["bills", "insights"].includes(routeParams.returnRoute)
-    ? routeParams.returnRoute
-    : "today";
 
-  const installmentsBackLabel = installmentsBackRoute === "bills"
-    ? "Bills & Plans"
-    : installmentsBackRoute === "insights" ? "Insights" : "Dashboard";
   const installmentBills = Store.getBills().filter((bill) =>
     Boolean(bill.installmentPlanId)
   );
@@ -8860,64 +8990,7 @@ function renderPaymentPlans() {
   `;
 
   return `
-    <div class="nav-bar">
-  <div
-    class="nav-bar-content"
-    style="
-      display:grid;
-      grid-template-columns:44px 1fr 44px;
-      align-items:center;
-    "
-  >
-    <button
-      type="button"
-      class="nav-button"
-            onclick="navigate('${installmentsBackRoute}')"
-      aria-label="Back to ${installmentsBackLabel}"
-      title="Back to ${installmentsBackLabel}"
-      style="
-        width:44px;
-        height:44px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        padding:0;
-        color:var(--text);
-      "
-    >
-      ${svgIcon("chevronLeft", 22)}
-    </button>
-
-    <div
-      class="nav-title"
-      style="
-        min-width:0;
-        text-align:center;
-      "
-    >
-      Installments
-    </div>
-
-    <button
-      type="button"
-      class="nav-button"
-      onclick="closeAddMenu(); openInstallmentPlanForm()"
-      aria-label="Add a payment plan"
-      title="Add payment plan"
-      style="
-        width:44px;
-        height:44px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        padding:0;
-        color:#b45cff;
-      "
-    >
-      ${svgIcon("plus", 22)}
-    </button>
-  </div>
-</div>
+    ${renderBillsAndPlansHeader("plans")}
     <div class="main-content fade-in">
       ${renderBillsAndPlansNavigation("plans")}
       <div class="content-pad content-gap">
@@ -13110,26 +13183,63 @@ function navigateMainTab(route) {
 }
 function tabBar() {
   const tabs = [
-  { id: 'today', label: 'Dashboard', icon: 'home' },
-  { id: 'recurring', label: 'Calendar', icon: 'calendar' },
-  { id: 'bills', label: 'Bills', icon: 'tray' },
-  { id: 'insights', label: 'Insights', icon: 'chart' },
-  { id: "more", label: "More", icon: "moreVertical" }
-  
-];
+    {
+      id: "today",
+      label: "Dashboard",
+      icon: "home"
+    },
+    {
+      id: "recurring",
+      label: "Calendar",
+      icon: "calendar"
+    },
+    {
+      id: "bills",
+      label: "Bills & Plans",
+      icon: "tray"
+    },
+    {
+      id: "insights",
+      label: "Insights",
+      icon: "chart"
+    },
+    {
+      id: "more",
+      label: "More",
+      icon: "moreVertical"
+    }
+  ];
 
   return `
     <div class="tab-bar">
-      ${tabs.map(tab => `
-        <button class="tab-item ${currentRoute === tab.id ? 'active' : ''}" onclick="navigateMainTab('${escapeInlineString(tab.id)}')">
-          <div class="tab-icon">${svgIcon(tab.icon, 24)}</div>
-          <span>${tab.label}</span>
-        </button>
-      `).join('')}
+      ${tabs.map(tab => {
+        const selected =
+          currentRoute === tab.id ||
+          (
+            tab.id === "bills" &&
+            currentRoute === "payment-plans"
+          );
+
+        return `
+          <button
+            type="button"
+            class="tab-item ${selected ? "active" : ""}"
+            ${selected ? 'aria-current="page"' : ""}
+            onclick="navigateMainTab('${escapeInlineString(tab.id)}')"
+          >
+            <div class="tab-icon">
+              ${svgIcon(tab.icon, 24)}
+            </div>
+
+            <span style="white-space:nowrap;">
+              ${tab.label}
+            </span>
+          </button>
+        `;
+      }).join("")}
     </div>
   `;
 }
-
 // ====================================
 // BILL FORM (Bottom Sheet)
 // ====================================
@@ -17441,7 +17551,14 @@ function render() {
   const view = Object.prototype.hasOwnProperty.call(views, currentRoute) ? views[currentRoute] : renderToday;
   let content = view();
     if (
-    ["today", "recurring", "bills", "more", "insights"]
+    [
+  "today",
+  "recurring",
+  "bills",
+  "payment-plans",
+  "more",
+  "insights"
+]
       .includes(currentRoute)
   ) {
     content += tabBar();
