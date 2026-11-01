@@ -4636,8 +4636,8 @@ function renderPaycheckDueAndLeftover(selected) {
   const estimate = getPaycheckLeftoverEstimate(selected);
   const shortfall = estimate.available && estimate.difference < 0;
   const label = shortfall ? "Shortfall" : "Leftover";
-  const caption = estimate.available
-    ? (estimate.partial ? "Partial estimate" : "Estimate")
+    const caption = estimate.available
+    ? (estimate.partial ? "Partial estimate" : "")
     : "Income setup needed";
   const help = estimate.available
     ? `${selected.id === "second" ? "Paycheck 2" : "Paycheck 1"} · ${formatDate(selected.payday, "monthYear")}\n\n` +
@@ -4650,18 +4650,45 @@ function renderPaycheckDueAndLeftover(selected) {
   return `
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:12px;">
       <div style="min-width:0;">
-        <div style="min-height:36px;display:flex;align-items:center;font-size:var(--text-xs);color:var(--text-muted);">Due</div>
+        <div style="min-height:36px;display:flex;align-items:center;font-size:var(--text-sm);font-weight:700;color:var(--text-secondary);">Due</div>
         <div class="text-upcoming" style="font-size:clamp(19px,5.5vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${formatCurrency(selected.remaining)}</div>
       </div>
       <div style="min-width:0;text-align:right;">
         <div style="display:flex;align-items:center;justify-content:flex-end;min-height:36px;gap:2px;">
-          <span style="font-size:var(--text-xs);color:var(--text-muted);">${label}</span>
+          <span style="font-size:var(--text-sm);font-weight:700;color:var(--text-secondary);">${label}</span>
           <button type="button" onclick="alert('${escapeInlineString(help)}')"
             aria-label="Explain ${label.toLowerCase()} estimate"
             style="display:inline-flex;align-items:center;justify-content:center;width:36px;min-height:36px;padding:0;border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:15px;cursor:pointer;">&#9432;</button>
         </div>
-        <div style="font-size:clamp(19px,5.5vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:${shortfall ? 'var(--overdue)' : 'var(--text)'};">${estimate.available ? formatCurrency(Math.abs(estimate.difference)) : '&mdash;'}</div>
-        <div style="margin-top:4px;font-size:var(--text-xs);line-height:1.3;color:${estimate.available && estimate.partial ? 'var(--upcoming)' : 'var(--text-muted)'};">${caption}</div>
+        <div style="font-size:clamp(19px,5.5vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:${
+  !estimate.available
+    ? 'var(--text-muted)'
+    : shortfall
+      ? 'var(--overdue)'
+      : estimate.difference > 0
+        ? 'var(--paid)'
+        : 'var(--text)'
+};">${estimate.available ? formatCurrency(Math.abs(estimate.difference)) : '&mdash;'}</div>
+        ${
+          caption
+            ? `
+              <div
+                style="
+                  margin-top:4px;
+                  font-size:var(--text-xs);
+                  line-height:1.3;
+                  color:${
+                    estimate.available && estimate.partial
+                      ? "var(--upcoming)"
+                      : "var(--text-muted)"
+                  };
+                "
+              >
+                ${caption}
+              </div>
+            `
+            : ""
+        }
       </div>
     </div>
   `;
