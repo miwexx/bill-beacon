@@ -27,7 +27,7 @@
       <div class="bb-payment-status-row-label" role="rowheader">${label}</div>
       ${statuses.map(status=>{
         const count=groups[name][status.key].length;
-        const period=status.key==="overdue"?"all dates":month;
+        const period = month;
         return `<div role="cell"><button type="button" class="bb-payment-status-count"
           onclick="openDashboardSeparatedStatus('${name}','${status.key}')"
           aria-label="${escapeHtml(`View ${count} ${status.label.toLowerCase()} ${label.toLowerCase()} payments, ${period}`)}"

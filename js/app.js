@@ -4501,22 +4501,35 @@ function renderDashboardPaycheckPlan(
         </button>
       </div>
 
-      ${
-        !isCurrentMonth
-          ? `
-            <div style="text-align:center;margin-bottom:12px;">
-              <button
-                type="button"
-                class="bb-outline-pill"
-                onclick="resetDashboardPaycheckMonth()"
-                style="min-height:36px;padding:0 14px;"
-              >
-                Current Month
-              </button>
-            </div>
-          `
-          : ""
-      }
+     ${
+  selectedDashboardPaycheckMonth
+    ? `
+      <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+        <button
+          type="button"
+          onclick="resetDashboardPaycheckMonth()"
+          aria-label="Return to the automatic paycheck planning month"
+          style="
+            display:inline-flex;
+            align-items:center;
+            justify-content:center;
+            min-height:36px;
+            padding:6px 10px;
+            border:0;
+            background:transparent;
+            color:var(--text-muted);
+            font:inherit;
+            font-size:var(--text-xs);
+            font-weight:650;
+            cursor:pointer;
+          "
+        >
+          Reset view
+        </button>
+      </div>
+    `
+    : ""
+}
       <div
         style="
           display:grid;
@@ -5847,11 +5860,6 @@ function resetDashboardReportMonth() {
 
 function renderDashboardReportMonthNavigation() {
   const date = getDashboardReportMonth();
-  const now = new Date();
-
-  const isCurrentMonth =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth();
 
   return `
     <div
@@ -5911,47 +5919,48 @@ function renderDashboardReportMonthNavigation() {
         ${svgIcon("chevronRight", 20)}
       </button>
     </div>
+  `;
+}
+function renderDashboardReportResetAction() {
+  const displayed = getDashboardReportMonth();
+  const now = new Date();
 
-    ${
-      !isCurrentMonth
-        ? `
-          <div
-            style="
-              display:flex;
-              justify-content:center;
-              margin:12px 0 6px;
-            "
-          >
-            <button
-              type="button"
-              class="bb-outline-pill"
-              onclick="resetDashboardReportMonth()"
-              aria-label="Return to the current calendar month"
-              style="
-                display:inline-flex !important;
-                align-items:center !important;
-                justify-content:center !important;
-                flex:0 0 auto !important;
-                width:auto !important;
-                min-width:132px !important;
-                height:auto !important;
-                min-height:36px !important;
-                margin:0 !important;
-                padding:8px 16px !important;
-                box-sizing:border-box !important;
-                font-size:13px !important;
-                font-weight:700 !important;
-                line-height:1.2 !important;
-                white-space:nowrap !important;
-                text-align:center !important;
-              "
-            >
-              Current Month
-            </button>
-          </div>
-        `
-        : ""
-    }
+  const isCurrentMonth =
+    displayed.getFullYear() === now.getFullYear() &&
+    displayed.getMonth() === now.getMonth();
+
+  if (isCurrentMonth) return "";
+
+  return `
+    <div
+      style="
+        display:flex;
+        justify-content:center;
+        margin-top:8px;
+      "
+    >
+      <button
+        type="button"
+        onclick="resetDashboardReportMonth()"
+        aria-label="Return to the current calendar month"
+        style="
+          display:inline-flex;
+          align-items:center;
+          justify-content:center;
+          min-height:36px;
+          padding:6px 12px;
+          border:0;
+          background:transparent;
+          color:var(--text-muted);
+          font:inherit;
+          font-size:var(--text-xs);
+          font-weight:650;
+          cursor:pointer;
+        "
+      >
+        Back to ${formatDate(now, "monthYear")}
+      </button>
+    </div>
   `;
 }
 window.addEventListener("billbeacon:signed-out", () => {
@@ -6252,6 +6261,7 @@ function renderToday() {
               "
             ></div>
           </div>
+          ${renderDashboardReportResetAction()}
         </section>
 
         ${renderDashboardSeparatedStatus(reportMonth)}
