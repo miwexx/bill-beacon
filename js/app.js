@@ -8863,19 +8863,34 @@ function renderPaymentPlans() {
       <span style="display:flex;justify-content:space-between;gap:12px;margin-top:9px;font-size:var(--text-xs);color:var(--text-muted);"><span>${plan.paid} of ${plan.bills.length} Payments Paid</span><span>View Plan ›</span></span>
     </button>`;
   }).join("");
-  return `<style>.bb-plan-group>.bb-plan-list-row+.bb-plan-list-row{border-top:1px solid var(--border)!important;}.bb-plan-list-row:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;}</style>${renderBillsAndPlansHeader("plans")}${renderBillsAndPlansNavigation("plans")}
-    <div class="main-content"><div class="content-pad content-gap">
-      <section class="card card-pad" aria-label="Total remaining plan balance" style="text-align:center;">
-        <div style="color:var(--text-muted);font-size:var(--text-sm);">Remaining Balance</div>
-        <div style="margin-top:8px;font-size:clamp(32px,10vw,48px);font-weight:850;line-height:1.15;overflow-wrap:anywhere;">${formatCurrency(total)}</div>
-        <div style="margin-top:10px;color:var(--text-muted);font-size:var(--text-sm);">Across ${active.length} Active ${active.length===1?'Plan':'Plans'}</div>
-        <div style="margin-top:5px;color:var(--text-muted);font-size:var(--text-xs);">All Remaining Payments, Not Just This Month</div>
-      </section>
-      <section aria-labelledby="bbActivePlansTitle"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;"><div class="section-header" id="bbActivePlansTitle" style="margin:0;">Active Plans</div>${completed.length ? `<button type="button" onclick="openCompletedPlansHistory()" style="min-height:44px;padding:8px 0 8px 12px;border:0;background:transparent;color:var(--accent);font:inherit;font-size:var(--text-sm);font-weight:700;cursor:pointer;">Completed Plans · ${completed.length} ›</button>` : ''}</div>
-        <div class="card bb-plan-group" style="overflow:hidden;">${cards || `<div class="card card-pad" style="text-align:center;"><div style="font-weight:750;">${completed.length?'All Plans Completed':'No Active Plans'}</div><p style="color:var(--text-muted);font-size:var(--text-sm);">${completed.length?'Your completed plans are available below.':'Add a plan to track its balance and payments.'}</p><button type="button" class="btn-primary" onclick="openInstallmentPlanForm()">Add Payment Plan</button></div>`}</div>
-      </section>
-      
-    </div></div>`;
+  bbPlanInstallViewportSizing();
+  return `<style>
+    #bbPlansViewport{box-sizing:border-box!important;overflow:hidden!important;padding:12px 16px!important;display:flex!important;flex-direction:column!important;gap:12px;min-height:0!important;background:var(--bg);}
+    #bbPlansViewport .bb-plan-balance{flex:0 0 auto;padding:14px 16px!important;margin:0!important;}
+    #bbPlansViewport .bb-plan-list-section{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;}
+    #bbPlansViewport .bb-plan-list-scroll{flex:1 1 auto;min-height:0;overflow-y:auto!important;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;margin:0!important;}
+    #bbPlansViewport .bb-plan-list-row+.bb-plan-list-row{border-top:1px solid var(--border)!important;}
+    #bbPlansViewport .bb-plan-list-row{padding:14px!important;}
+    #bbPlansViewport button:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;}
+  </style>${renderBillsAndPlansHeader("plans")}${renderBillsAndPlansNavigation("plans")}
+  <div class="main-content" id="bbPlansViewport">
+    <section class="card bb-plan-balance" aria-label="Total Remaining Balance">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div><div style="font-size:var(--text-sm);color:var(--text-muted);">Remaining Balance</div><div style="margin-top:4px;font-size:var(--text-xs);color:var(--text-muted);">${active.length} Active ${active.length===1?'Plan':'Plans'}</div></div>
+        <div style="font-size:clamp(26px,7vw,34px);font-weight:850;overflow-wrap:anywhere;">${formatCurrency(total)}</div>
+      </div>
+      <div style="margin-top:6px;color:var(--text-muted);font-size:var(--text-xs);">All Remaining Payments, Not Just This Month</div>
+    </section>
+    <section class="bb-plan-list-section" aria-labelledby="bbActivePlansTitle">
+      <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+        <div class="section-header" id="bbActivePlansTitle" style="margin:0;">Active Plans</div>
+        ${completed.length ? `<button type="button" onclick="openCompletedPlansHistory()" style="min-height:44px;border:0;padding:6px;background:transparent;color:var(--accent);font:inherit;font-size:var(--text-sm);font-weight:700;">Completed Plans · ${completed.length} ›</button>` : ''}
+      </div>
+      <div class="card bb-plan-group bb-plan-list-scroll" tabindex="0" role="region" aria-label="Active Plans List">
+        ${cards || `<div style="padding:20px;text-align:center;"><div style="font-weight:750;">${completed.length?'All Plans Completed':'No Active Plans'}</div><p style="color:var(--text-muted);font-size:var(--text-sm);">${completed.length?'Open Completed Plans To Review Your History.':'Add A Plan To Track Its Payments.'}</p><button type="button" class="btn-primary" onclick="openInstallmentPlanForm()">Add Payment Plan</button></div>`}
+      </div>
+    </section>
+  </div>`;
 }
 function showMoreActivePaymentPlans() {
   const extraPlans = document.getElementById("extra-active-payment-plans");
@@ -9246,7 +9261,7 @@ function getCompletedPaymentPlans() {
 }
 
 function openCompletedPlansHistory() {
-  document.getElementById("completed-plans-history")?.remove();
+  closeCompletedPlansHistory();
   const plans = getCompletedPaymentPlans();
   const rows = plans.map(plan => {
     const title = plan.storeName || plan.provider;
@@ -9260,30 +9275,39 @@ function openCompletedPlansHistory() {
   const container = document.createElement("div");
   container.id = "completed-plans-history";
   container.innerHTML = `<style>
-    #bbCompletedPlansDialog{position:fixed;inset:0;z-index:1000;display:flex;flex-direction:column;overflow:hidden;height:100%;height:100dvh;box-sizing:border-box;background:var(--bg,#09090c);color:var(--text,#f7f5fa);}
-    #bbCompletedPlansDialog .bb-completed-header{flex:0 0 auto;position:relative;z-index:1;box-sizing:border-box;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px;border-bottom:1px solid var(--border);background:var(--bg,#09090c);}
-    #bbCompletedPlansDialog .bb-completed-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:20px 16px calc(24px + env(safe-area-inset-bottom,0px));}
-    #bbCompletedPlansDialog .bb-completed-row{display:block;width:100%;padding:18px;border:0;background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer;}
+    #bbCompletedPlansDialog{position:fixed!important;inset:0!important;margin:0!important;padding:0!important;width:100vw!important;max-width:none!important;height:100%!important;height:100dvh!important;max-height:none!important;border:0!important;border-radius:0!important;box-sizing:border-box!important;overflow:hidden!important;background:var(--bg,#09090c);color:var(--text,#f7f5fa);}
+    #bbCompletedPlansDialog[open]{display:flex!important;flex-direction:column!important;}
+    #bbCompletedPlansDialog .bb-completed-header{flex:0 0 auto!important;margin:0!important;transform:none!important;padding:calc(8px + env(safe-area-inset-top,0px)) 16px 8px!important;border-bottom:1px solid var(--border);background:var(--bg,#09090c);}
+    #bbCompletedPlansDialog .bb-completed-scroll{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding:16px 16px calc(24px + env(safe-area-inset-bottom,0px));}
+    #bbCompletedPlansDialog .bb-completed-row{display:block;width:100%;padding:16px;border:0;background:transparent;color:var(--text);font:inherit;text-align:left;cursor:pointer;}
     #bbCompletedPlansDialog .bb-completed-row+.bb-completed-row{border-top:1px solid var(--border);}
     #bbCompletedPlansDialog button:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;}
   </style>
-  <section id="bbCompletedPlansDialog" role="dialog" aria-modal="true" aria-labelledby="bbCompletedPlansTitle">
-    <header class="bb-completed-header"><div style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;">
+  <dialog id="bbCompletedPlansDialog" aria-labelledby="bbCompletedPlansTitle">
+    <div class="bb-completed-header"><div style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:8px;align-items:center;">
       <span aria-hidden="true"></span><h2 id="bbCompletedPlansTitle" style="margin:0;text-align:center;font-size:var(--text-lg);font-weight:800;">Completed Plans</h2>
-      <button type="button" onclick="closeCompletedPlansHistory()" aria-label="Close Completed Plans" style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;border:0;background:transparent;color:var(--text);cursor:pointer;">${svgIcon("close",22)}</button>
-    </div></header>
+      <button type="button" onclick="closeCompletedPlansHistory()" aria-label="Close Completed Plans" style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;border:0;background:transparent;color:var(--text);">${svgIcon("close",22)}</button>
+    </div></div>
     <div class="bb-completed-scroll" tabindex="0" role="region" aria-label="Completed Plans List">
-      <div style="margin-bottom:16px;color:var(--text-muted);font-size:var(--text-sm);">${plans.length} Completed ${plans.length===1?'Plan':'Plans'}</div>
-      ${plans.length ? `<div class="card" style="overflow:hidden;">${rows}</div>` : `<div class="card card-pad" style="text-align:center;"><div style="font-weight:750;">No Completed Plans</div><p style="color:var(--text-muted);">Completed Payment Plans Will Appear Here.</p></div>`}
+      <div style="margin-bottom:14px;color:var(--text-muted);font-size:var(--text-sm);">${plans.length} Completed ${plans.length===1?'Plan':'Plans'}</div>
+      ${plans.length ? `<div class="card" style="overflow:hidden;">${rows}</div>` : `<div class="card card-pad" style="text-align:center;">No Completed Plans</div>`}
     </div>
-  </section>`;
+  </dialog>`;
   document.body.appendChild(container);
+  const dialog = container.querySelector('#bbCompletedPlansDialog');
+  dialog.addEventListener('cancel',event => {event.preventDefault();closeCompletedPlansHistory();});
+  dialog.addEventListener('close',() => container.remove());
+  try { dialog.showModal(); }
+  catch (error) { container.remove(); alert("Could Not Open Completed Plans. Update Your Browser And Try Again."); }
 }
 
 function closeCompletedPlansHistory() {
-  document.getElementById("completed-plans-history")?.remove();
+  const container = document.getElementById("completed-plans-history");
+  if (!container) return;
+  const dialog = container.querySelector("#bbCompletedPlansDialog");
+  if (dialog?.open && typeof dialog.close === 'function') dialog.close();
+  container.remove();
 }
-
 window.openCompletedPlansHistory = openCompletedPlansHistory;
 window.closeCompletedPlansHistory = closeCompletedPlansHistory;
 const installmentPopupIds = [
@@ -9372,6 +9396,7 @@ function openPaymentPlanDetails(planId) {
   container.id = "paymentPlanDetailsContainer";
   container.dataset.planId = String(planId);
   container.innerHTML = `<style>
+    #paymentPlanDetailsSheet .bb-plan-compact-progress>div{margin-top:6px!important;}
     #paymentPlanDetailsSheet{width:min(100%,560px);max-width:100%;box-sizing:border-box;margin-inline:auto;}
     #paymentPlanDetailsSheet .sheet-body{overflow-y:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px));}
     #paymentPlanDetailsSheet .bb-plan-row{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:16px;}
@@ -9387,22 +9412,25 @@ function openPaymentPlanDetails(planId) {
         <span aria-hidden="true" style="width:44px;"></span>
       </div>
       <div class="sheet-body content-gap">
-        <div class="card card-pad"><div style="display:flex;gap:14px;align-items:center;">${paymentPlanVisual(provider,44)}
-          <div style="min-width:0;"><div style="font-size:var(--text-lg);font-weight:850;overflow-wrap:anywhere;">${escapeHtml(name)}</div><div style="margin-top:4px;color:var(--text-muted);font-size:var(--text-sm);">${escapeHtml(provider)}</div></div></div>
-          <div style="margin-top:20px;color:var(--text-muted);font-size:var(--text-sm);">Remaining Balance</div>
-          <div style="margin-top:5px;font-size:clamp(28px,8vw,38px);font-weight:850;overflow-wrap:anywhere;">${formatCurrency(remaining)}</div>
-          ${renderInstallmentProgressBar(paidCount,bills.length)}
-          <div style="margin-top:9px;color:var(--text-muted);font-size:var(--text-sm);">${paidCount} of ${bills.length} Payments Paid</div>
-        ${next ? `<div style="margin-top:20px;padding-top:18px;border-top:1px solid var(--border);"><div style="font-weight:700;color:${overdue?'var(--overdue)':'var(--text-muted)'};">${overdue?'Overdue Payment':'Next Payment'}</div>
-          <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:baseline;margin-top:8px;"><span style="font-size:var(--text-xl);font-weight:800;">${formatCurrency(next.amount)}</span><span style="color:var(--text-muted);font-size:var(--text-sm);">Due ${escapeHtml(formatDate(next.dueDate,"full"))}</span></div>
-          <button type="button" class="btn-primary" style="width:100%;min-height:48px;margin:18px 0 0;" onclick="bbPlanRecordInstallment('${plan}','${escapeInlineString(next.id)}',this)">Mark ${overdue?'Overdue':'Next'} Payment Paid</button>
-          <button type="button" class="btn-secondary" style="width:100%;min-height:48px;margin:10px 0 0;white-space:normal;" onclick="payPaymentPlanInFull('${plan}')">Pay In Full · ${formatCurrency(remaining)}</button>
-          <p style="margin:12px 0 0;color:var(--text-muted);font-size:var(--text-xs);line-height:1.5;">Record a payment you already made. Bill Beacon does not send money.</p></div>`
-          : `<div style="margin-top:18px;color:var(--paid);font-weight:750;">${svgIcon("checkCircle",20)} All Payments Recorded. This Plan Is Complete.</div>`}
-        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
-          ${next ? `<button type="button" class="btn-secondary" style="flex:1 1 180px;min-height:46px;white-space:normal;" onclick="openExistingPaymentPlanEditor('${plan}')">Edit Next Payment</button>` : ''}
-          <button type="button" class="btn-danger" style="flex:1 1 140px;min-height:46px;" onclick="confirmDeletePaymentPlan('${plan}')">Delete Plan</button>
-        </div>
+        <div class="card" style="padding:14px!important;">
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
+            ${paymentPlanVisual(provider,36)}
+            <div style="min-width:100px;flex:1;"><div style="font-size:var(--text-base);font-weight:800;overflow-wrap:anywhere;">${escapeHtml(name)}</div><div style="margin-top:3px;color:var(--text-muted);font-size:var(--text-xs);">${escapeHtml(provider)}</div></div>
+            <div style="text-align:right;"><div style="font-weight:850;font-size:clamp(22px,6vw,28px);">${formatCurrency(remaining)}</div><div style="margin-top:2px;color:var(--text-muted);font-size:var(--text-xs);">Remaining</div></div>
+          </div>
+          <div style="margin-top:10px;font-size:var(--text-xs);color:var(--text-muted);">${paidCount} Of ${bills.length} Payments Paid</div>
+          <div class="bb-plan-compact-progress">${renderInstallmentProgressBar(paidCount,bills.length)}</div>
+          ${next ? `<div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);font-size:var(--text-sm);">
+            <span style="font-weight:750;color:${overdue?'var(--overdue)':'var(--text-muted)'};">${overdue?'Overdue Payment:':'Next Payment:'}</span>
+            <span style="font-weight:850;">${formatCurrency(next.amount)}</span><span style="color:var(--text-muted);">${escapeHtml(formatDate(next.dueDate,"short"))}</span>
+          </div>
+          <button type="button" class="btn-primary" style="width:100%;min-height:46px;margin:12px 0 0!important;padding:10px 12px!important;white-space:normal;" onclick="bbPlanRecordInstallment('${plan}','${escapeInlineString(next.id)}',this)">Mark ${overdue?'Overdue':'Next'} Payment Paid</button>
+          <button type="button" class="btn-secondary" style="width:100%;min-height:44px;margin:8px 0 0!important;padding:9px 12px!important;white-space:normal;" onclick="payPaymentPlanInFull('${plan}')">Pay In Full · ${formatCurrency(remaining)}</button>`
+          : `<div style="margin-top:12px;color:var(--paid);font-size:var(--text-sm);font-weight:750;">${svgIcon("checkCircle",18)} This Plan Is Complete.</div>`}
+          <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
+            ${next ? `<button type="button" class="btn-secondary" style="flex:1 1 120px;min-height:44px;margin:0!important;padding:9px!important;" onclick="openExistingPaymentPlanEditor('${plan}')">Edit Payment</button>` : ''}
+            <button type="button" class="btn-danger" style="flex:1 1 120px;min-height:44px;margin:0!important;padding:9px!important;" onclick="confirmDeletePaymentPlan('${plan}')">Delete Plan</button>
+          </div>
         </div>
         <div><div class="section-header">Payments</div><div class="card" style="overflow:hidden;">${rows}</div></div>
         <details class="card card-pad"><summary style="cursor:pointer;min-height:44px;font-weight:750;">Purchase Summary</summary>
@@ -9418,6 +9446,51 @@ function openPaymentPlanDetails(planId) {
     container.querySelector("#paymentPlanDetailsOverlay")?.classList.add("show");
     container.querySelector("#paymentPlanDetailsSheet")?.classList.add("show");
   });
+}
+function bbPlanEditablePayments(planId) {
+  return Store.getBills().filter(bill => bill.installmentPlanId === planId &&
+    !bill.archived && !bill.archivedAt && !bill.cancelled && !bill.cancelledAt && !bill.paidInFullAt &&
+    !["archived","cancelled","canceled","paid-in-full","paidinfull"].includes(String(bill.status || '').toLowerCase()) &&
+    !isOccurrencePaid(bill,new Date(bill.dueDate)))
+    .sort((a,b) => new Date(a.dueDate)-new Date(b.dueDate));
+}
+function bbPlanInstallViewportSizing() {
+  if (!window.bbPlanViewportSizing) {
+    const state = {frame:0};
+    state.fit = () => {
+      state.frame = 0;
+      if (currentRoute !== 'payment-plans') return;
+      const page = document.getElementById('bbPlansViewport');
+      const app = document.getElementById('app');
+      if (!page || !app) return;
+      const viewport = window.visualViewport;
+      const bottom = (viewport?.offsetTop || 0) + (viewport?.height || window.innerHeight);
+      const switcher = app.querySelector('.bb-bills-plans-switch');
+      const nav = app.querySelector('.nav-bar');
+      const tab = app.querySelector('.tab-bar');
+      const top = Math.max(viewport?.offsetTop || 0,switcher?.getBoundingClientRect().bottom || nav?.getBoundingClientRect().bottom || 0);
+      const tabRect = tab?.getBoundingClientRect();
+      const end = tabRect && tabRect.height > 0 && tabRect.top > top ? Math.min(bottom,tabRect.top) : bottom;
+      const rect = app.getBoundingClientRect();
+      const styles = {position:'fixed',top:`${Math.round(top)}px`,left:`${Math.round(rect.left)}px`,width:`${Math.round(rect.width)}px`,
+        height:`${Math.max(0,Math.floor(end-top))}px`,'max-height':`${Math.max(0,Math.floor(end-top))}px`,bottom:'auto',margin:'0','z-index':'1'};
+      for (const [key,value] of Object.entries(styles)) page.style.setProperty(key,value,'important');
+    };
+    state.schedule = () => {
+      if (!state.frame) state.frame = requestAnimationFrame(state.fit);
+    };
+    window.addEventListener('resize',state.schedule);
+    window.addEventListener('orientationchange',state.schedule);
+    window.visualViewport?.addEventListener('resize',state.schedule);
+    window.visualViewport?.addEventListener('scroll',state.schedule);
+    if (typeof ResizeObserver === 'function') {
+      state.observer = new ResizeObserver(state.schedule);
+      const app = document.getElementById('app');
+      if (app) state.observer.observe(app);
+    }
+    window.bbPlanViewportSizing = state;
+  }
+  window.bbPlanViewportSizing.schedule();
 }
 
 async function bbPlanRecordInstallment(planId, billId, button) {
@@ -9703,56 +9776,58 @@ async function payPaymentPlanInFull(planId) {
 }
 
 function openExistingPaymentPlanEditor(planId) {
-  const installments = Store.getBills()
-    .filter(bill =>
-      bill.installmentPlanId === planId
-    )
-    .sort((a, b) =>
-      new Date(a.dueDate) - new Date(b.dueDate)
-    );
-
-  if (!installments.length) {
-    alert("Payment plan not found.");
-    return;
-  }
-
-  const editableInstallment = installments.find(bill =>
-    !bill.archived &&
-    !bill.archivedAt &&
-    !bill.cancelled &&
-    !bill.cancelledAt &&
-    !bill.paidInFullAt &&
-    ![
-      "cancelled",
-      "canceled",
-      "paid-in-full",
-      "paidInFull"
-    ].includes(bill.status) &&
-    !isOccurrencePaid(bill, new Date(bill.dueDate))
-  );
-
-  if (!editableInstallment) {
-    alert(
-      "This plan has no unpaid installment available to edit. " +
-      "Paid and completed records were left unchanged."
-    );
-    return;
-  }
-
-  const confirmed = confirm(
-    `Edit Payment ${editableInstallment.installmentNumber || ""} ` +
-    `for ${editableInstallment.name}?\n\n` +
-    "This changes only this unpaid installment, " +
-    "not the entire plan."
-  );
-
-  if (!confirmed) return;
-
-  closePaymentPlanActions();
-  closePaymentPlanDetails();
-
-  openBillForm(editableInstallment.id);
+  if (document.getElementById("bbPlanEditPicker")) return;
+  const eligible = bbPlanEditablePayments(planId);
+  if (!eligible.length) { alert("No Unpaid Payments Are Available To Edit."); return; }
+  const session = bbLFSession();
+  const snapshots = new Map(eligible.map(bill => [String(bill.id),JSON.stringify(bill)]));
+  const dialog = document.createElement("dialog");
+  dialog.id = "bbPlanEditPicker";
+  dialog.setAttribute("aria-labelledby","bbPlanEditPickerTitle");
+  dialog.style.cssText = "position:fixed!important;inset:0!important;margin:auto!important;width:min(92vw,440px)!important;max-height:85dvh!important;overflow:auto!important;box-sizing:border-box;padding:20px!important;border:1px solid var(--border);border-radius:18px;background:var(--surface,#20202b);color:var(--text,#fff);";
+  dialog.innerHTML = `<style>#bbPlanEditPicker::backdrop{background:rgba(0,0,0,.65);}</style>
+    <h2 id="bbPlanEditPickerTitle" style="margin:0 0 14px;font-size:20px;">Edit Payment</h2>
+    <label for="bbPlanEditChoice" style="display:block;margin-bottom:10px;font-weight:700;">Choose A Payment</label>
+    <select id="bbPlanEditChoice" style="width:100%;min-height:48px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text);font:inherit;">
+      ${eligible.map(bill => `<option value="${escapeHtml(bill.id)}">Payment ${escapeHtml(bill.installmentNumber || '—')} · ${escapeHtml(formatDate(bill.dueDate,'short'))} · ${escapeHtml(formatCurrency(bill.amount))}</option>`).join('')}
+    </select>
+    <p style="font-size:var(--text-sm);line-height:1.5;color:var(--text-muted);">Only The Selected Unpaid Payment Will Be Edited.</p>
+    <p data-error role="alert" hidden style="color:var(--overdue);font-size:var(--text-sm);"></p>
+    <div style="display:flex;gap:10px;margin-top:16px;"><button type="button" data-cancel class="btn-secondary" style="flex:1;min-height:44px;">Cancel</button><button type="button" data-continue class="btn-primary" style="flex:1;min-height:44px;">Continue</button></div>`;
+  let finished = false;
+  const cancel = () => {
+    if (finished) return;
+    finished = true;
+    window.removeEventListener("billbeacon:signed-out",cancel);
+    window.removeEventListener("billbeacon:household-ready",cancel);
+    if (dialog.open) dialog.close();
+    dialog.remove();
+  };
+  dialog.querySelector('[data-cancel]').onclick = cancel;
+  dialog.addEventListener('cancel',event => {event.preventDefault();cancel();});
+  dialog.addEventListener('close',cancel);
+  window.addEventListener("billbeacon:signed-out",cancel);
+  window.addEventListener("billbeacon:household-ready",cancel);
+  dialog.querySelector('[data-continue]').onclick = () => {
+    const id = dialog.querySelector('#bbPlanEditChoice').value;
+    const fresh = bbPlanEditablePayments(planId).find(bill => String(bill.id) === id);
+    if (session !== bbLFSession() || !fresh || snapshots.get(id) !== JSON.stringify(fresh)) {
+      const error = dialog.querySelector('[data-error]');
+      error.hidden = false;
+      error.textContent = "This Payment Or Account Changed. Cancel And Reopen The Picker.";
+      return;
+    }
+    cancel();
+    closePaymentPlanActions();
+    closePaymentPlanDetails();
+    openBillForm(fresh.id);
+  };
+  document.body.appendChild(dialog);
+  try { dialog.showModal(); }
+  catch (error) { cancel(); alert("Could Not Open The Payment Picker. Nothing Was Changed."); }
 }
+
+
 function closeCategorySpendingSheet() {
   document
     .getElementById("categorySpendingOverlay")
