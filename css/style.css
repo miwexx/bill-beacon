@@ -1290,7 +1290,7 @@ a { color: var(--accent); text-decoration: none; }
   position: relative;
 }
 
-.dashboard-month-card:active,
+
 .next-due-card:active,
 .dashboard-status-card:active,
 .upcoming-bill-card:active,
@@ -6418,4 +6418,11 @@ max-height: max(160px, calc(50dvh - 88px));
   font-size: var(--text-base);
   font-weight: 700;
   line-height: 1.3;
+}
+/* The monthly summary is a container, not a pressable control. */
+section.dashboard-month-card,
+section.dashboard-month-card:active {
+  transform: none;
+  scale: none;
+  cursor: default;
 }
