@@ -3569,54 +3569,8 @@ let selectedDashboardPaycheckMonth = null;
 let dashboardPaycheckSelectionMonthKey = null;
 
 function getDashboardPaycheckMonth() {
-  // A manually selected month always wins.
-  if (selectedDashboardPaycheckMonth) {
-    return new Date(
-      selectedDashboardPaycheckMonth.getFullYear(),
-      selectedDashboardPaycheckMonth.getMonth(),
-      1,
-      12
-    );
-  }
-
-  const now = new Date();
-
-  const currentMonth = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    1,
-    12
-  );
-
-  try {
-    const bills = getPaycheckFundingBills(currentMonth);
-
-    // An empty month is not treated as a completed month.
-    const fullyPaid =
-      bills.length > 0 &&
-      bills.every(bill =>
-        isOccurrencePaid(
-          bill,
-          new Date(bill.dueDate)
-        )
-      );
-
-    if (fullyPaid) {
-      return new Date(
-        currentMonth.getFullYear(),
-        currentMonth.getMonth() + 1,
-        1,
-        12
-      );
-    }
-  } catch (error) {
-    console.error(
-      "Could not determine the default paycheck month.",
-      error
-    );
-  }
-
-  return currentMonth;
+  // One displayed month for the combined Dashboard card.
+  return getDashboardReportMonth();
 }
 function getDashboardPaycheckDefaultCycle() {
   const displayedMonth = getDashboardPaycheckMonth();
@@ -3665,30 +3619,12 @@ function getDashboardPaycheckDefaultCycle() {
   }
 }
 function changeDashboardPaycheckMonth(offset) {
-  if (offset !== -1 && offset !== 1) return;
-
-  const current = getDashboardPaycheckMonth();
-
-  selectedDashboardPaycheckMonth = new Date(
-    current.getFullYear(),
-    current.getMonth() + offset,
-    1,
-    12
-  );
-
-  selectedDashboardPaycheck = "first";
-  paycheckInlineViews = {};
-  if (routeParams) {delete routeParams.paycheckInlineReturn;delete routeParams.paycheckSheetReturn;}
-
-  render();
+  // Compatibility for any older caller: use the same shared month.
+  changeDashboardReportMonth(offset);
 }
 
 function resetDashboardPaycheckMonth() {
-  selectedDashboardPaycheckMonth = null;
-  selectedDashboardPaycheck = "first";
-  paycheckInlineViews = {};
-  if (routeParams) {delete routeParams.paycheckInlineReturn;delete routeParams.paycheckSheetReturn;}
-  render();
+  resetDashboardReportMonth();
 }
 
 function getPaycheckAssignmentLabel(assignment) {
@@ -4716,12 +4652,6 @@ function renderDashboardPaycheckPlan(
   referenceDate = getDashboardPaycheckMonth()
 ) {
   const plan = getPaycheckPlan(referenceDate);
-  const now = new Date();
-
-  const isCurrentMonth =
-    referenceDate.getFullYear() === now.getFullYear() &&
-    referenceDate.getMonth() === now.getMonth();
-
     const displayedMonthKey =
     `${referenceDate.getFullYear()}-` +
     String(referenceDate.getMonth() + 1).padStart(2, "0");
@@ -4751,66 +4681,6 @@ function renderDashboardPaycheckPlan(
     
 
     <div class="card card-pad">
-      <div
-        style="
-          display:grid;
-          grid-template-columns:44px minmax(0,1fr) 44px;
-          align-items:center;
-          gap:8px;
-          margin-bottom:var(--space-3);
-        "
-      >
-        <button
-          type="button"
-          class="bb-outline-pill"
-          aria-label="Previous paycheck plan month"
-          onclick="changeDashboardPaycheckMonth(-1)"
-          style="
-            width:44px;
-            min-height:44px;
-            padding:0;
-            justify-content:center;
-          "
-        >
-          ${svgIcon("chevronLeft", 20)}
-        </button>
-
-        <div
-          aria-live="polite"
-          style="
-            text-align:center;
-            font-size:var(--text-base);
-            font-weight:800;
-          "
-        >
-          ${formatDate(referenceDate, "monthYear")}
-        </div>
-
-        <button
-          type="button"
-          class="bb-outline-pill"
-          aria-label="Next paycheck plan month"
-          onclick="changeDashboardPaycheckMonth(1)"
-          style="
-            width:44px;
-            min-height:44px;
-            padding:0;
-            justify-content:center;
-          "
-        >
-          ${svgIcon("chevronRight", 20)}
-        </button>
-      </div>
-
-      ${selectedDashboardPaycheckMonth ? `
-        <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-          <button type="button" onclick="resetDashboardPaycheckMonth()"
-            aria-label="Return to the automatic paycheck planning month"
-            style="display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 10px;border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:var(--text-xs);font-weight:650;cursor:pointer;">
-            Reset view
-          </button>
-        </div>
-      ` : ""}
       <div
         style="
           display:grid;
@@ -6110,13 +5980,30 @@ function changeDashboardReportMonth(offset) {
   selectedDashboardReportMonth = new Date(
     date.getFullYear(), date.getMonth() + offset, 1, 12
   );
+  selectedDashboardPaycheckMonth = null;
+  selectedDashboardPaycheck = null;
+  dashboardPaycheckSelectionMonthKey = null;
+  paycheckInlineViews = {};
+  if (routeParams) {
+    delete routeParams.paycheckInlineReturn;
+    delete routeParams.paycheckSheetReturn;
+  }
   render();
 }
 
 function resetDashboardReportMonth() {
   selectedDashboardReportMonth = null;
+  selectedDashboardPaycheckMonth = null;
+  selectedDashboardPaycheck = null;
+  dashboardPaycheckSelectionMonthKey = null;
+  paycheckInlineViews = {};
+  if (routeParams) {
+    delete routeParams.paycheckInlineReturn;
+    delete routeParams.paycheckSheetReturn;
+  }
   render();
 }
+
 
 function renderDashboardReportMonthNavigation() {
   const date = getDashboardReportMonth();
