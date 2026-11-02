@@ -4677,6 +4677,18 @@ function renderDashboardPaycheckPlan(
   const firstLabel = formatDate(plan.first.payday, "short");
   const secondLabel = formatDate(plan.second.payday, "short");
 
+  const cents = value => {
+    if (value === null || value === undefined || String(value).trim() === '') return null;
+    const number = Number(value), rounded = Math.round(number * 100);
+    return Number.isFinite(number) && number >= 0 && Number.isSafeInteger(rounded) ? rounded : null;
+  };
+  const paidCents = cents(selected.paid);
+  const scheduledCents = cents(selected.scheduled);
+  const validTotals = paidCents !== null && scheduledCents !== null;
+  const paymentProgress = validTotals && scheduledCents > 0
+    ? Math.max(0, Math.min(100, paidCents / scheduledCents * 100)) : 0;
+
+
     return `
     
 
@@ -4743,6 +4755,26 @@ function renderDashboardPaycheckPlan(
       </div>
 
       ${renderPaycheckDueAndLeftover(selected)}
+
+      ${validTotals ? `
+        <div class="dashboard-progress-track"
+          role="progressbar"
+          aria-label="Payment Progress For Assigned Bills"
+          aria-valuemin="0" aria-valuemax="100"
+          aria-valuenow="${Math.round(paymentProgress * 10) / 10}"
+          aria-valuetext="${escapeHtml(scheduledCents > 0
+            ? `${formatCurrency(paidCents / 100)} Paid Of ${formatCurrency(scheduledCents / 100)} Scheduled`
+            : 'No Scheduled Amount')}"
+          style="height:6px;min-height:6px;max-height:6px;margin-top:14px;overflow:hidden;border-radius:999px;">
+          <div class="dashboard-progress-fill"
+            style="width:${paymentProgress}%;height:100%;min-height:6px;border-radius:inherit;"></div>
+        </div>
+      ` : `<div style="margin-top:10px;color:var(--text-muted);font-size:var(--text-xs);">Payment Progress Unavailable</div>`}
+
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:7px;color:var(--text-muted);font-size:var(--text-xs);line-height:1.4;font-variant-numeric:tabular-nums;">
+        <span>${paidCents === null ? '&mdash;' : formatCurrency(paidCents / 100)} Paid</span>
+        <span>${scheduledCents === null ? '&mdash;' : formatCurrency(scheduledCents / 100)} Scheduled</span>
+      </div>
 
       ${renderPaycheckInlineRows(selected)}
     </div>
