@@ -4680,7 +4680,7 @@ function renderDashboardPaycheckPlan(
     return `
     
 
-    <div class="card card-pad">
+    <div class="card card-pad bb-dashboard-paycheck-plan" style="padding:0!important;margin:0!important;border:0!important;outline:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;">
       <div
         style="
           display:grid;
@@ -4744,29 +4744,6 @@ function renderDashboardPaycheckPlan(
 
       ${renderPaycheckDueAndLeftover(selected)}
 
-      <div
-        class="dashboard-progress-track"
-        style="margin-top:var(--space-3);"
-      >
-        <div
-          class="dashboard-progress-fill"
-          style="width:${selected.progress}%;"
-        ></div>
-      </div>
-
-      <div
-        style="
-          display:flex;
-          justify-content:space-between;
-          margin-top:8px;
-          font-size:var(--text-xs);
-          color:var(--text-muted);
-        "
-      >
-               <span>${formatCurrency(selected.paid)} Paid</span>
-        <span>${formatCurrency(selected.scheduled)} Scheduled</span>
-      </div>
-
       ${renderPaycheckInlineRows(selected)}
     </div>
   `;
@@ -4801,16 +4778,20 @@ function renderPaycheckDueAndLeftover(selected) {
     const caption = estimate.available
     ? (estimate.partial ? "Partial estimate" : "")
     : "Income setup needed";
-  const help = estimate.available
-    ? `${selected.id === "second" ? "Paycheck 2" : "Paycheck 1"} · ${formatDate(selected.payday, "monthYear")}\n\n` +
-      `Expected income: ${formatCurrency(estimate.income)}\n` +
-      `Assigned paycheck costs: ${formatCurrency(estimate.assigned)}\n` +
-      `Already covered by another paycheck: ${formatCurrency(estimate.released)}\n` +
-      `Payments brought into this paycheck: ${formatCurrency(estimate.broughtForward)}\n\n` +
-      "Expected income minus costs covered by this paycheck, including its paid items. Early payments and full payoffs use the paycheck chosen at payment. Older full payoffs release later-period reservations using their recorded payment date as a planning assumption, not a known funding source. Due and Scheduled are unchanged. Everyday spending and savings are not deducted. This is not your current account balance or spending allowance.\n\n" +
+  const totals = `${selected.id === "second" ? "Paycheck 2" : "Paycheck 1"} · ${formatDate(selected.payday, "monthYear")}\n\n` +
+    `Assigned Bills Paid: ${formatCurrency(selected.paid)}\n` +
+    `Assigned Bills Scheduled: ${formatCurrency(selected.scheduled)}\n` +
+    `Still Due: ${formatCurrency(selected.remaining)}\n\n`;
+  const help = totals + (estimate.available
+    ? `Expected Income: ${formatCurrency(estimate.income)}\n` +
+      `Assigned Paycheck Costs: ${formatCurrency(estimate.assigned)}\n` +
+      `Already Covered By Another Paycheck: ${formatCurrency(estimate.released)}\n` +
+      `Payments Brought Into This Paycheck: ${formatCurrency(estimate.broughtForward)}\n\n` +
+      "Paid And Scheduled Describe Assigned Bill Records. Costs Used For Leftover Can Differ When Early Payments Or Full Payoffs Are Assigned To Another Paycheck.\n\n" +
+      "Expected income minus costs covered by this paycheck, including its paid items. Early payments and full payoffs use the paycheck chosen at payment. Older full payoffs release later-period reservations using their recorded payment date as a planning assumption, not a known funding source. Everyday spending and savings are not deducted. This is not your current account balance or spending allowance.\n\n" +
       "Uses current saved income estimates, not historical earnings. Weekly and biweekly income are averaged across two monthly planning buckets, not actual payday dates. Monthly income is assigned to Paycheck 1. Past-due bills outside this paycheck are not included." +
       (estimate.partial ? "\n\nPartial estimate: manual, irregular, or unsupported income sources are excluded." : "")
-    : estimate.reason;
+    : estimate.reason);
   return `
     <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:12px;">
       <div style="min-width:0;">
@@ -4857,6 +4838,7 @@ function renderPaycheckDueAndLeftover(selected) {
     </div>
   `;
 }
+
 function renderBillsAndPlansNavigation(activeSection) {
   const item = (key, label, action) => {
     const selected = activeSection === key;
@@ -5826,7 +5808,7 @@ function renderDashboardSeparatedStatus(
       }).join("")}
     </div>`;
   return `
-    <div style="margin-top:16px;padding-top:10px;border-top:1px solid var(--border);">
+    <div style="margin-top:10px;padding-top:0;border-top:0;">
       <style>
         .dashboard-month-card .bb-month-status-grid {display:grid;grid-template-columns:minmax(0,1.25fr) repeat(3,minmax(0,1fr));align-items:center;gap:4px;}
         .dashboard-month-card .bb-month-status-head {min-height:24px;text-align:center;color:var(--text-muted);font-size:11px;font-weight:650;}
@@ -5850,6 +5832,7 @@ function renderDashboardSeparatedStatus(
     </div>
   `;
 }
+
 function openDashboardSeparatedStatus(groupName, status) {
   closeDashboardStatusSheet();
   const now = getDashboardReportMonth();
@@ -6200,6 +6183,12 @@ function renderToday() {
           .bb-dashboard-combined>.dashboard-month-card{padding:0 0 14px!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;}
           .bb-dashboard-combined>.bb-dashboard-paycheck{border-top:1px solid var(--border);padding-top:14px;min-width:0;}
           .bb-dashboard-combined>.bb-dashboard-paycheck>.card{padding:0!important;margin:0!important;border:0!important;box-shadow:none!important;background:transparent!important;}
+          .bb-dashboard-combined>.dashboard-month-card::before,
+          .bb-dashboard-combined>.dashboard-month-card::after,
+          .bb-dashboard-combined .bb-dashboard-paycheck-plan::before,
+          .bb-dashboard-combined .bb-dashboard-paycheck-plan::after{content:none!important;display:none!important;}
+          .bb-dashboard-combined .bb-dashboard-paycheck-plan{border:0!important;border-image:none!important;outline:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;}
+
         </style>
         <div class="card bb-dashboard-combined" aria-label="Monthly Summary And Paycheck Plan">
         <section
@@ -6213,128 +6202,11 @@ function renderToday() {
             padding:18px 20px;
             text-align:left;
           "
-          aria-label="Monthly bills and installments summary and payment status"
+          aria-label="Monthly Bills And Installments Payment Status"
         >
           ${renderDashboardReportMonthNavigation()}
 
-          <div style="
-            display:grid;
-            grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-            align-items:start;
-            gap:16px;
-            margin-top:14px;
-          ">
-            <button
-              type="button"
-              onclick="openDashboardStatusSheet('unpaid')"
-              aria-label="View due and overdue bills and installments"
-              style="
-                display:flex;
-                flex-direction:column;
-                align-items:flex-start;
-                gap:4px;
-                width:100%;
-                height:auto;
-                min-height:0;
-                margin:0;
-                padding:6px 0;
-                border:0;
-                background:transparent;
-                color:inherit;
-                font:inherit;
-                text-align:left;
-                cursor:pointer;
-              "
-            >
-              <span style="
-                font-size:12px;
-                line-height:1.3;
-                color:var(--text-muted);
-              ">
-                Remaining
-              </span>
-
-              <span
-                class="text-upcoming"
-                style="
-                  font-size:clamp(22px,6.5vw,30px);
-                  font-weight:800;
-                  line-height:1.15;
-                  letter-spacing:-0.6px;
-                  font-variant-numeric:tabular-nums;
-                  white-space:nowrap;
-                "
-              >
-                ${formatCurrency(summary.remainingTotal)}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onclick="openDashboardPaidSheet()"
-              aria-label="View paid bills and installments"
-              style="
-                display:flex;
-                flex-direction:column;
-                align-items:flex-end;
-                gap:4px;
-                width:100%;
-                height:auto;
-                min-height:0;
-                margin:0;
-                padding:6px 0;
-                border:0;
-                background:transparent;
-                color:inherit;
-                font:inherit;
-                text-align:right;
-                cursor:pointer;
-              "
-            >
-              <span style="
-                font-size:12px;
-                line-height:1.3;
-                color:var(--text-muted);
-              ">
-                Paid
-              </span>
-
-              <span
-                class="text-paid"
-                style="
-                  font-size:clamp(22px,6.5vw,30px);
-                  font-weight:800;
-                  line-height:1.15;
-                  letter-spacing:-0.6px;
-                  font-variant-numeric:tabular-nums;
-                  white-space:nowrap;
-                "
-              >
-                ${formatCurrency(summary.paidTotal)}
-              </span>
-            </button>
-          </div>
-
-          <div
-            class="dashboard-progress-track"
-            style="
-              height:8px;
-              margin:12px 0 0;
-              overflow:hidden;
-              border-radius:999px;
-            "
-          >
-            <div
-              class="dashboard-progress-fill"
-              style="
-                width:${summary.progress}%;
-                height:100%;
-                border-radius:inherit;
-              "
-            ></div>
-          </div>
           ${renderDashboardSeparatedStatus(reportMonth, summary)}
-          ${renderDashboardReportResetAction()}
         </section>
         <div class="bb-dashboard-paycheck" aria-label="Paycheck Plan">
           ${renderDashboardPaycheckPlan()}
