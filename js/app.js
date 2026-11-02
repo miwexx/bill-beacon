@@ -20259,6 +20259,115 @@ window.addEventListener("storage", () => {
   window.billBeaconDragBackInstalled = true;
 
   const originalNavigate = navigate;
+  // Visual cache only. Does not cache financial calculations or change navigation.
+  const bbSwipeVisualCache = (() => {
+    let entry=null, timer=null, idle=null, held=false, rootObserved=null;
+    const rootObserver=new MutationObserver(()=>invalidate());
+    const outerObserver=new MutationObserver(()=>invalidate());
+    function cancelPending() {
+      if(timer!==null){clearTimeout(timer);timer=null;}
+      if(idle!==null && typeof window.cancelIdleCallback==='function')window.cancelIdleCallback(idle);
+      idle=null;
+    }
+    function observeRoot(root) {
+      if(root===rootObserved)return;
+      rootObserver.disconnect();entry=null;rootObserved=root;
+      if(root)rootObserver.observe(root,{childList:true,characterData:true,subtree:true,attributes:true});
+    }
+    function pendingMutations() {
+      const rootChanges=rootObserver.takeRecords();
+      const outerChanges=outerObserver.takeRecords();
+      if(rootChanges.length || outerChanges.length)entry=null;
+    }
+    function identity(root) {
+      const rect=root.getBoundingClientRect(),v=window.visualViewport;
+      let params;
+      try{params=JSON.stringify(routeParams || {});}catch{return null;}
+      return JSON.stringify([currentRoute,params,bbLFSession(),window.innerWidth,window.innerHeight,
+        v?.width||0,v?.height||0,v?.offsetTop||0,v?.offsetLeft||0,
+        rect.top,rect.left,rect.width,rect.height,window.scrollX,window.scrollY]);
+    }
+    function cloneSnapshot(saved) {
+      return {...saved,copy:saved.copy.cloneNode(true)};
+    }
+    function reusable(root,key) {
+      if(!entry || entry.root!==root || key===null || entry.key!==key)return false;
+      // Recheck current scroll offsets, including changes before a scroll event is delivered.
+      for(const item of entry.scrolls) {
+        if(!item.node.isConnected || item.node.scrollTop!==item.top || item.node.scrollLeft!==item.left)return false;
+      }
+      return true;
+    }
+    function capture(root,key) {
+      const saved=bbSwipeFrozenCapture(root,false);
+      if(!saved)return null;
+      const scrolls=[root,...root.querySelectorAll('*')].map(node=>({node,top:node.scrollTop,left:node.scrollLeft}));
+      entry=key===null?null:{root,key,saved,scrolls};
+      return saved;
+    }
+    function get() {
+      const root=document.getElementById('app');
+      if(!root)return null;
+      observeRoot(root);pendingMutations();
+      const key=identity(root);
+      if(reusable(root,key))return cloneSnapshot(entry.saved);
+      const saved=capture(root,key);
+      return saved?cloneSnapshot(saved):null;
+    }
+    function busy() {
+      return held || gesture || settling || overlay || document.visibilityState==='hidden';
+    }
+    function warm(deadline) {
+      idle=null;
+      if(busy())return;
+      if(deadline && !deadline.didTimeout && deadline.timeRemaining()<8){schedule();return;}
+      const root=document.getElementById('app');if(!root)return;
+      observeRoot(root);pendingMutations();
+      const rect=root.getBoundingClientRect();
+      if(!rect.width || !rect.height || getComputedStyle(root).display==='none')return;
+      const key=identity(root);if(reusable(root,key))return;
+      try{capture(root,key);}catch(error){entry=null;console.warn('Idle swipe preview skipped',error);}
+    }
+    function schedule() {
+      cancelPending();
+      timer=setTimeout(()=>{
+        timer=null;if(busy())return;
+        if(typeof window.requestIdleCallback==='function')idle=window.requestIdleCallback(warm,{timeout:1000});
+        else timer=setTimeout(()=>{timer=null;warm();},0);
+      },350);
+    }
+    function invalidate() {entry=null;schedule();}
+    function hold() {held=true;cancelPending();}
+    function release() {held=false;schedule();}
+    observeRoot(document.getElementById('app'));
+    if(document.documentElement)outerObserver.observe(document.documentElement,{attributes:true});
+    if(document.body)outerObserver.observe(document.body,{attributes:true});
+    if(document.head)outerObserver.observe(document.head,{childList:true,characterData:true,subtree:true,attributes:true});
+    document.addEventListener('scroll',event=>{
+      const root=document.getElementById('app');
+      if(event.target===document || event.target===document.documentElement || root?.contains(event.target))invalidate();
+    },{capture:true,passive:true});
+    // Input listeners only postpone cache warming. They never dismiss a view or prevent events.
+    document.addEventListener('touchstart',hold,{capture:true,passive:true});
+    document.addEventListener('touchend',release,{capture:true,passive:true});
+    document.addEventListener('touchcancel',release,{capture:true,passive:true});
+    document.addEventListener('pointerdown',hold,{capture:true,passive:true});
+    document.addEventListener('pointerup',release,{capture:true,passive:true});
+    document.addEventListener('pointercancel',release,{capture:true,passive:true});
+    document.addEventListener('load',event=>{
+      if(document.getElementById('app')?.contains(event.target) || document.head?.contains(event.target))invalidate();
+    },true);
+    window.addEventListener('resize',invalidate,{passive:true});
+    window.visualViewport?.addEventListener('resize',invalidate,{passive:true});
+    window.visualViewport?.addEventListener('scroll',invalidate,{passive:true});
+    document.fonts?.addEventListener?.('loadingdone',invalidate);
+    document.addEventListener('visibilitychange',()=>{held=false;invalidate();});
+    for(const name of ['billbeacon:data-changed','billbeacon:signed-out','billbeacon:authenticated','billbeacon:household-ready']) {
+      window.addEventListener(name,()=>{if(name!=='billbeacon:data-changed')held=false;invalidate();});
+    }
+    schedule();
+    return {get,invalidate};
+  })();
 
   let previous = null;
   const pageSnapshots = new Map();
@@ -20456,7 +20565,7 @@ window.addEventListener("storage", () => {
     }
   }
 function snapshot() {
-    return bbSwipeFrozenCapture(document.getElementById('app'),false);
+    return bbSwipeVisualCache.get();
   }
 
   navigate = function(route, params = {}) {
@@ -21249,5 +21358,7 @@ const viewObserver = new MutationObserver(() => {
   }
 
   for(const event of ['billbeacon:signed-out','billbeacon:authenticated','billbeacon:household-ready'])window.addEventListener(event,()=>planSwipeSources.clear());
+
+
 })();
 // END BILL BEACON DRAG-BACK
