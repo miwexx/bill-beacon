@@ -9474,7 +9474,21 @@ function openPaymentPlanDetails(planId) {
       <div class="sheet-handle"></div><div class="sheet-nav">
         <button type="button" class="nav-button" onclick="closePlanDetailsToParent()" aria-label="Close plan details">${svgIcon("close",22)}</button>
         <div class="sheet-title" id="bbPlanDetailsTitle">Plan Details</div>
-        <button type="button" class="nav-button" onclick="bbOpenPlanActions('${plan}')" aria-label="Plan Actions">${svgIcon('moreVertical',22)}</button>
+        <button
+  type="button"
+  class="nav-button"
+  onclick="openExistingPaymentPlanEditor('${plan}')"
+  aria-label="Edit Payment"
+  ${next ? '' : 'disabled aria-disabled="true"'}
+  style="
+    min-width:52px;
+    min-height:44px;
+    font-weight:700;
+    opacity:${next ? 1 : .45};
+  "
+>
+  Edit
+</button>
       </div>
       <div class="sheet-body content-gap">
         <div class="card" style="padding:14px!important;">
@@ -20591,7 +20605,10 @@ window.addEventListener("storage", () => {
     pane.appendChild(snap.copy.cloneNode(true));
   }
  function createModalPreview(state) {
-    if(isPlansSwipeState(state)){createPlansLivePreview(state);return;}
+    if (state.context.mode === "popup") {
+      createPlansLivePreview(state);
+      return;
+    }
     const base=snapshot();
     if (!base) return;
     base.windowScroll=Math.max(0,-document.getElementById("app").getBoundingClientRect().top);
