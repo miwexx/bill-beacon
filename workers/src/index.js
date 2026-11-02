@@ -2622,6 +2622,47 @@ if (
   return outcomes;
 }
 
+async function persistUserReminderDiagnostic(env, uid, result, checkedAt) {
+  // Diagnostic records only: never use this for notification delivery markers.
+  const key = `notification-run:${uid}`;
+  const date = checkedAt instanceof Date ? checkedAt : new Date(checkedAt);
+  const now = Number.isFinite(date.getTime()) ? date.getTime() : Date.now();
+  const evaluation = {...result, checkedAt:new Date(now).toISOString()};
+  const configured = Number(env.NOTIFICATION_DIAGNOSTIC_MINUTES);
+  const interval = (Number.isFinite(configured) && configured > 0
+    ? Math.max(15, Math.min(1440, configured)) : 60) * 60 * 1000;
+  try {
+    const previous = await env.NOTIFICATIONSKV.get(key, 'json');
+    const sameHousehold = previous?.householdId === result.householdId;
+    const last = Date.parse(previous?.checkedAt || '');
+    const fields = ['status','eligible','sent','skipped','noSubscriptions','removed','failures','reviewRequired'];
+    const significant = Number(result.eligible || 0) > 0 || Number(result.sent || 0) > 0 ||
+      Number(result.failures || 0) > 0 || Number(result.removed || 0) > 0 || Number(result.reviewRequired || 0) > 0;
+    const fingerprint = significant ? JSON.stringify([
+      evaluation.checkedAt.slice(0,10), result.householdId || null,
+      ...fields.map(field => result[field] ?? null)
+    ]) : null;
+    const newOutcome = significant && (!sameHousehold || previous?.diagnosticOutcomeFingerprint !== fingerprint);
+    const due = !sameHousehold || !Number.isFinite(last) || now < last || now-last >= interval;
+    if (!due && !newOutcome) return false;
+
+    const priorOutcome = sameHousehold ? previous?.lastEligibleOutcome || null : null;
+    const payload = {
+      ...evaluation,
+      lastEligibleOutcome: result.status === 'processed' && Number(result.eligible || 0) > 0
+        ? evaluation : priorOutcome,
+      diagnosticOutcomeFingerprint: fingerprint || (sameHousehold ? previous?.diagnosticOutcomeFingerprint || null : null),
+      diagnosticIntervalMinutes: interval / 60000
+    };
+    await env.NOTIFICATIONSKV.put(key, JSON.stringify(payload), {expirationTtl:60*60*24*7});
+    return true;
+  } catch (error) {
+    console.warn('Could not persist reminder diagnostic; delivery state was not changed.', {
+      message:String(error?.message || error).slice(0,300)
+    });
+    return false;
+  }
+}
 
 async function runScheduledBillReminders(env) {
   const startedAt = new Date();
@@ -2660,21 +2701,7 @@ async function runScheduledBillReminders(env) {
           accessToken,
           startedAt
         );
-          // Preserve the latest evaluation and the last eligible outcome.
-        try {
-          const diagnosticKey = `notification-run:${uid}`;
-          const previousDiagnostic = await env.NOTIFICATIONSKV.get(diagnosticKey, "json");
-          const evaluation = {...result, checkedAt: startedAt.toISOString()};
-          const priorOutcome = previousDiagnostic?.householdId === result.householdId
-            ? previousDiagnostic.lastEligibleOutcome || null : null;
-          await env.NOTIFICATIONSKV.put(diagnosticKey, JSON.stringify({
-            ...evaluation,
-            lastEligibleOutcome: result.status === "processed" && result.eligible > 0
-              ? evaluation : priorOutcome
-          }), {expirationTtl: 60 * 60 * 24 * 7});
-        } catch (error) {
-          console.warn("Could not save notification diagnostic.", {uid,message:error.message});
-        }
+        await persistUserReminderDiagnostic(env, uid, result, startedAt);
         if (result.status === "no-household") {
           summary.noHouseholdUsers += 1;
           continue;
@@ -2712,6 +2739,7 @@ async function runScheduledBillReminders(env) {
   }
 }
 // Plaid Production: private connection and transaction storage.
+
 function plaidConnectionKey(uid) {
   return `plaid:production:user:${uid}`;
 }
@@ -4616,7 +4644,13 @@ async function runScheduledBankPayments(env, options = {}) {
     return summary;
   } finally {
     summary.finishedAt = new Date().toISOString();
-    await env.NOTIFICATIONSKV.put("system:last-bank-run", JSON.stringify(summary));
+    try {
+      await env.NOTIFICATIONSKV.put("system:last-bank-run", JSON.stringify(summary));
+    } catch (error) {
+      console.warn("Bank diagnostic status was not saved; inspect logs for the processing outcome.", {
+        message:String(error?.message || error).slice(0,300)
+      });
+    }
   }
 }
 function bankBillHistoryEligibility(bill, transaction, timeZone) {
@@ -6126,27 +6160,20 @@ const exchanged = await plaidRequest(
     return json({ error: "Not found." }, 404, origin);
   },
 
-  async scheduled(event, env, ctx) {
-  if (event.cron === "1-59/5 * * * *") {
-    ctx.waitUntil(runScheduledBankPayments(env, {continuationOnly: true}));
-    return;
-  }
-  if (event.cron === "0 0,12 * * *") {
-    ctx.waitUntil(runScheduledBankPayments(env));
-    return;
+ async scheduled(event, env, ctx) {
+    // Retired continuation trigger is ignored, even if an old dashboard trigger remains briefly.
+    if (event.cron === "1-59/5 * * * *") return;
+    if (event.cron === "0 0,12 * * *") {
+      ctx.waitUntil(runScheduledBankPayments(env));
+      return;
+    }
+    if (event.cron === "*/5 * * * *") {
+      ctx.waitUntil(runScheduledBillReminders(env));
+      return;
+    }
+    console.warn("Unrecognized scheduled trigger:", event.cron);
   }
 
-  if (event.cron === "*/5 * * * *") {
-    ctx.waitUntil(runScheduledBillReminders(env));
-    return;
-  }
-
-  console.warn(
-    "Unrecognized scheduled trigger:",
-    event.cron
-  );
-}
-};
 const BC_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 const BC_PATHS = new Set([
   "/household-codes",
@@ -7492,8 +7519,11 @@ export default {
       ctx
     );
   },
-  scheduled(event, env, ctx) {
-    if (!["0 0,12 * * *", "1-59/5 * * * *"].includes(event.cron)) return workerHandlers.scheduled(event, env, ctx);
-    return bankRequestScope.run({calls: 0, limit: 45}, () => workerHandlers.scheduled(event, env, ctx));
+    scheduled(event, env, ctx) {
+    if (event.cron === "1-59/5 * * * *") return;
+    if (event.cron === "0 0,12 * * *") {
+      return bankRequestScope.run({calls:0, limit:45}, () => workerHandlers.scheduled(event, env, ctx));
+    }
+    return workerHandlers.scheduled(event, env, ctx);
   }
 };
