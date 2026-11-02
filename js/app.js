@@ -8879,7 +8879,7 @@ function renderPaymentPlans() {
         <div><div style="font-size:var(--text-sm);color:var(--text-muted);">Remaining Balance</div><div style="margin-top:4px;font-size:var(--text-xs);color:var(--text-muted);">${active.length} Active ${active.length===1?'Plan':'Plans'}</div></div>
         <div style="font-size:clamp(26px,7vw,34px);font-weight:850;overflow-wrap:anywhere;">${formatCurrency(total)}</div>
       </div>
-     
+      <div style="margin-top:6px;color:var(--text-muted);font-size:var(--text-xs);">All Remaining Payments, Not Just This Month</div>
     </section>
     <section class="bb-plan-list-section" aria-labelledby="bbActivePlansTitle">
       <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
@@ -8892,6 +8892,68 @@ function renderPaymentPlans() {
     </section>
   </div>`;
 }
+function bbCapturePlanReturn(planId) {
+  const root=document.getElementById('paymentPlanDetailsContainer');
+  return {planId,route:currentRoute,params:JSON.parse(JSON.stringify(routeParams || {})),session:bbLFSession(),
+    detailScroll:root?.querySelector('.sheet-body')?.scrollTop || 0,
+    completed:root?._bbCompletedBack || null,
+    listScroll:document.querySelector('#bbPlansViewport .bb-plan-list-scroll')?.scrollTop || 0,
+    mainScroll:document.querySelector('#app .main-content')?.scrollTop || 0,windowScroll:window.scrollY};
+}
+function bbRestorePlanReturn(saved, navigateBack=false) {
+  if(!saved || saved.session!==bbLFSession())return;
+  if(navigateBack)navigate(saved.route,JSON.parse(JSON.stringify(saved.params || {})));
+  if(currentRoute!==saved.route)return;
+  const restore=()=>{
+    if(saved.session!==bbLFSession() || currentRoute!==saved.route)return;
+    const list=document.querySelector('#bbPlansViewport .bb-plan-list-scroll');if(list)list.scrollTop=saved.listScroll;
+    const main=document.querySelector('#app .main-content');if(main)main.scrollTop=saved.mainScroll;
+    window.scrollTo(0,saved.windowScroll || 0);
+  };
+  restore();requestAnimationFrame(()=>{restore();requestAnimationFrame(restore);});
+  if(!Store.getBills().some(bill=>String(bill.installmentPlanId)===String(saved.planId)))return;
+  openPaymentPlanDetails(saved.planId);
+  const root=document.getElementById('paymentPlanDetailsContainer');
+  if(root){root._bbCompletedBack=saved.completed;const body=root.querySelector('.sheet-body');if(body)body.scrollTop=saved.detailScroll;}
+}
+function bbReturnToPlanDetails() {
+  bbRestorePlanReturn(routeParams.bbPlanBack,true);
+}
+function bbOpenCompletedPlan(planId) {
+  const completed={scroll:document.querySelector('#completed-plans-history .bb-completed-scroll')?.scrollTop || 0,
+    session:bbLFSession(),route:currentRoute};
+  closeCompletedPlansHistory();
+  openPaymentPlanDetails(planId);
+  const root=document.getElementById('paymentPlanDetailsContainer');if(root)root._bbCompletedBack=completed;
+}
+function closePlanDetailsToParent() {
+  const root=document.getElementById('paymentPlanDetailsContainer');
+  const completed=root?._bbCompletedBack;
+  closePaymentPlanDetails();
+  if(completed && completed.session===bbLFSession() && completed.route===currentRoute) {
+    openCompletedPlansHistory();
+    const list=document.querySelector('#completed-plans-history .bb-completed-scroll');if(list)list.scrollTop=completed.scroll;
+  }
+}
+function bbOpenPlanActions(planId) {
+  const saved=bbCapturePlanReturn(planId);
+  closePaymentPlanDetails();openPaymentPlanActions(planId);
+  const root=document.getElementById('paymentPlanActionsContainer');if(!root)return;
+  root._bbPlanReturn=saved;
+  for(const button of root.querySelectorAll('button')) {
+    if((button.getAttribute('onclick') || '').trim()==='closePaymentPlanActions()') {
+      button.setAttribute('onclick','closePlanActionsToDetails()');
+      button.setAttribute('aria-label','Back To Plan Details');
+      button.innerHTML=svgIcon('chevronLeft',22);
+    }
+  }
+  const shade=root.querySelector('#paymentPlanActionsOverlay');if(shade)shade.setAttribute('onclick','closePlanActionsToDetails()');
+}
+function closePlanActionsToDetails() {
+  const saved=document.getElementById('paymentPlanActionsContainer')?._bbPlanReturn;
+  closePaymentPlanActions();bbRestorePlanReturn(saved);
+}
+
 function showMoreActivePaymentPlans() {
   const extraPlans = document.getElementById("extra-active-payment-plans");
   const toggleButton = document.getElementById("toggle-active-payment-plans");
@@ -9265,7 +9327,7 @@ function openCompletedPlansHistory() {
   const plans = getCompletedPaymentPlans();
   const rows = plans.map(plan => {
     const title = plan.storeName || plan.provider;
-    return `<button type="button" class="bb-completed-row" onclick="closeCompletedPlansHistory();openPaymentPlanDetails('${escapeInlineString(plan.id)}');" aria-label="View ${escapeHtml(title)} Completed Plan">
+    return `<button type="button" class="bb-completed-row" onclick="bbOpenCompletedPlan('${escapeInlineString(plan.id)}');" aria-label="View ${escapeHtml(title)} Completed Plan">
       <span style="display:flex;gap:12px;align-items:center;">${paymentPlanVisual(plan.provider,38)}
         <span style="min-width:0;flex:1;"><span style="display:block;font-weight:800;overflow-wrap:anywhere;">${escapeHtml(title)}</span><span style="display:block;margin-top:4px;font-size:var(--text-sm);color:var(--text-muted);">${escapeHtml(plan.provider)} · Paid In Full</span></span>
         <span style="text-align:right;flex-shrink:0;font-weight:800;">${formatCurrency(plan.totalAmount)}<span style="display:block;margin-top:4px;font-size:var(--text-xs);color:var(--paid);">Paid ✓</span></span></span>
@@ -9368,6 +9430,8 @@ function closePaymentPlanDetails() {
   unlockInstallmentPopupScrollIfClosed();
 }
 function openPaymentPlanDetails(planId) {
+  const bbExisting=document.getElementById('paymentPlanDetailsContainer');
+  const bbCompletedOrigin=bbExisting && String(bbExisting.dataset.planId)===String(planId) ? bbExisting._bbCompletedBack : null;
   const bills = Store.getBills().filter(bill => bill.installmentPlanId === planId)
     .sort((a,b) => new Date(a.dueDate)-new Date(b.dueDate));
   if (!bills.length) { alert("Payment plan not found."); return; }
@@ -9395,6 +9459,7 @@ function openPaymentPlanDetails(planId) {
   const container = document.createElement("div");
   container.id = "paymentPlanDetailsContainer";
   container.dataset.planId = String(planId);
+  container._bbCompletedBack=bbCompletedOrigin;
   container.innerHTML = `<style>
     #paymentPlanDetailsSheet .bb-plan-compact-progress>div{margin-top:6px!important;}
     #paymentPlanDetailsSheet{width:min(100%,560px);max-width:100%;box-sizing:border-box;margin-inline:auto;}
@@ -9404,12 +9469,12 @@ function openPaymentPlanDetails(planId) {
     #paymentPlanDetailsSheet .bb-plan-action{grid-column:1/-1;display:flex;justify-content:flex-end;}
     @media(min-width:430px){#paymentPlanDetailsSheet .bb-plan-row{grid-template-columns:minmax(0,1fr) auto auto;}#paymentPlanDetailsSheet .bb-plan-action{grid-column:auto;}}
     </style>
-    <div class="sheet-overlay" id="paymentPlanDetailsOverlay" onclick="closePaymentPlanDetails()"></div>
+    <div class="sheet-overlay" id="paymentPlanDetailsOverlay" onclick="closePlanDetailsToParent()"></div>
     <section class="sheet" id="paymentPlanDetailsSheet" role="dialog" aria-modal="true" aria-labelledby="bbPlanDetailsTitle">
       <div class="sheet-handle"></div><div class="sheet-nav">
-        <button type="button" class="nav-button" onclick="closePaymentPlanDetails()" aria-label="Close plan details">${svgIcon("close",22)}</button>
+        <button type="button" class="nav-button" onclick="closePlanDetailsToParent()" aria-label="Close plan details">${svgIcon("close",22)}</button>
         <div class="sheet-title" id="bbPlanDetailsTitle">Plan Details</div>
-        <span aria-hidden="true" style="width:44px;"></span>
+        <button type="button" class="nav-button" onclick="bbOpenPlanActions('${plan}')" aria-label="Plan Actions">${svgIcon('moreVertical',22)}</button>
       </div>
       <div class="sheet-body content-gap">
         <div class="card" style="padding:14px!important;">
@@ -9428,7 +9493,7 @@ function openPaymentPlanDetails(planId) {
           <button type="button" class="btn-secondary" style="width:100%;min-height:44px;margin:8px 0 0!important;padding:9px 12px!important;white-space:normal;" onclick="payPaymentPlanInFull('${plan}')">Pay In Full · ${formatCurrency(remaining)}</button>`
           : `<div style="margin-top:12px;color:var(--paid);font-size:var(--text-sm);font-weight:750;">${svgIcon("checkCircle",18)} This Plan Is Complete.</div>`}
           <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;">
-            ${next ? `<button type="button" class="btn-secondary" style="flex:1 1 120px;min-height:44px;margin:0!important;padding:9px!important;" onclick="openExistingPaymentPlanEditor('${plan}')">Edit Payment</button>` : ''}
+            
             <button type="button" class="btn-danger" style="flex:1 1 120px;min-height:44px;margin:0!important;padding:9px!important;" onclick="confirmDeletePaymentPlan('${plan}')">Delete Plan</button>
           </div>
         </div>
@@ -9518,11 +9583,14 @@ async function bbPlanRecordInstallment(planId, billId, button) {
   finally { container.dataset.saving = "false"; buttons.forEach(item => item.disabled = false); }
 }
 function bbPlanOpenPaymentDetails(planId, billId) {
-  const bill = Store.getBill(billId);
-  if (!bill || bill.installmentPlanId !== planId) { alert("This payment is no longer available."); return; }
+  const bill=Store.getBill(billId);
+  if(!bill || String(bill.installmentPlanId)!==String(planId)){alert('This Payment Is No Longer Available.');return;}
+  const saved=bbCapturePlanReturn(planId);
   closePaymentPlanDetails();
-  navigate("detail",{id:bill.id,occurrenceDueDate:bill.dueDate,returnRoute:currentRoute,returnParams:{...routeParams}});
+  navigate('detail',{id:bill.id,occurrenceDueDate:bill.dueDate,returnRoute:saved.route,
+    returnParams:JSON.parse(JSON.stringify(saved.params)),bbPlanBack:saved});
 }
+
 function openPaymentPlanActions(planId) {
   const installments = Store.getBills()
     .filter((bill) => bill.installmentPlanId === planId)
@@ -9651,7 +9719,7 @@ function openPaymentPlanActions(planId) {
                 onclick="payPaymentPlanInFull('${escapeInlineString(planId)}')"
               >
                 ${svgIcon("checkCircle", 20)}
-                Pay in Full
+                Pay In Full
               </button>
             `
             : ""
@@ -9673,7 +9741,7 @@ function openPaymentPlanActions(planId) {
           onclick="openExistingPaymentPlanEditor('${escapeInlineString(planId)}')"
         >
           ${svgIcon("gear", 20)}
-          Edit Next Payment
+          Edit Payment
         </button>
 
         
@@ -9694,6 +9762,7 @@ function openPaymentPlanActions(planId) {
       ?.classList.add("show");
   });
 }
+
 function confirmDeletePaymentPlan(planId) {
   const installments = Store.getBills()
     .filter((bill) => bill.installmentPlanId === planId)
@@ -11939,14 +12008,18 @@ if (
     typeof routeParams.returnParams === "object" &&
     !Array.isArray(routeParams.returnParams);
 
-  const backAction = routeParams.returnToNotificationPopup
+  const backAction = routeParams.bbPlanBack && bill.installmentPlanId
+  ? "bbReturnToPlanDetails()"
+  : routeParams.returnToNotificationPopup
     ? "returnToNotificationCenter()"
     : `navigate(
         '${escapeInlineString(destination)}',
         ${savedReturnParams ? "getBillDetailReturnParams()" : "{}"}
       )`;
 
-  const backLabel = routeParams.returnToNotificationPopup
+  const backLabel = routeParams.bbPlanBack && bill.installmentPlanId
+  ? "Plan Details"
+  : routeParams.returnToNotificationPopup
     ? "Notifications"
     : destination === "today"
       ? "Dashboard"
@@ -11968,7 +12041,7 @@ if (
           ${backLabel}
         </button>
 
-        <button
+        ${bill.installmentPlanId ? `<span aria-hidden="true" style="width:44px;"></span>` : `<button
           type="button"
           class="nav-button"
           ${
@@ -11981,7 +12054,7 @@ if (
           style="color:var(--text);"
         >
           ${archived ? "Archived" : "Edit"}
-        </button>
+        </button>`}
       </div>
     </div>
 
@@ -12115,11 +12188,15 @@ const backParams = routeParams.returnParams &&
     : backRoute === "recurring" && isCalendarOccurrence
       ? `{ month: '${escapeInlineString(detailBill.dueDate)}' }`
       : '{}';
-const backAction = routeParams.returnToNotificationPopup
+const backAction = routeParams.bbPlanBack && bill.installmentPlanId
+  ? "bbReturnToPlanDetails()"
+  : routeParams.returnToNotificationPopup
   ? "returnToNotificationCenter()"
   : `navigate('${escapeInlineString(backRoute)}', ${backParams})`;
 
-const backLabel = routeParams.returnToNotificationPopup
+const backLabel = routeParams.bbPlanBack && bill.installmentPlanId
+  ? "Plan Details"
+  : routeParams.returnToNotificationPopup
   ? "Notifications"
   : backRoute === 'today'
     ? 'Dashboard'
@@ -12200,14 +12277,14 @@ const postponeAction = isRecurring
   ${backLabel}
 </button>
 
-        <button
+        ${bill.installmentPlanId ? `<span aria-hidden="true" style="width:44px;"></span>` : `<button
   type="button"
   class="nav-button"
   ${isArchivedHistory ? 'disabled' : `onclick="openBillForm('${escapeInlineString(sourceBillId)}')"`}
   style="color:var(--text);"
 >
   ${isArchivedHistory ? "Archived" : "Edit"}
-</button>
+</button>`}
       </div>
     </div>
 
@@ -12367,6 +12444,7 @@ const postponeAction = isRecurring
     </div>
   `;
 }
+
 
 function detailRow(label, value) {
   return `
@@ -20203,7 +20281,7 @@ window.addEventListener("storage", () => {
       visible(button) &&
       !button.disabled &&
       !button.classList.contains("dashboard-icon-button") &&
-      /^\s*(?:navigate|returnToNotificationCenter)\s*\(/.test(
+      /^\s*(?:navigate|returnToNotificationCenter|bbReturnToPlanDetails)\s*\(/.test(
         button.getAttribute("onclick") || ""
       )
     ) || null;
@@ -20229,8 +20307,17 @@ window.addEventListener("storage", () => {
     .sort((a, b) => a.z - b.z || a.index - b.index)
     .map((item) => item.node);
 }
-  function dismissContext(target = null) {
+   function dismissContext(target = null) {
     if (document.getElementById("moveOccurrencePaycheckDialog")?.open) return null;
+    const planDialogs=[...document.querySelectorAll('#bbCompletedPlansDialog[open],#bbPlanEditPicker[open],#bbLeftoverFundingDialog[open]')].filter(visible);
+    if(planDialogs.length) {
+      const root=planDialogs[planDialogs.length-1];
+      const isPlan=root.id!=='bbLeftoverFundingDialog' || Boolean(document.getElementById('paymentPlanDetailsContainer') || document.getElementById('paymentPlanActionsContainer'));
+      if(isPlan) {
+        const back=root.querySelector('[data-cancel]') || [...root.querySelectorAll('button')].find(isCloseControl);
+        return back && !back.disabled ? {mode:'popup',root,back,sheets:[root]} : null;
+      }
+    }
     const sheets = popupSheets();
     if (sheets.length) {
       const root = sheets[sheets.length-1];
@@ -20270,7 +20357,8 @@ window.addEventListener("storage", () => {
   }
   const allowed = () => ENABLED && Boolean(dismissContext(gesture?.context?.root));
 
-  function cleanup() {
+ function cleanup() {
+    if(plansLiveCleanup)plansLiveCleanup();
     clearTimeout(timer);
     timer = null;
     gestureTarget?.removeEventListener("touchend", handleDragEnd);
@@ -20502,7 +20590,8 @@ window.addEventListener("storage", () => {
     if (snap.css) {const style=document.createElement("style");style.textContent=snap.css;pane.appendChild(style);}
     pane.appendChild(snap.copy.cloneNode(true));
   }
-  function createModalPreview(state) {
+ function createModalPreview(state) {
+    if(isPlansSwipeState(state)){createPlansLivePreview(state);return;}
     const base=snapshot();
     if (!base) return;
     base.windowScroll=Math.max(0,-document.getElementById("app").getBoundingClientRect().top);
@@ -20613,7 +20702,8 @@ if (dock) {
   };
   window.closeNotificationCenter=closeNotificationCenter;
 
-  function createPreview(state) {
+ function createPreview(state) {
+    if(isPlansSwipeState(state)){createPlansLivePreview(state);return;}
     if (state.context.mode !== "page") {
       createModalPreview(state);
       return;
@@ -20732,7 +20822,7 @@ if (dock) {
     };
   }
 
-  function finish(state, goBack) {
+function finish(state, goBack) {
     if (settling) return;
 
     settling = true;
@@ -20743,8 +20833,7 @@ if (dock) {
       if (
   goBack &&
   valid &&
-  state.pane?.isConnected &&
-  overlay?.isConnected
+  ((state.pane?.isConnected && overlay?.isConnected) || isPlansSwipeState(state))
 ) {
         if (state.context.mode !== "page") {
           try {state.back.click();} catch(error) {cleanup();throw error;}
@@ -20752,6 +20841,7 @@ if (dock) {
           const waitForClose=()=>{
             if (!settling || !overlay) return;
             if (!state.context.root.isConnected ||
+                (state.context.root.tagName==='DIALOG' && !state.context.root.open) ||
                 getComputedStyle(state.context.root).display === "none" ||
                 performance.now()-started>800) {cleanup();return;}
             timer=setTimeout(waitForClose,16);
@@ -20967,7 +21057,7 @@ if (event.cancelable) event.preventDefault();
     { capture: true, passive: false }
   );
 
-  function handleDragEnd(event) {
+function handleDragEnd(event) {
       if (!gesture || settling) return;
 
       const state = gesture;
@@ -21024,7 +21114,7 @@ const reversing = velocityX < -0.15;
 let goBack = Boolean(
   touch &&
   state.armed &&
-  state.pane?.isConnected &&
+  (state.pane?.isConnected || isPlansSwipeState(state)) &&
   dx > 6 &&
   dx > dy &&
   !reversing &&
@@ -21036,7 +21126,6 @@ let goBack = Boolean(
       finish(state, goBack);
 
   }
-
   document.addEventListener("touchend", handleDragEnd, {
     capture: true,
     passive: false
@@ -21109,6 +21198,43 @@ const viewObserver = new MutationObserver(() => {
     cleanup();previous=null;pageSnapshots.clear();notificationPreview=null;
   });
   
- 
+  // Plans-only live swipe: no cloned background or changes to other page previews.
+  let plansLiveCleanup=null;
+  function isPlansSwipeState(state) {
+    const id=state?.context?.root?.id;
+    return ['paymentPlanDetailsSheet','paymentPlanActionsSheet','bbCompletedPlansDialog','bbPlanEditPicker'].includes(id) ||
+      (id==='bbLeftoverFundingDialog' && Boolean(document.getElementById('paymentPlanDetailsContainer') || document.getElementById('paymentPlanActionsContainer'))) ||
+      (state?.context?.mode==='page' && currentRoute==='detail' && Boolean(routeParams.bbPlanBack));
+  }
+  function createPlansLivePreview(state) {
+    const root=state.context.root;
+    const layer=document.createElement('div');
+    layer.setAttribute('data-bb-drag-preview','');layer.setAttribute('aria-hidden','true');layer.inert=true;
+    layer.style.cssText='position:fixed;inset:0;pointer-events:none;background:transparent;';
+    overlay=layer;document.body.appendChild(layer);
+    const properties=['translate','transform','transition'];
+    const before=Object.fromEntries(properties.map(key=>[key,{value:root.style.getPropertyValue(key),priority:root.style.getPropertyPriority(key)}]));
+    const shade=root.parentElement?.querySelector('.sheet-overlay');
+    const shadeBefore=shade?{opacity:shade.style.getPropertyValue('opacity'),opacityPriority:shade.style.getPropertyPriority('opacity'),transition:shade.style.getPropertyValue('transition'),transitionPriority:shade.style.getPropertyPriority('transition')}:null;
+    const popup=state.context.mode!=='page';
+    const canTranslate=typeof CSS!=='undefined' && CSS.supports('translate','1px 0px');
+    const computedTransform=getComputedStyle(root).transform;
+    const restore=(node,key,value,priority)=>{if(value)node.style.setProperty(key,value,priority);else node.style.removeProperty(key);};
+    plansLiveCleanup=()=>{
+      for(const [key,item]of Object.entries(before))restore(root,key,item.value,item.priority);
+      if(shadeBefore){restore(shade,'opacity',shadeBefore.opacity,shadeBefore.opacityPriority);restore(shade,'transition',shadeBefore.transition,shadeBefore.transitionPriority);}
+      plansLiveCleanup=null;
+    };
+    const style={setProperty(key,value){
+      if(key==='transition' && popup)root.style.setProperty('transition',canTranslate?value.replace(/transform/g,'translate'):value,'important');
+    }};
+    Object.defineProperty(style,'transform',{set(value){
+      if(!popup)return; // This one payment-detail page uses Back without a cloned page reveal.
+      if(canTranslate)root.style.setProperty('translate',value.replace(/^translateX\((.*)\)$/,'$1 0px'),'important');
+      else root.style.setProperty('transform',`${computedTransform==='none'?'':computedTransform} ${value}`,'important');
+    }});
+    state.pane={style,get isConnected(){return root.isConnected;}};
+    if(popup && shade)state.dim=shade;
+  }
 })();
 // END BILL BEACON DRAG-BACK
