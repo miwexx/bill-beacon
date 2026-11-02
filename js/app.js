@@ -2261,19 +2261,57 @@ function bankMatchIsEligibleBill(bill) {
       ["archived", "cancelled", "canceled", "paid-in-full", "paidinfull"].includes(status)) return false;
   return !getUnlinkedPaymentsForBill(getBillPaymentId(bill), true).length;
 }
+const bbOccurrenceBasePaymentReader = Store.getPaymentsForBill;
+const bbOccurrenceBasePaymentListReader = Store.getPayments;
+let bbOccurrencePaymentCache = null;
+function bbGetOccurrencePaymentIndex() {
+  const raw = localStorage.getItem('payments');
+  const reader = Store.getPayments;
+  const active = isFinancialPaymentActive;
+  const dateKey = getPaymentOccurrenceDateKey;
+  const timezoneOffset = new Date().getTimezoneOffset();
+  if (bbOccurrencePaymentCache && bbOccurrencePaymentCache.raw === raw &&
+      bbOccurrencePaymentCache.reader === reader && bbOccurrencePaymentCache.active === active &&
+      bbOccurrencePaymentCache.dateKey === dateKey && bbOccurrencePaymentCache.timezoneOffset === timezoneOffset) return bbOccurrencePaymentCache.index;
+
+  const payments = Store.getPayments();
+  if (!Array.isArray(payments)) throw new Error('Saved Payments Must Be An Array.');
+  const groups = new Map();
+  for (const payment of payments) {
+    if (!groups.has(payment.billId)) groups.set(payment.billId, []);
+    groups.get(payment.billId).push(payment);
+  }
+  const index = new Map();
+  for (const [billId, items] of groups) {
+    // Preserve the exact per-bill ordering used by Store.getPaymentsForBill().
+    items.sort((a,b) => new Date(b.paidDate) - new Date(a.paidDate));
+    for (const payment of items) {
+      if (!active(payment)) continue;
+      const due = dateKey(payment);
+      if (!due) continue;
+      const key = JSON.stringify([billId, due]);
+      if (!index.has(key)) index.set(key, payment);
+    }
+  }
+  bbOccurrencePaymentCache = {raw, reader, active, dateKey, timezoneOffset, index};
+  return index;
+}
+
 function getActivePaymentForOccurrence(bill, referenceDate = new Date()) {
   const billId = getBillPaymentId(bill);
-  const dueDateKey = financialDateKey(
-    getBillOccurrenceDueDate(bill, referenceDate)
-  );
+  const dueDateKey = financialDateKey(getBillOccurrenceDueDate(bill, referenceDate));
   if (!billId || !dueDateKey) return null;
-
-  // Store.getPaymentsForBill already returns newest-paid-date first.
-  return Store.getPaymentsForBill(billId).find(payment =>
-    isFinancialPaymentActive(payment) &&
-    getPaymentOccurrenceDateKey(payment) === dueDateKey
-  ) || null;
+  // Respect modules that replace Store readers with additional filtering behavior.
+  if (Store.getPaymentsForBill !== bbOccurrenceBasePaymentReader || Store.getPayments !== bbOccurrenceBasePaymentListReader) {
+    return Store.getPaymentsForBill(billId).find(payment =>
+      isFinancialPaymentActive(payment) && getPaymentOccurrenceDateKey(payment) === dueDateKey
+    ) || null;
+  }
+  const payment = bbGetOccurrencePaymentIndex().get(JSON.stringify([billId,dueDateKey]));
+  // Preserve the original fresh-object behavior; callers cannot mutate the cache.
+  return payment ? JSON.parse(JSON.stringify(payment)) : null;
 }
+
 
 function isOccurrencePaid(bill, referenceDate = new Date()) {
   return Boolean(getActivePaymentForOccurrence(bill, referenceDate));
@@ -20424,7 +20462,9 @@ function snapshot() {
   navigate = function(route, params = {}) {
     cleanup();
     let captured = null;
-    if (ENABLED && route !== currentRoute) {
+    const rootTabs = ["today", "recurring", "calendar", "bills", "more"];
+    const rootTabSwitch = rootTabs.includes(currentRoute) && rootTabs.includes(route);
+    if (ENABLED && route !== currentRoute && !rootTabSwitch) {
       try { captured = snapshot(); }
       catch (error) { console.warn("Back preview skipped", error); }
     }
@@ -20710,6 +20750,8 @@ function finish(state, goBack) {
           const waitForClose=()=>{
             if (!settling || !overlay) return;
             if (!state.context.root.isConnected ||
+                !state.back.isConnected ||
+                renderPending ||
                 (state.context.root.tagName==='DIALOG' && !state.context.root.open) ||
                 getComputedStyle(state.context.root).display === "none" ||
                 performance.now()-started>800) {cleanup();return;}
@@ -20765,7 +20807,6 @@ function finish(state, goBack) {
     }
     timer = setTimeout(complete, 190);
   }
-
   document.addEventListener(
     "touchstart",
     event => {

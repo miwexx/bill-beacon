@@ -19,7 +19,31 @@ const DEFAULT_TIME_ZONE = "America/New_York";
 const REMINDER_PREFIX = "reminders:";
 const SUBSCRIPTION_PREFIX = "subscriptions:";
 const CRON_STATUS_KEY = "system:last-cron-run";
-
+async function persistCronStatusBudgeted(env, summary) {
+  // Operational status only. Never use this helper for delivery markers or financial data.
+  const minutes = Number(env.CRON_STATUS_PERSIST_MINUTES);
+  const interval = (Number.isFinite(minutes) && minutes > 0
+    ? Math.max(15, Math.min(1440, minutes)) : 60) * 60 * 1000;
+  const now = Date.now();
+  console.info('bill-beacon:cron-run', {
+    startedAt: summary.startedAt || null,
+    finishedAt: summary.finishedAt || null,
+    source: summary.source || null
+  });
+  try {
+    const previous = await env.NOTIFICATIONSKV.get(CRON_STATUS_KEY, 'json');
+    const last = Date.parse(previous?.finishedAt || '');
+    if (Number.isFinite(last) && now >= last && now - last < interval) return false;
+    await env.NOTIFICATIONSKV.put(CRON_STATUS_KEY, JSON.stringify(summary));
+    return true;
+  } catch (error) {
+    // A diagnostic status-write failure must not mask the reminder job's original outcome.
+    console.warn('bill-beacon:cron-status-not-persisted', {
+      message: String(error?.message || error).slice(0, 300)
+    });
+    return false;
+  }
+}
 const firebaseKeys = createRemoteJWKSet(
   new URL(
     "https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com"
@@ -2684,10 +2708,7 @@ async function runScheduledBillReminders(env) {
   } finally {
     summary.finishedAt = new Date().toISOString();
 
-    await env.NOTIFICATIONSKV.put(
-      CRON_STATUS_KEY,
-      JSON.stringify(summary)
-    );
+   await persistCronStatusBudgeted(env, summary);
   }
 }
 // Plaid Production: private connection and transaction storage.
