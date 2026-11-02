@@ -6308,6 +6308,13 @@ function renderToday() {
       <div class="content-pad dashboard-content">
         ${renderLegacyPaymentReviewNotice()}
 
+        <style>
+          .bb-dashboard-combined{padding:16px!important;overflow:hidden;}
+          .bb-dashboard-combined>.dashboard-month-card{padding:0 0 14px!important;margin:0!important;border:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;}
+          .bb-dashboard-combined>.bb-dashboard-paycheck{border-top:1px solid var(--border);padding-top:14px;min-width:0;}
+          .bb-dashboard-combined>.bb-dashboard-paycheck>.card{padding:0!important;margin:0!important;border:0!important;box-shadow:none!important;background:transparent!important;}
+        </style>
+        <div class="card bb-dashboard-combined" aria-label="Monthly Summary And Paycheck Plan">
         <section
           class="dashboard-month-card"
           style="
@@ -6442,7 +6449,10 @@ function renderToday() {
           ${renderDashboardSeparatedStatus(reportMonth, summary)}
           ${renderDashboardReportResetAction()}
         </section>
+        <div class="bb-dashboard-paycheck" aria-label="Paycheck Plan">
           ${renderDashboardPaycheckPlan()}
+        </div>
+        </div>
         <div class="dashboard-section-title-row">
           <div class="section-header dashboard-section-header">
             Recent Payments
@@ -20520,7 +20530,9 @@ window.addEventListener("storage", () => {
   const allowed = () => ENABLED && Boolean(dismissContext(gesture?.context?.root));
 
  function cleanup() {
+    gesture?._bbReleaseBlurStyle?.remove();
     if(plansLiveCleanup)plansLiveCleanup();
+
     clearTimeout(timer);
     timer = null;
     gestureTarget?.removeEventListener("touchend", handleDragEnd);
@@ -20839,6 +20851,90 @@ function createPreview(state) {
       main: previous.mainScroll,
       window: previous.windowScroll
     };
+  }
+   function bbReleaseSwipeBlur(state, duration) {
+    const transition=`filter ${duration}ms ease-out`;
+    // Preview builders place the blurred destination directly under the foreground.
+    for(const node of [...(overlay?.children || [])]) {
+      if((node.style.getPropertyValue('filter') || '').includes('blur(')) {
+        node.style.setProperty('transition',transition,'important');
+        node.style.setProperty('filter','blur(0px)','important');
+      }
+    }
+    const shade=state.dim;
+    if(shade) {
+      shade.style.setProperty('transition',`opacity ${duration}ms ease-out, backdrop-filter ${duration}ms ease-out, -webkit-backdrop-filter ${duration}ms ease-out`,'important');
+      shade.style.setProperty('opacity','0','important');
+      shade.style.setProperty('backdrop-filter','blur(0px)','important');
+      shade.style.setProperty('-webkit-backdrop-filter','blur(0px)','important');
+    }
+    if(overlay && (overlay.style.getPropertyValue('backdrop-filter') || '').includes('blur(')) {
+      overlay.style.setProperty('transition',`backdrop-filter ${duration}ms ease-out, -webkit-backdrop-filter ${duration}ms ease-out`,'important');
+      overlay.style.setProperty('backdrop-filter','blur(0px)','important');
+      overlay.style.setProperty('-webkit-backdrop-filter','blur(0px)','important');
+    }
+    const root=state.context.root;
+    if(root.tagName==='DIALOG' && root.id) {
+      const style=document.createElement('style');
+      const id=typeof CSS!=='undefined' && CSS.escape?CSS.escape(root.id):root.id.replace(/[^A-Za-z0-9_-]/g,'');
+      style.textContent=`#${id}::backdrop{transition:backdrop-filter ${duration}ms ease-out,-webkit-backdrop-filter ${duration}ms ease-out!important;backdrop-filter:blur(0px)!important;-webkit-backdrop-filter:blur(0px)!important;}`;
+      state._bbReleaseBlurStyle=style;document.head.appendChild(style);
+    }
+  }
+
+function finish(state, goBack) {
+    if(settling)return;
+    settling=true;
+    const duration=reducedMotion() || !state.pane ? 0 : 120;
+    let finished=false;
+    const onEnd=event=>{
+      if(event.target===state.pane && ['transform','translate'].includes(event.propertyName))complete();
+    };
+    const complete=()=>{
+      if(finished)return;finished=true;
+      state.pane?.removeEventListener?.('transitionend',onEnd);
+      if(gesture!==state || !settling)return;
+      clearTimeout(timer);timer=null;
+      if(!goBack || !contextMatches(state) ||
+          !((state.pane?.isConnected && overlay?.isConnected) || isPlansSwipeState(state))) {cleanup();return;}
+      if(state.context.mode==='page') {
+        const scroll=state.returnScroll;
+        cleanup();state.back.click();
+        if(scroll) {
+          const route=currentRoute;
+          requestAnimationFrame(()=>{
+            if(currentRoute!==route)return;
+            const main=document.querySelector('#app .main-content');if(main)main.scrollTop=scroll.main;
+            window.scrollTo(0,scroll.window);
+          });
+        }
+        return;
+      }
+      const root=state.context.root;
+      const beforeMarkup=root.innerHTML;
+      const wasShown=root.classList.contains('show');
+      // Live popups must not start a second CSS close animation after sliding away.
+      if(state.context.mode==='popup' && plansLiveCleanup)root.style.setProperty('transition','none','important');
+      try{state.back.click();}catch(error){cleanup();throw error;}
+      if(root.isConnected)void getComputedStyle(root).transform;
+      const started=performance.now();
+      const wait=()=>{
+        if(gesture!==state || !settling)return;
+        const changed=!root.isConnected || !state.back.isConnected || renderPending ||
+          (root.tagName==='DIALOG' && !root.open) || getComputedStyle(root).display==='none' ||
+          (wasShown && !root.classList.contains('show')) || root.innerHTML!==beforeMarkup;
+        if(changed || performance.now()-started>=160) {cleanup();return;}
+        timer=setTimeout(wait,16);
+      };
+      wait();
+    };
+    if(goBack)bbReleaseSwipeBlur(state,duration);
+    if(!duration){complete();return;}
+    state.pane?.addEventListener?.('transitionend',onEnd);
+    state.pane.style.setProperty('transition',`transform ${duration}ms ease-out`,'important');
+    state.pane.style.transform=`translateX(${goBack?window.innerWidth:0}px)`;
+    // Live-popup adapters do not expose DOM transition events; timer is also a safety fallback.
+    timer=setTimeout(complete,duration+25);
   }
 function finish(state, goBack) {
     if (settling) return;
