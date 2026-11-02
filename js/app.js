@@ -9600,6 +9600,7 @@ function bbPlanOpenPaymentDetails(planId, billId) {
   const bill=Store.getBill(billId);
   if(!bill || String(bill.installmentPlanId)!==String(planId)){alert('This Payment Is No Longer Available.');return;}
   const saved=bbCapturePlanReturn(planId);
+  saved.swipePreviewKey=window.bbRememberPlanSwipeSource?.(planId) || null;
   closePaymentPlanDetails();
   navigate('detail',{id:bill.id,occurrenceDueDate:bill.dueDate,returnRoute:saved.route,
     returnParams:JSON.parse(JSON.stringify(saved.params)),bbPlanBack:saved});
@@ -20416,113 +20417,9 @@ window.addEventListener("storage", () => {
       });
     }
   }
-
-  function snapshot() {
-  const root = document.getElementById("app");
-  if (!root) return null;
-
-  const copy = root.cloneNode(true);
-  const originals = [root, ...root.querySelectorAll("*")];
-  const copies = [copy, ...copy.querySelectorAll("*")];
-  const rootRect = root.getBoundingClientRect();
-  const mainScroll =
-    root.querySelector(".main-content")?.scrollTop || 0;
-
-  for (let index = 0; index < copies.length; index++) {
-    const node = copies[index];
-    const original = originals[index];
-
-    if (node.id) node.setAttribute("data-bb-copy-id", node.id);
-    if (original.scrollTop) node.setAttribute("data-bb-scroll-top", String(original.scrollTop));
-    if (original.scrollLeft) node.setAttribute("data-bb-scroll-left", String(original.scrollLeft));
-    node.removeAttribute("id");
-
-    for (const attribute of [...node.attributes]) {
-      if (/^on/i.test(attribute.name) ||
-          attribute.name === "autofocus") {
-        node.removeAttribute(attribute.name);
-      }
-    }
-
-    node.style.setProperty("animation", "none", "important");
-
-    const position = getComputedStyle(original).position;
-
-    if (
-      original !== root &&
-      (position === "fixed" || position === "sticky")
-    ) {
-      const rect = original.getBoundingClientRect();
-
-      if (position === "sticky") {
-        const spacer = document.createElement("div");
-
-        spacer.style.cssText =
-          `height:${rect.height}px;` +
-          `min-height:${rect.height}px;` +
-          "flex-shrink:0;pointer-events:none;";
-
-        node.parentNode.insertBefore(spacer, node);
-      }
-
-      for (const [property, value] of Object.entries({
-        position: "absolute",
-        top: `${rect.top - rootRect.top}px`,
-        left: `${rect.left - rootRect.left}px`,
-        right: "auto",
-        bottom: "auto",
-        width: `${rect.width}px`,
-        height: `${rect.height}px`
-      })) {
-        node.style.setProperty(property, value, "important");
-      }
-    }
+function snapshot() {
+    return bbSwipeFrozenCapture(document.getElementById('app'),false);
   }
-    // Do not bring hidden navigation back into a swipe preview.
-  const liveDock = root.querySelector(".tab-bar");
-  const copiedDock = copy.querySelector(".tab-bar");
-
-  if (copiedDock) {
-    const dockStyle = liveDock
-      ? getComputedStyle(liveDock)
-      : null;
-
-    const hideDock =
-      currentRoute === "settings" ||
-      !liveDock ||
-      dockStyle.display === "none" ||
-      dockStyle.visibility === "hidden" ||
-      dockStyle.visibility === "collapse" ||
-      Number(dockStyle.opacity) === 0 ||
-      liveDock.getClientRects().length === 0;
-
-    if (hideDock) {
-      copiedDock.remove();
-    }
-  }
-  copy.querySelectorAll("script,iframe,object,embed")
-    .forEach(node => node.remove());
-
-  copy.inert = true;
-  copy.setAttribute("aria-hidden", "true");
-
-  Object.assign(copy.style, {
-    display: "flex",
-    flexDirection: "column",
-    position: "relative",
-    width: "100%",
-    minHeight: "100dvh",
-    margin: "0",
-    pointerEvents: "none"
-  });
-
-  return {
-    copy,
-    mainScroll,
-    windowScroll: window.scrollY,
-    route: currentRoute
-  };
-}
 
   navigate = function(route, params = {}) {
     cleanup();
@@ -20538,57 +20435,7 @@ window.addEventListener("storage", () => {
   };
 
   function panelSnapshot(root) {
-    const copy=root.cloneNode(true);
-    const originals=[root,...root.querySelectorAll("*")];
-    const copies=[copy,...copy.querySelectorAll("*")];
-    const ids=new Set(originals.map(node=>node.id).filter(Boolean));
-    originals.forEach((original,index)=>{
-      const node=copies[index];
-      if (original.id) node.setAttribute("data-bb-copy-id",original.id);
-      node.removeAttribute("id");
-      for (const attribute of [...node.attributes]) {
-        if (/^on/i.test(attribute.name)||attribute.name==="autofocus") node.removeAttribute(attribute.name);
-      }
-      node.style.setProperty("animation","none","important");
-      if (original.scrollTop) node.setAttribute("data-bb-scroll-top",String(original.scrollTop));
-      if (original.scrollLeft) node.setAttribute("data-bb-scroll-left",String(original.scrollLeft));
-      if (original instanceof HTMLInputElement) {node.value=original.value;node.checked=original.checked;}
-      if (original instanceof HTMLTextAreaElement || original instanceof HTMLSelectElement) node.value=original.value;
-    });
-    copy.querySelectorAll("script,iframe,object,embed").forEach(node=>node.remove());
-    const rect=root.getBoundingClientRect();
-        // Preserve the root layout after its ID is removed from the preview.
-    const rootStyle = getComputedStyle(root);
-
-    for (const property of [
-      "flex-direction",
-      "flex-wrap",
-      "align-items",
-      "justify-content",
-      "gap",
-      "box-sizing",
-      "overflow-x",
-      "overflow-y",
-      "padding-top",
-      "padding-right",
-      "padding-bottom",
-      "padding-left",
-      "border-radius"
-    ]) {
-      copy.style.setProperty(
-        property,
-        rootStyle.getPropertyValue(property),
-        "important"
-      );
-    }
-    for (const [property,value] of Object.entries({position:"absolute",top:`${rect.top}px`,left:`${rect.left}px`,
-      right:"auto",bottom:"auto",width:`${rect.width}px`,height:`${rect.height}px`,maxHeight:"none",minHeight:"0",margin:"0",
-      transform:"none",display:getComputedStyle(root).display,opacity:"1"})) copy.style.setProperty(property,value,"important");
-    copy.inert=true;copy.setAttribute("aria-hidden","true");
-    const styleTexts=[...root.parentElement.querySelectorAll("style")].map(style=>style.textContent);
-    const css=styleTexts.join("\n").replace(/#([A-Za-z_][\w-]*)/g,(match,id)=>
-      ids.has(id)?`[data-bb-copy-id="${id}"]`:match);
-    return {copy,css,mainScroll:0,windowScroll:0,route:currentRoute};
+    return bbSwipeFrozenCapture(root,true);
   }
   function restoreCloneScroll(pane) {
     for (const node of pane.querySelectorAll("[data-bb-scroll-top],[data-bb-scroll-left]")) {
@@ -20604,7 +20451,7 @@ window.addEventListener("storage", () => {
     if (snap.css) {const style=document.createElement("style");style.textContent=snap.css;pane.appendChild(style);}
     pane.appendChild(snap.copy.cloneNode(true));
   }
- function createModalPreview(state) {
+  function createModalPreview(state) {
     if (state.context.mode === "popup") {
       createPlansLivePreview(state);
       return;
@@ -20624,6 +20471,7 @@ window.addEventListener("storage", () => {
       "overflow:hidden;" +
       "pointer-events:none;" +
       "z-index:0;";
+    behind.style.filter='blur(6px)';
     const content=document.createElement("div");content.style.cssText=`width:100%;min-height:100%;transform:translateY(${-base.windowScroll}px);`;
     content.appendChild(base.copy.cloneNode(true));behind.appendChild(content);layer.appendChild(behind);
     const dock = content.querySelector(".tab-bar");
@@ -20719,8 +20567,11 @@ if (dock) {
   };
   window.closeNotificationCenter=closeNotificationCenter;
 
- function createPreview(state) {
-    if(isPlansSwipeState(state)){createPlansLivePreview(state);return;}
+function createPreview(state) {
+    if(state.context.mode==='page' && routeParams.bbPlanBack) {
+      if(!bbCreatePlanPageSwipe(state))createPlansLivePreview(state);
+      return;
+    }
     if (state.context.mode !== "page") {
       createModalPreview(state);
       return;
@@ -20739,6 +20590,7 @@ if (dock) {
       const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;";
               behind.style.zIndex = "0";
               behind.style.isolation = "isolate";
+              behind.style.filter = "blur(6px)";
       const content=document.createElement("div");content.style.transform=`translateY(${-saved.base.windowScroll}px)`;
       content.appendChild(saved.base.copy.cloneNode(true));behind.appendChild(content);
       const shade=document.createElement("div");shade.style.cssText=`position:absolute;inset:0;background:${saved.shade};`;
@@ -20815,6 +20667,7 @@ if (dock) {
     };
 
     const behind = makePane(previous);
+    behind.pane.style.filter = "blur(6px)";
     const ahead = makePane(current);
 
     ahead.pane.style.boxShadow =
@@ -20838,7 +20691,6 @@ if (dock) {
       window: previous.windowScroll
     };
   }
-
 function finish(state, goBack) {
     if (settling) return;
 
@@ -21223,7 +21075,7 @@ const viewObserver = new MutationObserver(() => {
       (id==='bbLeftoverFundingDialog' && Boolean(document.getElementById('paymentPlanDetailsContainer') || document.getElementById('paymentPlanActionsContainer'))) ||
       (state?.context?.mode==='page' && currentRoute==='detail' && Boolean(routeParams.bbPlanBack));
   }
-  function createPlansLivePreview(state) {
+ function createPlansLivePreview(state) {
     const root=state.context.root;
     const layer=document.createElement('div');
     layer.setAttribute('data-bb-drag-preview','');layer.setAttribute('aria-hidden','true');layer.inert=true;
@@ -21252,6 +21104,109 @@ const viewObserver = new MutationObserver(() => {
     }});
     state.pane={style,get isConnected(){return root.isConnected;}};
     if(popup && shade)state.dim=shade;
+    if(popup) {
+      const oldCleanup=plansLiveCleanup;
+      const blurKeys=['backdrop-filter','-webkit-backdrop-filter'];
+      const savedBlur=shade?Object.fromEntries(blurKeys.map(key=>[key,{value:shade.style.getPropertyValue(key),priority:shade.style.getPropertyPriority(key)}])):null;
+      let extraStyle=null;
+      if(shade)for(const key of blurKeys)shade.style.setProperty(key,'blur(6px)','important');
+      else if(root.tagName==='DIALOG' && root.id) {
+        extraStyle=document.createElement('style');
+        const id=typeof CSS!=='undefined' && CSS.escape?CSS.escape(root.id):root.id.replace(/[^A-Za-z0-9_-]/g,'');
+        extraStyle.textContent=`#${id}::backdrop{backdrop-filter:blur(6px)!important;-webkit-backdrop-filter:blur(6px)!important;}`;
+        document.head.appendChild(extraStyle);
+      } else {
+        const z=parseInt(getComputedStyle(root).zIndex,10)||1000;
+        layer.style.cssText=`position:fixed;inset:0;pointer-events:none;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:${Math.max(0,z-1)};`;
+      }
+      plansLiveCleanup=()=>{
+        oldCleanup();
+        if(savedBlur)for(const [key,item]of Object.entries(savedBlur))restore(shade,key,item.value,item.priority);
+        extraStyle?.remove();
+      };
+    }
   }
+   const planSwipeSources=new Map();
+  function bbSwipeFrozenCapture(root,panel=false) {
+    if(!root)return null;
+    const copy=root.cloneNode(true),originals=[root,...root.querySelectorAll('*')],copies=[copy,...copy.querySelectorAll('*')];
+    const ids=new Set(originals.map(node=>node.id).filter(Boolean));
+    const styles=originals.map(node=>getComputedStyle(node));
+    const rootRect=root.getBoundingClientRect();
+    const props=['display','box-sizing','width','height','min-width','max-width','min-height','max-height',
+      'padding-top','padding-right','padding-bottom','padding-left','margin-top','margin-right','margin-bottom','margin-left',
+      'flex-direction','flex-wrap','flex-grow','flex-shrink','flex-basis','align-items','align-self','justify-content','justify-items','gap','row-gap','column-gap','order',
+      'grid-template-columns','grid-template-rows','grid-column','grid-row','overflow-x','overflow-y',
+      'font-family','font-size','font-weight','font-style','line-height','letter-spacing','text-align','text-transform','white-space','word-break','overflow-wrap',
+      'color','background-color','background-image','background-size','background-position','background-repeat','border-radius','border-top-width','border-right-width','border-bottom-width','border-left-width',
+      'border-top-style','border-right-style','border-bottom-style','border-left-style','border-top-color','border-right-color','border-bottom-color','border-left-color','box-shadow','opacity','visibility','object-fit','object-position'];
+    originals.forEach((original,index)=>{
+      const node=copies[index],computed=styles[index];
+      if(original.id)node.setAttribute('data-bb-copy-id',original.id);
+      node.removeAttribute('id');
+      for(const attribute of [...node.attributes])if(/^on/i.test(attribute.name)||attribute.name==='autofocus')node.removeAttribute(attribute.name);
+      for(const key of props){const value=computed.getPropertyValue(key);if(value)node.style.setProperty(key,value,'important');}
+      node.style.setProperty('animation','none','important');node.style.setProperty('transition','none','important');
+      if(original.scrollTop)node.setAttribute('data-bb-scroll-top',String(original.scrollTop));
+      if(original.scrollLeft)node.setAttribute('data-bb-scroll-left',String(original.scrollLeft));
+      if(original instanceof HTMLInputElement){node.value=original.value;node.checked=original.checked;}
+      if(original instanceof HTMLTextAreaElement || original instanceof HTMLSelectElement)node.value=original.value;
+      if(original!==root && ['fixed','sticky'].includes(computed.position)) {
+        const rect=original.getBoundingClientRect();
+        let parent=original.parentElement;
+        while(parent && parent!==root && getComputedStyle(parent).position==='static' && getComputedStyle(parent).transform==='none')parent=parent.parentElement;
+        const parentRect=parent?.getBoundingClientRect() || rootRect;
+        const parentStyle=parent?getComputedStyle(parent):null;
+        if(computed.position==='sticky') {
+          const spacer=document.createElement('div');
+          spacer.style.cssText=`height:${rect.height}px;min-height:${rect.height}px;flex-shrink:0;pointer-events:none;`;
+          for(const key of ['margin-top','margin-right','margin-bottom','margin-left'])spacer.style.setProperty(key,computed.getPropertyValue(key));
+          node.parentNode.insertBefore(spacer,node);
+        }
+        const values={position:'absolute',top:`${rect.top-parentRect.top-(parseFloat(parentStyle?.borderTopWidth)||0)+(parent?.scrollTop||0)}px`,
+          left:`${rect.left-parentRect.left-(parseFloat(parentStyle?.borderLeftWidth)||0)+(parent?.scrollLeft||0)}px`,right:'auto',bottom:'auto',width:`${rect.width}px`,height:`${rect.height}px`,
+          'box-sizing':'border-box',margin:'0',transform:'none',translate:'none'};
+        for(const [key,value]of Object.entries(values))node.style.setProperty(key,value,'important');
+      }
+    });
+    const css=[...root.parentElement.querySelectorAll('style')].map(style=>style.textContent).join('\n').replace(/#([A-Za-z_][\w-]*)/g,(match,id)=>ids.has(id)?`[data-bb-copy-id="${id}"]`:match);
+    for(const style of copy.querySelectorAll('style'))style.remove();
+    if(css){const style=document.createElement('style');style.textContent=css;copy.appendChild(style);}
+    copy.querySelectorAll('script,iframe,object,embed').forEach(node=>node.remove());
+    copy.inert=true;copy.setAttribute('aria-hidden','true');
+    const frame={position:'absolute',top:`${panel?rootRect.top:rootRect.top+window.scrollY}px`,left:`${rootRect.left}px`,right:'auto',bottom:'auto',
+      width:`${rootRect.width}px`,height:`${rootRect.height}px`,'min-height':'0','max-height':'none','min-width':'0','max-width':'none',
+      margin:'0','box-sizing':'border-box',transform:'none',translate:'none','pointer-events':'none'};
+    for(const [key,value]of Object.entries(frame))copy.style.setProperty(key,value,'important');
+    const dock=root.querySelector('.tab-bar');
+    if(dock && (!visible(dock) || Number(getComputedStyle(dock).opacity)===0))copy.querySelector('.tab-bar')?.remove();
+    return {copy,css:'',mainScroll:root.querySelector('.main-content')?.scrollTop||0,windowScroll:panel?0:window.scrollY,route:currentRoute};
+  }
+  window.bbRememberPlanSwipeSource=function(planId) {
+    const root=document.getElementById('paymentPlanDetailsSheet');if(!root)return null;
+    const key=JSON.stringify([bbLFSession(),String(planId)]);
+    planSwipeSources.set(key,{base:snapshot(),panel:panelSnapshot(root),shade:shadeFor(root)});
+    while(planSwipeSources.size>8)planSwipeSources.delete(planSwipeSources.keys().next().value);
+    return key;
+  };
+  function bbCreatePlanPageSwipe(state) {
+    const key=routeParams.bbPlanBack?.swipePreviewKey,saved=key && planSwipeSources.get(key);
+    if(!saved?.base || !saved.panel)return false;
+    const current=snapshot();if(!current)return false;
+    const layer=document.createElement('div');
+    layer.setAttribute('data-bb-drag-preview','');layer.setAttribute('aria-hidden','true');layer.inert=true;
+    layer.style.cssText='position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg,#09090c);';
+    const behind=document.createElement('div');behind.style.cssText='position:absolute;inset:0;overflow:hidden;filter:blur(6px);pointer-events:none;';
+    const base=document.createElement('div');base.style.cssText=`position:absolute;inset:0;transform:translateY(${-saved.base.windowScroll}px);`;
+    base.appendChild(saved.base.copy.cloneNode(true));behind.appendChild(base);
+    const dim=document.createElement('div');dim.style.cssText=`position:absolute;inset:0;background:${saved.shade};pointer-events:none;`;behind.appendChild(dim);
+    addPanel(behind,saved.panel);layer.appendChild(behind);
+    const ahead=document.createElement('div');ahead.style.cssText='position:absolute;inset:0;overflow:hidden;background:var(--bg,#09090c);will-change:transform;pointer-events:none;';
+    const front=document.createElement('div');front.style.cssText=`position:absolute;inset:0;transform:translateY(${-current.windowScroll}px);`;
+    front.appendChild(current.copy);ahead.appendChild(front);layer.appendChild(ahead);
+    overlay=layer;document.body.appendChild(layer);restoreCloneScroll(layer);state.pane=ahead;return true;
+  }
+
+  for(const event of ['billbeacon:signed-out','billbeacon:authenticated','billbeacon:household-ready'])window.addEventListener(event,()=>planSwipeSources.clear());
 })();
 // END BILL BEACON DRAG-BACK
