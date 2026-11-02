@@ -20118,997 +20118,365 @@ window.addEventListener("storage", () => {
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
 });
 
-// BEGIN BILL BEACON DRAG-BACK
+// BEGIN BILL BEACON DRAG-BACK V2
 (() => {
   "use strict";
-
-  const ENABLED = true;
-
-  if (window.billBeaconDragBackInstalled) return;
+  if (window.bbNavigationV2) return;
+  window.bbNavigationV2 = true;
   window.billBeaconDragBackInstalled = true;
 
-  const originalNavigate = navigate;
-
-  let previous = null;
-  const pageSnapshots = new Map();
-  const formBaselines = new WeakMap();
-  let notificationPreview = null;
+  const baseNavigate = navigate;
+  const baseRender = render;
+  const baseOpenPlan = openPaymentPlanDetails;
+  const baseClosePlan = closePaymentPlanDetails;
+  const baseOpenCompleted = openCompletedPlansHistory;
+  const baseCloseCompleted = closeCompletedPlansHistory;
+  const baseOpenBillForm = openBillForm;
+  const stack = [];
+  let backInProgress = false;
   let gesture = null;
-  let overlay = null;
-  let timer = null;
-  let settling = false;
-  let renderPending = false;
-  let gestureTarget = null;
-  const renderBeforeDragBack = render;
+  let pendingClosePlan = null;
+  let pendingCompleted = null;
+  let session = bbLFSession();
+  const rootRoutes = new Set(["today","bills","recurring","calendar","more","insights"]);
+  const clone = value => JSON.parse(JSON.stringify(value || {}));
+  const visible = node => Boolean(node?.isConnected && !node.closest('[data-bb-drag-preview]') &&
+    getComputedStyle(node).display !== 'none' && getComputedStyle(node).visibility !== 'hidden' && node.getClientRects().length);
 
-  render = function() {
-    if (gesture || settling || overlay) {
-      renderPending = true;
-      return;
-    }
-    renderPending = false;
-    return renderBeforeDragBack.apply(this, arguments);
-  };
-  window.render = render;
-    // Keep live inbox updates from replacing the touched row mid-swipe.
-  let notificationContentPending = false;
-
-  const notificationContentBeforeDrag =
-    renderNotificationCenterContent;
-
-  renderNotificationCenterContent = function () {
-    if (gesture || settling || overlay) {
-      notificationContentPending = true;
-      return;
-    }
-
-    notificationContentPending = false;
-
-    return notificationContentBeforeDrag.apply(
-      this,
-      arguments
-    );
-  };
-
-  window.renderNotificationCenterContent =
-    renderNotificationCenterContent;
-
-  const reducedMotion = () =>
-    Boolean(
-      window.matchMedia?.(
-        "(prefers-reduced-motion: reduce)"
-      ).matches
-    );
-
-  function visible(node) {
-    if (!node?.isConnected || node.closest('[data-bb-drag-preview]')) return false;
-    const style = getComputedStyle(node);
-    return style.display !== "none" && style.visibility !== "hidden" &&
-      node.getBoundingClientRect().width > 0 && node.getBoundingClientRect().height > 0;
-  }
-  function isCloseControl(button) {
-    const action = (button.getAttribute("onclick") || "").trim();
-    return !button.disabled && (button.id === "notificationCenterCloseButton" ||
-      /^(?:window\.)?close[A-Za-z0-9_]+\(\s*\)\s*;?$/.test(action));
-  }
-    function pageBackButton() {
-    // Dashboard is a root screen, not a page with a Back action.
-    if (currentRoute === "today") return null;
-
-    return [
-      ...document.querySelectorAll(
-        "#app .nav-bar button.nav-button"
-      )
-    ].find(button =>
-      visible(button) &&
-      !button.disabled &&
-      !button.classList.contains("dashboard-icon-button") &&
-      /^\s*(?:navigate|returnToNotificationCenter)\s*\(/.test(
-        button.getAttribute("onclick") || ""
-      )
-    ) || null;
-  }
-  function popupSheets() {
-  const selector = [
-    ".sheet",
-    "#billDetailsSheet",
-    '#completed-plans-history > [role="dialog"]'
-  ].join(", ");
-
-  return [...document.querySelectorAll(selector)]
-    .filter(visible)
-    .map((node, index) => ({
-      node,
-      index,
-      z:
-        Number.parseInt(
-          getComputedStyle(node).zIndex,
-          10
-        ) || 0
-    }))
-    .sort((a, b) => a.z - b.z || a.index - b.index)
-    .map((item) => item.node);
-}
-  function dismissContext(target = null) {
-    if (document.getElementById("moveOccurrencePaycheckDialog")?.open) return null;
-    const sheets = popupSheets();
-    if (sheets.length) {
-      const root = sheets[sheets.length-1];
-      const back = [...root.querySelectorAll("button")].find(isCloseControl);
-      return back ? {mode:"popup",root,back,sheets} : null;
-    }
-    const inline = target?.closest?.(".recurring-calendar-selected-day");
-    if (inline && visible(inline)) {
-      const back = inline.querySelector('button[aria-label="Close selected day"]');
-      if (back && !back.disabled) return {mode:"inline",root:inline,back,sheets:[]};
-    }
-    const back = pageBackButton();
-    return back && !dashboardHasOpenFormOrPopup()
-      ? {mode:"page",root:document.getElementById("app"),back,sheets:[]} : null;
-  }
-  function contextMatches(state) {
-    const now = dismissContext(state.context.root);
-    return ENABLED && currentRoute === state.route && now &&
-      now.mode === state.context.mode && now.root === state.context.root &&
-      now.back === state.back && state.back.isConnected;
-  }
-  function fieldSignature(root) {
-    return JSON.stringify([...root.querySelectorAll("input,textarea,select")]
-      .filter(field=>!field.disabled && field.type!=="hidden")
-      .map(field=>[field.name||field.id,field.type,field.value,field.checked]));
-  }
-  function formChanged(root) {
-    const formIds = ["sheetContainer","incomeSourceContainer","installmentPlanContainer",
-      "postponeBillContainer","postponeRecurringOccurrenceContainer","paymentLinkPopupContainer"];
-    const isForm = formIds.some(id=>root.closest(`[id="${id}"]`));
-    return isForm && formBaselines.has(root) && formBaselines.get(root)!==fieldSignature(root);
-  }
-  function rememberForms() {
-    for (const root of popupSheets()) {
-      if (!formBaselines.has(root)) formBaselines.set(root,fieldSignature(root));
-    }
-  }
-  const allowed = () => ENABLED && Boolean(dismissContext(gesture?.context?.root));
-
-  function cleanup() {
-    clearTimeout(timer);
-    timer = null;
-    gestureTarget?.removeEventListener("touchend", handleDragEnd);
-    gestureTarget?.removeEventListener("touchcancel", cleanup);
-    gestureTarget = null;
-    overlay?.remove();
-    overlay = null;
-    gesture = null;
-    settling = false;
-
-        if (notificationContentPending) {
-      notificationContentPending = false;
-
-      queueMicrotask(() => {
-        // A new gesture may have started before this update runs.
-        if (gesture || settling || overlay) {
-          notificationContentPending = true;
-          return;
-        }
-
-        renderNotificationCenterContent();
-      });
-    }
-
-    if (renderPending) {
-      renderPending = false;
-      const savedRoute = currentRoute;
-      const savedWindowScroll = window.scrollY;
-      const savedMainScroll = document.querySelector("#app .main-content")?.scrollTop || 0;
-      queueMicrotask(() => {
-        if (gesture || settling || overlay) {
-          renderPending = true;
-          return;
-        }
-        window.render();
-        if (currentRoute === savedRoute) {
-          window.scrollTo(0, savedWindowScroll);
-          const main = document.querySelector("#app .main-content");
-          if (main) main.scrollTop = savedMainScroll;
-        }
-      });
-    }
-  }
-
-  function snapshot() {
-  const root = document.getElementById("app");
-  if (!root) return null;
-
-  const copy = root.cloneNode(true);
-  const originals = [root, ...root.querySelectorAll("*")];
-  const copies = [copy, ...copy.querySelectorAll("*")];
-  const rootRect = root.getBoundingClientRect();
-  const mainScroll =
-    root.querySelector(".main-content")?.scrollTop || 0;
-
-  for (let index = 0; index < copies.length; index++) {
-    const node = copies[index];
-    const original = originals[index];
-
-    if (node.id) node.setAttribute("data-bb-copy-id", node.id);
-    if (original.scrollTop) node.setAttribute("data-bb-scroll-top", String(original.scrollTop));
-    if (original.scrollLeft) node.setAttribute("data-bb-scroll-left", String(original.scrollLeft));
-    node.removeAttribute("id");
-
-    for (const attribute of [...node.attributes]) {
-      if (/^on/i.test(attribute.name) ||
-          attribute.name === "autofocus") {
-        node.removeAttribute(attribute.name);
+  function scrollState() {
+    const app = document.getElementById('app');
+    if (!app) return {window:window.scrollY,items:[]};
+    const items = [];
+    for (const node of [app,...app.querySelectorAll('*')]) {
+      if (!node.scrollTop && !node.scrollLeft) continue;
+      const path = []; let at = node;
+      while (at && at !== app) {
+        path.unshift([...at.parentElement.children].indexOf(at)); at = at.parentElement;
       }
+      if (at === app) items.push({id:node.id || null,path,top:node.scrollTop,left:node.scrollLeft});
     }
-
-    node.style.setProperty("animation", "none", "important");
-
-    const position = getComputedStyle(original).position;
-
-    if (
-      original !== root &&
-      (position === "fixed" || position === "sticky")
-    ) {
-      const rect = original.getBoundingClientRect();
-
-      if (position === "sticky") {
-        const spacer = document.createElement("div");
-
-        spacer.style.cssText =
-          `height:${rect.height}px;` +
-          `min-height:${rect.height}px;` +
-          "flex-shrink:0;pointer-events:none;";
-
-        node.parentNode.insertBefore(spacer, node);
+    return {window:window.scrollY,items};
+  }
+  function restoreScroll(saved) {
+    if (!saved) return;
+    const apply = () => {
+      const app = document.getElementById('app');
+      if (!app) return;
+      for (const item of saved.items || []) {
+        let node = item.id ? document.getElementById(item.id) : null;
+        if (!node || !app.contains(node)) {
+          node = app;
+          for (const index of item.path) {node = node?.children[index];if (!node) break;}
+        }
+        if (node) {node.scrollTop=item.top;node.scrollLeft=item.left;}
       }
-
-      for (const [property, value] of Object.entries({
-        position: "absolute",
-        top: `${rect.top - rootRect.top}px`,
-        left: `${rect.left - rootRect.left}px`,
-        right: "auto",
-        bottom: "auto",
-        width: `${rect.width}px`,
-        height: `${rect.height}px`
-      })) {
-        node.style.setProperty(property, value, "important");
-      }
+      window.scrollTo(0,saved.window || 0);
+    };
+    apply();
+    const route = currentRoute, token = bbLFSession();
+    requestAnimationFrame(() => {if (currentRoute===route && bbLFSession()===token) apply();});
+  }
+  function planState(root=document.getElementById('paymentPlanDetailsContainer')) {
+    if (!root) return null;
+    return {planId:root.dataset.planId,origin:root._bbOrigin || null,
+      detailScroll:root.querySelector('.sheet-body')?.scrollTop || 0,
+      route:currentRoute,params:clone(routeParams),pageScroll:scrollState(),session:bbLFSession()};
+  }
+  function reopenPlan(saved) {
+    if (!saved || saved.session !== bbLFSession() || currentRoute !== saved.route) return;
+    if (!Store.getBills().some(bill=>String(bill.installmentPlanId)===String(saved.planId))) return;
+    restoreScroll(saved.pageScroll);
+    openPaymentPlanDetails(saved.planId);
+    const root = document.getElementById('paymentPlanDetailsContainer');
+    if (root) {
+      root._bbOrigin=saved.origin;
+      const body=root.querySelector('.sheet-body');if(body)body.scrollTop=saved.detailScroll || 0;
     }
   }
-    // Do not bring hidden navigation back into a swipe preview.
-  const liveDock = root.querySelector(".tab-bar");
-  const copiedDock = copy.querySelector(".tab-bar");
-
-  if (copiedDock) {
-    const dockStyle = liveDock
-      ? getComputedStyle(liveDock)
-      : null;
-
-    const hideDock =
-      currentRoute === "settings" ||
-      !liveDock ||
-      dockStyle.display === "none" ||
-      dockStyle.visibility === "hidden" ||
-      dockStyle.visibility === "collapse" ||
-      Number(dockStyle.opacity) === 0 ||
-      liveDock.getClientRects().length === 0;
-
-    if (hideDock) {
-      copiedDock.remove();
-    }
+  function rememberBriefly(which,value) {
+    if (which==='plan') pendingClosePlan=value;else pendingCompleted=value;
+    queueMicrotask(() => {
+      if(which==='plan' && pendingClosePlan===value)pendingClosePlan=null;
+      if(which==='completed' && pendingCompleted===value)pendingCompleted=null;
+    });
   }
-  copy.querySelectorAll("script,iframe,object,embed")
-    .forEach(node => node.remove());
 
-  copy.inert = true;
-  copy.setAttribute("aria-hidden", "true");
-
-  Object.assign(copy.style, {
-    display: "flex",
-    flexDirection: "column",
-    position: "relative",
-    width: "100%",
-    minHeight: "100dvh",
-    margin: "0",
-    pointerEvents: "none"
-  });
-
-  return {
-    copy,
-    mainScroll,
-    windowScroll: window.scrollY,
-    route: currentRoute
+  closeCompletedPlansHistory = function() {
+    const root=document.getElementById('completed-plans-history');
+    if(root) rememberBriefly('completed',{kind:'completed',scroll:root.querySelector('.bb-completed-scroll')?.scrollTop || 0,
+      route:currentRoute,session:bbLFSession()});
+    return baseCloseCompleted.apply(this,arguments);
   };
-}
+  window.closeCompletedPlansHistory=closeCompletedPlansHistory;
 
-  navigate = function(route, params = {}) {
-    cleanup();
-    let captured = null;
-    if (ENABLED && route !== currentRoute) {
-      try { captured = snapshot(); }
-      catch (error) { console.warn("Back preview skipped", error); }
-    }
-    if (captured) pageSnapshots.set(captured.route,captured);
-    const result = originalNavigate.apply(this, arguments);
-    previous = captured && currentRoute === route ? captured : null;
+  openCompletedPlansHistory = function() {
+    const result=baseOpenCompleted.apply(this,arguments);
+    pendingCompleted=null;
     return result;
   };
+  window.openCompletedPlansHistory=openCompletedPlansHistory;
 
-  function panelSnapshot(root) {
-    const copy=root.cloneNode(true);
-    const originals=[root,...root.querySelectorAll("*")];
-    const copies=[copy,...copy.querySelectorAll("*")];
-    const ids=new Set(originals.map(node=>node.id).filter(Boolean));
-    originals.forEach((original,index)=>{
-      const node=copies[index];
-      if (original.id) node.setAttribute("data-bb-copy-id",original.id);
-      node.removeAttribute("id");
-      for (const attribute of [...node.attributes]) {
-        if (/^on/i.test(attribute.name)||attribute.name==="autofocus") node.removeAttribute(attribute.name);
-      }
-      node.style.setProperty("animation","none","important");
-      if (original.scrollTop) node.setAttribute("data-bb-scroll-top",String(original.scrollTop));
-      if (original.scrollLeft) node.setAttribute("data-bb-scroll-left",String(original.scrollLeft));
-      if (original instanceof HTMLInputElement) {node.value=original.value;node.checked=original.checked;}
-      if (original instanceof HTMLTextAreaElement || original instanceof HTMLSelectElement) node.value=original.value;
-    });
-    copy.querySelectorAll("script,iframe,object,embed").forEach(node=>node.remove());
-    const rect=root.getBoundingClientRect();
-        // Preserve the root layout after its ID is removed from the preview.
-    const rootStyle = getComputedStyle(root);
-
-    for (const property of [
-      "flex-direction",
-      "flex-wrap",
-      "align-items",
-      "justify-content",
-      "gap",
-      "box-sizing",
-      "overflow-x",
-      "overflow-y",
-      "padding-top",
-      "padding-right",
-      "padding-bottom",
-      "padding-left",
-      "border-radius"
-    ]) {
-      copy.style.setProperty(
-        property,
-        rootStyle.getPropertyValue(property),
-        "important"
-      );
+  openPaymentPlanDetails = function(planId) {
+    const old=document.getElementById('paymentPlanDetailsContainer');
+    const origin=(old && String(old.dataset.planId)===String(planId) ? old._bbOrigin : null) ||
+      (pendingCompleted?.session===bbLFSession() && pendingCompleted.route===currentRoute ? pendingCompleted : null);
+    pendingCompleted=null;
+    const result=baseOpenPlan.apply(this,arguments);
+    const root=document.getElementById('paymentPlanDetailsContainer');
+    if(root) {
+      root._bbOrigin=origin;
+      const close=root.querySelector('button[onclick="closePaymentPlanDetails()"]');
+      if(close) close.setAttribute('onclick','bbNavigationBack()');
+      const shade=root.querySelector('#paymentPlanDetailsOverlay');
+      if(shade)shade.setAttribute('onclick','bbNavigationBack()');
     }
-    for (const [property,value] of Object.entries({position:"absolute",top:`${rect.top}px`,left:`${rect.left}px`,
-      right:"auto",bottom:"auto",width:`${rect.width}px`,height:`${rect.height}px`,maxHeight:"none",minHeight:"0",margin:"0",
-      transform:"none",display:getComputedStyle(root).display,opacity:"1"})) copy.style.setProperty(property,value,"important");
-    copy.inert=true;copy.setAttribute("aria-hidden","true");
-    const styleTexts=[...root.parentElement.querySelectorAll("style")].map(style=>style.textContent);
-    const css=styleTexts.join("\n").replace(/#([A-Za-z_][\w-]*)/g,(match,id)=>
-      ids.has(id)?`[data-bb-copy-id="${id}"]`:match);
-    return {copy,css,mainScroll:0,windowScroll:0,route:currentRoute};
-  }
-  function restoreCloneScroll(pane) {
-    for (const node of pane.querySelectorAll("[data-bb-scroll-top],[data-bb-scroll-left]")) {
-      if (node.hasAttribute("data-bb-scroll-top")) node.scrollTop=Number(node.getAttribute("data-bb-scroll-top"));
-      if (node.hasAttribute("data-bb-scroll-left")) node.scrollLeft=Number(node.getAttribute("data-bb-scroll-left"));
-    }
-  }
-  function shadeFor(root) {
-    const shade=root.parentElement.querySelector(".sheet-overlay");
-    return shade ? getComputedStyle(shade).backgroundColor : "rgba(0,0,0,.6)";
-  }
-  function addPanel(pane,snap) {
-    if (snap.css) {const style=document.createElement("style");style.textContent=snap.css;pane.appendChild(style);}
-    pane.appendChild(snap.copy.cloneNode(true));
-  }
-  function createModalPreview(state) {
-    const base=snapshot();
-    if (!base) return;
-    base.windowScroll=Math.max(0,-document.getElementById("app").getBoundingClientRect().top);
-    if (state.context.mode==="inline") base.copy.querySelector(".recurring-calendar-selected-day")?.remove();
-    const layer=document.createElement("div");
-    layer.setAttribute("data-bb-drag-preview","");layer.setAttribute("aria-hidden","true");layer.inert=true;
-    layer.style.cssText="position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
-        const behind = document.createElement("div");
-
-    behind.style.cssText =
-      "position:absolute;" +
-      "inset:0;" +
-      "overflow:hidden;" +
-      "pointer-events:none;" +
-      "z-index:0;";
-    const content=document.createElement("div");content.style.cssText=`width:100%;min-height:100%;transform:translateY(${-base.windowScroll}px);`;
-    content.appendChild(base.copy.cloneNode(true));behind.appendChild(content);layer.appendChild(behind);
-    const dock = content.querySelector(".tab-bar");
-
-if (dock) {
-  // Keep the copied navigation outside the scrolled content.
-  behind.appendChild(dock);
-
-  for (const [property, value] of Object.entries({
-    position: "absolute",
-    top: "auto",
-    bottom: "0",
-    left: "0",
-    right: "0",
-    width: "100%",
-    height: "auto",
-    margin: "0",
-    transform: "none"
-  })) {
-    dock.style.setProperty(property, value, "important");
-  }
-}
-    for (const root of state.context.sheets.slice(0,-1)) {
-      const dim=document.createElement("div");dim.style.cssText=`position:absolute;inset:0;background:${shadeFor(root)};pointer-events:none;`;
-      behind.appendChild(dim);addPanel(behind,panelSnapshot(root));
-    }
-        // Some sheets have an internal Back destination,
-    // such as Privacy Policy -> About.
-    if (
-      state.context.mode === "popup" &&
-      typeof window.bbGetPopupBackPreview === "function"
-    ) {
-      const destination =
-        window.bbGetPopupBackPreview(
-          state.context.root
-        );
-
-      if (destination) {
-        // Keep the live sheet's measured size and layout,
-        // but preview the saved destination's contents.
-        const destinationSnapshot = panelSnapshot(
-          state.context.root
-        );
-
-        destinationSnapshot.copy.replaceChildren(
-          ...Array.from(destination.childNodes)
-            .map(node => node.cloneNode(true))
-        );
-
-        addPanel(behind, destinationSnapshot);
-      }
-    }
-        if (state.context.mode === "popup") {
-      const dim = document.createElement("div");
-
-      dim.style.cssText =
-        "position:absolute;" +
-        "inset:0;" +
-        `background:${shadeFor(state.context.root)};` +
-        "pointer-events:none;" +
-        "z-index:1;";
-
-      layer.appendChild(dim);
-      state.dim = dim;
-    }
-        const pane = document.createElement("div");
-
-    pane.style.cssText =
-      "position:absolute;" +
-      "inset:0;" +
-      "overflow:hidden;" +
-      "pointer-events:none;" +
-      "will-change:transform;" +
-      "z-index:2;";
-    addPanel(pane,panelSnapshot(state.context.root));layer.appendChild(pane);
-    overlay=layer;document.body.appendChild(layer);
-    restoreCloneScroll(layer);state.pane=pane;
-  }
-  function rememberNotificationPreview() {
-    const root=document.getElementById("notificationCenterSheet");
-    if (!root) return;
-    const base=snapshot();
-    if (!base) return;
-    base.windowScroll=Math.max(0,-document.getElementById("app").getBoundingClientRect().top);
-    notificationPreview={base,panel:panelSnapshot(root),shade:shadeFor(root)};
-  }
-  const notificationCloseBeforeDrag=closeNotificationCenter;
-  closeNotificationCenter=function() {
-    if (ENABLED && arguments[0]===true) {
-      try {rememberNotificationPreview();} catch(error) {notificationPreview=null;}
-    }
-    return notificationCloseBeforeDrag.apply(this,arguments);
+    return result;
   };
-  window.closeNotificationCenter=closeNotificationCenter;
+  window.openPaymentPlanDetails=openPaymentPlanDetails;
 
-  function createPreview(state) {
-    if (state.context.mode !== "page") {
-      createModalPreview(state);
-      return;
+  closePaymentPlanDetails = function() {
+    const saved=planState();if(saved)rememberBriefly('plan',saved);
+    return baseClosePlan.apply(this,arguments);
+  };
+  window.closePaymentPlanDetails=closePaymentPlanDetails;
+
+  openBillForm = function(billId) {
+    const saved=pendingClosePlan;
+    pendingClosePlan=null;
+    const result=baseOpenBillForm.apply(this,arguments);
+    const bill=Store.getBill(billId);
+    const root=document.getElementById('billSheet');
+    if(root && saved && saved.session===bbLFSession() && bill &&
+        String(bill.installmentPlanId)===String(saved.planId)) {
+      root._bbReturnPlan=saved;
+      for(const button of root.querySelectorAll('button')) {
+        if(/^\s*closeBillForm\(\s*\)\s*;?\s*$/.test(button.getAttribute('onclick') || '')) {
+          button.setAttribute('onclick','bbNavigationBack()');
+        }
+      }
+      const shade=document.getElementById('sheetOverlay');
+      if(shade)shade.setAttribute('onclick','bbNavigationBack()');
     }
-    const handler = state.back.getAttribute("onclick") || "";
+    rememberForms();
+    return result;
+  };
+  window.openBillForm=openBillForm;
 
-    const destination = handler.match(
-      /^\s*navigate\(\s*['"]([^'"]+)['"]/
-    );
-
-    if (/^\s*returnToNotificationCenter\(/.test(handler) && notificationPreview) {
-      const saved=notificationPreview;
-      const layer=document.createElement("div");
-      layer.setAttribute("data-bb-drag-preview","");layer.inert=true;layer.setAttribute("aria-hidden","true");
-      layer.style.cssText="position:fixed;inset:0;overflow:hidden;z-index:19000;pointer-events:none;background:var(--bg);";
-      const behind=document.createElement("div");behind.style.cssText="position:absolute;inset:0;overflow:hidden;";
-              behind.style.zIndex = "0";
-              behind.style.isolation = "isolate";
-      const content=document.createElement("div");content.style.transform=`translateY(${-saved.base.windowScroll}px)`;
-      content.appendChild(saved.base.copy.cloneNode(true));behind.appendChild(content);
-      const shade=document.createElement("div");shade.style.cssText=`position:absolute;inset:0;background:${saved.shade};`;
-      behind.appendChild(shade);addPanel(behind,saved.panel);layer.appendChild(behind);
-      const ahead=document.createElement("div");ahead.style.cssText="position:absolute;inset:0;overflow:hidden;background:var(--bg);";
-              ahead.style.zIndex = "1";
-              ahead.style.isolation = "isolate";
-      const current=snapshot();if(!current)return;
-      const frontContent=document.createElement("div");frontContent.style.transform=`translateY(${-current.windowScroll}px)`;
-      frontContent.appendChild(current.copy);ahead.appendChild(frontContent);layer.appendChild(ahead);
-      overlay=layer;document.body.appendChild(layer);restoreCloneScroll(layer);state.pane=ahead;return;
-    }
-    const destinationSnapshot = destination && pageSnapshots.get(destination[1]);
-    if (destinationSnapshot) previous = destinationSnapshot;
-       if (
-      !previous ||
-      !destination ||
-      destination[1] !== previous.route
-    ) {
-      return;
-    }
-    const current = snapshot();
-    if (!current) return;
-
-    const layer = document.createElement("div");
-
-    layer.inert = true;
-    layer.setAttribute("aria-hidden", "true");
-
-    Object.assign(layer.style, {
-      position: "fixed",
-      inset: "0",
-      overflow: "hidden",
-      zIndex: "19000",
-      pointerEvents: "none",
-      background: "var(--bg, #09090c)"
+  const baselines=new WeakMap();
+  function signature(root) {
+    return JSON.stringify([...root.querySelectorAll('input,textarea,select')]
+      .filter(field=>!field.disabled && field.type!=='hidden')
+      .map(field=>[field.id||field.name,field.value,field.checked]));
+  }
+  function formRoot(root) {
+    return root && (root.id==='billSheet' || Boolean(root.closest('#sheetContainer,#incomeSourceContainer,#installmentPlanContainer,#postponeBillContainer,#postponeRecurringOccurrenceContainer,#paymentLinkPopupContainer')));
+  }
+  function rememberForms() {
+    document.querySelectorAll('.sheet').forEach(root=>{
+      if(formRoot(root) && !baselines.has(root))baselines.set(root,signature(root));
     });
-
-    overlay = layer;
-    layer.setAttribute("data-bb-drag-preview", "");
-
-    const makePane = snap => {
-      const pane = document.createElement("div");
-
-      Object.assign(pane.style, {
-        position: "absolute",
-        inset: "0",
-        overflow: "hidden",
-        background: "var(--bg, #09090c)",
-        pointerEvents: "none",
-        willChange: "transform"
-      });
-
-      const content = document.createElement("div");
-
-      Object.assign(content.style, {
-        width: "100%",
-        minHeight: "100%",
-        transform:
-          `translateY(${-snap.windowScroll}px)`
-      });
-
-      content.appendChild(
-        snap.copy.cloneNode(true)
-      );
-
-      pane.appendChild(content);
-      layer.appendChild(pane);
-
-      return {
-        pane,
-        mainScroll: snap.mainScroll
-      };
-    };
-
-    const behind = makePane(previous);
-    const ahead = makePane(current);
-
-    ahead.pane.style.boxShadow =
-      "-8px 0 24px rgba(0,0,0,.25)";
-
-    document.body.appendChild(layer);
-
-    for (const item of [behind, ahead]) {
-      const main =
-        item.pane.querySelector(".main-content");
-
-      if (main) {
-        main.scrollTop = item.mainScroll;
-      }
-    }
-
-    state.pane = ahead.pane;
-
-    state.returnScroll = {
-      main: previous.mainScroll,
-      window: previous.windowScroll
-    };
   }
-
-  function finish(state, goBack) {
-    if (settling) return;
-
-    settling = true;
-
-    const complete = () => {
-      const valid = contextMatches(state);
-
-      if (
-  goBack &&
-  valid &&
-  state.pane?.isConnected &&
-  overlay?.isConnected
-) {
-        if (state.context.mode !== "page") {
-          try {state.back.click();} catch(error) {cleanup();throw error;}
-          const started=performance.now();
-          const waitForClose=()=>{
-            if (!settling || !overlay) return;
-            if (!state.context.root.isConnected ||
-                getComputedStyle(state.context.root).display === "none" ||
-                performance.now()-started>800) {cleanup();return;}
-            timer=setTimeout(waitForClose,16);
-          };
-          waitForClose();
-          return;
-        }
-        const scroll = state.returnScroll;
-
-        cleanup();
-        state.back.click();
-
-        if (scroll) {
-          const returnedRoute = currentRoute;
-
-          requestAnimationFrame(() => {
-            if (currentRoute !== returnedRoute) return;
-
-            const main = document.querySelector(
-              "#app .main-content"
-            );
-
-            if (main) {
-              main.scrollTop = scroll.main;
-            }
-
-            window.scrollTo(0, scroll.window);
-          });
-        }
-      } else {
-        cleanup();
-      }
-    };
-
-    if (!state.pane || reducedMotion()) {
-      complete();
-      return;
-    }
-
-    state.pane.style.setProperty(
-  "transition",
-  "transform 180ms ease-out",
-  "important"
-);
-
-    state.pane.style.transform =
-      `translateX(${goBack ? window.innerWidth : 0}px)`;
-
-    if (state.dim) {
-      state.dim.style.setProperty("transition", "opacity 180ms ease-out", "important");
-      state.dim.style.opacity = goBack ? "0" : "1";
-    }
-    timer = setTimeout(complete, 190);
+  function closeButton(root) {
+    return [...root.querySelectorAll('button')].find(button=>!button.disabled &&
+      (/^\s*(?:window\.)?close[A-Za-z0-9_]+\(\s*\)\s*;?\s*$/.test(button.getAttribute('onclick') || '') ||
+       /^\s*bbNavigationBack\(\s*\)\s*;?\s*$/.test(button.getAttribute('onclick') || '') ||
+       button.id==='notificationCenterCloseButton')) || null;
   }
-
-  document.addEventListener(
-    "touchstart",
-    event => {
-      if (settling) return;
-
-      cleanup();
-
-      if (
-        !ENABLED ||
-        event.touches.length !== 1
-      ) {
-        return;
-      }
-
-      const target = event.target;
-
-      if (
-        !(target instanceof Element) ||
-        !dismissContext(target)?.root.contains(target) ||
-        target.closest(
-      "input,textarea,select,[contenteditable],.tab-bar,.activity-months"
-)
-      ) {
-        return;
-      }
-
-      const touch = event.touches[0];
-
-            // Accept starts from the left edge through the start zone.
-      if (touch.clientX > 110) {
-        return;
-      }
-
-      const context = dismissContext(target);
-      const back = context?.back;
-
-      if (!back || back.disabled) return;
-
-      gestureTarget = target;
-      target.addEventListener("touchend", handleDragEnd, {passive: false});
-      target.addEventListener("touchcancel", cleanup, {passive: true});
-
-
-     gesture = {
-  context,
-  id: touch.identifier,
-  x: touch.clientX,
-  y: touch.clientY,
-  started: performance.now(),
-  route: currentRoute,
-  back,
-  armed: false,
-  pane: null,
-  samples: [{
-    x: touch.clientX,
-    time: performance.now()
-  }]
-};
-    },
-    { capture: true, passive: true }
-  );
-
-  document.addEventListener(
-    "touchmove",
-    event => {
-      if (!gesture || settling) return;
-
-      if (
-        !contextMatches(gesture) ||
-        event.touches.length !== 1
-      ) {
-        cleanup();
-        return;
-      }
-
-      const touch = event.touches[0];
-
-      if (touch.identifier !== gesture.id) {
-        cleanup();
-        return;
-      }
-      const sampleTime = performance.now();
-
-gesture.samples.push({
-  x: touch.clientX,
-  time: sampleTime
-});
-
-gesture.samples = gesture.samples
-  .filter(sample => sampleTime - sample.time <= 120)
-  .slice(-8);
-      const dx =
-        touch.clientX - gesture.x;
-      if (gesture.dim) gesture.dim.style.opacity = String(1-Math.min(1,Math.max(0,dx)/window.innerWidth));
-
-      const dy = Math.abs(
-        touch.clientY - gesture.y
-      );
-
-      if (
-  !gesture.armed &&
-  (
-    dx < -10 ||
-    dy > 32 ||
-    (dy > 10 && dy > Math.abs(dx))
-  )
-) {
-  cleanup();
-  return;
-}
-
-            if (dx > 8 && dx > dy * 1.5) {
-      if (!gesture.armed && !event.cancelable) {
-  cleanup();
-  return;
-}
-
-if (event.cancelable) event.preventDefault();
-
-        if (!gesture.armed) {
-          gesture.armed = true;
-
-          try {
-            createPreview(gesture);
-          } catch (error) {
-            overlay?.remove();
-            overlay = null;
-            gesture.pane = null;
-
-            console.warn(
-              "Back preview unavailable",
-              error
-            );
-          }
-        }
-
-        if (gesture.pane) {
-          gesture.pane.style.transform =
-            `translateX(${
-              Math.min(
-                Math.max(0, dx),
-                window.innerWidth
-              )
-            }px)`;
-        }
-      } else if (
-        gesture.armed &&
-        event.cancelable
-      ) {
-        event.preventDefault();
-
-        if (gesture.pane) {
-          gesture.pane.style.transform =
-            `translateX(${Math.max(0, dx)}px)`;
-        }
-      }
-    },
-    { capture: true, passive: false }
-  );
-
-  function handleDragEnd(event) {
-      if (!gesture || settling) return;
-
-      const state = gesture;
-
-      if (!state.armed) {
-  cleanup();
-  return;
-}
-
-if (event.cancelable) event.preventDefault();
-
-      const touch = [...event.changedTouches]
-        .find(item =>
-          item.identifier === state.id
-        );
-
-      const dx = touch
-        ? touch.clientX - state.x
-        : 0;
-
-      const dy = touch
-        ? Math.abs(touch.clientY - state.y)
-        : Infinity;
-// Release completes Back unless dragged back to the start.
-// Complete Back only after a deliberate drag or rightward flick.
-const releaseTime = performance.now();
-
-const recentSamples = state.samples.filter(
-  sample => releaseTime - sample.time <= 100
-);
-
-const firstSample = recentSamples[0];
-
-const velocityX =
-  touch && firstSample
-    ? (touch.clientX - firstSample.x) /
-      Math.max(1, releaseTime - firstSample.time)
-    : 0;
-
-// Long drag: roughly 30% of the screen, capped at 140px.
-const distanceThreshold = Math.min(
-  window.innerWidth * 0.30,
-  140
-);
-
-const passedDistance = dx >= distanceThreshold;
-
-// Shorter movement counts only if released as a quick rightward flick.
-const passedFlick = dx >= 45 && velocityX >= 0.55;
-
-// A leftward release means the user is pulling the view back.
-const reversing = velocityX < -0.15;
-
-let goBack = Boolean(
-  touch &&
-  state.armed &&
-  state.pane?.isConnected &&
-  dx > 6 &&
-  dx > dy &&
-  !reversing &&
-  (passedDistance || passedFlick)
-);
-      if (goBack && state.context.mode !== "page" && formChanged(state.context.root)) {
-        goBack = confirm("Discard unsaved changes and close this form?");
-      }
-      finish(state, goBack);
-
+  function pageBackButton() {
+    return [...document.querySelectorAll('#app .nav-bar button.nav-button')].find(button=>visible(button) && !button.disabled &&
+      /^\s*(?:navigate|returnToNotificationCenter|bbNavigationBack)\s*\(/.test(button.getAttribute('onclick') || '')) || null;
   }
-
-  document.addEventListener("touchend", handleDragEnd, {
-    capture: true,
-    passive: false
-  });
-
-  document.addEventListener(
-    "touchcancel",
-    cleanup,
-    { passive: true }
-  );
-
-  // Reset interrupted gestures without deleting page Back previews.
-window.addEventListener("resize", () => {
-  cleanup();
-  notificationPreview = null;
-});
-
-document.addEventListener("visibilitychange", () => {
-  // Clean up on both backgrounding and returning to the app.
-  cleanup();
-
-  if (document.visibilityState === "hidden") {
-    notificationPreview = null;
+  function context(target=null) {
+    const dialogs=[...document.querySelectorAll('dialog[open]')].filter(visible);
+    if(dialogs.length) {
+      const root=dialogs[dialogs.length-1];
+      if(root.id==='moveOccurrencePaycheckDialog')return {kind:'blocked',root};
+      return {kind:'dialog',root};
+    }
+    const sheets=[...document.querySelectorAll('.sheet,#billDetailsSheet,#completed-plans-history > [role="dialog"]')]
+      .filter(visible).map((root,index)=>({root,index,z:parseInt(getComputedStyle(root).zIndex,10)||0}))
+      .sort((a,b)=>a.z-b.z||a.index-b.index);
+    if(sheets.length) {
+      const root=sheets[sheets.length-1].root;
+      if(root.id==='paymentPlanDetailsSheet')return {kind:'plan',root,back:closeButton(root)};
+      const back=closeButton(root);
+      return back ? {kind:'popup',root,back} : {kind:'blocked',root};
+    }
+    const inline=target?.closest?.('.recurring-calendar-selected-day') || (gesture?.ctx.kind==='inline'?gesture.root:null);
+    if(inline && visible(inline)) {
+      const back=inline.querySelector('button[aria-label="Close selected day"]');
+      if(back && !back.disabled)return {kind:'inline',root:inline,back};
+    }
+    if(dashboardHasOpenFormOrPopup()) return {kind:'blocked',root:document.getElementById('app')};
+    const back=pageBackButton();
+    return back && currentRoute!=='today' ? {kind:'page',root:document.getElementById('app'),back} : null;
   }
-});
-
-  window.addEventListener(
-    "billbeacon:signed-out",
-    () => {
-      cleanup();
-      previous = null; pageSnapshots.clear(); notificationPreview = null;
+  function authorizeDiscard(root) {
+    return !formRoot(root) || !baselines.has(root) || baselines.get(root)===signature(root) ||
+      confirm('Discard Unsaved Changes And Go Back?');
+  }
+  function closePlanBack() {
+    const root=document.getElementById('paymentPlanDetailsContainer');
+    const origin=root?._bbOrigin;
+    baseClosePlan();pendingClosePlan=null;
+    if(origin?.kind==='completed' && origin.session===bbLFSession() && origin.route===currentRoute) {
+      openCompletedPlansHistory();
+      const list=document.querySelector('#completed-plans-history .bb-completed-scroll');
+      if(list)list.scrollTop=origin.scroll || 0;
     }
-  );
-
-  window.addEventListener(
-    "billbeacon:data-changed",
-    () => {
-      cleanup();
-      previous = null;
-      notificationPreview = null;
-      // Retain inert Back previews for this session. The destination
-      // is rendered from current household data when Back completes.
+  }
+  function act(ctx) {
+    if(!ctx || ctx.kind==='blocked')return false;
+    if(ctx.kind==='dialog') {
+      const cancel=new Event('cancel',{cancelable:true});
+      ctx.root.dispatchEvent(cancel);
+      if(!cancel.defaultPrevented && ctx.root.open)ctx.root.close();
+      return true;
     }
-  );
-  const appRoot = document.getElementById("app");
+    if(ctx.kind==='inline') {ctx.back.click();return true;}
+    if(ctx.kind==='plan') {closePlanBack();return true;}
+    if(ctx.kind==='popup') {
+      if(!authorizeDiscard(ctx.root))return false;
+      const saved=ctx.root._bbReturnPlan;
+      const ownBack=(ctx.back.getAttribute('onclick') || '').includes('bbNavigationBack');
+      if(ownBack && ctx.root.id==='billSheet')closeBillForm();
+      else if(ownBack)return false;
+      else ctx.back.click();
+      if(saved)reopenPlan(saved);
+      return true;
+    }
+    if(ctx.kind==='page') {
+      if(routeParams?.returnToNotificationPopup) {returnToNotificationCenter();return true;}
+      const explicit=routeParams?._bbParentPlan;
+      if(explicit && explicit.session===bbLFSession()) {
+        backInProgress=true;
+        try {navigate(explicit.route,clone(explicit.params));}finally {backInProgress=false;}
+        if(stack.length && stack[stack.length-1].route===explicit.route)stack.pop();
+        reopenPlan(explicit);return true;
+      }
+      const prior=stack.pop();
+      if(prior) {
+        backInProgress=true;
+        try {navigate(prior.route,clone(prior.params));}finally {backInProgress=false;}
+        restoreScroll(prior.scroll);return true;
+      }
+      if((ctx.back.getAttribute('onclick') || '').includes('bbNavigationBack')) {
+        const original=ctx.back._bbOriginalBack;
+        if(original)original.call(ctx.back);
+      } else ctx.back.click();
+      return true;
+    }
+    return false;
+  }
+  function resetGesture() {
+    const old=gesture;gesture=null;
+    if(old?.moved && old.root?.isConnected) {
+      if(old.translate)old.root.style.setProperty('translate',old.translate,old.priority);
+      else old.root.style.removeProperty('translate');
+      if(old.transition)old.root.style.setProperty('transition',old.transition,old.transitionPriority);
+      else old.root.style.removeProperty('transition');
+    }
+  }
+  window.bbNavigationBack=function() {resetGesture();return act(context());};
 
-if (appRoot) {
-const viewObserver = new MutationObserver(() => {
-  if (!gesture) return;
-  const context = dismissContext(gesture.context.root);
-  const same = context && context.mode === gesture.context.mode &&
-    context.root === gesture.context.root &&
-    context.back.getAttribute("onclick") === gesture.back.getAttribute("onclick");
-  if (!same || currentRoute !== gesture.route) {cleanup();return;}
-  gesture.back = context.back;
-});
+  function syncBackButton() {
+    if(rootRoutes.has(currentRoute) || !stack.length && !routeParams?._bbParentPlan)return;
+    const button=pageBackButton();
+    if(!button || button._bbOriginalBack)return;
+    button._bbOriginalBack=button.onclick;
+    button.setAttribute('onclick','bbNavigationBack()');
+  }
+  render=function() {
+    const result=baseRender.apply(this,arguments);
+    syncBackButton();rememberForms();return result;
+  };
+  window.render=render;
 
-  viewObserver.observe(appRoot, {
-    childList: true,
-    subtree: true
+  navigate=function(route,params={}) {
+    resetGesture();
+    if(session!==bbLFSession()) {stack.length=0;session=bbLFSession();}
+    const before={route:currentRoute,params:clone(routeParams),scroll:scrollState()};
+    const result=baseNavigate.apply(this,arguments);
+    if(!backInProgress && (before.route!==currentRoute || JSON.stringify(before.params)!==JSON.stringify(routeParams))) {
+      stack.push(before);if(stack.length>40)stack.shift();
+    }
+    syncBackButton();return result;
+  };
+  window.navigate=navigate;
+
+  const basePlanPaymentDetails=bbPlanOpenPaymentDetails;
+  bbPlanOpenPaymentDetails=function(planId,billId) {
+    const saved=planState();
+    const bill=Store.getBill(billId);
+    if(!saved || !bill || String(bill.installmentPlanId)!==String(planId))return basePlanPaymentDetails.apply(this,arguments);
+    baseClosePlan();pendingClosePlan=null;
+    navigate('detail',{id:bill.id,occurrenceDueDate:bill.dueDate,returnRoute:saved.route,
+      returnParams:clone(saved.params),_bbParentPlan:saved});
+    syncBackButton();
+  };
+  window.bbPlanOpenPaymentDetails=bbPlanOpenPaymentDetails;
+
+  document.addEventListener('touchstart',event=>{
+    resetGesture();
+    if(event.touches.length!==1)return;
+    const target=event.target;
+    if(!(target instanceof Element) || target.closest('input,textarea,select,[contenteditable],.tab-bar,.activity-months,.bill-swipe-wrapper'))return;
+    const touch=event.touches[0];if(touch.clientX>70)return;
+    const ctx=context(target);
+    if(!ctx || ctx.kind==='blocked' || !ctx.root?.contains(target))return;
+    rememberForms();
+    gesture={ctx,root:ctx.root,id:touch.identifier,x:touch.clientX,y:touch.clientY,lastX:touch.clientX,lastTime:performance.now(),
+      route:currentRoute,session:bbLFSession(),armed:false,moved:false,dx:0,velocity:0,
+      translate:ctx.root.style.getPropertyValue('translate'),priority:ctx.root.style.getPropertyPriority('translate'),
+      transition:ctx.root.style.getPropertyValue('transition'),transitionPriority:ctx.root.style.getPropertyPriority('transition')};
+  },{capture:true,passive:true});
+  document.addEventListener('touchmove',event=>{
+    const state=gesture;if(!state)return;
+    const now=context();
+    if(event.touches.length!==1 || currentRoute!==state.route || bbLFSession()!==state.session || now?.root!==state.root || !state.root.isConnected){resetGesture();return;}
+    const touch=event.touches[0];if(touch.identifier!==state.id){resetGesture();return;}
+    const dx=touch.clientX-state.x,dy=Math.abs(touch.clientY-state.y);
+    if(!state.armed && (dx < -10 || dy>28 || dy>10 && dy>Math.abs(dx))){resetGesture();return;}
+    if(!state.armed && dx>12 && dx>dy*1.5) {
+      if(!event.cancelable){resetGesture();return;}state.armed=true;
+    }
+    const time=performance.now();
+    state.velocity=(touch.clientX-state.lastX)/Math.max(1,time-state.lastTime);
+    state.lastX=touch.clientX;state.lastTime=time;state.dx=dx;
+    if(state.armed) {
+      if(event.cancelable)event.preventDefault();
+      // Move only the live popup. Never clone/transform the page behind it.
+      if(state.ctx.kind!=='page' && CSS.supports('translate','1px 0px') && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+        state.moved=true;
+        state.root.style.setProperty('transition','none','important');
+        state.root.style.setProperty('translate',`${Math.max(0,Math.min(window.innerWidth,dx))}px 0px`,'important');
+      }
+    }
+  },{capture:true,passive:false});
+  document.addEventListener('touchend',event=>{
+    const state=gesture;if(!state)return;
+    const touch=[...event.changedTouches].find(item=>item.identifier===state.id);
+    const now=context();
+    const dx=touch?touch.clientX-state.x:0,dy=touch?Math.abs(touch.clientY-state.y):Infinity;
+    const velocity=performance.now()-state.lastTime>120?0:state.velocity;
+    const commit=state.armed && now?.root===state.root && state.route===currentRoute && state.session===bbLFSession() &&
+      dx>dy && velocity>=-0.15 && (dx>=Math.min(window.innerWidth*.30,140) || dx>=50 && velocity>=.55);
+    if(state.armed && event.cancelable)event.preventDefault();
+    resetGesture();
+    if(commit)act(state.ctx);
+  },{capture:true,passive:false});
+  document.addEventListener('touchcancel',resetGesture,{passive:true});
+  window.addEventListener('resize',resetGesture);
+  document.addEventListener('visibilitychange',resetGesture);
+  window.addEventListener('billbeacon:data-changed',resetGesture);
+  for(const name of ['billbeacon:signed-out','billbeacon:authenticated','billbeacon:household-ready']) {
+    window.addEventListener(name,()=>{resetGesture();stack.length=0;pendingClosePlan=null;pendingCompleted=null;session=bbLFSession();});
+  }
+  const observer=new MutationObserver(()=>{
+    rememberForms();
+    if(gesture && (!gesture.root.isConnected || context()?.root!==gesture.root))resetGesture();
   });
-}
-  const formObserver = new MutationObserver(rememberForms);
-  formObserver.observe(document.body,{childList:true,subtree:true});
-  rememberForms();
-  window.addEventListener("billbeacon:authenticated",()=>{
-    cleanup();previous=null;pageSnapshots.clear();notificationPreview=null;
-  });
-  window.addEventListener("billbeacon:household-ready",()=>{
-    cleanup();previous=null;pageSnapshots.clear();notificationPreview=null;
-  });
-  
- 
+  observer.observe(document.body,{childList:true,subtree:true});
+  rememberForms();syncBackButton();
 })();
-// END BILL BEACON DRAG-BACK
+// END BILL BEACON DRAG-BACK V2
