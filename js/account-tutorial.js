@@ -89,7 +89,17 @@ function installStyle() {
   #billBeaconTutorial .bbt-copy{font-size:15px;line-height:1.6;margin:0;color:var(--text-secondary,var(--text,#b8b5c9));}
   #billBeaconTutorial .bbt-start{margin-top:14px;padding:12px;border-left:3px solid var(--accent,#b45cff);border-radius:5px;background:var(--bg,#15141e);font-size:13px;line-height:1.6;}
   #billBeaconTutorial .bbt-footer{margin-top:20px;display:flex;align-items:center;gap:10px;}
-  #billBeaconTutorial .bbt-next{flex:1;min-height:46px;padding:10px 16px;border:0;border-radius:13px;background:var(--accent,#b45cff);color:#fff;font-weight:750;}
+  #billBeaconTutorial .bbt-next {
+  flex: 1;
+  min-height: 46px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: var(--radius-lg, 18px);
+  background: var(--sunset, var(--accent, #b45cff));
+  color: #fff;
+  font-weight: 750;
+  box-shadow: var(--shadow);
+}
   #billBeaconTutorial .bbt-back{min-height:46px;padding:10px 16px;border:1px solid var(--border,#353442);border-radius:13px;background:transparent;color:var(--text,#f4f4fa);}
   #billBeaconTutorial .bbt-progress{display:flex;gap:5px;margin:14px 0 0;}
   #billBeaconTutorial .bbt-progress span{height:3px;flex:1;background:var(--border,#353442);border-radius:99px;}
