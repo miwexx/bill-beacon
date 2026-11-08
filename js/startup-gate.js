@@ -11,7 +11,7 @@
   let authSettled = false;
   let timer = null;
   let failure = "";
-  let lastStage = "Checking your saved session…";
+  let lastStage = "Checking Your Saved Session…";
   let panel = null;
   const appUser = () => window.getBillBeaconFirebaseUser?.() || null;
   const context = () => window.getBillBeaconHouseholdContext?.();
@@ -133,7 +133,7 @@
     authSettled = true;
     expectedUid = user.uid;
     rememberSignedOut(false);
-    loading("Loading your household…");
+    loading("Loading Your Household…");
   });
 
   window.addEventListener("billbeacon:household-ready", event => {
