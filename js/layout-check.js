@@ -19,6 +19,10 @@
     return {
       tab:nav.querySelector('.tab-item.active')?.textContent.trim().replace(/\s+/g,' ')||'unknown',
       tutorial:!!document.getElementById('billBeaconTutorial'),
+      viewportRefresh: {
+  loaded: !!window.BillBeaconViewportRefresh,
+  last: window.BillBeaconViewportRefresh?.last || null
+},
       viewport:{innerHeight:window.innerHeight,clientHeight:document.documentElement.clientHeight,visualHeight:vv?round(vv.height):null,visualTop:vv?round(vv.offsetTop):null,scale:vv?round(vv.scale):null,scrollY:round(window.scrollY)},
       nav:{top:round(rect.top),bottom:round(rect.bottom),height:round(rect.height),gapToInnerBottom:round(window.innerHeight-rect.bottom),position:css.position,bottomCSS:css.bottom,marginBottom:css.marginBottom,paddingBottom:css.paddingBottom,transform:css.transform},
       htmlOverflow:getComputedStyle(document.documentElement).overflow,
