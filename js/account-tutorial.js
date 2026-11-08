@@ -34,7 +34,9 @@ const steps = [
   }
 ];
 function userContext() {
-  const user = window.getBillBeaconFirebaseUser?.();
+  if (window.billBeaconSignupInProgress) return null;
+  const user
+ = window.getBillBeaconFirebaseUser?.();
   const household = window.getBillBeaconHouseholdContext?.();
   if (!user?.uid || !household?.ready || household.uid !== user.uid) return null;
   return {uid:user.uid, householdId:household.householdId};

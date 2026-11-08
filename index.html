@@ -139,7 +139,8 @@
 
     /* Startup caption. */
     #bb-startup-screen::after {
-      content: "Logging in…";
+      content: attr(data-stage);
+
 
       position: absolute;
       top: 60%;
@@ -175,7 +176,7 @@
     }
   </style>
 
-  <script src="js/startup-gate.js?v=step8-3"></script>
+  <script src="js/startup-gate.js?v=account-flow-1"></script>
 </head>
 
 <body>
@@ -192,7 +193,7 @@
 
       <h1 class="login-title">Bill Beacon</h1>
 
-      <div class="login-form">
+      <form class="login-form">
         <label class="login-label" for="email-login">
           Email
         </label>
@@ -241,7 +242,7 @@
         <button
           id="email-signin-button"
           class="login-button login-button-primary"
-          type="button"
+          type="submit"
           disabled
         >
           Sign In
@@ -255,14 +256,14 @@
         >
           Create Account
         </button>
-      </div>
+     </form>
     </div>
   </section>
 
   <div id="app" style="display: none;"></div>
 
   <script type="module" src="js/firebase-sync.js"></script>
-  <script type="module" src="js/firebase-auth.js"></script>
+  <script type="module" src="js/firebase-auth.js?v=account-flow-1"></script>
   <script src="js/app.js?v=leftover-color-3"></script>
   <script src="js/settings-cleanup.js?v=settings-cleanup-3"></script>
 <script src="js/bill-splits.js?v=paycheck-navigation-1"></script>
@@ -270,7 +271,7 @@
 
   <script src="js/calendar-preview.js"></script>
   <script src="js/about-legal.js"></script>
-  <script type="module" src="js/account-tutorial.js?v=3"></script>
+  <script type="module" src="js/account-tutorial.js?v=account-flow-1"></script>
   <script src="js/login-polish.js?v=1"></script>
   <script src="js/savings-store.js?v=2"></script>
 <script src="js/more-tools-preview.js?v=remove-what-if-1"></script>

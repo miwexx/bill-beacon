@@ -70,7 +70,7 @@ function showLogin() {
 
 function showApp() {
   householdLoading = true;
-  closeCreateAccountDialog(true);
+  if (!signupBusy) closeCreateAccountDialog(true);
   getElement("login-screen")?.classList.remove("hidden");
   const app = getElement("app");
   if (app) app.style.display = "none";
@@ -122,120 +122,93 @@ function signupValidation(email, password, confirmation) {
 
 function closeCreateAccountDialog(force = false) {
   if (signupBusy && !force) return;
-  const dialog = getElement("billBeaconSignupDialog");
+  const dialog = getElement("bb-account-dialog");
   if (!dialog) return;
-  dialog.querySelectorAll('input[type="password"]').forEach(input => { input.value = ""; });
-  dialog.remove();
+   dialog.querySelectorAll('input[autocomplete="new-password"], input[type="password"]').forEach(input => { input.value = ""; });
+  if (dialog.open) dialog.close();
+  else dialog.remove();
   if (!force && signupPreviousFocus?.isConnected) signupPreviousFocus.focus();
   signupPreviousFocus = null;
 }
 
 async function openCreateAccountDialog() {
-  if (householdLoading || auth.currentUser) return;
-
+  if (householdLoading || auth.currentUser || signupBusy) return;
+  signupBusy = true;
+  window.billBeaconSignupInProgress = true;
+  signupPreviousFocus = document.activeElement;
   let createdUser = null;
-
-  return bbAccountForm(
-    "Create Account",
-    [
-      {
-        key: "firstName",
-        label: "First Name",
-        autocomplete: "given-name"
-      },
-      {
-        key: "lastName",
-        label: "Last Name",
-        autocomplete: "family-name"
-      },
-      {
-        key: "email",
-        label: "Email",
-        type: "email",
-        autocomplete: "email",
-        value: getElement("email-login")?.value.trim()
-      },
-      {
-        key: "password",
-        label: "Password",
-        type: "password",
-        autocomplete: "new-password"
-      },
-      {
-        key: "confirmation",
-        label: "Confirm Password",
-        type: "password",
-        autocomplete: "new-password"
-      }
-    ],
-    "Create Account",
-    async (values, inputs) => {
+  let completed = false;
+  try {
+    completed = await bbAccountForm("Create Account", [
+      { key: "firstName", label: "First Name", autocomplete: "given-name" },
+      { key: "lastName", label: "Last Name", autocomplete: "family-name" },
+      { key: "email", label: "Email", type: "email", autocomplete: "email",
+        value: getElement("email-login")?.value.trim() },
+      { key: "password", label: "Password", type: "password", autocomplete: "new-password" },
+      { key: "confirmation", label: "Confirm Password", type: "password", autocomplete: "new-password" }
+    ], "Create Account", async (values, inputs, progress) => {
       if (!values.firstName.trim() || !values.lastName.trim()) {
         throw new Error("Enter both first and last name.");
       }
-
       if (!createdUser) {
-        if (values.password.length < 6) {
-          throw new Error(
-            "Use a password with at least 6 characters."
-          );
-        }
-
-        if (values.password !== values.confirmation) {
-          throw new Error("The passwords do not match.");
-        }
-
-        const result = await createUserWithEmailAndPassword(
-          auth,
-          values.email.trim(),
-          values.password
-        );
-
+        const validation = signupValidation(values.email, values.password, values.confirmation);
+        if (validation) throw new Error(validation);
+        progress("Creating your account…");
+        const result = await createUserWithEmailAndPassword(auth, values.email.trim(), values.password);
         createdUser = result.user;
-
-        const loginEmail = getElement("email-login");
-        if (loginEmail) loginEmail.value = values.email.trim();
-
-        const loginPassword = getElement("password-login");
-        if (loginPassword) loginPassword.value = "";
-
+        try { localStorage.setItem("billbeacon:onboarding-pending:" + createdUser.uid, "true"); } catch {}
+        if (getElement("email-login")) getElement("email-login").value = values.email.trim();
+        if (getElement("password-login")) getElement("password-login").value = "";
         inputs.email.disabled = true;
-
         for (const key of ["password", "confirmation"]) {
           inputs[key].value = "";
           inputs[key].required = false;
           inputs[key].disabled = true;
         }
       }
-
       bbCheckAccountUser(createdUser);
-
-      try {
-        await bbSaveAccountName(
-          values.firstName,
-          values.lastName,
-          createdUser
-        );
-      } catch {
-        throw new Error(
-          "The account was created, but name setup did not finish. " +
-          "Retry this button to save the name, or use Change Name " +
-          "in Settings. No second account will be created by this retry."
-        );
+      progress("Finishing account setup…");
+      const setupDeadline = Date.now() + 25000;
+      let context = window.getBillBeaconHouseholdContext?.();
+      if (!context?.ready || context.uid !== createdUser.uid) {
+        window.dispatchEvent(new CustomEvent("billbeacon:authenticated", { detail: { user: createdUser } }));
       }
-
-      window.dispatchEvent(
-        new CustomEvent("billbeacon:account-created", {
-          detail: {
-            uid: createdUser.uid
-          }
-        })
-      );
-
-      return "Your account has been created.";
+      while (true) {
+        bbCheckAccountUser(createdUser);
+        context = window.getBillBeaconHouseholdContext?.();
+        if (context?.ready && context.uid === createdUser.uid) break;
+        if (Date.now() >= setupDeadline) {
+          throw new Error(
+  "Your account is created, but setup is taking longer than expected. " +
+  "Check your connection and choose Retry Setup in this window. " +
+  "This retry will not create another account."
+);
+        }
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      progress("Saving your name…");
+      try {
+        await bbSaveAccountName(values.firstName, values.lastName, createdUser);
+      } catch {
+        throw new Error("Your account is created, but your name could not be fully saved. Retry to finish setup; this will not create another account. You can also close this window and use Change Name in Settings.");
+      }
+      bbCheckAccountUser(createdUser);
+      return "Your account is ready.";
+    }, { autoClose: true, busyLabel: "Creating your account…", retryLabel: () => createdUser ? "Retry Setup" : "Create Account" });
+  } finally {
+    signupBusy = false;
+    window.billBeaconSignupInProgress = false;
+    const context = window.getBillBeaconHouseholdContext?.();
+    if (context?.ready && context.uid === auth.currentUser?.uid) {
+      revealReadyHousehold();
+      window.dispatchEvent(new CustomEvent("billbeacon:household-ready", { detail: context }));
     }
-  );
+  }
+  if (completed && createdUser && auth.currentUser?.uid === createdUser.uid) {
+    window.dispatchEvent(new CustomEvent("billbeacon:account-created", { detail: { uid: createdUser.uid } }));
+  }
 }
+
 function setLoginControlsLocked(locked) {
   for (const id of ["email-login","password-login","email-signin-button","email-create-button","forgot-password-button"]) {
     const control = getElement(id);
@@ -269,6 +242,7 @@ function setupActions(show = false) {
 }
 
 function revealReadyHousehold() {
+  if (signupBusy) return false;
   const context = window.getBillBeaconHouseholdContext?.();
   if (!auth.currentUser || !context?.ready || context.uid !== auth.currentUser.uid) return false;
   householdLoading = false;
@@ -308,7 +282,7 @@ async function resetPassword() {
 
   if (!email) {
     setMessage(
-      "Enter your household email first, then choose Forgot password.",
+      "Enter your email address first, then choose Forgot password.",
       true
     );
 
@@ -413,16 +387,25 @@ function initFirebaseLogin() {
     return;
   }
 
-  signInButton.addEventListener("click", async () => {
-    try {
+  signInButton.addEventListener("click", async event => {
+  event.preventDefault();
+
+  try {
+      setLoginControlsLocked(true);
       setBusy(signInButton, true, "Signing in…", "Sign In");
       await signIn();
     } catch (error) {
       console.error("Firebase sign-in failed:", error);
       setMessage(friendlyError(error), true);
     } finally {
+      setLoginControlsLocked(householdLoading);
       setBusy(signInButton, false, "Signing in…", "Sign In");
     }
+  });
+
+  getElement("email-login")?.closest("form")?.addEventListener("submit", event => {
+    event.preventDefault();
+    if (!signInButton.disabled) signInButton.click();
   });
 
   createButton.addEventListener("click", openCreateAccountDialog);
@@ -445,7 +428,7 @@ function initFirebaseLogin() {
       if (code === "auth/invalid-email") {
         setMessage("Enter a valid email address.", true);
       } else if (code === "auth/user-not-found") {
-        setMessage("No household account was found for that email.", true);
+        setMessage("No account was found for that email.", true);
       } else if (code === "auth/too-many-requests") {
         setMessage("Too many attempts. Wait a moment, then try again.", true);
       } else {
@@ -656,12 +639,13 @@ async function bbSyncAccountEmail(user = bbAccountUser()) {
   await bbWriteProfileFields(user, { email: user.email });
 }
 
-function bbAccountForm(title, definitions, saveLabel, save) {
+function bbAccountForm(title, definitions, saveLabel, save, options = {}) {
   return new Promise(resolve => {
     if (document.getElementById("bb-account-dialog")) { resolve(false); return; }
+    const previousFocus = document.activeElement;
     const dialog = document.createElement("dialog");
     dialog.id = "bb-account-dialog";
-    dialog.style.cssText = "margin:auto;width:min(440px,calc(100% - 32px));max-height:85dvh;overflow:auto;padding:24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--text);";
+    dialog.style.cssText = "margin:auto;width:min(440px,calc(100% - 32px));box-sizing:border-box;max-height:85dvh;overflow:auto;padding:24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--text);";
     const heading = document.createElement("h2");
     heading.id = "bb-account-heading";
     heading.textContent = title;
@@ -670,23 +654,77 @@ function bbAccountForm(title, definitions, saveLabel, save) {
     const form = document.createElement("form");
     form.style.cssText = "display:grid;gap:12px;";
     const inputs = {};
+    const passwordFields = [];
+    const feedback = {};
     for (const definition of definitions) {
       const label = document.createElement("label");
       label.className = "login-label";
       label.textContent = definition.label;
       const input = document.createElement("input");
       input.id = `bb-account-${definition.key}`;
+      input.name = definition.key;
       input.className = "login-input";
       input.type = definition.type || "text";
       input.required = true;
       input.autocomplete = definition.autocomplete || "off";
       input.value = definition.value || "";
+      input.style.cssText = "width:100%;min-width:0;box-sizing:border-box;";
       if (input.type === "text") input.maxLength = 100;
-      if (input.type === "email") { input.autocapitalize = "none"; input.spellcheck = false; }
+      if (input.type === "email") { input.autocapitalize = "none"; input.spellcheck = false; input.inputMode = "email"; }
       label.htmlFor = input.id;
       inputs[definition.key] = input;
-      form.append(label, input);
+      form.append(label);
+      if (definition.type === "password") {
+        passwordFields.push(input);
+        const row = document.createElement("div");
+        row.style.cssText = "display:flex;gap:8px;align-items:center;min-width:0;";
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.textContent = "Show";
+        toggle.className = "bb-outline-pill";
+        toggle.style.cssText = "min-width:60px;min-height:44px;";
+        toggle.setAttribute("aria-controls", input.id);
+        toggle.setAttribute("aria-label", "Show " + definition.label.toLowerCase());
+        toggle.setAttribute("aria-pressed", "false");
+        toggle.addEventListener("click", () => {
+          const visible = input.type === "password";
+          input.type = visible ? "text" : "password";
+          toggle.textContent = visible ? "Hide" : "Show";
+          toggle.setAttribute("aria-label", (visible ? "Hide " : "Show ") + definition.label.toLowerCase());
+          toggle.setAttribute("aria-pressed", String(visible));
+        });
+        row.append(input, toggle);
+        form.append(row);
+      } else form.append(input);
+      if (definition.key === "password" || definition.key === "newPassword") {
+        input.minLength = 6;
+        const help = document.createElement("small");
+        help.id = input.id + "-help";
+        help.textContent = "Use at least 6 characters.";
+        help.style.color = "var(--text-secondary,var(--text))";
+        input.setAttribute("aria-describedby", help.id);
+        form.append(help);
+      }
+      if (definition.key === "confirmation") {
+        const help = document.createElement("small");
+        help.id = input.id + "-help";
+        help.setAttribute("aria-live", "polite");
+        help.style.color = "var(--overdue,#f43f5e)";
+        feedback.confirmation = help;
+        input.setAttribute("aria-describedby", help.id);
+        form.append(help);
+      }
     }
+    const checkConfirmation = () => {
+      const confirmation = inputs.confirmation;
+      const password = inputs.newPassword || inputs.password;
+      if (!confirmation || !password) return;
+      const mismatch = !confirmation.disabled && confirmation.value !== "" && confirmation.value !== password.value;
+      confirmation.setCustomValidity(mismatch ? "The passwords do not match." : "");
+      confirmation.setAttribute("aria-invalid", String(mismatch));
+      if (feedback.confirmation) feedback.confirmation.textContent = mismatch ? "The passwords do not match." : "";
+    };
+    Object.values(inputs).forEach(input => input.addEventListener("input", checkConfirmation));
     const message = document.createElement("p");
     message.setAttribute("role", "status");
     message.setAttribute("aria-live", "polite");
@@ -700,38 +738,50 @@ function bbAccountForm(title, definitions, saveLabel, save) {
     cancel.className = "bb-outline-pill";
     cancel.textContent = "Cancel";
     let busy = false, succeeded = false;
-    cancel.addEventListener("click", () => dialog.close());
+    cancel.addEventListener("click", () => { if (!busy) dialog.close(); });
     dialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
     dialog.addEventListener("close", () => {
-      Object.values(inputs).forEach(input => { if (input.type === "password") input.value = ""; });
+      passwordFields.forEach(input => { input.value = ""; input.type = "password"; });
       dialog.remove();
+      if (previousFocus?.isConnected && previousFocus.getClientRects().length) previousFocus.focus();
       resolve(succeeded);
     }, { once: true });
     form.addEventListener("submit", async event => {
       event.preventDefault();
       if (busy || succeeded) return;
+      checkConfirmation();
+      if (!form.reportValidity()) return;
       busy = true;
+      form.setAttribute("aria-busy", "true");
       submit.disabled = cancel.disabled = true;
-      submit.textContent = "Saving…";
+      const states = new Map(Object.values(inputs).map(input => [input, input.readOnly]));
+      Object.values(inputs).forEach(input => { input.readOnly = true; });
+      submit.textContent = options.busyLabel || "Saving…";
       message.textContent = "";
+      const progress = text => { message.textContent = text; message.style.color = "var(--text)"; submit.textContent = text; };
       try {
         const values = Object.fromEntries(Object.entries(inputs).map(([key, input]) => [key, input.value]));
-        message.textContent = await save(values, inputs);
-        message.style.color = "var(--paid, #00b894)";
+        message.textContent = await save(values, inputs, progress);
+        if (!dialog.isConnected || !dialog.open) return;
+        message.style.color = "var(--paid,#00b894)";
         succeeded = true;
-        Object.values(inputs).forEach(input => {
-          if (input.type === "password") input.value = "";
-          input.disabled = true;
-        });
+        passwordFields.forEach(input => { input.value = ""; });
+        Object.values(inputs).forEach(input => { input.disabled = true; });
+        if (options.autoClose) { dialog.close(); return; }
         submit.hidden = true;
         cancel.textContent = "Done";
       } catch (error) {
-        message.style.color = "var(--overdue, #f43f5e)";
-        message.textContent = friendlyError(error);
+        if (dialog.isConnected) {
+          message.style.color = "var(--overdue,#f43f5e)";
+          message.textContent = friendlyError(error);
+          if (options.retryLabel && auth.currentUser) cancel.textContent = "Close";
+        }
       } finally {
         busy = false;
+        form.removeAttribute("aria-busy");
+        for (const [input, readOnly] of states) input.readOnly = readOnly;
         submit.disabled = cancel.disabled = false;
-        submit.textContent = saveLabel;
+        submit.textContent = options.retryLabel ? options.retryLabel() : saveLabel;
       }
     });
     form.append(message, submit, cancel);

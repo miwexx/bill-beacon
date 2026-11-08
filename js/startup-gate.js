@@ -50,6 +50,7 @@
     }
     panel.classList.toggle("bb-startup-error", Boolean(failure));
     panel.querySelector("#bb-startup-message").textContent = failure || lastStage;
+    panel.setAttribute("data-stage", lastStage);
     panel.querySelector("#bb-startup-actions").style.display = failure ? "grid" : "none";
     panel.querySelector("#bb-startup-signout").hidden = !appUser();
   }
@@ -74,8 +75,10 @@
     armSlowWarning();
   }
 
-  function reveal() {
-    const user = appUser();
+ function reveal() {
+    if (window.billBeaconSignupInProgress) return false;
+    const user
+ = appUser();
     const live = context();
     if (!authSettled || phase !== "loading" || !expectedUid || !user ||
         user.uid !== expectedUid || !live?.ready || live.uid !== user.uid || !live.householdId) return false;
@@ -103,7 +106,7 @@
     const button = panel?.querySelector("#bb-startup-signout");
     if (button) button.disabled = true;
     try {
-      const {auth, signOut} = await import("./firebase-auth.js");
+      const {auth, signOut} = await import("./firebase-auth.js?v=account-flow-1");
       await signOut(auth);
     } catch (error) {
       failure = error?.message || "Could not sign out. Please retry.";
