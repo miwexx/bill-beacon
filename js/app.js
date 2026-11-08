@@ -1140,7 +1140,7 @@ function createBillOccurrence(bill, dueDate) {
     : [];
 
   const override = occurrenceOverrides.find(
-    (item) => item.originalDueDate === normalizedDueDate
+    (item) => financialDateKey(item.originalDueDate) === financialDateKey(normalizedDueDate)
   );
 
   if (override?.cancelled) {
@@ -1177,6 +1177,7 @@ function createBillOccurrence(bill, dueDate) {
     isOccurrence: true,
   };
 }
+
 function getMonthBounds(referenceDate = new Date()) {
   const year = referenceDate.getFullYear();
   const month = referenceDate.getMonth();
@@ -1931,13 +1932,14 @@ function confirmPostponeBill(billId) {
 }
 function openPostponeRecurringOccurrenceSheet(
   billId,
-  originalDueDate
+  originalDueDate,
+  selectedDueDate = originalDueDate
 ) {
   const bill = Store.getBill(billId);
 
   if (!bill) return;
 
-  const originalDue = new Date(originalDueDate);
+  const originalDue = new Date(selectedDueDate);
 
   const minimumDate = new Date(originalDue);
   minimumDate.setDate(minimumDate.getDate() + 1);
@@ -1984,7 +1986,7 @@ function openPostponeRecurringOccurrenceSheet(
               margin-top:4px;
             "
           >
-            Scheduled for ${formatDate(originalDueDate, "full")}
+            Scheduled for ${formatDate(selectedDueDate, "full")}
           </div>
         </div>
 
@@ -2018,7 +2020,8 @@ function openPostponeRecurringOccurrenceSheet(
           style="width:100%"
           onclick="confirmPostponeRecurringOccurrence(
             '${escapeInlineString(bill.id)}',
-            '${escapeInlineString(originalDueDate)}'
+            '${escapeInlineString(originalDueDate)}',
+            '${escapeInlineString(selectedDueDate)}'
           )"
         >
           ${svgIcon("calendar", 20)}
@@ -2045,7 +2048,6 @@ function openPostponeRecurringOccurrenceSheet(
       ?.classList.add("show");
   });
 }
-
 function closePostponeRecurringOccurrenceSheet() {
   document
     .getElementById("postponeRecurringOccurrenceOverlay")
@@ -2066,7 +2068,8 @@ function closePostponeRecurringOccurrenceSheet() {
 
 function confirmPostponeRecurringOccurrence(
   billId,
-  originalDueDate
+  originalDueDate,
+  selectedDueDate = originalDueDate
 ) {
   const input = document.getElementById(
     "postponeRecurringOccurrenceDate"
@@ -2084,26 +2087,38 @@ function confirmPostponeRecurringOccurrence(
     return;
   }
 
-  const existingOverride = (bill.occurrenceOverrides || []).find(item =>
-    getLocalDateKey(item.originalDueDate) === getLocalDateKey(originalDueDate)
-  );
-  const currentDueDate = existingOverride?.postponedTo || originalDueDate;
-  const occurrence = resolveCalendarBillOccurrence(billId, currentDueDate);
-  if (!occurrence) { alert("Reopen Calendar and choose the current occurrence."); return; }
+  const originKey = financialDateKey(originalDueDate);
+  const overrides = Array.isArray(bill.occurrenceOverrides) ? bill.occurrenceOverrides : [];
+  const existingOverride = overrides.find(item =>
+    financialDateKey(item.originalDueDate) === originKey);
+  if (!originKey || existingOverride?.cancelled) {
+    alert("This occurrence is no longer available. Open its latest details."); return;
+  }
+  const lookupDate = existingOverride?.postponedTo || selectedDueDate;
+  const occurrence = resolveCalendarBillOccurrence(billId, lookupDate);
+  if (!occurrence || financialDateKey(occurrence.originalDueDate || occurrence.dueDate) !== originKey) {
+    alert("This occurrence has changed. Open its latest details before postponing."); return;
+  }
+  const currentDueDate = occurrence.dueDate;
   if (isOccurrencePaid(occurrence, new Date(currentDueDate))) {
     alert("A paid occurrence cannot be postponed. Reverse its payment first."); return;
   }
+  originalDueDate = occurrence.originalDueDate || occurrence.dueDate;
 
   const postponedTo = dateFromInput(input.value);
 
-  if (new Date(postponedTo) <= new Date(currentDueDate)) {
+  if (!financialDateKey(postponedTo)) {
+    alert("Choose a valid new due date."); return;
+  }
+
+  if (financialDateKey(postponedTo) <= financialDateKey(currentDueDate)) {
     alert("Choose a date after the current occurrence date.");
     return;
   }
 
   const occurrenceOverrides = Array.isArray(bill.occurrenceOverrides)
     ? bill.occurrenceOverrides.filter(
-        (item) => item.originalDueDate !== originalDueDate
+        (item) => financialDateKey(item.originalDueDate) !== originKey
       )
     : [];
 
@@ -2157,6 +2172,7 @@ function confirmPostponeRecurringOccurrence(
   closePostponeRecurringOccurrenceSheet();
   navigate("recurring");
 }
+
 function getLocalDateKey(value) {
   const date = new Date(value);
 
@@ -12074,7 +12090,8 @@ const markUnpaidAction = isRecurring
 const postponeAction = isRecurring
   ? `openPostponeRecurringOccurrenceSheet(
       '${escapeInlineString(sourceBillId)}',
-      '${escapeInlineString(detailBill.originalDueDate || detailBill.dueDate)}'
+      '${escapeInlineString(detailBill.originalDueDate || detailBill.dueDate)}',
+      '${escapeInlineString(detailBill.dueDate)}'
     )`
   : `openPostponeBillSheet('${escapeInlineString(sourceBillId)}')`;
   const paymentAction = isArchivedHistory ? `<div class="settings-footer">Archived history — read only.</div>` : !payment
