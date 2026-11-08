@@ -56,7 +56,13 @@
       if((entry.id&&ids.has(entry.id))||content.has(signature))continue;
       if(entry.id)ids.add(entry.id);content.add(signature);result.push({...entry,text:value});
     }
-    return result.sort((a,b)=>String(a.timestamp||"").localeCompare(String(b.timestamp||"")));
+    return result.sort((a, b) => {
+  const aTime = Date.parse(a.timestamp || "");
+  const bTime = Date.parse(b.timestamp || "");
+
+  return (Number.isFinite(bTime) ? bTime : 0) -
+         (Number.isFinite(aTime) ? aTime : 0);
+});
   }
 
     function notesMarkup(context) {

@@ -2095,10 +2095,54 @@ function confirmPostponeRecurringOccurrence(
     alert("This occurrence is no longer available. Open its latest details."); return;
   }
   const lookupDate = existingOverride?.postponedTo || selectedDueDate;
-  const occurrence = resolveCalendarBillOccurrence(billId, lookupDate);
-  if (!occurrence || financialDateKey(occurrence.originalDueDate || occurrence.dueDate) !== originKey) {
-    alert("This occurrence has changed. Open its latest details before postponing."); return;
-  }
+const occurrence = resolveCalendarBillOccurrence(billId, lookupDate);
+
+const resolvedOriginKey = occurrence
+  ? financialDateKey(
+      occurrence.originalDueDate || occurrence.dueDate
+    )
+  : "";
+
+if (!occurrence || resolvedOriginKey !== originKey) {
+  const diagnostic = {
+    reason: !occurrence
+      ? "Occurrence lookup returned nothing"
+      : "Original occurrence date does not match",
+
+    billId,
+    originalDueDate,
+    selectedDueDate,
+    originKey,
+    lookupDate,
+
+    existingOverride: existingOverride
+      ? {
+          originalDueDate: existingOverride.originalDueDate,
+          postponedTo: existingOverride.postponedTo,
+          cancelled: Boolean(existingOverride.cancelled)
+        }
+      : null,
+
+    resolvedOccurrence: occurrence
+      ? {
+          id: occurrence.id,
+          sourceBillId: occurrence.sourceBillId,
+          dueDate: occurrence.dueDate,
+          originalDueDate: occurrence.originalDueDate,
+          resolvedOriginKey
+        }
+      : null
+  };
+
+  console.warn("Bill Beacon postpone lookup:", diagnostic);
+
+  alert(
+    "Postpone could not verify this occurrence. Nothing was changed.\n\n" +
+    JSON.stringify(diagnostic, null, 2)
+  );
+
+  return;
+}
   const currentDueDate = occurrence.dueDate;
   if (isOccurrencePaid(occurrence, new Date(currentDueDate))) {
     alert("A paid occurrence cannot be postponed. Reverse its payment first."); return;
@@ -12102,7 +12146,7 @@ const postponeAction = isRecurring
         grid-template-columns:1fr 1fr;
         gap:var(--space-2);
         margin-top:var(--space-4);
-      "
+      "s
     >
       <button
         class="btn-primary"
