@@ -59,10 +59,67 @@
   return `<button type="button" class="bbml-row" data-bbml-action="${esc(action)}"><span class="bbml-icon bbml-${tone}">${icon(symbol)}</span><span class="bbml-row-copy"><span class="bbml-row-title">${esc(name)}</span><span class="bbml-row-sub">${esc(sub)}</span></span>${tag?`<span class="bbml-tag">${esc(tag)}</span>`:''}<span class="bbml-chevron">${icon('arrow',16)}</span></button>`;
  }
  const group=(title,body)=>`<section class="bbml-section"><h2>${esc(title)}</h2><div class="bbml-group">${body}</div></section>`;
- function main(){
-  const s=snapshot();const tool=k=>{const t=TOOLS[k];return row(t[0],t[1],t[2],t[3],'open:'+k,k==='goals'?'Shared':k==='documents'?'Notes':k==='cards'?'Bills':'Read-only');};
-  return `<div class="nav-bar"><div class="nav-bar-content bbml-nav"><span></span><div class="nav-title">More</div><span></span></div></div><div class="main-content fade-in bbml-page"><div class="content-pad bbml-content"><div class="bbml-intro"><div><p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p><h1>Plan ahead. Stay in control.</h1></div><span class="bbml-badge">App-data beta</span></div><p class="bbml-intro-note">${esc(s.ok?'Your household records and shared savings plans.':s.reason)}</p><button type="button" class="bbml-bank" data-bbml-action="route:transactions"><span class="bbml-icon bbml-purple">${icon('bank',24)}</span><span class="bbml-row-copy"><span class="bbml-row-title">Banking</span><span class="bbml-row-sub">Open your existing transactions</span></span><span class="bbml-bank-link">View ${icon('arrow',15)}</span></button>${group('Planning',tool('goals'))}${group('Manage',tool('subscriptions')+tool('cards')+tool('documents'))}${group('Review',tool('review')+tool('monthly')+row('Activity & Changes','Your existing bill and payment change history.','activity','orange','route:activity'))}${group('App',tool('connections')+row('Settings','Account, appearance, reminders and backups.','settings','purple','route:settings'))}<p class="bbml-footer">No sample records · projections are not available balances · ${esc(monthLabel())}</p></div></div>`;
- }
+ function main() {
+  const s = snapshot();
+  const count = s.ok ? reviewIssues(s).length : null;
+  const customRow = (title, sub, symbol, tone, action) =>
+    row(title, sub, symbol, tone, action)
+      .replace('data-bbml-action=', 'data-bb-organize=');
+
+  return `
+    <div class="nav-bar">
+      <div class="nav-bar-content bbml-nav">
+        <span></span><div class="nav-title">More</div><span></span>
+      </div>
+    </div>
+    <div class="main-content fade-in bbml-page">
+      <div class="content-pad bbml-content">
+        <div class="bbml-intro">
+          <div>
+            <p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p>
+            <h1>Tools for your household.</h1>
+          </div>
+        </div>
+        <p class="bbml-intro-note">${esc(s.ok
+          ? 'Manage your money tools, review changes, and find help.'
+          : s.reason)}</p>
+        ${group('Money tools',
+          row('Banking & Transactions', 'View transactions and review bank activity.',
+            'bank', 'purple', 'route:transactions') +
+          row('Savings Plan', 'Track goals, emergency funds, and savings activity.',
+            'goal', 'green', 'open:goals', 'Shared') +
+          row(count === null ? 'Needs Review' : `Needs Review (${count})`,
+            'Inspect possible issues; records are not repaired automatically.',
+            'review', 'orange', 'open:review')
+        )}
+        ${group('History',
+          row('Activity & Changes', 'Review the full saved change history.',
+            'activity', 'orange', 'route:activity')
+        )}
+        ${group('App',
+          row('Settings', 'Income, account, household, notifications, and backups.',
+            'settings', 'purple', 'route:settings') +
+          customRow('Help & Tutorial', 'Replay the tour and find important settings.',
+            'document', 'blue', 'help')
+        )}
+        <p class="bbml-footer">Savings entries track activity; they do not move bank money.</p>
+      </div>
+    </div>`;
+}
+
+// Narrow read-only bridge for the navigation cleanup. No financial writes.
+window.BillBeaconFeatureBridge = Object.freeze({
+  summary() {
+    const s = snapshot();
+    if (!s.ok) return null;
+    return {
+      scope: s.scope,
+      reviewCount: reviewIssues(s).length,
+      incomeCount: s.income.length,
+      billCount: s.bills.filter(b => enabled(b) && !b.splitPaymentParentId).length
+    };
+  }
+});
   let forecastView = {
    scope: null,
    year: null,
@@ -485,7 +542,9 @@
  function connectionsHTML(s){
   let bank=null;try{if(typeof plaidBankState!=='undefined')bank=plaidBankState;}catch{}
   const loaded=bank&&(bank.connected===true||array(bank.accounts).length>0||!!bank.lastSyncedAt);let bankStatus=bank?.connected===true?'Connected in loaded app data':loaded?'Connection not reported as active':'Not loaded / not verified in this session';
-  let status=window.billBeaconSyncStatus;const identity=scope();const syncText=status?.conflict?'Conflict reported by app':status?.pending?'Changes pending':status?.ready&&identity.ok?'App reports ready':'Not ready / unavailable';
+  let status = typeof window.billBeaconSyncStatus === 'function'
+  ? window.billBeaconSyncStatus()
+  : window.billBeaconSyncStatus;const identity=scope();const syncText=status?.conflict?'Conflict reported by app':status?.pending?'Changes pending':status?.ready&&identity.ok?'App reports ready':'Not ready / unavailable';
   const permission=typeof Notification==='undefined'?'Unsupported in this browser':Notification.permission;
   return note('Local status snapshot, not a new server check. “Not loaded” does not mean disconnected. “Ready” does not independently prove the latest changes reached the server.')+panel('Bank connection',detail('Loaded status',bankStatus)+detail('Loaded accounts',loaded?String(array(bank.accounts).length):'Not loaded')+detail('Reported last bank timestamp',bank?.lastSyncedAt?fmtDate(bank.lastSyncedAt)+' '+(date(bank.lastSyncedAt)?.toLocaleTimeString()||''):'Not available')+routeButton('Open Banking to verify or sync','transactions'))+panel('Household sync',detail('Current household context',identity.ok?'Ready for signed-in user':'Not ready')+detail('Sync state',syncText)+help('No sync operation or conflict resolution is run by this screen.'))+panel('Notifications',detail('Browser permission',permission)+detail('Server subscription registration','Not verified here')+help('Permission being granted does not prove the server has an active registration for this account. Verify from the existing Notifications settings.')+routeButton('Open Settings','settings'));
  }
