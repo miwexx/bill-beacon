@@ -59,54 +59,49 @@
   return `<button type="button" class="bbml-row" data-bbml-action="${esc(action)}"><span class="bbml-icon bbml-${tone}">${icon(symbol)}</span><span class="bbml-row-copy"><span class="bbml-row-title">${esc(name)}</span><span class="bbml-row-sub">${esc(sub)}</span></span>${tag?`<span class="bbml-tag">${esc(tag)}</span>`:''}<span class="bbml-chevron">${icon('arrow',16)}</span></button>`;
  }
  const group=(title,body)=>`<section class="bbml-section"><h2>${esc(title)}</h2><div class="bbml-group">${body}</div></section>`;
- function main() {
+function main() {
   const s = snapshot();
   const count = s.ok ? reviewIssues(s).length : null;
-  const customRow = (title, sub, symbol, tone, action) =>
-    row(title, sub, symbol, tone, action)
-      .replace('data-bbml-action=', 'data-bb-organize=');
-
   return `
-    <div class="nav-bar">
-      <div class="nav-bar-content bbml-nav">
-        <span></span><div class="nav-title">More</div><span></span>
-      </div>
-    </div>
+    <div class="nav-bar"><div class="nav-bar-content bbml-nav">
+      <span></span><div class="nav-title">More</div><span></span>
+    </div></div>
     <div class="main-content fade-in bbml-page">
       <div class="content-pad bbml-content">
-        <div class="bbml-intro">
-          <div>
-            <p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p>
-            <h1>Tools for your household.</h1>
-          </div>
-        </div>
+        <div class="bbml-intro"><div>
+          <p class="bbml-eyebrow">YOUR MONEY TOOLKIT</p>
+          <h1>Tools for your household.</h1>
+        </div></div>
         <p class="bbml-intro-note">${esc(s.ok
-          ? 'Manage your money tools, review changes, and find help.'
-          : s.reason)}</p>
+          ? 'Manage your tools and review household activity.' : s.reason)}</p>
         ${group('Money tools',
           row('Banking & Transactions', 'View transactions and review bank activity.',
             'bank', 'purple', 'route:transactions') +
           row('Savings Plan', 'Track goals, emergency funds, and savings activity.',
-            'goal', 'green', 'open:goals', 'Shared') +
-          row(count === null ? 'Needs Review' : `Needs Review (${count})`,
-            'Inspect possible issues; records are not repaired automatically.',
-            'review', 'orange', 'open:review')
+            'goal', 'green', 'open:goals', 'Shared')
         )}
-        ${group('History',
+        ${group('Manage',
+          row('Subscriptions', 'Review your subscription-category bills and schedules.',
+            'renew', 'pink', 'open:subscriptions') +
+          row('Credit Cards', 'Open your existing credit card tool.',
+            'card', 'blue', 'open:cards')
+        )}
+        ${group('Review',
+          row(count === null ? 'Needs Review' : `Needs Review (${count})`,
+            'Inspect possible issues without automatic changes.',
+            'review', 'orange', 'open:review') +
+          row('Monthly Review', 'Payments and changes for the current calendar month.',
+            'report', 'purple', 'open:monthly') +
           row('Activity & Changes', 'Review the full saved change history.',
             'activity', 'orange', 'route:activity')
         )}
-        ${group('App',
-          row('Settings', 'Income, account, household, notifications, and backups.',
-            'settings', 'purple', 'route:settings') +
-          customRow('Help & Tutorial', 'Replay the tour and find important settings.',
-            'document', 'blue', 'help')
-        )}
+        ${group('App', row('Settings',
+          'Income, account, household, notifications, connections, and backups.',
+          'settings', 'purple', 'route:settings'))}
         <p class="bbml-footer">Savings entries track activity; they do not move bank money.</p>
       </div>
     </div>`;
 }
-
 // Narrow read-only bridge for the navigation cleanup. No financial writes.
 window.BillBeaconFeatureBridge = Object.freeze({
   summary() {
