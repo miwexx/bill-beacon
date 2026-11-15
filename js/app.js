@@ -2432,7 +2432,7 @@ function bbSaveProcessing(billId, dueDate, next) {
     const question = next === 'processing'
       ? `Mark ${occurrence.name} as Processing?\n\n${formatCurrency(occurrence.amount)} will move out of Due and actionable Overdue, but will not count as Paid. Only do this after submitting the transfer.`
       : `Cancel processing for ${occurrence.name}?\n\nIt will return to Due and, if past its due date, Overdue. This does not cancel a bank transfer.`;
-    if (!confirm(question)) return false;
+    if (next === 'cancelled' && !confirm(question)) return false;
     bbLFAssert(capture);
     const bills = Store.getBills(), index = bills.findIndex(bill => bill.id === billId);
     if (index < 0) throw new Error('Bill is no longer active.');
