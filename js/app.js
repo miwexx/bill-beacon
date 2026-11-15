@@ -1612,7 +1612,7 @@ function getAllOverdueBillOccurrences(referenceDate = new Date()) {
       const key = `${getBillPaymentId(bill)}:${dueKey}`;
       if (!dueKey || dueKey >= todayKey || seen.has(key)) continue;
       seen.add(key);
-      if (!isOccurrencePaid(bill, new Date(bill.dueDate))) overdue.push(bill);
+      if (!isOccurrencePaid(bill, new Date(bill.dueDate)) && !isOccurrenceProcessing(bill, new Date(bill.dueDate))) overdue.push(bill);
     }
     cursor.setMonth(cursor.getMonth() + 1);
   }
@@ -2377,6 +2377,131 @@ function isOccurrencePaid(bill, referenceDate = new Date()) {
   return Boolean(getActivePaymentForOccurrence(bill, referenceDate));
 }
 
+
+// Manual processing trial v1: metadata on the exact occurrence, never an active payment.
+function bbProcessingRecord(bill, referenceDate = new Date()) {
+  if (!bill) return null;
+  const id = getBillPaymentId(bill);
+  const due = getBillOccurrenceDueDate(bill, referenceDate);
+  const source = Store.getBill(id);
+  if (!source || source.archived || source.archivedAt || source.cancelled || source.cancelledAt || source.paidInFullAt || ['archived','cancelled','canceled','paid-in-full','paidinfull'].includes(String(source.status || '').toLowerCase())) return null;
+  const occurrence = bill.isOccurrence ? bill : resolveCalendarBillOccurrence(id, due);
+  if (!occurrence) return null;
+  const origin = financialDateKey(occurrence.originalDueDate || occurrence.dueDate);
+  const record = source.processingOccurrences?.[origin];
+  if (!record || record.version !== 1 || record.status !== 'processing' || !Array.isArray(record.existingPaymentIds)) return null;
+  if (record.dueKey !== financialDateKey(occurrence.dueDate)) return null;
+  try { if (record.amountCents !== bbLFCents(occurrence.amount)) return null; } catch (_) { return null; }
+  // A later payment retires this attempt even if that payment is subsequently voided.
+  // Undo/Mark Unpaid must never resurrect an old Processing flag.
+  const laterPayment = Store.getPaymentsForBill(id).some(payment =>
+    getPaymentOccurrenceDateKey(payment) === record.dueKey &&
+    (!payment.id || !record.existingPaymentIds.includes(payment.id)));
+  if (laterPayment || isOccurrencePaid(occurrence, new Date(occurrence.dueDate))) return null;
+  return record;
+}
+function isOccurrenceProcessing(bill, referenceDate = new Date()) {
+  return Boolean(bbProcessingRecord(bill, referenceDate));
+}
+function bbProcessingSplit(selected) {
+  const seen = new Set(), items = [];
+  for (const bill of selected.unpaidBills || []) {
+    const token = bbLFKey(getBillPaymentId(bill), bill.dueDate);
+    if (seen.has(token)) continue;
+    seen.add(token);
+    if (isOccurrenceProcessing(bill, new Date(bill.dueDate))) items.push(bill);
+  }
+  const processingCents = items.reduce((sum, bill) => sum + bbLFCents(bill.amount), 0);
+  const remainingCents = bbLFCents(selected.remaining);
+  if (!Number.isSafeInteger(processingCents) || processingCents > remainingCents) throw new Error('Processing totals need review.');
+  return {items, processing:processingCents / 100, due:(remainingCents - processingCents) / 100};
+}
+function bbSaveProcessing(billId, dueDate, next) {
+  try {
+    if (!['processing','cancelled'].includes(next)) throw new Error('Unsupported processing action.');
+    const context = window.getBillBeaconHouseholdContext?.();
+    if (window.getBillBeaconFirebaseUser?.()?.uid && !context?.ready) throw new Error('Wait for your household to finish loading.');
+    const capture = bbLFCapture();
+    const occurrence = bbLFOccurrence(billId, dueDate);
+    const origin = financialDateKey(occurrence.originalDueDate || occurrence.dueDate);
+    if (!origin) throw new Error('This payment has no original occurrence date.');
+    const current = bbProcessingRecord(occurrence, new Date(occurrence.dueDate));
+    if (next === 'processing' && current) return false;
+    if (next === 'cancelled' && !current) throw new Error('This payment is no longer processing. Refresh its details.');
+    if (next === 'processing' && !confirmUnlinkedPaymentReview(billId)) return false;
+    const question = next === 'processing'
+      ? `Mark ${occurrence.name} as Processing?\n\n${formatCurrency(occurrence.amount)} will move out of Due and actionable Overdue, but will not count as Paid. Only do this after submitting the transfer.`
+      : `Cancel processing for ${occurrence.name}?\n\nIt will return to Due and, if past its due date, Overdue. This does not cancel a bank transfer.`;
+    if (!confirm(question)) return false;
+    bbLFAssert(capture);
+    const bills = Store.getBills(), index = bills.findIndex(bill => bill.id === billId);
+    if (index < 0) throw new Error('Bill is no longer active.');
+    const now = new Date().toISOString();
+    const record = next === 'processing' ? {version:1, status:next,
+      submittedAt:now, dueKey:financialDateKey(occurrence.dueDate), originalKey:origin,
+      amountCents:bbLFCents(occurrence.amount),
+      existingPaymentIds:Store.getPaymentsForBill(billId).filter(payment =>
+        getPaymentOccurrenceDateKey(payment) === financialDateKey(occurrence.dueDate)).map(payment => {
+          if (!payment.id) throw new Error('Review older payments without IDs before marking Processing.');
+          return payment.id;
+        })} : {...current,status:next,cancelledAt:now};
+    bills[index] = {...bills[index], updatedAt:now,
+      processingOccurrences:{...(bills[index].processingOccurrences || {}), [origin]:record}};
+    const activity = {id:uid(),timestamp:now,action:next === 'processing' ? 'payment_processing' : 'payment_processing_cancelled',
+      entityType:occurrence.installmentPlanId ? 'paymentplan' : 'bill',entityId:occurrence.installmentPlanId || billId,
+      title:`${occurrence.name} · ${next === 'processing' ? 'Processing' : 'Processing cancelled'}`,
+      detail:`${formatCurrency(occurrence.amount)} · Due ${formatDate(occurrence.dueDate, 'short')}`,
+      before:current,after:{billId,dueDate:occurrence.dueDate,...record}};
+    const writes = {bills:JSON.stringify(bills),activityLog:JSON.stringify([...Store.getActivityLog(), activity])};
+    bbLFAssert(capture);
+    try { for (const [key,value] of Object.entries(writes)) localStorage.setItem(key,value); }
+    catch (error) {
+      let restored = true;
+      for (const key of Object.keys(writes)) {
+        try { const value=capture.raw[key]; if(value===null)localStorage.removeItem(key);else localStorage.setItem(key,value); }
+        catch (_) { restored=false; }
+      }
+      throw new Error(restored ? 'Processing could not be saved. Nothing was changed.' : 'Storage rollback was incomplete. Reload and review before editing.');
+    }
+    window.dispatchEvent(new CustomEvent('billbeacon:data-changed'));
+    render();
+    return true;
+  } catch(error) { alert(error.message || 'Could not update processing.'); return false; }
+}
+function closeProcessingList() {
+  document.getElementById('bbProcessingListContainer')?.remove();
+}
+function openProcessingList(paycheck, payday) {
+  closeProcessingList();
+  try {
+    const date = new Date(payday);
+    if (!Number.isFinite(date.getTime()) || !['first','second','previous'].includes(paycheck)) throw new Error('Choose a valid paycheck.');
+    const selected = getPaycheckPlan(date)[paycheck];
+    const split = bbProcessingSplit(selected);
+    const rows = split.items.map(bill => {
+      const id = getBillPaymentId(bill), record = bbProcessingRecord(bill, new Date(bill.dueDate));
+      return `<button type="button" class="bill-row" style="width:100%;text-align:left;color:var(--text);"
+        onclick="closeProcessingList();navigate('detail',{id:'${escapeInlineString(id)}',occurrenceDueDate:'${escapeInlineString(bill.dueDate)}',returnRoute:'today',returnParams:{...routeParams}})">
+        <span class="bill-info"><span class="bill-name" style="display:block;">${escapeHtml(bill.name)}</span>
+        <span class="bill-meta" style="color:#79b9ff;">Processing · Submitted ${escapeHtml(formatDate(record.submittedAt,'short'))}</span>
+        <span class="bill-meta">Original due ${escapeHtml(formatDate(bill.dueDate,'short'))}</span></span>
+        <span class="bill-amount">${formatCurrency(bill.amount)}</span></button>`;
+    }).join('');
+    const container = document.createElement('div'); container.id = 'bbProcessingListContainer';
+    container.innerHTML = `<div class="sheet-overlay show" onclick="closeProcessingList()"></div>
+      <section class="sheet show" id="bbProcessingListSheet" role="dialog" aria-modal="true" aria-labelledby="bbProcessingListTitle">
+        <div class="sheet-handle"></div><div class="sheet-nav"><button type="button" class="nav-button" onclick="closeProcessingList()" aria-label="Close processing list">${svgIcon('chevronLeft',22)}</button><div class="sheet-title" id="bbProcessingListTitle">Processing</div><div style="width:44px;"></div></div>
+        <div class="sheet-body"><div class="card card-pad"><div style="display:flex;justify-content:space-between;gap:12px;font-weight:750;"><span>${split.items.length} awaiting confirmation</span><span style="color:#79b9ff;">${formatCurrency(split.processing)}</span></div><p style="margin:8px 0 0;font-size:var(--text-xs);color:var(--text-muted);">Selected paycheck only. Not yet counted as Paid.</p></div>
+        <div class="card" style="margin-top:12px;">${rows || '<div style="padding:20px;color:var(--text-muted);">No processing payments assigned to this paycheck.</div>'}</div></div></section>`;
+    document.body.appendChild(container);
+    if (typeof fitBillListSheet === 'function') fitBillListSheet('bbProcessingListSheet',1);
+    const close=container.querySelector('button'); if(close)close.focus();
+  } catch(error) { alert(error.message || 'Could not open processing payments.'); }
+}
+window.addEventListener('billbeacon:signed-out',closeProcessingList);
+window.addEventListener('billbeacon:household-ready',closeProcessingList);
+// End manual processing trial helpers.
+
 function getOccurrenceStatus(bill, referenceDate = new Date()) {
   const occurrenceDueDate = getBillOccurrenceDueDate(bill, referenceDate);
 
@@ -2387,6 +2512,8 @@ function getOccurrenceStatus(bill, referenceDate = new Date()) {
   if (isOccurrencePaid(bill, referenceDate)) {
     return "paid";
   }
+
+  if (isOccurrenceProcessing(bill, referenceDate)) return "processing";
 
   return daysUntil(occurrenceDueDate) < 0 ? "overdue" : "upcoming";
 }
@@ -3619,7 +3746,7 @@ function renderDashboardUpcomingBill(bill) {
         "
       >
         ${formatDate(bill.dueDate, "short")}
-        · ${relativeDue(bill.dueDate)}
+        · ${billStatus === "processing" ? "Processing" : relativeDue(bill.dueDate)}
       </div>
     </button>
   `;
@@ -4390,6 +4517,8 @@ function getDefaultDashboardPaycheck(referenceDate = new Date()) {
 function getPaycheckBillStatusLabel(bill) {
   const status = getOccurrenceStatus(bill, new Date(bill.dueDate));
 
+  if (status === "processing") return {label:"Processing", color:"#79b9ff", icon:"clock"};
+
   if (status === "paid") {
     const payment = getActivePaymentForOccurrence(
       bill,
@@ -4865,6 +4994,7 @@ function getPaycheckLeftoverEstimate(selected) {
 }
 function renderPaycheckDueAndLeftover(selected) {
   const estimate = getPaycheckLeftoverEstimate(selected);
+  const processing = bbProcessingSplit(selected);
   const shortfall = estimate.available && estimate.difference < 0;
   const label = shortfall ? "Shortfall" : "Leftover";
     const caption = estimate.available
@@ -4873,7 +5003,9 @@ function renderPaycheckDueAndLeftover(selected) {
   const totals = `${selected.id === "second" ? "Paycheck 2" : "Paycheck 1"} · ${formatDate(selected.payday, "monthYear")}\n\n` +
     `Assigned Bills Paid: ${formatCurrency(selected.paid)}\n` +
     `Assigned Bills Scheduled: ${formatCurrency(selected.scheduled)}\n` +
-    `Still Due: ${formatCurrency(selected.remaining)}\n\n`;
+    `Still To Submit: ${formatCurrency(processing.due)}\n` +
+    `Processing: ${formatCurrency(processing.processing)}\n` +
+    `Total Not Yet Confirmed Paid: ${formatCurrency(selected.remaining)}\n\n`;
   const help = totals + (estimate.available
     ? `Expected Income: ${formatCurrency(estimate.income)}\n` +
       `Assigned Paycheck Costs: ${formatCurrency(estimate.assigned)}\n` +
@@ -4885,11 +5017,17 @@ function renderPaycheckDueAndLeftover(selected) {
       (estimate.partial ? "\n\nPartial estimate: manual, irregular, or unsupported income sources are excluded." : "")
     : estimate.reason);
   return `
-    <div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start;gap:12px;">
+    <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:8px;">
       <div style="min-width:0;">
         <div style="min-height:36px;display:flex;align-items:center;font-size:var(--text-sm);font-weight:700;color:var(--text-secondary);">Due</div>
-        <div class="text-upcoming" style="font-size:clamp(19px,5.5vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${formatCurrency(selected.remaining)}</div>
+        <div class="text-upcoming" style="font-size:clamp(16px,4.6vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${formatCurrency(processing.due)}</div>
       </div>
+      <button type="button" onclick="openProcessingList('${escapeInlineString(selected.id)}','${escapeInlineString(getDashboardReportMonth().toISOString())}')"
+        aria-label="View ${processing.items.length} processing payments for this paycheck"
+        style="display:block;min-width:0;min-height:64px;padding:0;border:0;background:transparent;color:var(--text);text-align:center;font:inherit;cursor:pointer;">
+        <span style="min-height:36px;display:flex;align-items:center;justify-content:center;font-size:var(--text-sm);font-weight:700;color:var(--text-secondary);">Processing</span>
+        <span style="display:block;font-size:clamp(16px,4.6vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:#79b9ff;">${formatCurrency(processing.processing)}</span>
+      </button>
       <div style="min-width:0;text-align:right;">
         <div style="display:flex;align-items:center;justify-content:flex-end;min-height:36px;gap:2px;">
           <span style="font-size:var(--text-sm);font-weight:700;color:var(--text-secondary);">${label}</span>
@@ -4897,7 +5035,7 @@ function renderPaycheckDueAndLeftover(selected) {
             aria-label="Explain ${label.toLowerCase()} estimate"
             style="display:inline-flex;align-items:center;justify-content:center;width:36px;min-height:36px;padding:0;border:0;background:transparent;color:var(--text-muted);font:inherit;font-size:15px;cursor:pointer;">&#9432;</button>
         </div>
-        <div style="font-size:clamp(19px,5.5vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:${
+        <div style="font-size:clamp(16px,4.6vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;color:${
   !estimate.available
     ? 'var(--text-muted)'
     : shortfall
@@ -6604,14 +6742,14 @@ function renderRecurringOccurrenceRow(bill) {
   const isPaymentPlanInstallment = Boolean(bill.installmentPlanId);
 
   const statusColor =
-    status === "paid"
+    status === "processing" ? "#79b9ff" : status === "paid"
       ? "var(--paid)"
       : status === "overdue"
         ? "var(--overdue)"
         : "var(--text-muted)";
 
   const statusLabel =
-    status === "paid"
+    status === "processing" ? "Processing" : status === "paid"
       ? `Paid ${formatDate(bill.dueDate, "short")}`
       : status === "overdue"
         ? `${getRecurringRelativeLabel(bill.dueDate)} · ${formatDate(
@@ -7835,13 +7973,13 @@ window.openCalendarDay = function (dateString) {
                     const paid = isCalendarBillPaid(bill);
                     const status = getCalendarBillStatus(bill);
 
-                    const statusText = paid
+                    const statusText = status === "processing" ? "Processing" : paid
                       ? "Paid"
                       : status === "overdue"
                         ? "Overdue"
                         : "Due";
 
-                    const statusColor = paid
+                    const statusColor = status === "processing" ? "#79b9ff" : paid
                       ? "var(--paid)"
                       : status === "overdue"
                         ? "var(--overdue)"
@@ -9345,10 +9483,11 @@ function openPaymentPlanDetails(planId) {
   const rows = bills.map((bill,index) => {
     const payment = getActivePaymentForOccurrence(bill,new Date(bill.dueDate));
     const late = !payment && getOccurrenceStatus(bill,new Date(bill.dueDate)) === "overdue";
-    const color = payment ? "var(--paid)" : late ? "var(--overdue)" : "var(--text-muted)";
+    const processing = !payment && isOccurrenceProcessing(bill,new Date(bill.dueDate));
+    const color = processing ? "#79b9ff" : payment ? "var(--paid)" : late ? "var(--overdue)" : "var(--text-muted)";
     return `<div class="bb-plan-row">
       <div style="min-width:0;"><div style="font-weight:750;">Payment ${escapeHtml(bill.installmentNumber || index+1)} of ${bills.length}</div>
-        <div style="margin-top:5px;color:${color};font-size:var(--text-sm);">${payment?'Paid ✓':late?'Overdue':'Due'} · ${escapeHtml(formatDate(payment ? payment.paidDate : bill.dueDate,"short"))}</div>
+        <div style="margin-top:5px;color:${color};font-size:var(--text-sm);">${payment?'Paid ✓':processing?'Processing':late?'Overdue':'Due'} · ${escapeHtml(formatDate(payment ? payment.paidDate : bill.dueDate,"short"))}</div>
         ${payment ? `<div style="margin-top:4px;color:var(--text-muted);font-size:var(--text-xs);">Originally Due ${escapeHtml(formatDate(bill.dueDate,"short"))}</div>` : ''}</div>
       <div style="font-weight:800;text-align:right;">${formatCurrency(bill.amount)}</div>
       <div class="bb-plan-action"><button type="button" class="bb-outline-pill" style="min-height:44px;justify-content:center;" onclick="${payment?'bbPlanOpenPaymentDetails':'bbPlanRecordInstallment'}('${plan}','${escapeInlineString(bill.id)}'${payment?'':',this'})" aria-label="${payment?'View details for':'Mark paid:'} payment ${index+1}">${payment?'Details':'Mark Paid'}</button></div>
@@ -12138,7 +12277,20 @@ const postponeAction = isRecurring
       '${escapeInlineString(detailBill.dueDate)}'
     )`
   : `openPostponeBillSheet('${escapeInlineString(sourceBillId)}')`;
-  const paymentAction = isArchivedHistory ? `<div class="settings-footer">Archived history — read only.</div>` : !payment
+  const processingAction = status === "processing";
+  const processingId = escapeInlineString(sourceBillId);
+  const processingDue = escapeInlineString(detailBill.dueDate);
+  const processingRecord = bbProcessingRecord(detailBill, referenceDate);
+  const processingButton = !isArchivedHistory && !payment && !processingAction
+    ? `<button type="button" class="bb-outline-pill" style="width:100%;min-height:44px;margin-top:12px;color:#79b9ff;" onclick="bbSaveProcessing('${processingId}','${processingDue}','processing')">${svgIcon('clock',18)} Mark as Processing</button>` : '';
+  const paymentAction = isArchivedHistory ? `<div class="settings-footer">Archived history — read only.</div>` : processingAction
+  ? `<div class="card card-pad" style="margin-top:16px;">
+      <div style="color:#79b9ff;font-weight:750;">Processing · Submitted ${escapeHtml(formatDate(processingRecord.submittedAt,'short'))}</div>
+      <p style="font-size:var(--text-xs);color:var(--text-muted);line-height:1.5;">Awaiting confirmation. Original due ${escapeHtml(formatDate(detailBill.dueDate,'full'))}. Leftover is unchanged.</p>
+      <button type="button" class="btn-primary" style="width:100%;min-height:44px;" onclick="${markPaidAction}">Confirm Paid</button>
+      <button type="button" class="bb-outline-pill" style="width:100%;min-height:44px;margin-top:10px;" onclick="bbSaveProcessing('${processingId}','${processingDue}','cancelled')">Failed / Cancel Processing</button>
+    </div>`
+  : !payment
   ? `
     <div
       style="
@@ -12260,7 +12412,7 @@ const postponeAction = isRecurring
           <div class="detail-status">
             <span
               class="status-pill"
-              style="
+              style="${status === 'processing' ? '--upcoming:#79b9ff;--upcoming-bg:rgba(121,185,255,.12);' : ''}
                 background:var(--${
                   status === "paid"
                     ? "paid-bg"
@@ -12285,7 +12437,7 @@ const postponeAction = isRecurring
                     : svgIcon("clock", 12)
               }
 
-              ${status === 'paid'
+              ${status === 'processing' ? 'Processing' : status === 'paid'
   ? `Paid ${formatDate(payment.paidDate, 'short')}`
   : relativeDue(detailBill.dueDate).charAt(0).toUpperCase() +
     relativeDue(detailBill.dueDate).slice(1)
@@ -12336,7 +12488,7 @@ const postponeAction = isRecurring
         </div>
 
         ${renderLegacyPaymentReviewNotice(sourceBillId)}
-        ${paymentAction}
+        ${paymentAction}${processingButton}
         ${!isArchivedHistory ? renderOccurrenceFundingAction(detailBill) : ""}
 
         <button
