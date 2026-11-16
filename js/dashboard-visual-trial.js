@@ -1,146 +1,121 @@
-/* Bill Beacon Dashboard visual trial v1.
-   Load LAST, after the current Dashboard/UI scripts.
-   Presentation only: no payment, funding, account, or storage operations. */
+/* Bill Beacon Dashboard layout trial v2 — placement only.
+   REPLACE dashboard-visual-trial.js; do not append to v1.
+   Load last, after all existing UI and Processing scripts.
+   No financial reads/writes; existing HTML, handlers, and values are retained. */
 (() => {
   'use strict';
   if (window.BillBeaconDashboardVisualTrial) return;
   if (typeof renderToday !== 'function') {
-    console.error('Dashboard visual trial: load the app and UI scripts first.');
-    return;
+    console.error('Dashboard layout trial: load the app and UI scripts first.'); return;
   }
   const original = renderToday;
   let enabled = true;
   const style = document.createElement('style');
   style.id = 'bbDashboardVisualTrialStyle';
   style.textContent = `
-  .bb-dashboard-visual-trial .bb-trial-month-label {
-    margin:12px 0 6px;color:var(--text-secondary,#bcb5c6);
-    font-size:.73rem;line-height:1.5;font-weight:650;letter-spacing:.02em;
-  }
-  .bb-dashboard-visual-trial .bb-month-status-count,
-  .bb-dashboard-visual-trial .bb-payment-status-count {
-    font-size:21px!important;font-weight:750!important;min-height:44px!important;
-  }
-  .bb-dashboard-visual-trial .bb-month-status-row,
-  .bb-dashboard-visual-trial .bb-payment-status-row {min-height:46px!important;}
-  .bb-dashboard-visual-trial .bb-month-status-head,
-  .bb-dashboard-visual-trial .bb-payment-status-columns {
-    color:var(--text-secondary,#bcb5c6)!important;font-size:.71rem!important;
-  }
-  .bb-dashboard-visual-trial .bb-dashboard-paycheck {
-    margin-top:16px!important;padding-top:16px!important;
-    border-top:1px solid var(--border)!important;
-  }
-  .bb-dashboard-visual-trial .bb-dashboard-paycheck-plan > div:first-child {
-    margin-bottom:16px!important;
-  }
-  .bb-dashboard-visual-trial .bb-dashboard-paycheck-plan > div:first-child > button {
-    min-height:44px!important;font-size:.79rem!important;font-weight:700!important;
-  }
-  .bb-dashboard-visual-trial .bb-trial-amounts {
-    padding:10px 10px 12px!important;border:1px solid var(--border)!important;
-    border-radius:14px!important;background:var(--surface-2,transparent)!important;
-    gap:8px!important;align-items:start!important;
-  }
-  .bb-dashboard-visual-trial .bb-trial-amounts > * {min-width:0!important;}
-  .bb-dashboard-visual-trial .bb-trial-amount {
-    font-size:clamp(17px,4.8vw,25px)!important;line-height:1.25!important;
-    font-weight:800!important;letter-spacing:-.025em;font-variant-numeric:tabular-nums;
-    overflow-wrap:anywhere!important;
-  }
-  .bb-dashboard-visual-trial .bb-trial-amount-label {
-    font-size:.76rem!important;font-weight:650!important;
-    color:var(--text-secondary,#bcb5c6)!important;
-  }
-  .bb-dashboard-visual-trial .dashboard-progress-track {
-    height:4px!important;min-height:4px!important;max-height:4px!important;
-    margin-top:14px!important;
-  }
-  .bb-dashboard-visual-trial .dashboard-progress-fill {
-    height:100%!important;min-height:0!important;
-  }
-  .bb-dashboard-visual-trial .bb-trial-progress-caption {
-    color:var(--text-secondary,#bcb5c6)!important;
-    font-size:.73rem!important;line-height:1.5!important;
-  }
-  .bb-dashboard-visual-trial #paycheckInlineList {margin-top:18px!important;}
-  .bb-dashboard-visual-trial .bb-trial-bill-row {padding:14px 0!important;gap:11px!important;}
-  .bb-dashboard-visual-trial .bb-trial-bill-name {
-    font-size:.86rem!important;font-weight:750!important;line-height:1.4!important;
-  }
-  .bb-dashboard-visual-trial .bb-trial-status {
-    font-size:.74rem!important;line-height:1.5!important;margin-top:4px!important;
-  }
-  .bb-dashboard-visual-trial .bb-trial-move-note {
-    color:var(--text-secondary,#bcb5c6)!important;font-size:.73rem!important;
-    line-height:1.5!important;margin-top:5px!important;
-  }
-  @media(max-width:350px) {
-    .bb-dashboard-visual-trial .bb-trial-amounts {padding-left:7px!important;padding-right:7px!important;gap:5px!important;}
-    .bb-dashboard-visual-trial .bb-trial-amount {font-size:17px!important;}
-    .bb-dashboard-visual-trial .bb-trial-amount-label {font-size:.7rem!important;}
-  }
+    .bb-dashboard-split-layout {display:grid;gap:16px;min-width:0;}
+    .bb-dashboard-split-layout > .bb-dashboard-paycheck-card,
+    .bb-dashboard-split-layout > .bb-dashboard-monthly-status-card {
+      min-width:0;margin:0!important;padding:16px!important;overflow:hidden;
+    }
+    .bb-dashboard-paycheck-card > .bb-paycheck-month-navigation {margin-bottom:14px;}
+    .bb-dashboard-paycheck-card > .bb-dashboard-paycheck {
+      border:0!important;padding:0!important;min-width:0;
+    }
+    .bb-dashboard-paycheck-card > .bb-dashboard-paycheck > .card {
+      padding:0!important;margin:0!important;border:0!important;
+      box-shadow:none!important;background:transparent!important;
+    }
+    .bb-dashboard-monthly-status-card > .dashboard-month-card {
+      display:block;width:100%;min-width:0;height:auto;min-height:0;
+      padding:0!important;margin:0!important;border:0!important;border-radius:0!important;
+      box-shadow:none!important;background:transparent!important;
+    }
+    .bb-dashboard-monthly-status-card .bb-dashboard-payment-status {
+      margin:0!important;padding:0!important;border:0!important;box-shadow:none!important;background:transparent!important;
+    }
+    .bb-dashboard-monthly-status-card > .dashboard-month-card::before,
+    .bb-dashboard-monthly-status-card > .dashboard-month-card::after,
+    .bb-dashboard-paycheck-card .bb-dashboard-paycheck-plan::before,
+    .bb-dashboard-paycheck-card .bb-dashboard-paycheck-plan::after {content:none!important;display:none!important;}
+    .bb-dashboard-paycheck-card .bb-dashboard-paycheck-plan {
+      border:0!important;border-image:none!important;outline:0!important;
+      border-radius:0!important;box-shadow:none!important;background:transparent!important;
+    }
+    .bb-dashboard-monthly-status-card .bb-layout-monthly-heading {
+      display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+      margin:0 0 8px;
+    }
+    .bb-dashboard-monthly-status-card .bb-layout-monthly-heading h2 {
+      margin:0;font-size:var(--text-base);font-weight:800;line-height:1.4;color:var(--text);
+    }
+    .bb-dashboard-monthly-status-card .bb-layout-monthly-heading span {
+      font-size:var(--text-xs);color:var(--text-muted);line-height:1.4;text-align:right;
+    }
   `;
   document.head.appendChild(style);
-  function decorate(html) {
-    const root = document.createElement('div'); root.innerHTML = html;
+  function splitDashboard(root) {
     const combined = root.querySelector('.dashboard-content .bb-dashboard-combined');
     const month = combined?.querySelector('.dashboard-month-card');
-    const plan = combined?.querySelector('.bb-dashboard-paycheck-plan');
-    if (!combined || !month || !plan) return html;
-    const table = month.querySelector('[role="table"]');
-    if (!table) return html;
-    combined.classList.add('bb-dashboard-visual-trial');
-    const existingTitle = month.querySelector('.bb-payment-status-title');
-    if (existingTitle) existingTitle.textContent = 'Monthly status';
-    else {
-      const label = document.createElement('div');
-      label.className = 'bb-trial-month-label'; label.textContent = 'Monthly status';
-      table.before(label);
+    const paycheck = combined?.querySelector('.bb-dashboard-paycheck');
+    if (!combined || !month || !paycheck || month.parentElement !== combined || paycheck.parentElement !== combined) return false;
+    if (!month.querySelector('[role="table"]') || !paycheck.querySelector('.bb-dashboard-paycheck-plan')) return false;
+    const arrows = node => [...node.querySelectorAll('button[onclick]')].map(button =>
+      (button.getAttribute('onclick') || '').replace(/\s+/g,''));
+    const nav = [...month.children].find(node => {
+      const handlers=arrows(node);
+      return handlers.includes('changeDashboardReportMonth(-1)') && handlers.includes('changeDashboardReportMonth(1)');
+    });
+    if (!nav) return false;
+    const allArrows=arrows(combined).filter(handler=>/^changeDashboardReportMonth\(/.test(handler));
+    if (allArrows.length !== 2) return false;
+    const monthName = nav.children[1]?.textContent.trim();
+    if (!monthName) return false;
+    const monthly = document.createElement('section');
+    monthly.className='card bb-dashboard-monthly-status-card';
+    const title = month.querySelector('.bb-payment-status-title');
+    if (title) {
+      title.textContent='Monthly Status';
+      if (!title.id) title.id='bbLayoutMonthlyStatusTitle';
+      monthly.setAttribute('aria-labelledby',title.id);
+    } else {
+      const header=document.createElement('header');header.className='bb-layout-monthly-heading';
+      const heading=document.createElement('h2');heading.id='bbLayoutMonthlyStatusTitle';heading.textContent='Monthly Status';
+      const date=document.createElement('span');date.textContent=monthName;
+      header.append(heading,date);monthly.append(header);
+      monthly.setAttribute('aria-labelledby',heading.id);
     }
-    const processing = plan.querySelector('button[onclick*="openProcessingList("]');
-    const amounts = processing?.parentElement;
-    // Do not guess at a changed/non-Processing layout.
-    if (amounts && amounts.children.length === 3) {
-      amounts.classList.add('bb-trial-amounts');
-      for (const cell of amounts.children) {
-        const amount = [...cell.children].find(node => (node.getAttribute('style') || '').includes('font-variant-numeric:tabular-nums'));
-        if (amount) amount.classList.add('bb-trial-amount');
-        const label = cell.firstElementChild;
-        if (label) {
-          label.classList.add('bb-trial-amount-label');
-          // Leftover's information button keeps its handler, target and original size.
-          const text = [...label.children].find(node => node.tagName === 'SPAN');
-          if (text) text.classList.add('bb-trial-amount-label');
-        }
-      }
-    }
-    const track = plan.querySelector('.dashboard-progress-track');
-    if (track?.nextElementSibling && !track.nextElementSibling.id) track.nextElementSibling.classList.add('bb-trial-progress-caption');
-    for (const button of plan.querySelectorAll('#paycheckInlineList button[onclick*="openPaycheckInlineBill("]')) {
-      button.classList.add('bb-trial-bill-row');
-      const info = button.children[1];
-      if (!info) continue;
-      info.children[0]?.classList.add('bb-trial-bill-name');
-      info.children[1]?.classList.add('bb-trial-status');
-      info.children[2]?.classList.add('bb-trial-move-note');
-    }
-    return root.innerHTML;
+    // Move the original navigation; do not create independent month state or handlers.
+    nav.classList.add('bb-paycheck-month-navigation');
+    combined.insertBefore(nav,paycheck);
+    monthly.append(month);
+    combined.classList.remove('bb-dashboard-combined');
+    combined.classList.add('bb-dashboard-paycheck-card');
+    combined.setAttribute('aria-label','Paycheck plan and reporting month');
+    const wrapper=document.createElement('div');wrapper.className='bb-dashboard-split-layout';
+    combined.replaceWith(wrapper);wrapper.append(combined,monthly);
+    return true;
   }
-  renderToday = function() {
-    const html = original.apply(this,arguments);
+  renderToday=function() {
+    const html=original.apply(this,arguments);
     if (!enabled) return html;
-    try { return decorate(html); }
-    catch (error) { console.warn('Dashboard visual trial retained the original screen:',error); return html; }
+    try {
+      const root=document.createElement('div');root.innerHTML=html;
+      return splitDashboard(root) ? root.innerHTML : html;
+    } catch(error) {
+      console.warn('Dashboard layout trial retained the original layout:',error);
+      return html;
+    }
   };
   function redrawIfVisible() {
     if (typeof currentRoute !== 'undefined' && currentRoute === 'today' &&
-        document.querySelector('#app .bb-dashboard-combined') && typeof render === 'function') render();
+        document.querySelector('#app .dashboard-content') && typeof render === 'function') render();
   }
-  window.BillBeaconDashboardVisualTrial = Object.freeze({
-    version:1,
-    setEnabled(value) { enabled=Boolean(value); style.disabled=!enabled; redrawIfVisible(); },
-    isEnabled() { return enabled; }
+  window.BillBeaconDashboardVisualTrial=Object.freeze({
+    version:2,
+    setEnabled(value) {enabled=Boolean(value);style.disabled=!enabled;redrawIfVisible();},
+    isEnabled(){return enabled;},
+    _test:{splitDashboard}
   });
   redrawIfVisible();
 })();
