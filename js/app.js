@@ -129,6 +129,70 @@ const ICONS = {
 // DATA LAYER (localStorage)
 // ====================================
 
+// Performance phase 1: private raw-value-keyed read indexes. No financial storage changes.
+const bbFastRecordReads = {bills:null, payments:null, billReader:null, paymentReader:null};
+function bbFastRecordScope() {
+  const user = window.getBillBeaconFirebaseUser?.();
+  const context = window.getBillBeaconHouseholdContext?.();
+  return JSON.stringify([user?.uid || null, context?.uid || null, context?.householdId || null,
+    context?.generation ?? null, context?.ready ?? null]);
+}
+function bbResetFastRecordReads() {
+  bbFastRecordReads.bills = null;
+  bbFastRecordReads.payments = null;
+}
+function bbFastReadBill(owner, id) {
+  if (owner !== Store || owner.getBills !== bbFastRecordReads.billReader) {
+    return owner.getBills().find(bill => bill.id === id);
+  }
+  let raw, scope;
+  try { raw = localStorage.getItem('bills'); scope = bbFastRecordScope(); }
+  catch (_) { bbFastRecordReads.bills = null; return owner.getBills().find(bill => bill.id === id); }
+  let cached = bbFastRecordReads.bills;
+  if (!cached || cached.raw !== raw || cached.scope !== scope) {
+    let records;
+    try { records = JSON.parse(raw || '[]'); } catch (_) { records = []; }
+    // Preserve legacy behavior on malformed data instead of silently hiding it.
+    if (!Array.isArray(records) || records.some(bill => bill == null)) {
+      bbFastRecordReads.bills = null;
+      return owner.getBills().find(bill => bill.id === id);
+    }
+    const index = new Map();
+    for (const bill of records) if (!index.has(bill.id)) index.set(bill.id, bill);
+    cached = {raw, scope, index};
+    bbFastRecordReads.bills = cached;
+  }
+  if (!cached.index.has(id)) return undefined;
+  // Keep the original fresh-object contract: callers cannot mutate cached records.
+  return JSON.parse(JSON.stringify(cached.index.get(id)));
+}
+function bbFastReadBillPayments(owner, billId) {
+  const legacy = () => owner.getPayments().filter(payment => payment.billId === billId)
+    .sort((a,b) => new Date(b.paidDate) - new Date(a.paidDate));
+  if (owner !== Store || owner.getPayments !== bbFastRecordReads.paymentReader) return legacy();
+  let raw, scope;
+  try { raw = localStorage.getItem('payments'); scope = bbFastRecordScope(); }
+  catch (_) { bbFastRecordReads.payments = null; return legacy(); }
+  let cached = bbFastRecordReads.payments;
+  if (!cached || cached.raw !== raw || cached.scope !== scope) {
+    let records;
+    try { records = JSON.parse(raw || '[]'); } catch (_) { records = []; }
+    if (!Array.isArray(records) || records.some(payment => payment == null)) {
+      bbFastRecordReads.payments = null; return legacy();
+    }
+    const index = new Map();
+    for (const payment of records) {
+      if (!index.has(payment.billId)) index.set(payment.billId, []);
+      index.get(payment.billId).push(payment);
+    }
+    for (const values of index.values()) values.sort((a,b) => new Date(b.paidDate) - new Date(a.paidDate));
+    cached = {raw, scope, index};
+    bbFastRecordReads.payments = cached;
+  }
+  return JSON.parse(JSON.stringify(cached.index.get(billId) || []));
+}
+// End performance read-index helpers.
+
 const Store = {
   getBills() {
     try { return JSON.parse(localStorage.getItem('bills') || '[]'); }
@@ -139,7 +203,7 @@ const Store = {
   window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
   },
   getBill(id) {
-    return this.getBills().find(b => b.id === id);
+    return bbFastReadBill(this, id);
   },
   addBill(bill) {
     const bills = this.getBills();
@@ -601,7 +665,7 @@ updatePayment(paymentId, updates) {
   );
 },
   getPaymentsForBill(billId) {
-    return this.getPayments().filter(p => p.billId === billId).sort((a, b) => new Date(b.paidDate) - new Date(a.paidDate));
+    return bbFastReadBillPayments(this, billId);
   },
   getSettings() {
     try {
@@ -622,6 +686,15 @@ updatePayment(paymentId, updates) {
     window.dispatchEvent(new CustomEvent("billbeacon:data-changed"));
      },
 };
+bbFastRecordReads.billReader = Store.getBills;
+bbFastRecordReads.paymentReader = Store.getPayments;
+for (const event of ['billbeacon:signed-out','billbeacon:authenticated','billbeacon:household-ready']) {
+  window.addEventListener(event, bbResetFastRecordReads);
+}
+window.addEventListener('storage', event => {
+  if (event.key === null || event.key === 'bills' || event.key === 'payments') bbResetFastRecordReads();
+});
+
 function createPaymentBillSnapshot(payment, bill, isLegacy = false) {
   if (!bill) return null;
 
@@ -2385,6 +2458,8 @@ function bbProcessingRecord(bill, referenceDate = new Date()) {
   const due = getBillOccurrenceDueDate(bill, referenceDate);
   const source = Store.getBill(id);
   if (!source || source.archived || source.archivedAt || source.cancelled || source.cancelledAt || source.paidInFullAt || ['archived','cancelled','canceled','paid-in-full','paidinfull'].includes(String(source.status || '').toLowerCase())) return null;
+  if (!source.processingOccurrences || !Object.values(source.processingOccurrences).some(record =>
+      record?.version === 1 && record.status === 'processing')) return null;
   const occurrence = bill.isOccurrence ? bill : resolveCalendarBillOccurrence(id, due);
   if (!occurrence) return null;
   const origin = financialDateKey(occurrence.originalDueDate || occurrence.dueDate);
@@ -20587,7 +20662,7 @@ function snapshot() {
   navigate = function(route, params = {}) {
     cleanup();
     let captured = null;
-    const rootTabs = ["today", "recurring", "calendar", "bills", "more"];
+    const rootTabs = ["today", "recurring", "calendar", "bills", "insights", "more"];
     const rootTabSwitch = rootTabs.includes(currentRoute) && rootTabs.includes(route);
     if (ENABLED && route !== currentRoute && !rootTabSwitch) {
       try { captured = snapshot(); }
