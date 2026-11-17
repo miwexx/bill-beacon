@@ -1,18 +1,752 @@
-/* Bill Beacon Dashboard layout trial v2 — placement only.
-   REPLACE dashboard-visual-trial.js; do not append to v1.
-   Load last, after all existing UI and Processing scripts.
-   No financial reads/writes; existing HTML, handlers, and values are retained. */
+Hire your first teammate
+Persistent agents that work for you.
+
+
+
+US flag
+GOV
+
+This shows the exact placement: keep your existing card and change only the two-column amount row to:
+
+text
+Due          Processing       Leftover
+$885.93      $0.00            $955.86
+Your monthly Paid/Due/Overdue counters, paycheck buttons, progress bar, and bill list should stay in place. Processing belongs between the amounts beneath the paycheck buttons—not in a separate redesigned Dashboard.
+
+One important detail: those amounts sit under the selected PAYCHECK · Nov 15 button. Processing must therefore follow that selected paycheck’s scope. Marking a payment processing should reduce Due only if that payment currently contributes to the displayed $885.93; Leftover must remain unchanged.
+
+To prepare the working patch safely, please attach your current js/app.js. The earlier GitHub retrieval of that large file was truncated, and the smaller modules do not expose the full paycheck-card and payment-saving logic. I can read the other files through the connector.
+
+I need that source rather than guessing at the financial handlers or sending you another visual-only demo.
+
+
+paste.txt
+Text file
+paste.txt
+
+
+I have the full source now. I’ll patch the existing paycheck row directly, keeping your layout and Leftover calculation intact. Processing will be stored against the individual bill occurrence, so it won’t affect future recurring payments.
+
+
+app
+JavaScript
+
+app
+JavaScript
+
+processing-calendar
+JavaScript
+
+5 artifacts
+
+INSTALL
+Text
+
+TEST-RESULTS
+JSON
+
+app
+JavaScript
+
+bill-beacon-processing-trial
+ZIP
+
+processing-trial.diff
+File
+The installable trial package is ready—not another standalone demo. It is built from the full app source you uploaded and keeps your existing Dashboard layout.
+
+What changes
+Your paycheck amount row becomes:
+
+text
+Due          Processing       Leftover
+Everything around it stays in place: month navigation, monthly status counters, paycheck buttons, progress bar, and bill list.
+
+The trial adds:
+
+Mark as Processing in an unpaid bill’s detail screen.
+
+A tappable Processing amount showing that selected paycheck’s processing payments.
+
+Confirm Paid and Failed / Cancel Processing actions.
+
+Processing labels in the paycheck list and Calendar.
+
+Marking a payment Processing moves its amount out of the selected paycheck’s Due amount and removes it from actionable Overdue counts. It does not increase Paid, change Scheduled, advance the progress bar, or change Leftover.
+
+Install: three files in one commit
+Use the attached ZIP.
+
+1. Replace js/app.js
+Replace the entire existing file with js/app.js from the ZIP.
+
+Do not append it. This replacement is based on the source you just uploaded; don’t overwrite any newer edits made afterward.
+
+2. Add js/processing-calendar.js
+Add the new file from the ZIP at:
+
+text
+js/processing-calendar.js
+This keeps Calendar from displaying a processing payment as Due or using a Paid marker for an all-processing day.
+
+3. Edit index.html
+Change the existing app.js script’s src to:
+
+xml
+js/app.js?v=processing-trial-1
+Keep its other attributes and do not add a second app.js tag.
+
+Then add this after the existing Calendar and UI scripts, immediately before </body>:
+
+xml
+<script src="js/processing-calendar.js?v=1"></script>
+Suggested commit message:
+
+text
+Add manual Processing payments to existing paycheck Dashboard
+Test one payment first
+Create a backup and use a preview deployment before applying this to all four transfers.
+
+Record the current Due, Paid, Leftover, and selected paycheck.
+
+Open one transfer you already submitted.
+
+Choose Mark as Processing.
+
+Verify its exact amount moves from Due to Processing.
+
+Verify Paid and Leftover stay unchanged.
+
+Refresh and switch paychecks to check persistence and scope.
+
+Open Processing to confirm the correct item appears.
+
+Cancel Processing before changing that item’s amount, due date, split schedule, or archive state.
+
+Verification and limits
+Both JavaScript files passed syntax checks, and 14 mocked tests passed, including occurrence isolation, no premature payment creation, cancellation, reversal behavior, and local-storage rollback. The core Leftover and payment-commit functions remain unchanged.
+
+Browser/iPhone rendering, live household sync, and backup/restore round-trips have not been verified.
+
+Server-side reminders and existing notification-inbox entries are not changed by this trial, so they may still mention an item as overdue.
+
+Nothing has been committed or deployed. The ZIP includes the installation guide, review diff, and test report.
+
+
+Next is Insights. I’ll preserve the current sections and appearance, but render the final screen directly instead of building the old screen and then replacing it. I’ll also reuse the monthly payment and schedule results while their source data is unchanged.
+
+
+insights-polish
+JavaScript
+
+insights-polish
+JavaScript
+
+5 artifacts
+
+INSIGHTS-PERFORMANCE-TESTS
+JSON
+
+INSTALL-INSIGHTS-PHASE3
+Text
+
+bill-beacon-insights-performance-phase3
+ZIP
+
+index-insights-change.diff
+File
+
+insights-performance.test.cjs
+File
+The Insights performance patch—phase three—is ready. Keep the working core and Calendar patches installed.
+
+This phase targets the old-screen-then-replacement workflow: Insights now renders the accepted screen directly instead of calculating the original screen, parsing its HTML, and replacing sections.
+
+What improves
+One current-month payment result supplies the composition, category totals, and current history bar.
+
+Monthly summaries are reused across the top card and Next Three Months.
+
+Six months of payment aggregates are cached in memory for warm returns.
+
+The original renderer is not called during successful rendering.
+
+No detached-DOM parsing or HTML-rewriting pass is performed.
+
+The existing category and installment-classification rules are reused rather than replaced with new financial definitions.
+
+Install: two files, one commit
+Use the attached phase-three ZIP.
+
+1. Replace js/insights-polish.js
+Replace the entire existing file with js/insights-polish.js from the ZIP.
+
+Do not append it.
+
+2. Update its script line in index.html
+Replace:
+
+xml
+<script src="js/insights-polish.js?v=1"></script>
+With:
+
+xml
+<script src="js/insights-polish.js?v=insights-performance-3"></script>
+Keep the same position and only one Insights script tag.
+
+Do not change app.js, calendar-preview.js, or the Dashboard layout script.
+
+Suggested commit message:
+
+text
+Render Insights once and reuse financial month aggregates
+Test in a preview/local copy before merging to main where possible; your current workflow deploys main.
+
+What stays the same
+Income, scheduled commitments, and planned remainder/shortfall.
+
+Payments Recorded.
+
+Next Three Months.
+
+Payments by Group and its category-opening actions.
+
+Six-month history and the current-month “In progress” label.
+
+The optional Monthly Spending Limit card.
+
+Due-month reporting and exclusion of voided payments.
+
+The cache refreshes when relevant saved data, household scope, date/timezone, or helper implementations change. It does not write financial records or create a persistent cache.
+
+Verification
+25 mocked checks passed in UTC, New York, and Los Angeles timezones.
+
+The synthetic test recorded:
+
+Work	First render	Two warm returns combined
+Monthly-summary provider calls	3	0
+Monthly-payment provider calls	6	0
+Original-renderer calls	0	0
+These are top-level provider counts—not measured phone timings. Actual browser/iPhone rendering, live cloud updates, and category-sheet interaction still need testing.
+
+The old renderer remains in app.js as an error fallback, but is not executed on the normal path.
+
+Test and rollback
+After reloading, compare the totals, six history months, and three scheduled months. Tap a category, then leave Insights and return several times to compare responsiveness.
+
+To roll back, restore only the previous Insights file and its v=1 script line. Keep phases one and two installed; no data reset is needed.
+
+Nothing has been committed or deployed. After this is verified, Dashboard paycheck switching and Back/swipe work are next.
+
+good
+
+Great—keep phases one through three installed.
+
+Next is Dashboard performance: reusing paycheck calculations, avoiding unnecessary rebuilding when switching paychecks, and improving the return from See All or bill details.
+
+We’ll keep your current two-card layout, Processing behavior, and financial totals unchanged. Swipe-preview cleanup comes after that.
+
+Show me the dashboard patch
+
+
+I’ll build this against the versions you’ve installed. The patch will keep the two-card layout, reuse paycheck/month calculations, and update only the paycheck section when you switch paychecks. Back/swipe-preview cleanup will remain a separate step so we can test these changes clearly.
+
+
+dashboard-visual-trial
+JavaScript
+
+dashboard-visual-trial
+JavaScript
+
+dashboard-visual-trial
+JavaScript
+
+5 artifacts
+
+DASHBOARD-PERFORMANCE-TESTS
+JSON
+
+INSTALL-DASHBOARD-PHASE4
+Text
+
+bill-beacon-dashboard-performance-phase4
+ZIP
+
+dashboard-performance.test.cjs
+File
+
+index-dashboard-change.diff
+File
+
+5 artifacts
+
+DASHBOARD-PERFORMANCE-TESTS
+JSON
+
+INSTALL-DASHBOARD-PHASE4
+Text
+
+bill-beacon-dashboard-performance-phase4
+ZIP
+
+dashboard-performance.test.cjs
+File
+
+index-dashboard-change.diff
+File
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+dashboard-visual-trial
+/* Bill Beacon Dashboard performance phase 4 (v3).
+   Full replacement for dashboard-visual-trial.js; load last after existing UI scripts.
+   Direct accepted two-card layout; bounded, read-only private data/amount caches.
+   Paycheck switching updates its own section when the displayed data remains valid. */
 (() => {
-  'use strict';
-  if (window.BillBeaconDashboardVisualTrial) return;
-  if (typeof renderToday !== 'function') {
-    console.error('Dashboard layout trial: load the app and UI scripts first.'); return;
+ 'use strict';
+ if(window.BillBeaconDashboardVisualTrial)return;
+ if(typeof renderToday!=='function'||typeof getPaycheckPlan!=='function'||typeof setDashboardPaycheck!=='function'){
+  console.error('Dashboard performance: load core and existing UI scripts first.');return;
+ }
+ const original=renderToday,beforeSwitch=setDashboardPaycheck;
+ let enabled=true,revision=null,epoch=0,recentCache=null,lastNotificationCount=null,switchToken=0;
+ const months=new Map(),amounts=new Map();
+ const monthKey=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+ function copy(value,seen=new Map()){
+  if(value===null||typeof value!=='object')return value;
+  if(value instanceof Date)return new Date(value.getTime());
+  if(seen.has(value))return seen.get(value);
+  const result=Array.isArray(value)?[]:{};seen.set(value,result);
+  for(const [key,item]of Object.entries(value))Object.defineProperty(result,key,{value:copy(item,seen),enumerable:true,writable:true,configurable:true});
+  return result;
+ }
+ function invalidate(){revision=null;recentCache=null;months.clear();amounts.clear();switchToken++;}
+ function freshness(){
+  const now=new Date(),user=window.getBillBeaconFirebaseUser?.(),context=window.getBillBeaconHouseholdContext?.();
+  const next={raw:['bills','payments','archivedBills','incomeSources','settings'].map(key=>localStorage.getItem(key)),
+   scope:JSON.stringify([user?.uid||null,context?.uid||null,context?.householdId||null,context?.generation??null,context?.ready??null]),
+   day:getLocalDateKey(now),offset:now.getTimezoneOffset(),zone:Intl.DateTimeFormat().resolvedOptions().timeZone||'',
+   language:typeof navigator==='undefined'?'':(navigator.languages||[navigator.language]).join('|'),
+   refs:[Store.getBills,Store.getBill,Store.getPayments,Store.getPaymentsForBill,Store.getIncomeSources,Store.getSettings,
+    getArchivedBills,getDashboardMonthSummary,getPaycheckPlan,getPaycheckFundingBills,getOccurrenceFunding,
+    isOccurrencePaid,getOccurrencePaidAmount,getActivePaymentForOccurrence,getPaycheckLeftoverEstimate,
+    getTotalIncomeForPayCycle,bbLFExpenses,bbProcessingSplit,isOccurrenceProcessing,
+    renderDashboardSeparatedStatus,getDashboardSeparatedStatus,renderPaycheckDueAndLeftover,
+    renderPaycheckInlineRows,getPaycheckBillStatusLabel,getCategory]};
+  const same=revision&&revision.scope===next.scope&&revision.day===next.day&&revision.offset===next.offset&&
+   revision.zone===next.zone&&revision.language===next.language&&next.raw.every((value,index)=>revision.raw[index]===value)&&
+   next.refs.every((value,index)=>revision.refs[index]===value);
+  if(!same){invalidate();revision=next;epoch++;}
+ }
+ function keep(map,key,value,limit){map.delete(key);map.set(key,value);if(map.size>limit)map.delete(map.keys().next().value);return value;}
+ function monthData(date){
+  const key=monthKey(date);
+  if(months.has(key)){const value=months.get(key);months.delete(key);months.set(key,value);return value;}
+  const summary=getDashboardMonthSummary(date),plan=getPaycheckPlan(date);
+  return keep(months,key,{summary,plan,statusHTML:null},3);
+ }
+ function amountsHTML(selected,date){
+  const key=monthKey(date)+':'+selected.id;
+  if(amounts.has(key))return amounts.get(key);
+  return keep(amounts,key,renderPaycheckDueAndLeftover(selected),6);
+ }
+ function monthlyHTML(date){
+  const data=monthData(date);
+  if(data.statusHTML!==null)return data.statusHTML;
+  let status=renderDashboardSeparatedStatus(date,copy(data.summary));
+  const compact=/class=["'][^"']*\bbb-payment-status-title\b/.test(status);
+  if(compact)status=status.replace('>Payment Status</h2>','>Monthly Status</h2>');
+  const header=compact?'':`<header class="bb-layout-monthly-heading"><h2 id="bbLayoutMonthlyStatusTitle">Monthly Status</h2><span>${escapeHtml(formatDate(date,'monthYear'))}</span></header>`;
+  const label=compact?'aria-label="Monthly Status"':'aria-labelledby="bbLayoutMonthlyStatusTitle"';
+  data.statusHTML=`<section class="card bb-dashboard-monthly-status-card" ${label}>${header}<section class="dashboard-month-card" aria-label="Monthly Bills And Installments Payment Status" style="display:block;width:100%;height:auto;min-height:0;box-sizing:border-box;text-align:left;">${status}</section></section>`;
+  return data.statusHTML;
+ }
+  function buildRecent(){
+  const allBillsById = new Map(
+    getArchivedBills().map(bill => [bill.id, bill])
+  );
+
+  for (const bill of Store.getBills()) {
+    allBillsById.set(bill.id, bill);
   }
-  const original = renderToday;
-  let enabled = true;
-  const style = document.createElement('style');
-  style.id = 'bbDashboardVisualTrialStyle';
-  style.textContent = `
+
+  const recentPayments = Store.getPayments()
+    .map(payment => ({
+      ...payment,
+      bill: allBillsById.get(payment.billId) || null
+    }))
+    .sort((a, b) =>
+      (dashboardDate(b.voidedAt || b.paidDate)?.getTime() || 0) -
+      (dashboardDate(a.voidedAt || a.paidDate)?.getTime() || 0)
+    )
+    .slice(0, 3);
+
+
+  const recentRows = recentPayments.map(payment => {
+    const voided = payment.status === "voided";
+    const removed = !Store.getBill(payment.billId);
+
+    const name =
+      payment.billSnapshot?.name ||
+      payment.bill?.name ||
+      "Removed bill";
+
+    const shownDate = payment.voidedAt || payment.paidDate;
+    const dateLabel = shownDate
+      ? formatDate(shownDate, "full")
+      : "Date unavailable";
+
+    return `
+      <div
+        class="recent-payment-row"
+        style="${voided ? "opacity:.58;" : ""}"
+      >
+        <div
+          class="recent-payment-icon"
+          style="color:${
+            voided ? "var(--text-muted)" : "var(--paid)"
+          };"
+        >
+          ${svgIcon(voided ? "close" : "checkCircle", 18)}
+        </div>
+
+        <div class="bill-info">
+          <div class="bill-name">
+            ${escapeHtml(name)}${voided ? " · Voided" : ""}
+          </div>
+
+          <div class="bill-meta">
+            ${voided ? "Payment Voided" : "Paid"}
+            · ${escapeHtml(dateLabel)}
+          </div>
+
+          ${
+            removed
+              ? `
+                <div
+                  class="bill-meta"
+                  style="color:var(--overdue);"
+                >
+                  Removed · History Retained
+                </div>
+              `
+              : ""
+          }
+        </div>
+
+        <div
+          class="recent-payment-amount"
+          style="${
+            voided
+              ? "text-decoration:line-through;color:var(--text-muted);"
+              : ""
+          }"
+        >
+          ${formatCurrency(payment.amount)}
+        </div>
+      </div>
+    `;
+  }).join("");
+    return {payments:recentPayments,rows:recentRows};
+  }
+function navigationHTML() {
+  const date = getDashboardReportMonth();
+  return `
+    <div class="bb-paycheck-month-navigation" style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;">
+      <button type="button" class="bb-outline-pill" aria-label="Previous reporting month"
+        onclick="changeDashboardReportMonth(-1)"
+        style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;padding:0;box-sizing:border-box;">
+        ${svgIcon("chevronLeft", 20)}
+      </button>
+      <div aria-live="polite" style="min-width:0;text-align:center;font-size:var(--text-base);font-weight:800;line-height:1.3;">
+        ${formatDate(date, "monthYear")}
+      </div>
+      <button type="button" class="bb-outline-pill" aria-label="Next reporting month"
+        onclick="changeDashboardReportMonth(1)"
+        style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;padding:0;box-sizing:border-box;">
+        ${svgIcon("chevronRight", 20)}
+      </button>
+    </div>
+  `;
+}function paycheckHTML(
+  referenceDate = getDashboardPaycheckMonth()
+) {
+  freshness();
+  const plan = copy(monthData(referenceDate).plan);
+    const displayedMonthKey =
+    `${referenceDate.getFullYear()}-` +
+    String(referenceDate.getMonth() + 1).padStart(2, "0");
+
+  const displayedMonthChanged =
+    dashboardPaycheckSelectionMonthKey !== displayedMonthKey;
+
+  if (
+    displayedMonthChanged ||
+    !selectedDashboardPaycheck
+  ) {
+    selectedDashboardPaycheck =
+      getDashboardPaycheckDefaultCycle();
+
+    dashboardPaycheckSelectionMonthKey =
+      displayedMonthKey;
+  }
+  const selectedKey =
+    selectedDashboardPaycheck === "second" ? "second" : "first";
+
+  const selected = plan[selectedKey];
+
+  const firstLabel = formatDate(plan.first.payday, "short");
+  const secondLabel = formatDate(plan.second.payday, "short");
+
+  const cents = value => {
+    if (value === null || value === undefined || String(value).trim() === '') return null;
+    const number = Number(value), rounded = Math.round(number * 100);
+    return Number.isFinite(number) && number >= 0 && Number.isSafeInteger(rounded) ? rounded : null;
+  };
+  const paidCents = cents(selected.paid);
+  const scheduledCents = cents(selected.scheduled);
+  const validTotals = paidCents !== null && scheduledCents !== null;
+  const paymentProgress = validTotals && scheduledCents > 0
+    ? Math.max(0, Math.min(100, paidCents / scheduledCents * 100)) : 0;
+
+
+    return `
+    
+
+    <div class="card card-pad bb-dashboard-paycheck-plan" style="padding:0!important;margin:0!important;border:0!important;outline:0!important;border-radius:0!important;box-shadow:none!important;background:transparent!important;">
+      <div
+        style="
+          display:grid;
+          grid-template-columns:1fr 1fr;
+          gap:8px;
+          margin-bottom:var(--space-3);
+        "
+      >
+        <button
+          type="button"
+          onclick="setDashboardPaycheck('first')"
+          style="
+            min-height:42px;
+            border:1px solid ${
+              selectedKey === "first"
+                ? "var(--accent)"
+                : "var(--border)"
+            };
+            border-radius:12px;
+            background:${
+              selectedKey === "first"
+                ? "var(--accent-soft, rgba(124,92,255,.14))"
+                : "transparent"
+            };
+            color:var(--text);
+            font:inherit;
+            font-size:var(--text-sm);
+            font-weight:800;
+            cursor:pointer;
+          "
+        >
+          PAYCHECK · ${firstLabel}
+        </button>
+
+        <button
+          type="button"
+          onclick="setDashboardPaycheck('second')"
+          style="
+            min-height:42px;
+            border:1px solid ${
+              selectedKey === "second"
+                ? "var(--accent)"
+                : "var(--border)"
+            };
+            border-radius:12px;
+            background:${
+              selectedKey === "second"
+                ? "var(--accent-soft, rgba(124,92,255,.14))"
+                : "transparent"
+            };
+            color:var(--text);
+            font:inherit;
+            font-size:var(--text-sm);
+            font-weight:800;
+            cursor:pointer;
+          "
+        >
+          PAYCHECK · ${secondLabel}
+        </button>
+      </div>
+
+      ${amountsHTML(selected,referenceDate)}
+
+      ${validTotals ? `
+        <div class="dashboard-progress-track"
+          role="progressbar"
+          aria-label="Payment Progress For Assigned Bills"
+          aria-valuemin="0" aria-valuemax="100"
+          aria-valuenow="${Math.round(paymentProgress * 10) / 10}"
+          aria-valuetext="${escapeHtml(scheduledCents > 0
+            ? `${formatCurrency(paidCents / 100)} Paid Of ${formatCurrency(scheduledCents / 100)} Scheduled`
+            : 'No Scheduled Amount')}"
+          style="height:6px;min-height:6px;max-height:6px;margin-top:14px;overflow:hidden;border-radius:999px;">
+          <div class="dashboard-progress-fill"
+            style="width:${paymentProgress}%;height:100%;min-height:6px;border-radius:inherit;"></div>
+        </div>
+      ` : `<div style="margin-top:10px;color:var(--text-muted);font-size:var(--text-xs);">Payment Progress Unavailable</div>`}
+
+      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:7px;color:var(--text-muted);font-size:var(--text-xs);line-height:1.4;font-variant-numeric:tabular-nums;">
+        <span>${paidCents === null ? '&mdash;' : formatCurrency(paidCents / 100)} Paid</span>
+        <span>${scheduledCents === null ? '&mdash;' : formatCurrency(scheduledCents / 100)} Scheduled</span>
+      </div>
+
+      ${renderPaycheckInlineRows(selected)}
+    </div>
+  `;
+}  function view(){
+    freshness();
+    const now=new Date(),reportMonth=getDashboardReportMonth();
+    const currentDateLabel=new Intl.DateTimeFormat(undefined,{weekday:'short',month:'short',day:'numeric'}).format(now);
+    if(!recentCache)recentCache=buildRecent();
+    const recentPayments=recentCache.payments,recentRows=recentCache.rows;
+    const notificationCount=getNotificationCount();lastNotificationCount=notificationCount;
+  return `
+    <div class="nav-bar dashboard-nav">
+      <div class="nav-bar-content">
+        <button
+          type="button"
+          class="nav-button dashboard-icon-button"
+          onclick="navigate('settings', { returnRoute: 'today' })"
+          aria-label="Open settings"
+          style="color:var(--text-muted);"
+        >
+          ${svgIcon("gear", 22)}
+        </button>
+
+        <div class="dashboard-date">
+          ${escapeHtml(currentDateLabel)}
+        </div>
+
+        <button
+          type="button"
+          class="nav-button dashboard-icon-button"
+          onclick="openNotificationCenter()"
+          aria-label="Open notifications"
+          style="position:relative;color:var(--text-muted);"
+        >
+          ${svgIcon("bell", 22)}
+
+          ${
+            notificationCount > 0
+              ? `
+                <span style="
+                  position:absolute;
+                  top:-3px;
+                  right:0;
+                  min-width:17px;
+                  padding:1px 4px;
+                  border-radius:999px;
+                  background:var(--overdue);
+                  color:#fff;
+                  font-size:10px;
+                  font-weight:800;
+                ">
+                  ${notificationCount > 9 ? "9+" : notificationCount}
+                </span>
+              `
+              : ""
+          }
+        </button>
+      </div>
+    </div>
+
+    <div class="main-content fade-in">
+      <div class="content-pad dashboard-content">
+        ${renderLegacyPaymentReviewNotice()}
+
+        <style>${CSS}</style>
+        <div class="bb-dashboard-split-layout" data-bb-dashboard-epoch="${epoch}" data-bb-dashboard-month="${monthKey(reportMonth)}">
+          <div class="card bb-dashboard-paycheck-card" aria-label="Paycheck plan and reporting month">
+            ${navigationHTML()}
+            <div class="bb-dashboard-paycheck" aria-label="Paycheck Plan">${paycheckHTML()}</div>
+          </div>
+          ${monthlyHTML(reportMonth)}
+        </div>
+        <div class="dashboard-section-title-row">
+          <div class="section-header dashboard-section-header">
+            Recent Payments
+          </div>
+
+          ${
+            recentPayments.length
+              ? `
+                <button
+                  type="button"
+                  class="bb-outline-pill"
+                  style="
+                    min-height:34px;
+                    padding:0 12px;
+                    font-size:var(--text-xs);
+                  "
+                  onclick="navigate('history')"
+                >
+                  <span>See All</span>
+                  <span class="pill-chevron">
+                    ${svgIcon("chevronRight", 14)}
+                  </span>
+                </button>
+              `
+              : ""
+          }
+        </div>
+
+        ${
+          recentPayments.length
+            ? `<div class="card">${recentRows}</div>`
+            : `
+              <div class="dashboard-empty-card">
+                ${svgIcon("tray", 22)}
+                <span>
+                  Payments you mark as paid will appear here
+                </span>
+              </div>
+            `
+        }
+      </div>
+    </div>
+  `;
+}
+ const CSS=`
     .bb-dashboard-split-layout {display:grid;gap:16px;min-width:0;}
     .bb-dashboard-split-layout > .bb-dashboard-paycheck-card,
     .bb-dashboard-split-layout > .bb-dashboard-monthly-status-card {
@@ -52,70 +786,50 @@
     .bb-dashboard-monthly-status-card .bb-layout-monthly-heading span {
       font-size:var(--text-xs);color:var(--text-muted);line-height:1.4;text-align:right;
     }
-  `;
-  document.head.appendChild(style);
-  function splitDashboard(root) {
-    const combined = root.querySelector('.dashboard-content .bb-dashboard-combined');
-    const month = combined?.querySelector('.dashboard-month-card');
-    const paycheck = combined?.querySelector('.bb-dashboard-paycheck');
-    if (!combined || !month || !paycheck || month.parentElement !== combined || paycheck.parentElement !== combined) return false;
-    if (!month.querySelector('[role="table"]') || !paycheck.querySelector('.bb-dashboard-paycheck-plan')) return false;
-    const arrows = node => [...node.querySelectorAll('button[onclick]')].map(button =>
-      (button.getAttribute('onclick') || '').replace(/\s+/g,''));
-    const nav = [...month.children].find(node => {
-      const handlers=arrows(node);
-      return handlers.includes('changeDashboardReportMonth(-1)') && handlers.includes('changeDashboardReportMonth(1)');
-    });
-    if (!nav) return false;
-    const allArrows=arrows(combined).filter(handler=>/^changeDashboardReportMonth\(/.test(handler));
-    if (allArrows.length !== 2) return false;
-    const monthName = nav.children[1]?.textContent.trim();
-    if (!monthName) return false;
-    const monthly = document.createElement('section');
-    monthly.className='card bb-dashboard-monthly-status-card';
-    const title = month.querySelector('.bb-payment-status-title');
-    if (title) {
-      title.textContent='Monthly Status';
-      if (!title.id) title.id='bbLayoutMonthlyStatusTitle';
-      monthly.setAttribute('aria-labelledby',title.id);
-    } else {
-      const header=document.createElement('header');header.className='bb-layout-monthly-heading';
-      const heading=document.createElement('h2');heading.id='bbLayoutMonthlyStatusTitle';heading.textContent='Monthly Status';
-      const date=document.createElement('span');date.textContent=monthName;
-      header.append(heading,date);monthly.append(header);
-      monthly.setAttribute('aria-labelledby',heading.id);
-    }
-    // Move the original navigation; do not create independent month state or handlers.
-    nav.classList.add('bb-paycheck-month-navigation');
-    combined.insertBefore(nav,paycheck);
-    monthly.append(month);
-    combined.classList.remove('bb-dashboard-combined');
-    combined.classList.add('bb-dashboard-paycheck-card');
-    combined.setAttribute('aria-label','Paycheck plan and reporting month');
-    const wrapper=document.createElement('div');wrapper.className='bb-dashboard-split-layout';
-    combined.replaceWith(wrapper);wrapper.append(combined,monthly);
-    return true;
-  }
-  renderToday=function() {
-    const html=original.apply(this,arguments);
-    if (!enabled) return html;
-    try {
-      const root=document.createElement('div');root.innerHTML=html;
-      return splitDashboard(root) ? root.innerHTML : html;
-    } catch(error) {
-      console.warn('Dashboard layout trial retained the original layout:',error);
-      return html;
-    }
-  };
-  function redrawIfVisible() {
-    if (typeof currentRoute !== 'undefined' && currentRoute === 'today' &&
-        document.querySelector('#app .dashboard-content') && typeof render === 'function') render();
-  }
-  window.BillBeaconDashboardVisualTrial=Object.freeze({
-    version:2,
-    setEnabled(value) {enabled=Boolean(value);style.disabled=!enabled;redrawIfVisible();},
-    isEnabled(){return enabled;},
-    _test:{splitDashboard}
-  });
-  redrawIfVisible();
+ `;
+
+ renderToday=function(){
+  if(!enabled)return original.apply(this,arguments);
+  try{return view();}
+  catch(error){invalidate();console.warn('Dashboard performance retained the original error fallback:',error);return original.apply(this,arguments);}
+ };
+ setDashboardPaycheck=function(paycheckKey){
+  if(!enabled||currentRoute!=='today')return beforeSwitch.apply(this,arguments);
+  const host=document.querySelector('#app .bb-dashboard-paycheck');
+  const wrapper=host?.closest('.bb-dashboard-split-layout');
+  if(!host||!wrapper)return beforeSwitch.apply(this,arguments);
+  try{freshness();}
+  catch(error){return beforeSwitch.apply(this,arguments);}
+  const month=monthKey(getDashboardReportMonth());
+  if(wrapper.dataset.bbDashboardEpoch!==String(epoch)||wrapper.dataset.bbDashboardMonth!==month||
+     getNotificationCount()!==lastNotificationCount)return beforeSwitch.apply(this,arguments);
+  capturePaycheckInlineView();
+  const target=paycheckKey==='second'?'second':'first';
+  const main=document.querySelector('#app .main-content');
+  const scroll={window:window.scrollY||0,main:main?.scrollTop||0};
+  const focus=host.contains(document.activeElement);
+  selectedDashboardPaycheck=target;
+  const token=++switchToken,stamp=revision;
+  try{
+   const html=paycheckHTML();
+   host.innerHTML=html;
+   restorePaycheckInlineView();
+   if(focus)host.querySelector(`button[onclick="setDashboardPaycheck('${target}')"]`)?.focus({preventScroll:true});
+   requestAnimationFrame(()=>{
+    if(token!==switchToken||revision!==stamp||currentRoute!=='today'||selectedDashboardPaycheck!==target||
+       monthKey(getDashboardReportMonth())!==month)return;
+    window.scrollTo(0,scroll.window);
+    const current=document.querySelector('#app .main-content');
+    if(current&&current===main)current.scrollTop=scroll.main;
+   });
+  }catch(error){invalidate();console.warn('Dashboard paycheck update used full render:',error);render();}
+ };
+ for(const event of ['billbeacon:data-changed','billbeacon:signed-out','billbeacon:authenticated','billbeacon:household-ready'])window.addEventListener(event,invalidate);
+ window.addEventListener('storage',event=>{if(event.key===null||['bills','payments','archivedBills','incomeSources','settings'].includes(event.key))invalidate();});
+ document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')invalidate();});
+ function redrawIfVisible(){if(typeof currentRoute!=='undefined'&&currentRoute==='today'&&document.querySelector('#app .dashboard-content')&&typeof render==='function')render();}
+ window.BillBeaconDashboardVisualTrial=Object.freeze({version:3,performancePhase:4,
+  setEnabled(value){enabled=Boolean(value);redrawIfVisible();},isEnabled(){return enabled;},
+  _test:{view,model:date=>{freshness();return copy(monthData(date||getDashboardReportMonth()));},
+   cacheSizes:()=>({months:months.size,amounts:amounts.size,recent:!!recentCache,epoch})}});
 })();
