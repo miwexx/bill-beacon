@@ -8998,7 +8998,7 @@ function renderPaymentPlans() {
     };
   });
 
-  const active = plans
+  const Active = Plans
     .filter(plan => plan.unpaid.length)
     .sort(
       (a, b) =>
@@ -9402,7 +9402,7 @@ function renderPaymentPlans() {
         >
           <div class="bb-inst-summary-top">
             <div>
-              <div class="bb-inst-label">Remaining balance</div>
+              <div class="bb-inst-label">Remaining Balance</div>
               <div class="bb-inst-total">
                 ${formatCurrency(total)}
               </div>
@@ -9417,7 +9417,7 @@ function renderPaymentPlans() {
           <div class="bb-inst-metrics">
             <div>
               <span class="bb-inst-label">
-                To pay · next 7 days
+                To Pay · Next 7 Days
               </span>
               <span
                 class="bb-inst-metric-value"
@@ -9493,7 +9493,7 @@ function renderPaymentPlans() {
 
         <section>
           <div class="bb-inst-heading">
-            <h2>Upcoming payments</h2>
+            <h2>Upcoming Payments</h2>
             <span class="bb-inst-small">
               ${
                 upcoming.length
@@ -9518,7 +9518,7 @@ function renderPaymentPlans() {
 
         <section>
           <div class="bb-inst-heading">
-            <h2>Active plans · ${active.length}</h2>
+            <h2>Active Plans · ${active.length}</h2>
 
             <button
               type="button"
@@ -9579,8 +9579,8 @@ function renderPaymentPlans() {
                 >
                   ${
                     expanded
-                      ? "Show fewer plans"
-                      : `Show all ${active.length} plans`
+                      ? "Show Fewer Plans"
+                      : `Show All ${active.length} Plans`
                   }
                 </button>
               `
