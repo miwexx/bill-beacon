@@ -8916,65 +8916,709 @@ function renderInstallmentProgressBar(paidCount, installmentCount) {
   </div>`;
 }
 function renderPaymentPlans() {
+  const today = new Date();
+  const todayKey = getLocalDateKey(today);
+
+  const weekEnd = getLocalDateKey(
+    new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + 6,
+      12
+    )
+  );
+
   const groups = new Map();
-  Store.getBills().filter(bill => bill.installmentPlanId).forEach(bill => {
-    if (!groups.has(bill.installmentPlanId)) groups.set(bill.installmentPlanId,[]);
+
+  for (const bill of Store.getBills()) {
+    if (!bill.installmentPlanId) continue;
+
+    if (!groups.has(bill.installmentPlanId)) {
+      groups.set(bill.installmentPlanId, []);
+    }
+
     groups.get(bill.installmentPlanId).push(bill);
+  }
+
+  const time = entry => {
+    const value = new Date(entry.bill.dueDate).getTime();
+    return Number.isFinite(value) ? value : Infinity;
+  };
+
+  const plans = [...groups].map(([id, bills]) => {
+    const entries = bills
+      .map(bill => ({
+        bill,
+        status: getOccurrenceStatus(
+          bill,
+          new Date(bill.dueDate)
+        ),
+        day: financialDateKey(bill.dueDate)
+      }))
+      .sort((a, b) => time(a) - time(b));
+
+    entries.forEach((entry, index) => {
+      entry.number = entry.bill.installmentNumber || index + 1;
+    });
+
+    const unpaid = entries.filter(
+      entry => entry.status !== "paid"
+    );
+
+    const pending = unpaid.filter(
+      entry => entry.status === "processing"
+    );
+
+    const actionable = unpaid.filter(
+      entry => entry.status !== "processing"
+    );
+
+    const first = entries[0].bill;
+    const provider = first.installmentProvider || "Payment Plan";
+
+    return {
+      id,
+      entries,
+      unpaid,
+      pending,
+      next: actionable[0] || unpaid[0],
+      processingOnly:
+        unpaid.length > 0 && !actionable.length,
+      provider,
+      name:
+        first.installmentStore?.trim() ||
+        String(first.name || "")
+          .replace(/\s+Payment Plan$/i, "")
+          .trim() ||
+        provider,
+      paid: entries.length - unpaid.length,
+      remaining: dashboardMoneyTotal(
+        unpaid.map(entry => entry.bill.amount)
+      )
+    };
   });
-  const plans = [...groups].map(([id,bills]) => {
-    bills.sort((a,b) => new Date(a.dueDate)-new Date(b.dueDate));
-    const unpaid = bills.filter(bill => !isOccurrencePaid(bill,new Date(bill.dueDate)));
-    const first = bills[0];
-    return {id,bills,unpaid,next:unpaid[0],provider:first.installmentProvider || "Payment Plan",
-      name:first.installmentStore?.trim() || String(first.name || "").replace(/\s+Payment Plan$/i,"").trim() || first.installmentProvider || "Payment Plan",
-      remaining:dashboardMoneyTotal(unpaid.map(bill => bill.amount)),paid:bills.length-unpaid.length};
+
+  const active = plans
+    .filter(plan => plan.unpaid.length)
+    .sort(
+      (a, b) =>
+        Number(a.processingOnly) - Number(b.processingOnly) ||
+        time(a.next) - time(b.next)
+    );
+
+  const completed = plans.filter(
+    plan => !plan.unpaid.length
+  );
+
+  const all = active.flatMap(plan =>
+    plan.unpaid.map(entry => ({...entry, plan}))
+  );
+
+  const overdue = all
+    .filter(entry => entry.status === "overdue")
+    .sort((a, b) => time(a) - time(b));
+
+  const processing = all
+    .filter(entry => entry.status === "processing")
+    .sort((a, b) => time(a) - time(b));
+
+  const upcoming = all
+    .filter(
+      entry =>
+        entry.status === "upcoming" &&
+        entry.day &&
+        entry.day >= todayKey
+    )
+    .sort((a, b) => time(a) - time(b));
+
+  const dueThisWeek = upcoming.filter(
+    entry => entry.day <= weekEnd
+  );
+
+  const total = dashboardMoneyTotal(
+    active.map(plan => plan.remaining)
+  );
+
+  const pendingTotal = dashboardMoneyTotal(
+    processing.map(entry => entry.bill.amount)
+  );
+
+  const weekTotal = dashboardMoneyTotal(
+    dueThisWeek.map(entry => entry.bill.amount)
+  );
+
+  const expanded =
+    routeParams.bbInstallmentsExpanded === true;
+
+  const shown = expanded ? active : active.slice(0, 6);
+
+  const dueLabel = entry =>
+    entry.day
+      ? formatDate(entry.bill.dueDate, "short")
+      : "Date unavailable";
+
+  const paymentRow = entry => {
+    const {bill, plan, status} = entry;
+
+    const label =
+      status === "processing"
+        ? "Processing"
+        : status === "overdue"
+          ? "Overdue"
+          : "Due";
+
+    const color =
+      status === "processing"
+        ? "#79b9ff"
+        : status === "overdue"
+          ? "var(--overdue)"
+          : "var(--text-secondary)";
+
+    const number = entry.number;
+
+    return `
+      <button
+        type="button"
+        class="bb-inst-payment"
+        onclick="navigate('detail',{
+          id:'${escapeInlineString(getBillPaymentId(bill))}',
+          occurrenceDueDate:'${escapeInlineString(bill.dueDate)}',
+          returnRoute:'payment-plans',
+          returnParams:{...routeParams}
+        })"
+        aria-label="${escapeHtml(
+          `${plan.name}, ${plan.provider}, ${label}, ` +
+          `${dueLabel(entry)}, ${formatCurrency(bill.amount)}`
+        )}"
+      >
+        <span class="bb-inst-logo">
+          ${paymentPlanVisual(plan.provider, 32)}
+        </span>
+
+        <span class="bb-inst-copy">
+          <span class="bb-inst-name">
+            ${escapeHtml(plan.name)}
+          </span>
+
+          <span class="bb-inst-meta" style="color:${color};">
+            ${label} ${escapeHtml(dueLabel(entry))}
+            · ${escapeHtml(plan.provider)}
+          </span>
+
+          <span class="bb-inst-meta">
+            Payment ${number}
+            of ${bill.installmentTotal || plan.entries.length}
+          </span>
+        </span>
+
+        <span class="bb-inst-payment-amount">
+          ${formatCurrency(bill.amount)}
+        </span>
+
+        <span aria-hidden="true" class="bb-inst-chevron">
+          ${svgIcon("chevronRight", 16)}
+        </span>
+      </button>
+    `;
+  };
+
+  const planCard = plan => {
+    const next = plan.next;
+
+    const color =
+      next.status === "overdue"
+        ? "var(--overdue)"
+        : next.status === "processing"
+          ? "#79b9ff"
+          : "var(--text)";
+
+    const label =
+      next.status === "overdue"
+        ? "Overdue"
+        : next.status === "processing"
+          ? "Processing"
+          : "Next";
+
+    return `
+      <button
+        type="button"
+        class="card bb-inst-plan"
+        onclick="openPaymentPlanDetails(
+          '${escapeInlineString(plan.id)}'
+        )"
+        aria-label="View ${escapeHtml(plan.name)} installment plan"
+      >
+        <span class="bb-inst-plan-top">
+          <span class="bb-inst-logo">
+            ${paymentPlanVisual(plan.provider, 40)}
+          </span>
+
+          <span class="bb-inst-copy">
+            <span class="bb-inst-name">
+              ${escapeHtml(plan.name)}
+            </span>
+
+            <span class="bb-inst-meta">
+              ${escapeHtml(plan.provider)}
+            </span>
+          </span>
+
+          <span class="bb-inst-plan-balance">
+            <span>${formatCurrency(plan.remaining)}</span>
+            <span class="bb-inst-meta">Remaining</span>
+          </span>
+        </span>
+
+        <span class="bb-inst-next" style="color:${color};">
+          ${label} · ${escapeHtml(dueLabel(next))}
+          <span>${formatCurrency(next.bill.amount)}</span>
+        </span>
+
+        ${renderInstallmentProgressBar(
+          plan.paid,
+          plan.entries.length
+        )}
+
+        <span class="bb-inst-plan-footer">
+          <span>
+            ${plan.paid} of ${plan.entries.length} paid
+            ${
+              plan.pending.length
+                ? ` · ${plan.pending.length} processing`
+                : ""
+            }
+          </span>
+
+          <span>View plan ›</span>
+        </span>
+      </button>
+    `;
+  };
+
+  return `
+    ${renderBillsAndPlansHeader("plans")}
+
+    <style>
+      .bb-inst-page .bb-inst-content {
+        padding-bottom:calc(100px + env(safe-area-inset-bottom));
+      }
+
+      .bb-inst-page .bb-inst-summary {
+        padding:16px;
+      }
+
+      .bb-inst-page .bb-inst-summary-top,
+      .bb-inst-page .bb-inst-plan-top {
+        display:flex;
+        align-items:center;
+        gap:12px;
+      }
+
+      .bb-inst-page .bb-inst-summary-top {
+        justify-content:space-between;
+        flex-wrap:wrap;
+      }
+
+      .bb-inst-page .bb-inst-label {
+        font-size:var(--text-xs);
+        color:var(--text-secondary);
+        line-height:1.5;
+      }
+
+      .bb-inst-page .bb-inst-total {
+        margin-top:4px;
+        font-size:clamp(27px,7vw,34px);
+        font-weight:850;
+        line-height:1.2;
+        font-variant-numeric:tabular-nums;
+      }
+
+      .bb-inst-page .bb-inst-chip {
+        border:1px solid var(--border);
+        border-radius:999px;
+        padding:7px 10px;
+        font-size:var(--text-xs);
+        color:var(--text-secondary);
+      }
+
+      .bb-inst-page .bb-inst-metrics {
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        gap:14px;
+        border-top:1px solid var(--border);
+        margin-top:14px;
+        padding-top:12px;
+      }
+
+      .bb-inst-page .bb-inst-metric-value {
+        display:block;
+        margin-top:4px;
+        font-size:var(--text-lg);
+        font-weight:800;
+        overflow-wrap:anywhere;
+        font-variant-numeric:tabular-nums;
+      }
+
+      .bb-inst-page .bb-inst-heading {
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        gap:10px;
+        margin-bottom:9px;
+      }
+
+      .bb-inst-page .bb-inst-heading h2 {
+        margin:0;
+        font-size:var(--text-base);
+        font-weight:800;
+      }
+
+      .bb-inst-page .bb-inst-small {
+        font-size:var(--text-xs);
+        color:var(--text-secondary);
+      }
+
+      .bb-inst-page .bb-inst-payment {
+        display:flex;
+        align-items:center;
+        gap:10px;
+        width:100%;
+        min-height:72px;
+        padding:12px 14px;
+        border:0;
+        background:transparent;
+        color:var(--text);
+        font:inherit;
+        text-align:left;
+        cursor:pointer;
+      }
+
+      .bb-inst-page .bb-inst-payment + .bb-inst-payment {
+        border-top:1px solid var(--border);
+      }
+
+      .bb-inst-page .bb-inst-logo {
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        flex:0 0 auto;
+      }
+
+      .bb-inst-page .bb-inst-copy {
+        display:block;
+        flex:1;
+        min-width:0;
+      }
+
+      .bb-inst-page .bb-inst-name {
+        display:block;
+        font-size:var(--text-sm);
+        font-weight:800;
+        overflow-wrap:anywhere;
+      }
+
+      .bb-inst-page .bb-inst-meta {
+        display:block;
+        margin-top:4px;
+        font-size:var(--text-xs);
+        color:var(--text-secondary);
+        line-height:1.4;
+        font-weight:400;
+      }
+
+      .bb-inst-page .bb-inst-payment-amount {
+        flex-shrink:0;
+        font-size:var(--text-sm);
+        font-weight:800;
+        font-variant-numeric:tabular-nums;
+      }
+
+      .bb-inst-page .bb-inst-chevron {
+        color:var(--text-muted);
+        flex-shrink:0;
+      }
+
+      .bb-inst-page .bb-inst-plan-list {
+        display:grid;
+        gap:12px;
+      }
+
+      .bb-inst-page .bb-inst-plan {
+        display:block;
+        width:100%;
+        min-width:0;
+        padding:16px;
+        font:inherit;
+        color:var(--text);
+        text-align:left;
+        cursor:pointer;
+      }
+
+      .bb-inst-page .bb-inst-plan-balance {
+        flex-shrink:0;
+        text-align:right;
+        font-weight:800;
+        font-variant-numeric:tabular-nums;
+      }
+
+      .bb-inst-page .bb-inst-next {
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        margin-top:14px;
+        font-size:var(--text-sm);
+        font-weight:700;
+      }
+
+      .bb-inst-page .bb-inst-plan-footer {
+        display:flex;
+        justify-content:space-between;
+        gap:12px;
+        margin-top:10px;
+        font-size:var(--text-xs);
+        color:var(--text-secondary);
+        line-height:1.5;
+      }
+
+      .bb-inst-page .bb-inst-empty {
+        padding:18px 14px;
+        font-size:var(--text-sm);
+        color:var(--text-secondary);
+        line-height:1.6;
+      }
+
+      .bb-inst-page button:focus-visible {
+        outline:2px solid var(--accent);
+        outline-offset:-3px;
+      }
+    </style>
+
+    <div class="main-content fade-in bb-inst-page">
+      <div class="content-pad content-gap bb-inst-content">
+
+        <section
+          class="card bb-inst-summary"
+          aria-label="Installment overview"
+        >
+          <div class="bb-inst-summary-top">
+            <div>
+              <div class="bb-inst-label">Remaining balance</div>
+              <div class="bb-inst-total">
+                ${formatCurrency(total)}
+              </div>
+            </div>
+
+            <span class="bb-inst-chip">
+              ${active.length} active
+              ${active.length === 1 ? "plan" : "plans"}
+            </span>
+          </div>
+
+          <div class="bb-inst-metrics">
+            <div>
+              <span class="bb-inst-label">
+                To pay · next 7 days
+              </span>
+              <span
+                class="bb-inst-metric-value"
+                style="color:var(--upcoming);"
+              >
+                ${formatCurrency(weekTotal)}
+              </span>
+            </div>
+
+            <div>
+              <span class="bb-inst-label">
+                Processing · ${processing.length}
+              </span>
+              <span
+                class="bb-inst-metric-value"
+                style="color:#79b9ff;"
+              >
+                ${formatCurrency(pendingTotal)}
+              </span>
+            </div>
+          </div>
+
+          ${
+            processing.length
+              ? `
+                <div class="bb-inst-meta" style="margin-top:10px;">
+                  Remaining balance includes processing payments.
+                </div>
+              `
+              : ""
+          }
+        </section>
+
+        ${
+          overdue.length
+            ? `
+              <section>
+                <div class="bb-inst-heading">
+                  <h2 style="color:var(--overdue);">
+                    Needs attention
+                  </h2>
+                  <span class="bb-inst-small">
+                    ${overdue.length} overdue
+                  </span>
+                </div>
+
+                <div class="card">
+                  ${overdue.map(paymentRow).join("")}
+                </div>
+              </section>
+            `
+            : ""
+        }
+
+        ${
+          processing.length
+            ? `
+              <section>
+                <div class="bb-inst-heading">
+                  <h2>Processing</h2>
+                  <span class="bb-inst-small">
+                    Awaiting confirmation
+                  </span>
+                </div>
+
+                <div class="card">
+                  ${processing.map(paymentRow).join("")}
+                </div>
+              </section>
+            `
+            : ""
+        }
+
+        <section>
+          <div class="bb-inst-heading">
+            <h2>Upcoming payments</h2>
+            <span class="bb-inst-small">
+              ${
+                upcoming.length
+                  ? `Next ${Math.min(3, upcoming.length)}`
+                  : ""
+              }
+            </span>
+          </div>
+
+          <div class="card">
+            ${
+              upcoming.length
+                ? upcoming.slice(0, 3).map(paymentRow).join("")
+                : `
+                  <div class="bb-inst-empty">
+                    No upcoming payments waiting to be submitted.
+                  </div>
+                `
+            }
+          </div>
+        </section>
+
+        <section>
+          <div class="bb-inst-heading">
+            <h2>Active plans · ${active.length}</h2>
+
+            <button
+              type="button"
+              class="bb-outline-pill"
+              onclick="openCompletedPlansHistory()"
+              style="
+                min-height:40px;
+                padding:6px 10px;
+                font-size:var(--text-xs);
+              "
+            >
+              Completed · ${completed.length} ›
+            </button>
+          </div>
+
+          <div
+            class="bb-inst-plan-list"
+            id="bbInstallmentsActiveList"
+          >
+            ${
+              shown.map(planCard).join("") ||
+              `
+                <div class="card bb-inst-empty">
+                  ${
+                    completed.length
+                      ? "All your plans are completed. Open Completed to review them."
+                      : "No active plans yet."
+                  }
+
+                  <button
+                    type="button"
+                    class="btn-primary"
+                    onclick="openInstallmentPlanForm()"
+                    style="width:100%;margin-top:12px;"
+                  >
+                    Add installment plan
+                  </button>
+                </div>
+              `
+            }
+          </div>
+
+          ${
+            active.length > 6
+              ? `
+                <button
+                  type="button"
+                  class="bb-outline-pill"
+                  aria-controls="bbInstallmentsActiveList"
+                  aria-expanded="${expanded}"
+                  onclick="bbSetInstallmentsExpanded(${!expanded})"
+                  style="
+                    width:100%;
+                    min-height:44px;
+                    justify-content:center;
+                    margin-top:12px;
+                  "
+                >
+                  ${
+                    expanded
+                      ? "Show fewer plans"
+                      : `Show all ${active.length} plans`
+                  }
+                </button>
+              `
+              : ""
+          }
+        </section>
+
+      </div>
+    </div>
+  `;
+}
+
+function bbSetInstallmentsExpanded(expanded) {
+  if (currentRoute !== "payment-plans") return;
+
+  const position = {
+    window: window.scrollY || 0,
+    main:
+      document.querySelector("#app .main-content")
+        ?.scrollTop || 0
+  };
+
+  routeParams = {
+    ...routeParams,
+    bbInstallmentsExpanded: expanded === true
+  };
+
+  render();
+
+  requestAnimationFrame(() => {
+    if (currentRoute !== "payment-plans") return;
+
+    window.scrollTo(0, position.window);
+
+    const main = document.querySelector("#app .main-content");
+
+    if (main) main.scrollTop = position.main;
   });
-  const active = plans.filter(plan => plan.next).sort((a,b) => new Date(a.next.dueDate)-new Date(b.next.dueDate));
-  const completed = plans.filter(plan => !plan.next);
-  const total = dashboardMoneyTotal(active.map(plan => plan.remaining));
-  const cards = active.map(plan => {
-    const overdue = getOccurrenceStatus(plan.next,new Date(plan.next.dueDate)) === "overdue";
-    return `<button type="button" class="bb-plan-list-row" style="display:block;width:100%;padding:18px;text-align:left;color:var(--text);background:transparent;font:inherit;cursor:pointer;border:0;" onclick="openPaymentPlanDetails('${escapeInlineString(plan.id)}')" aria-label="View ${escapeHtml(plan.name)} plan details">
-      <span style="display:flex;align-items:flex-start;gap:12px;">
-        ${paymentPlanVisual(plan.provider,40)}
-        <span style="min-width:0;flex:1;"><span style="display:block;font-weight:800;overflow-wrap:anywhere;">${escapeHtml(plan.name)}</span>
-          <span style="display:block;margin-top:4px;color:var(--text-muted);font-size:var(--text-sm);">${escapeHtml(plan.provider)}</span></span>
-        <span style="text-align:right;flex-shrink:0;"><span style="display:block;font-weight:800;">${formatCurrency(plan.remaining)}</span>
-          <span style="display:block;margin-top:4px;color:var(--text-muted);font-size:var(--text-xs);">Remaining</span></span>
-      </span>
-      <span style="display:block;margin-top:15px;color:${overdue?'var(--overdue)':'var(--text)'};font-size:var(--text-sm);font-weight:650;">${overdue?'Overdue':'Next Payment'}: ${formatCurrency(plan.next.amount)} · ${escapeHtml(formatDate(plan.next.dueDate,"short"))}</span>
-      ${renderInstallmentProgressBar(plan.paid,plan.bills.length)}
-      <span style="display:flex;justify-content:space-between;gap:12px;margin-top:9px;font-size:var(--text-xs);color:var(--text-muted);"><span>${plan.paid} of ${plan.bills.length} Payments Paid</span><span>View Plan ›</span></span>
-    </button>`;
-  }).join("");
-  bbPlanInstallViewportSizing();
-  return `<style>
-    #bbPlansViewport{box-sizing:border-box!important;overflow:hidden!important;padding:12px 16px!important;display:flex!important;flex-direction:column!important;gap:12px;min-height:0!important;background:var(--bg);}
-    #bbPlansViewport .bb-plan-balance{flex:0 0 auto;padding:14px 16px!important;margin:0!important;}
-    #bbPlansViewport .bb-plan-list-section{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;overflow:hidden;}
-    #bbPlansViewport .bb-plan-list-scroll{flex:1 1 auto;min-height:0;overflow-y:auto!important;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;margin:0!important;}
-    #bbPlansViewport .bb-plan-list-row+.bb-plan-list-row{border-top:1px solid var(--border)!important;}
-    #bbPlansViewport .bb-plan-list-row{padding:14px!important;}
-    #bbPlansViewport button:focus-visible{outline:2px solid var(--accent);outline-offset:-3px;}
-  </style>${renderBillsAndPlansHeader("plans")}${renderBillsAndPlansNavigation("plans")}
-  <div class="main-content" id="bbPlansViewport">
-    <section class="card bb-plan-balance" aria-label="Total Remaining Balance">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-        <div><div style="font-size:var(--text-sm);color:var(--text-muted);">Remaining Balance</div><div style="margin-top:4px;font-size:var(--text-xs);color:var(--text-muted);">${active.length} Active ${active.length===1?'Plan':'Plans'}</div></div>
-        <div style="font-size:clamp(26px,7vw,34px);font-weight:850;overflow-wrap:anywhere;">${formatCurrency(total)}</div>
-      </div>
-      <div style="margin-top:6px;color:var(--text-muted);font-size:var(--text-xs);">All Remaining Payments, Not Just This Month</div>
-    </section>
-    <section class="bb-plan-list-section" aria-labelledby="bbActivePlansTitle">
-      <div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
-        <div class="section-header" id="bbActivePlansTitle" style="margin:0;">Active Plans</div>
-        ${completed.length ? `<button type="button" onclick="openCompletedPlansHistory()" style="min-height:44px;border:0;padding:6px;background:transparent;color:var(--accent);font:inherit;font-size:var(--text-sm);font-weight:700;">Completed Plans · ${completed.length} ›</button>` : ''}
-      </div>
-      <div class="card bb-plan-group bb-plan-list-scroll" tabindex="0" role="region" aria-label="Active Plans List">
-        ${cards || `<div style="padding:20px;text-align:center;"><div style="font-weight:750;">${completed.length?'All Plans Completed':'No Active Plans'}</div><p style="color:var(--text-muted);font-size:var(--text-sm);">${completed.length?'Open Completed Plans To Review Your History.':'Add A Plan To Track Its Payments.'}</p><button type="button" class="btn-primary" onclick="openInstallmentPlanForm()">Add Payment Plan</button></div>`}
-      </div>
-    </section>
-  </div>`;
 }
 function bbCapturePlanReturn(planId) {
   const root=document.getElementById('paymentPlanDetailsContainer');
