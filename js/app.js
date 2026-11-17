@@ -8998,7 +8998,7 @@ function renderPaymentPlans() {
     };
   });
 
-  const Active = Plans
+  const active = plans
     .filter(plan => plan.unpaid.length)
     .sort(
       (a, b) =>
