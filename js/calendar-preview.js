@@ -1,11 +1,13 @@
-/* Bill Beacon BROWSER Calendar preview v2.
-   Replaces js/calendar-preview.js. Original calendar CSS/classes retained.
-   Month/Week/Today are display controls only. No financial storage writes. */
+/* Bill Beacon Calendar performance phase 2 (v3).
+   Full replacement for calendar-preview.js. Load after app.js and bill-splits.js.
+   Remove the processing-calendar.js script: Processing is rendered here.
+   Read-only, bounded in-memory models; no financial storage writes. */
 (() => {
   "use strict";
   if(window.BillBeaconCalendarPreview)return;
-  if(typeof renderRecurring!=="function"||typeof getCalendarBillsForMonth!=="function") {
-    console.error("Calendar preview: load app.js and the existing UI scripts first.");return;
+  if(typeof renderRecurring!=="function"||typeof getCalendarBillsForMonth!=="function"||
+     typeof isOccurrenceProcessing!=="function") {
+    console.error("Calendar v3: load app.js and the existing split/UI scripts first.");return;
   }
   const original=renderRecurring;
   const key=value=>financialDateKey(value);
@@ -14,9 +16,9 @@
   const monthKey=date=>`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}`;
   const iso=value=>localDate(value).toISOString();
   const firstOfMonth=date=>new Date(date.getFullYear(),date.getMonth(),1,12);
+  const clone=value=>JSON.parse(JSON.stringify(value));
   function addDays(value,amount){const date=localDate(value);date.setDate(date.getDate()+amount);return dateKey(date);}
   function startOfWeek(value){const date=localDate(value);return addDays(value,-date.getDay());}
-
   function state() {
     const now=new Date(),raw=String(routeParams.month||"");
     const match=raw.match(/^(\d{4})-(\d{2})/);
@@ -32,23 +34,65 @@
       filter:["all","unpaid","paid"].includes(routeParams.bbCalendarFilter)?routeParams.bbCalendarFilter:"all",
       expanded:routeParams.bbCalendarExpanded===true};
   }
+  const MONTH_LIMIT=6,PERIOD_LIMIT=8;
+  let revision=null,overdueCache=null;
+  const months=new Map(),periods=new Map();
+  function invalidate(){revision=null;overdueCache=null;months.clear();periods.clear();}
+  function freshness() {
+    const now=new Date(),user=window.getBillBeaconFirebaseUser?.(),context=window.getBillBeaconHouseholdContext?.();
+    const next={raw:["bills","payments","archivedBills","settings"].map(name=>localStorage.getItem(name)),
+      scope:JSON.stringify([user?.uid||null,context?.uid||null,context?.householdId||null,context?.generation??null,context?.ready??null]),
+      day:dateKey(now),offset:now.getTimezoneOffset(),zone:Intl.DateTimeFormat().resolvedOptions().timeZone||"",
+      refs:[Store.getBills,Store.getPayments,Store.getPaymentsForBill,Store.getSettings,getCalendarBillsForMonth,
+        getOccurrenceStatus,isOccurrencePaid,getOccurrencePaidAmount,getAllOverdueBillOccurrences,isOccurrenceProcessing]};
+    const same=revision&&revision.scope===next.scope&&revision.day===next.day&&revision.offset===next.offset&&revision.zone===next.zone&&
+      next.raw.every((value,index)=>revision.raw[index]===value)&&next.refs.every((value,index)=>revision.refs[index]===value);
+    if(!same){invalidate();revision=next;}
+  }
+  function keep(map,name,value,limit){map.delete(name);map.set(name,value);if(map.size>limit)map.delete(map.keys().next().value);return value;}
+  function entryFor(bill) {
+    const status=getOccurrenceStatus(bill,new Date(bill.dueDate));
+    return {bill,day:key(bill.dueDate),status,paid:status==="paid",
+      paidAmount:status==="paid"?getOccurrencePaidAmount(bill):0};
+  }
+  function monthEntries(month) {
+    if(months.has(month)){const value=months.get(month);months.delete(month);months.set(month,value);return value;}
+    const bills=getCalendarBillsForMonth(localDate(month+"-01"));
+    if(!Array.isArray(bills))throw new Error("Calendar month records are unavailable.");
+    return keep(months,month,bills.map(entryFor),MONTH_LIMIT);
+  }
+  function periodData(s) {
+    const token=s.start+"|"+s.end;
+    if(periods.has(token)){const value=periods.get(token);periods.delete(token);periods.set(token,value);return value;}
+    const monthNames=new Set([s.start.slice(0,7),s.end.slice(0,7)]);
+    const entries=[...monthNames].flatMap(monthEntries).filter(entry=>entry.day>=s.start&&entry.day<=s.end)
+      .sort((a,b)=>String(a.day).localeCompare(String(b.day))||String(a.bill.name).localeCompare(String(b.bill.name)));
+    return keep(periods,token,{entries},PERIOD_LIMIT);
+  }
   function isPaid(bill){return isOccurrencePaid(bill,new Date(bill.dueDate));}
   function filteredBills(bills,filter) {
     return bills.filter(bill=>filter==="all"||(filter==="paid"?isPaid(bill):!isPaid(bill)))
       .slice().sort((a,b)=>String(key(a.dueDate)).localeCompare(String(key(b.dueDate)))||String(a.name).localeCompare(String(b.name)));
   }
   function total(values){return values.reduce((sum,value)=>{const n=Math.round(Number(value)*100);return sum+(Number.isSafeInteger(n)?n:0);},0)/100;}
-  function periodBills(s) {
-    const months=new Set([s.start.slice(0,7),s.end.slice(0,7)]);
-    return [...months].flatMap(month=>getCalendarBillsForMonth(localDate(month+"-01")))
-      .filter(bill=>key(bill.dueDate)>=s.start&&key(bill.dueDate)<=s.end);
-  }
+  function periodBills(s){freshness();return periodData(s).entries.map(entry=>clone(entry.bill));}
   function model(s=state()) {
-    const visible=filteredBills(periodBills(s),s.filter);
-    const list=s.selected?visible.filter(bill=>key(bill.dueDate)===s.selected):visible;
-    const amount=s.filter==="paid"?total(list.map(bill=>getOccurrencePaidAmount(bill))):total(list.filter(bill=>!isPaid(bill)).map(bill=>bill.amount));
+    freshness();
+    const visibleEntries=periodData(s).entries.filter(entry=>s.filter==="all"||(s.filter==="paid"?entry.paid:!entry.paid));
+    const byDay=new Map();
+    for(const entry of visibleEntries){if(!byDay.has(entry.day))byDay.set(entry.day,[]);byDay.get(entry.day).push(entry);}
+    const listEntries=s.selected?(byDay.get(s.selected)||[]):visibleEntries;
+    const amount=s.filter==="paid"?total(listEntries.map(entry=>entry.paidAmount)):total(listEntries.filter(entry=>!entry.paid).map(entry=>entry.bill.amount));
+    const pending=listEntries.filter(entry=>entry.status==="processing");
     const dates=[];for(let value=s.start;value<=s.end;value=addDays(value,1))dates.push(value);
-    return {s,visible,list,amount,dates};
+    return {s,visible:visibleEntries.map(entry=>entry.bill),list:listEntries.map(entry=>entry.bill),
+      visibleEntries,listEntries,byDay,amount,dates,processingAmount:total(pending.map(entry=>entry.bill.amount)),processingCount:pending.length};
+  }
+  function overdueModel() {
+    if(overdueCache)return overdueCache;
+    const bills=getAllOverdueBillOccurrences(new Date());
+    if(!Array.isArray(bills))throw new Error("Overdue records are unavailable.");
+    overdueCache={count:bills.length,amount:total(bills.map(bill=>bill.amount))};return overdueCache;
   }
   function update(changes,resetScroll=false) {
     if(currentRoute!=="recurring")return;
@@ -99,10 +143,10 @@
     const left=first.toLocaleDateString(undefined,{month:"short",day:"numeric",...(crossYear?{year:"numeric"}:{})});
     return left+" – "+last.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"});
   }
-  function row(bill) {
-    const paid=isPaid(bill),status=getOccurrenceStatus(bill,new Date(bill.dueDate));
-    const color=paid?"var(--paid)":status==="overdue"?"var(--overdue)":"var(--text-muted)";
-    const label=paid?"Paid":status==="overdue"?"Overdue":"Due";
+  function row(entry) {
+    const {bill,paid,status}=entry;
+    const color=paid?"var(--paid)":status==="processing"?"#79b9ff":status==="overdue"?"var(--overdue)":"var(--text-muted)";
+    const label=paid?"Paid":status==="processing"?"Processing":status==="overdue"?"Overdue":"Due";
     const name=bill.splitPaymentParentId&&!/\s-\sSplit\s\d+$/i.test(bill.name)?`${bill.name} - Split ${bill.splitPaymentPartNumber}`:bill.name;
     const id=getBillPaymentId(bill),visual={...bill,name};
     return `<button type="button" class="bill-row" style="width:100%;text-align:left;color:var(--text);"
@@ -133,36 +177,37 @@
   ${billOrPaymentPlanVisual(visual,42)}
 </span>
       <span class="bill-info"><span class="bill-name" style="display:block;">${escapeHtml(name)}</span>
-      <span class="bill-meta" style="color:${color};">${paid?svgIcon("checkCircle",13):status==="overdue"?svgIcon("warning",13):svgIcon("calendar",13)} ${label} · ${escapeHtml(formatDate(bill.dueDate,"short"))}</span></span>
+      <span class="bill-meta" style="color:${color};">${paid?svgIcon("checkCircle",13):status==="processing"?svgIcon("clock",13):status==="overdue"?svgIcon("warning",13):svgIcon("calendar",13)} ${label} · ${escapeHtml(formatDate(bill.dueDate,"short"))}</span></span>
       <span class="bill-amount">${formatCurrency(bill.amount)}</span><span aria-hidden="true" style="color:var(--text-muted);">${svgIcon("chevronRight",16)}</span></button>`;
   }
-  function agenda(items,s) {
-    const shown=items.slice(0,s.expanded?items.length:5);
+  function agenda(entries,s) {
+    const shown=entries.slice(0,s.expanded?entries.length:5);
     if(s.mode!=="week"||s.selected)return shown.map(row).join("");
     let previous="";
-    return shown.map(bill=>{
-      const day=key(bill.dueDate);
+    return shown.map(entry=>{
+      const day=entry.day;
       const heading=day!==previous?`<div class="section-header" style="padding:12px 14px 6px;">${escapeHtml(formatDate(iso(day),"full"))}</div>`:"";
-      previous=day;return heading+row(bill);
+      previous=day;return heading+row(entry);
     }).join("");
   }
   function view() {
-    const {s,visible,list,amount,dates}=model(),todayKey=dateKey(new Date());
+    const m=model(),{s,list,amount,dates}=m,todayKey=dateKey(new Date());
     const cells=s.mode==="month"?Array.from({length:s.date.getDay()},()=>'<div class="recurring-calendar-day is-empty"></div>'):[];
     for(const value of dates) {
-      const date=localDate(value),items=visible.filter(bill=>key(bill.dueDate)===value);
-      const paidCount=items.filter(isPaid).length;
-      const overdue=items.some(bill=>getOccurrenceStatus(bill,new Date(bill.dueDate))==="overdue");
-      const upcoming=items.some(bill=>getOccurrenceStatus(bill,new Date(bill.dueDate))==="upcoming");
-      const markerClass=overdue?"overdue":upcoming?"upcoming":"paid";
-      // Reuse the original calendar day, dot, Today and selection classes.
+      const date=localDate(value),entries=m.byDay.get(value)||[];
+      let paidCount=0,processingCount=0,overdue=false,upcoming=false;
+      for(const entry of entries){if(entry.paid)paidCount++;if(entry.status==="processing")processingCount++;if(entry.status==="overdue")overdue=true;if(entry.status==="upcoming")upcoming=true;}
+      const markerClass=overdue?"overdue":upcoming?"upcoming":processingCount?"processing":"paid";
+      const description=processingCount
+        ? `${formatDate(iso(value),"full")}, ${entries.length} payments, ${paidCount} paid, ${processingCount} processing, ${entries.length-paidCount-processingCount} still to submit`
+        : `${formatDate(iso(value),"full")}, ${entries.length} payments, ${paidCount} paid, ${entries.length-paidCount} unpaid`;
       cells.push(`<button type="button" class="recurring-calendar-day${value===todayKey?' is-today':''}${s.selected===value?' is-selected':''}${overdue?' has-overdue':''}"
         onclick="BillBeaconCalendarPreview.selectDay('${value}')"
-        aria-label="${escapeHtml(`${formatDate(iso(value),"full")}, ${items.length} payments, ${paidCount} paid, ${items.length-paidCount} unpaid`)}"
+        aria-label="${escapeHtml(description)}"
         aria-pressed="${s.selected===value}" ${value===todayKey?'aria-current="date"':''}>
-        <span>${date.getDate()}</span>${items.length?`<i class="recurring-calendar-marker ${markerClass}" aria-hidden="true"></i>`:""}</button>`);
+        <span>${date.getDate()}</span>${entries.length?`<i class="recurring-calendar-marker ${markerClass}" ${markerClass==='processing'?'style="background-color:#79b9ff;"':''} aria-hidden="true"></i>`:""}</button>`);
     }
-    const overdue=getAllOverdueBillOccurrences(new Date());
+    const overdue=overdueModel();
     const heading=s.selected?formatDate(iso(s.selected),"full"):s.mode==="week"?"Week Payments":formatDate(s.date,"monthYear")+" Payments";
     const empty=s.filter==="paid"?"No paid payments":s.filter==="unpaid"?"No unpaid payments":"No payments";
     return `<div class="nav-bar"><div class="nav-bar-content" style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;">
@@ -170,7 +215,7 @@
       <button type="button" class="nav-button" style="width:44px;height:44px;justify-content:center;" onclick="openAddMenu()" aria-label="Add a bill or payment plan">${svgIcon("plus",20)}</button></div></div>
       <main class="main-content bb-calendar-preview-page"><div class="content-pad content-gap">
       <style>
-        /* New controls only. Original calendar grid/day styling is untouched. */
+        /* Existing Calendar/control appearance retained. */
         .bb-calendar-preview-page{min-width:0;}
         .bb-cal-view-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0;}
         .bb-cal-view-toggle{display:flex;gap:3px;padding:3px;border:1px solid var(--border);border-radius:999px;background:var(--surface-2);}
@@ -203,17 +248,17 @@
         <div class="recurring-calendar-grid">${cells.join("")}</div>
       </section>
       <div class="bb-cal-filters" role="group" aria-label="Filter calendar payments">${[["all","All"],["unpaid","Unpaid"],["paid","Paid"]].map(([id,label])=>`<button type="button" aria-pressed="${s.filter===id}" onclick="BillBeaconCalendarPreview.filter('${id}')">${label}</button>`).join("")}</div>
-      ${overdue.length?`<button type="button" class="bb-cal-overdue" onclick="openDashboardStatusSheet('overdue')" aria-label="View all overdue payments, including earlier months"><span>${overdue.length} Overdue · All Dates</span><span>${formatCurrency(total(overdue.map(bill=>bill.amount)))}</span></button>`:""}
+      ${overdue.count?`<button type="button" class="bb-cal-overdue" onclick="openDashboardStatusSheet('overdue')" aria-label="View all overdue payments, including earlier months"><span>${overdue.count} Overdue · All Dates</span><span>${formatCurrency(overdue.amount)}</span></button>`:""}
       <section ${s.selected?'class="recurring-calendar-selected-day"':''} aria-label="Calendar payment list">
-        <div class="bb-cal-listhead"><div><h2>${escapeHtml(heading)}</h2><div class="bb-cal-listmeta">${list.length} ${list.length===1?'Payment':'Payments'} · ${s.filter==='paid'?'Paid':'Remaining'} ${formatCurrency(amount)}</div></div>
+        <div class="bb-cal-listhead"><div><h2>${escapeHtml(heading)}</h2><div class="bb-cal-listmeta">${list.length} ${list.length===1?'Payment':'Payments'} · ${s.filter==='paid'?'Paid':'Remaining'} ${formatCurrency(amount)}${m.processingCount?` · ${formatCurrency(m.processingAmount)} processing`:''}</div></div>
         ${s.selected?`<button type="button" class="bb-cal-clear" onclick="BillBeaconCalendarPreview.clearDay()" aria-label="Close selected day">${svgIcon("close",16)}</button>`:""}</div>
-        <div class="card">${list.length?agenda(list,s):`<div style="padding:22px 14px;text-align:center;color:var(--text-muted);font-size:var(--text-sm);">${empty} ${s.selected?'for this day':s.mode==='week'?'for this week':'for this month'}.</div>`}
+        <div class="card">${list.length?agenda(m.listEntries,s):`<div style="padding:22px 14px;text-align:center;color:var(--text-muted);font-size:var(--text-sm);">${empty} ${s.selected?'for this day':s.mode==='week'?'for this week':'for this month'}.</div>`}
         ${list.length>5?`<button type="button" class="bb-cal-more" onclick="BillBeaconCalendarPreview.expand()" aria-expanded="${s.expanded}">${s.expanded?'Show Less':`Show More (${list.length-5})`}</button>`:""}</div>
       </section></div></main>`;
   }
   renderRecurring=function() {
     let html;
-    try{html=view();}catch(error){console.error("Calendar preview failed; original view retained.",error);return original.apply(this,arguments);}
+    try{html=view();}catch(error){invalidate();console.error("Calendar v3 failed; original view retained.",error);return original.apply(this,arguments);}
     const scroll=routeParams.bbCalendarPreviewReturn;
     if(scroll){delete routeParams.bbCalendarPreviewReturn;requestAnimationFrame(()=>{
       if(currentRoute!=="recurring")return;window.scrollTo(0,scroll.window||0);
@@ -221,6 +266,13 @@
     });}
     return html;
   };
-  window.BillBeaconCalendarPreview={version:2,changeMonth,setView,today,selectDay,clearDay,filter,expand,openBill,
-    originalRenderer:original,_test:{state,model,periodBills,startOfWeek,addDays,filteredBills,total,view}};
+  for(const event of ["billbeacon:data-changed","billbeacon:signed-out","billbeacon:authenticated","billbeacon:household-ready"])window.addEventListener(event,invalidate);
+  window.addEventListener("storage",event=>{if(event.key===null||["bills","payments","archivedBills","settings"].includes(event.key))invalidate();});
+  document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")invalidate();});
+  function publicModel(s){const value=model(s);return {s:value.s,visible:clone(value.visible),list:clone(value.list),amount:value.amount,dates:[...value.dates],processingAmount:value.processingAmount,processingCount:value.processingCount};}
+  window.BillBeaconCalendarPreview={version:3,changeMonth,setView,today,selectDay,clearDay,filter,expand,openBill,
+    originalRenderer:original,_test:{state,model:publicModel,periodBills,startOfWeek,addDays,filteredBills,total,view,
+      cacheSizes:()=>({months:months.size,periods:periods.size,overdue:!!overdueCache})}};
+  // Prevent an older cached HTML page from installing the retired adapter twice.
+  if(!window.BillBeaconProcessingCalendar)window.BillBeaconProcessingCalendar=Object.freeze({version:2,integrated:true});
 })();
