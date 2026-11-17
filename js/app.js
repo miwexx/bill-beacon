@@ -20408,8 +20408,8 @@ window.addEventListener("storage", () => {
     }
     function warm(deadline) {
       idle=null;
-      if(busy())return;
-      if(deadline && !deadline.didTimeout && deadline.timeRemaining()<8){schedule();return;}
+      // Preview warming is optional. Never force a capture after an idle timeout.
+      if(busy() || !deadline || deadline.didTimeout || deadline.timeRemaining()<12)return;
       const root=document.getElementById('app');if(!root)return;
       observeRoot(root);pendingMutations();
       const rect=root.getBoundingClientRect();
@@ -20419,11 +20419,12 @@ window.addEventListener("storage", () => {
     }
     function schedule() {
       cancelPending();
+      // Without a real idle callback, capture only when a preview is requested.
+      if(typeof window.requestIdleCallback!=='function')return;
       timer=setTimeout(()=>{
         timer=null;if(busy())return;
-        if(typeof window.requestIdleCallback==='function')idle=window.requestIdleCallback(warm,{timeout:1000});
-        else timer=setTimeout(()=>{timer=null;warm();},0);
-      },350);
+        idle=window.requestIdleCallback(warm);
+      },500);
     }
     function invalidate() {entry=null;schedule();}
     function hold() {held=true;cancelPending();}
@@ -20609,6 +20610,7 @@ window.addEventListener("storage", () => {
   const allowed = () => ENABLED && Boolean(dismissContext(gesture?.context?.root));
 
  function cleanup() {
+    gesture?._bbCloseObserver?.disconnect();
     gesture?._bbReleaseBlurStyle?.remove();
     if(plansLiveCleanup)plansLiveCleanup();
 
@@ -20663,8 +20665,10 @@ function snapshot() {
     cleanup();
     let captured = null;
     const rootTabs = ["today", "recurring", "calendar", "bills", "insights", "more"];
-    const rootTabSwitch = rootTabs.includes(currentRoute) && rootTabs.includes(route);
-    if (ENABLED && route !== currentRoute && !rootTabSwitch) {
+    // Root screens have no page Back destination to prepare. Returning to one
+    // must not first freeze/clone the screen being dismissed.
+    const destinationIsRoot = rootTabs.includes(route);
+    if (ENABLED && route !== currentRoute && !destinationIsRoot) {
       try { captured = snapshot(); }
       catch (error) { console.warn("Back preview skipped", error); }
     }
@@ -20990,7 +20994,10 @@ function finish(state, goBack) {
         return;
       }
       const root=state.context.root;
-      const beforeMarkup=root.innerHTML;
+      let contentChanged=false;
+      const closeObserver=new MutationObserver(()=>{contentChanged=true;});
+      state._bbCloseObserver=closeObserver;
+      closeObserver.observe(root,{childList:true,subtree:true,characterData:true});
       const wasShown=root.classList.contains('show');
       // Live popups must not start a second CSS close animation after sliding away.
       if(state.context.mode==='popup' && plansLiveCleanup)root.style.setProperty('transition','none','important');
@@ -21001,7 +21008,7 @@ function finish(state, goBack) {
         if(gesture!==state || !settling)return;
         const changed=!root.isConnected || !state.back.isConnected || renderPending ||
           (root.tagName==='DIALOG' && !root.open) || getComputedStyle(root).display==='none' ||
-          (wasShown && !root.classList.contains('show')) || root.innerHTML!==beforeMarkup;
+          (wasShown && !root.classList.contains('show')) || contentChanged;
         if(changed || performance.now()-started>=160) {cleanup();return;}
         timer=setTimeout(wait,16);
       };
@@ -21014,82 +21021,6 @@ function finish(state, goBack) {
     state.pane.style.transform=`translateX(${goBack?window.innerWidth:0}px)`;
     // Live-popup adapters do not expose DOM transition events; timer is also a safety fallback.
     timer=setTimeout(complete,duration+25);
-  }
-function finish(state, goBack) {
-    if (settling) return;
-
-    settling = true;
-
-    const complete = () => {
-      const valid = contextMatches(state);
-
-      if (
-  goBack &&
-  valid &&
-  ((state.pane?.isConnected && overlay?.isConnected) || isPlansSwipeState(state))
-) {
-        if (state.context.mode !== "page") {
-          try {state.back.click();} catch(error) {cleanup();throw error;}
-          const started=performance.now();
-          const waitForClose=()=>{
-            if (!settling || !overlay) return;
-            if (!state.context.root.isConnected ||
-                !state.back.isConnected ||
-                renderPending ||
-                (state.context.root.tagName==='DIALOG' && !state.context.root.open) ||
-                getComputedStyle(state.context.root).display === "none" ||
-                performance.now()-started>800) {cleanup();return;}
-            timer=setTimeout(waitForClose,16);
-          };
-          waitForClose();
-          return;
-        }
-        const scroll = state.returnScroll;
-
-        cleanup();
-        state.back.click();
-
-        if (scroll) {
-          const returnedRoute = currentRoute;
-
-          requestAnimationFrame(() => {
-            if (currentRoute !== returnedRoute) return;
-
-            const main = document.querySelector(
-              "#app .main-content"
-            );
-
-            if (main) {
-              main.scrollTop = scroll.main;
-            }
-
-            window.scrollTo(0, scroll.window);
-          });
-        }
-      } else {
-        cleanup();
-      }
-    };
-
-    if (!state.pane || reducedMotion()) {
-      complete();
-      return;
-    }
-
-    state.pane.style.setProperty(
-  "transition",
-  "transform 180ms ease-out",
-  "important"
-);
-
-    state.pane.style.transform =
-      `translateX(${goBack ? window.innerWidth : 0}px)`;
-
-    if (state.dim) {
-      state.dim.style.setProperty("transition", "opacity 180ms ease-out", "important");
-      state.dim.style.opacity = goBack ? "0" : "1";
-    }
-    timer = setTimeout(complete, 190);
   }
   document.addEventListener(
     "touchstart",
