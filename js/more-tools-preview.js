@@ -90,8 +90,20 @@ function main() {
           row(count === null ? 'Needs Review' : `Needs Review (${count})`,
             'Inspect possible issues without automatic changes.',
             'review', 'orange', 'open:review') +
-          row('Monthly Review', 'Payments and changes for the current calendar month.',
-            'report', 'purple', 'open:monthly') +
+          row(
+  'Insights',
+  'Monthly totals, payment groups, and history.',
+  'forecast',
+  'purple',
+  'route:insights'
+) +
+row(
+  'Monthly Review',
+  'Payments and changes for the current calendar month.',
+  'report',
+  'purple',
+  'open:monthly'
+) +
           row('Activity & Changes', 'Review the full saved change history.',
             'activity', 'orange', 'route:activity')
         )}
@@ -2458,7 +2470,25 @@ window.BillBeaconFeatureBridge = Object.freeze({
     return;
   }
   if(a==='close')return close();if(a==='refresh')return refreshDialog();if(a.startsWith('open:'))return open(a.slice(5));
-  if(a.startsWith('route:')){const r=a.slice(6);if(['today','transactions','activity','settings','bills'].includes(r)){close();navigate(r);}return;}
+  if (a.startsWith('route:')) {
+  const r = a.slice(6);
+
+  if (
+    [
+      'today',
+      'transactions',
+      'activity',
+      'settings',
+      'bills',
+      'insights'
+    ].includes(r)
+  ) {
+    close();
+    navigate(r);
+  }
+
+  return;
+}
   if(a.startsWith('bill:')){const s=snapshot();if(!s.ok)return;const id=a.slice(5);if(!s.bills.some(x=>x.id===id))return;close();navigate('detail',{id,returnRoute:'more'});}
  }
  function redraw(){if(!active||typeof currentRoute==='undefined'||currentRoute!=='more'||typeof render!=='function')return;const main=document.querySelector('#app .main-content'),y=main?.scrollTop||0,wy=window.scrollY;render();const next=document.querySelector('#app .main-content');if(next)next.scrollTop=y;window.scrollTo(0,wy);}

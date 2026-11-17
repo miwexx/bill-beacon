@@ -355,7 +355,40 @@
   function view(date=new Date()){
     const m=model(date);
     return `<style data-bb-insights-polish="true">${CSS}</style>
-      <div class="nav-bar"><div class="nav-bar-content"><div class="nav-title bb-centered-page-title">Insights</div></div></div>
+      <div class="nav-bar">
+  <div
+    class="nav-bar-content"
+    style="
+      display:grid;
+      grid-template-columns:44px minmax(0,1fr) 44px;
+      align-items:center;
+    "
+  >
+    <button
+      type="button"
+      class="nav-button"
+      onclick="navigate('more')"
+      aria-label="Back to More"
+      style="
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        width:44px;
+        height:44px;
+        padding:0;
+        color:var(--text);
+      "
+    >
+      ${svgIcon("chevronLeft", 22)}
+    </button>
+
+    <div class="nav-title" style="text-align:center;">
+      Insights
+    </div>
+
+    <div aria-hidden="true" style="width:44px;"></div>
+  </div>
+</div>
       <div class="main-content fade-in"><div class="content-pad content-gap">
         <div class="section-header" style="color:var(--text);font-size:18px;font-weight:700;line-height:1.4;">${formatDate(date,'monthYear')}</div>
         ${summaryHTML(m,date)}${paymentsHTML(date,m.totals)}${scheduledHTML(m.schedules)}${categoryHTML(m)}${historyHTML(date,m.history)}${limitHTML(m,date)}

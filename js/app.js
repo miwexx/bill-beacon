@@ -5145,58 +5145,41 @@ function renderPaycheckDueAndLeftover(selected) {
 }
 
 function renderBillsAndPlansNavigation(activeSection) {
-  const item = (key, label, action) => {
-    const selected = activeSection === key;
-
-    return `
-      <button
-        type="button"
-        class="bb-bills-plans-option ${
-          selected ? "is-selected" : ""
-        }"
-        ${selected ? 'aria-current="page"' : ""}
-        onclick="${action}"
-      >
-        ${label}
-      </button>
-    `;
-  };
-
-  return `
-    <nav
-      class="bb-bills-plans-switch"
-      aria-label="Bills and installment plans"
-    >
-      ${item(
-        "bills",
-        "Bills",
-        "navigate('bills')"
-      )}
-
-      ${item(
-        "plans",
-        "Installment Plans",
-        "navigate('payment-plans', {returnRoute:'bills'})"
-      )}
-    </nav>
-  `;
+  return "";
 }
 function renderBillsAndPlansHeader(activeSection) {
   const isPlans = activeSection === "plans";
 
-  const backRoute =
-    routeParams.returnRoute === "insights"
-      ? "insights"
-      : "today";
+  const destinations = {
+    today: "Dashboard",
+    recurring: "Calendar",
+    calendar: "Calendar",
+    bills: "Bills",
+    more: "More",
+    insights: "Insights"
+  };
+
+  const requestedBack = routeParams.returnRoute;
 
   const showBack =
     isPlans &&
-    routeParams.returnRoute !== "bills";
+    Object.prototype.hasOwnProperty.call(
+      destinations,
+      requestedBack
+    );
 
-  const backLabel =
-    backRoute === "insights"
-      ? "Insights"
-      : "Dashboard";
+  const backLabel = showBack
+    ? destinations[requestedBack]
+    : "";
+
+  const buttonStyle = `
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:44px;
+    height:44px;
+    padding:0;
+  `;
 
   return `
     <div class="nav-bar">
@@ -5216,22 +5199,19 @@ function renderBillsAndPlansHeader(activeSection) {
               <button
                 type="button"
                 class="nav-button"
-                onclick="navigate('${backRoute}')"
+                onclick="navigate('${escapeInlineString(requestedBack)}')"
                 aria-label="Back to ${backLabel}"
-                style="
-                  display:flex;
-                  align-items:center;
-                  justify-content:center;
-                  width:44px;
-                  height:44px;
-                  padding:0;
-                  color:var(--text);
-                "
+                style="${buttonStyle}color:var(--text);"
               >
                 ${svgIcon("chevronLeft", 22)}
               </button>
             `
-            : '<div aria-hidden="true" style="width:44px;height:44px;"></div>'
+            : `
+              <div
+                aria-hidden="true"
+                style="width:44px;height:44px;"
+              ></div>
+            `
         }
 
         <div
@@ -5242,7 +5222,7 @@ function renderBillsAndPlansHeader(activeSection) {
             white-space:nowrap;
           "
         >
-          Bills &amp; Plans
+          ${isPlans ? "Installments" : "Bills"}
         </div>
 
         <button
@@ -5258,15 +5238,7 @@ function renderBillsAndPlansHeader(activeSection) {
               ? "Add an installment plan"
               : "Add a bill"
           }"
-          style="
-            display:flex;
-            align-items:center;
-            justify-content:center;
-            width:44px;
-            height:44px;
-            padding:0;
-            color:var(--accent);
-          "
+          style="${buttonStyle}color:var(--accent);"
         >
           ${svgIcon("plus", 22)}
         </button>
@@ -12779,42 +12751,24 @@ function navigateMainTab(route) {
 }
 function tabBar() {
   const tabs = [
-    {
-      id: "today",
-      label: "Dashboard",
-      icon: "home"
-    },
-    {
-      id: "recurring",
-      label: "Calendar",
-      icon: "calendar"
-    },
-    {
-      id: "bills",
-      label: "Bills & Plans",
-      icon: "tray"
-    },
-    {
-      id: "insights",
-      label: "Insights",
-      icon: "chart"
-    },
-    {
-      id: "more",
-      label: "More",
-      icon: "moreVertical"
-    }
+    {id: "today", label: "Dashboard", icon: "home"},
+    {id: "recurring", label: "Calendar", icon: "calendar"},
+    {id: "bills", label: "Bills", icon: "doc"},
+    {id: "payment-plans", label: "Installments", icon: "creditcard"},
+    {id: "more", label: "More", icon: "moreVertical"}
   ];
+
+  const activeRoute =
+    currentRoute === "insights"
+      ? "more"
+      : currentRoute === "calendar"
+        ? "recurring"
+        : currentRoute;
 
   return `
     <div class="tab-bar">
       ${tabs.map(tab => {
-        const selected =
-          currentRoute === tab.id ||
-          (
-            tab.id === "bills" &&
-            currentRoute === "payment-plans"
-          );
+        const selected = activeRoute === tab.id;
 
         return `
           <button
@@ -20664,10 +20618,29 @@ function snapshot() {
   navigate = function(route, params = {}) {
     cleanup();
     let captured = null;
-    const rootTabs = ["today", "recurring", "calendar", "bills", "insights", "more"];
-    // Root screens have no page Back destination to prepare. Returning to one
-    // must not first freeze/clone the screen being dismissed.
-    const destinationIsRoot = rootTabs.includes(route);
+        const rootTabs = [
+      "today",
+      "recurring",
+      "calendar",
+      "bills",
+      "payment-plans",
+      "more"
+    ];
+
+    const contextualPlans =
+      route === "payment-plans" &&
+      [
+        "today",
+        "recurring",
+        "calendar",
+        "bills",
+        "more",
+        "insights"
+      ].includes(params.returnRoute);
+
+    const destinationIsRoot =
+      rootTabs.includes(route) &&
+      !contextualPlans;
     if (ENABLED && route !== currentRoute && !destinationIsRoot) {
       try { captured = snapshot(); }
       catch (error) { console.warn("Back preview skipped", error); }
