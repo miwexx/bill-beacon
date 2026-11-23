@@ -17,7 +17,17 @@
   for(const [key,item]of Object.entries(value))Object.defineProperty(result,key,{value:copy(item,seen),enumerable:true,writable:true,configurable:true});
   return result;
  }
- function invalidate(){revision=null;recentCache=null;months.clear();amounts.clear();switchToken++;}
+ function invalidate() {
+  revision = null;
+  recentCache = null;
+  upcomingCache = null;
+
+  months.clear();
+  amounts.clear();
+  upcomingScroll.clear();
+
+  switchToken++;
+ }
  function freshness(){
   const now=new Date(),user=window.getBillBeaconFirebaseUser?.(),context=window.getBillBeaconHouseholdContext?.();
   const next={raw:['bills','payments','archivedBills','incomeSources','settings'].map(key=>localStorage.getItem(key)),
@@ -29,7 +39,10 @@
     isOccurrencePaid,getOccurrencePaidAmount,getActivePaymentForOccurrence,getPaycheckLeftoverEstimate,
     getTotalIncomeForPayCycle,bbLFExpenses,bbProcessingSplit,isOccurrenceProcessing,
     renderDashboardSeparatedStatus,getDashboardSeparatedStatus,renderPaycheckDueAndLeftover,
-    renderPaycheckInlineRows,getPaycheckBillStatusLabel,getCategory]};
+    renderPaycheckInlineRows,getPaycheckBillStatusLabel,getCategory,
+    getCalendarBillsForMonth,getAllOverdueBillOccurrences,
+    getOccurrenceStatus,financialDateKey,getBillPaymentId,
+    billOrPaymentPlanVisual,occurrenceFundingLabel]};
   const same=revision&&revision.scope===next.scope&&revision.day===next.day&&revision.offset===next.offset&&
    revision.zone===next.zone&&revision.language===next.language&&next.raw.every((value,index)=>revision.raw[index]===value)&&
    next.refs.every((value,index)=>revision.refs[index]===value);
@@ -168,6 +181,561 @@ white-space:nowrap;
     6
   );
  }
+  // BEGIN DASHBOARD UPCOMING TRIAL
+
+ let upcomingCache = null;
+ let upcomingDays = 7;
+ let upcomingOverdueOpen = false;
+
+ const upcomingScroll = new Map();
+ const upcomingPlanOpen = new Map();
+
+ function upcomingModel() {
+  if (upcomingCache) return upcomingCache;
+
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+
+  const start = getLocalDateKey(today);
+
+  const endDate = new Date(
+   today.getFullYear(),
+   today.getMonth(),
+   today.getDate() + 13,
+   12
+  );
+
+  const end = getLocalDateKey(endDate);
+
+  const dates = [
+   new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    1,
+    12
+   )
+  ];
+
+  if (monthKey(endDate) !== monthKey(today)) {
+   dates.push(
+    new Date(
+     endDate.getFullYear(),
+     endDate.getMonth(),
+     1,
+     12
+    )
+   );
+  }
+
+  const seen = new Set();
+
+  const describe = bill => ({
+   bill,
+   id: getBillPaymentId(bill),
+   day: financialDateKey(bill.dueDate),
+   status: getOccurrenceStatus(
+    bill,
+    new Date(bill.dueDate)
+   ),
+   funding: occurrenceFundingLabel(
+    getOccurrenceFunding(bill)
+   )
+  });
+
+  const entries = dates
+   .flatMap(date => getCalendarBillsForMonth(date))
+   .filter(bill => {
+    const day = financialDateKey(bill.dueDate);
+
+    const key =
+     `${getBillPaymentId(bill)}:${day}`;
+
+    if (
+     !day ||
+     day < start ||
+     day > end ||
+     seen.has(key)
+    ) {
+     return false;
+    }
+
+    seen.add(key);
+    return true;
+   })
+   .map(describe)
+   .filter(entry =>
+    entry.status === "upcoming" ||
+    entry.status === "processing"
+   )
+   .sort((a, b) =>
+    a.day.localeCompare(b.day) ||
+    String(a.bill.name).localeCompare(
+     String(b.bill.name)
+    )
+   );
+
+  const overdue = getAllOverdueBillOccurrences(today)
+   .map(describe)
+   .filter(entry => entry.status === "overdue");
+
+  upcomingCache = {
+   today,
+   entries,
+   overdue
+  };
+
+  return upcomingCache;
+ }
+
+ function upcomingCard(entry) {
+  const {bill, status} = entry;
+
+  const processing = status === "processing";
+  const overdue = status === "overdue";
+
+  const color = processing
+   ? "#79b9ff"
+   : overdue
+    ? "var(--overdue)"
+    : "var(--text-secondary)";
+
+  return `
+   <button
+    type="button"
+    class="bb-up-card"
+    data-bill-id="${escapeHtml(entry.id)}"
+    data-due="${escapeHtml(bill.dueDate)}"
+    onclick="BillBeaconDashboardVisualTrial.openUpcomingBill(this)"
+    aria-label="${escapeHtml(
+     `${bill.name}, ${formatCurrency(bill.amount)}, ` +
+     `due ${formatDate(bill.dueDate, "short")}, ` +
+     `${
+      processing
+       ? "Processing, "
+       : overdue
+        ? "Overdue, "
+        : ""
+     }${entry.funding}`
+    )}"
+   >
+    <span class="bb-up-icon">
+     ${billOrPaymentPlanVisual(bill, 32)}
+    </span>
+
+    <span class="bb-up-name">
+     ${escapeHtml(bill.name)}
+    </span>
+
+    <span class="bb-up-amount">
+     ${formatCurrency(bill.amount)}
+    </span>
+
+    <span
+     class="bb-up-date"
+     style="color:${color};"
+    >
+     ${overdue ? "Overdue" : "Due"}
+     ${escapeHtml(formatDate(bill.dueDate, "short"))}
+    </span>
+
+    ${
+     processing
+      ? `
+       <span class="bb-up-processing">
+        Processing · Awaiting confirmation
+       </span>
+      `
+      : ""
+    }
+
+    <span class="bb-up-funding">
+     ${escapeHtml(entry.funding)}
+    </span>
+   </button>
+  `;
+ }
+
+ function upcomingHTML() {
+  const data = upcomingModel();
+
+  const end = new Date(
+   data.today.getFullYear(),
+   data.today.getMonth(),
+   data.today.getDate() + upcomingDays - 1,
+   12
+  );
+
+  const endKey = getLocalDateKey(end);
+
+  const entries = data.entries.filter(
+   entry => entry.day <= endKey
+  );
+
+  const stamp = epoch;
+
+  requestAnimationFrame(() => {
+   if (
+    currentRoute !== "today" ||
+    stamp !== epoch
+   ) {
+    return;
+   }
+
+   const rail = document.querySelector(
+    "#app [data-bb-up-track]"
+   );
+
+   if (
+    rail &&
+    Number(rail.dataset.days) === upcomingDays
+   ) {
+    rail.scrollLeft =
+     upcomingScroll.get(upcomingDays) || 0;
+
+    updateUpcomingArrows(rail);
+   }
+  });
+
+  return `
+   <section
+    class="card bb-upcoming"
+    data-bb-upcoming
+    aria-labelledby="bbUpcomingTitle"
+   >
+    ${
+     data.overdue.length
+      ? `
+       <div class="bb-up-attention">
+        <button
+         type="button"
+         aria-expanded="${upcomingOverdueOpen}"
+         aria-controls="bbUpcomingOverdue"
+         onclick="BillBeaconDashboardVisualTrial.toggleUpcomingOverdue()"
+        >
+         <span>
+          Needs attention · ${data.overdue.length} overdue
+         </span>
+         <span>
+          ${upcomingOverdueOpen ? "Hide" : "Show"}
+         </span>
+        </button>
+
+        ${
+         upcomingOverdueOpen
+          ? `
+           <div
+            id="bbUpcomingOverdue"
+            class="bb-up-overdue-list"
+           >
+            ${data.overdue.map(upcomingCard).join("")}
+           </div>
+          `
+          : '<div id="bbUpcomingOverdue" hidden></div>'
+        }
+       </div>
+      `
+      : ""
+    }
+
+    <div class="bb-up-heading">
+     <h2 id="bbUpcomingTitle">
+      Upcoming payments
+     </h2>
+
+     <button
+      type="button"
+      class="bb-outline-pill"
+      onclick="navigate('recurring')"
+     >
+      Calendar
+     </button>
+    </div>
+
+    <div
+     class="bb-up-filters"
+     role="group"
+     aria-label="Upcoming payment date range"
+    >
+     ${
+      [7, 14].map(days => `
+       <button
+        type="button"
+        aria-pressed="${upcomingDays === days}"
+        data-bb-up-days="${days}"
+        onclick="BillBeaconDashboardVisualTrial.setUpcomingDays(${days})"
+       >
+        Next ${days} days
+       </button>
+      `).join("")
+     }
+    </div>
+
+    <div class="bb-up-period" aria-live="polite">
+     ${escapeHtml(formatDate(data.today, "short"))}
+     –
+     ${escapeHtml(formatDate(end, "short"))}
+     · ${entries.length}
+     ${entries.length === 1 ? "payment" : "payments"}
+    </div>
+
+    ${
+     entries.length
+      ? `
+       <div
+        class="bb-up-track"
+        data-bb-up-track
+        data-days="${upcomingDays}"
+        tabindex="0"
+        role="region"
+        aria-label="Payments due within the next ${upcomingDays} days; scroll horizontally"
+       >
+        ${entries.map(upcomingCard).join("")}
+       </div>
+
+       <div class="bb-up-navigation">
+        <span>Swipe to browse</span>
+
+        <button
+         type="button"
+         data-bb-up-prev
+         aria-label="Previous upcoming payments"
+         onclick="BillBeaconDashboardVisualTrial.scrollUpcoming(-1)"
+        >
+         ${svgIcon("chevronLeft", 18)}
+        </button>
+
+        <button
+         type="button"
+         data-bb-up-next
+         aria-label="Next upcoming payments"
+         onclick="BillBeaconDashboardVisualTrial.scrollUpcoming(1)"
+        >
+         ${svgIcon("chevronRight", 18)}
+        </button>
+       </div>
+      `
+      : `
+       <div class="bb-up-empty">
+        No unpaid payments due in this date range.
+       </div>
+      `
+    }
+   </section>
+  `;
+ }
+
+ function rememberUpcomingScroll() {
+  const rail = document.querySelector(
+   "#app [data-bb-up-track]"
+  );
+
+  if (rail) {
+   upcomingScroll.set(
+    Number(rail.dataset.days),
+    rail.scrollLeft
+   );
+  }
+ }
+
+ function updateUpcomingArrows(rail) {
+  const section = rail.closest(
+   "[data-bb-upcoming]"
+  );
+
+  const previous = section?.querySelector(
+   "[data-bb-up-prev]"
+  );
+
+  const next = section?.querySelector(
+   "[data-bb-up-next]"
+  );
+
+  if (previous) {
+   previous.disabled = rail.scrollLeft <= 1;
+  }
+
+  if (next) {
+   next.disabled =
+    rail.scrollLeft + rail.clientWidth >=
+    rail.scrollWidth - 1;
+  }
+ }
+
+ function replaceUpcoming(focusDays = null) {
+  if (!enabled || currentRoute !== "today") return;
+
+  const section = document.querySelector(
+   "#app [data-bb-upcoming]"
+  );
+
+  if (!section) return;
+
+  rememberUpcomingScroll();
+  freshness();
+
+  section.outerHTML = upcomingHTML();
+
+  if (focusDays) {
+   document.querySelector(
+    `#app [data-bb-up-days="${focusDays}"]`
+   )?.focus({preventScroll:true});
+  }
+ }
+
+ function setUpcomingDays(days) {
+  if (
+   ![7, 14].includes(days) ||
+   !enabled ||
+   currentRoute !== "today"
+  ) {
+   return;
+  }
+
+  rememberUpcomingScroll();
+  upcomingDays = days;
+  replaceUpcoming(days);
+ }
+
+ function toggleUpcomingOverdue() {
+  if (!enabled || currentRoute !== "today") return;
+
+  upcomingOverdueOpen = !upcomingOverdueOpen;
+  replaceUpcoming();
+
+  document.querySelector(
+   "#app .bb-up-attention > button"
+  )?.focus({preventScroll:true});
+ }
+
+ function scrollUpcoming(direction) {
+  const rail = document.querySelector(
+   "#app [data-bb-up-track]"
+  );
+
+  if (!rail) return;
+
+  const width = rail
+   .querySelector(".bb-up-card")
+   ?.getBoundingClientRect().width || 220;
+
+  rail.scrollBy({
+   left: (direction < 0 ? -1 : 1) * (width + 12),
+   behavior: "auto"
+  });
+ }
+
+ function openUpcomingBill(button) {
+  if (!enabled || currentRoute !== "today") return;
+
+  rememberUpcomingScroll();
+
+  openPaycheckInlineBill(
+   button,
+   button.dataset.billId,
+   button.dataset.due
+  );
+ }
+
+ function paycheckListHTML(selected, date) {
+  const key =
+   monthKey(date) + ":" + selected.id;
+
+  return `
+   <details
+    class="bb-up-paycheck-list"
+    data-bb-up-plan="${escapeHtml(key)}"
+    ${upcomingPlanOpen.has(key) ? "open" : ""}
+   >
+    <summary>
+     View paycheck bills · ${selected.bills.length}
+    </summary>
+
+    ${renderPaycheckInlineRows(selected)}
+   </details>
+  `;
+ }
+
+ document.addEventListener("scroll", event => {
+  const rail = event.target;
+
+  if (
+   rail?.matches?.("#app [data-bb-up-track]")
+  ) {
+   upcomingScroll.set(
+    Number(rail.dataset.days),
+    rail.scrollLeft
+   );
+
+   updateUpcomingArrows(rail);
+  }
+ }, true);
+
+ document.addEventListener("keydown", event => {
+  const rail = event.target;
+
+  if (
+   !rail?.matches?.("#app [data-bb-up-track]")
+  ) {
+   return;
+  }
+
+  if (
+   !["ArrowLeft", "ArrowRight", "Home", "End"]
+    .includes(event.key)
+  ) {
+   return;
+  }
+
+  event.preventDefault();
+
+  if (event.key === "Home") {
+   rail.scrollLeft = 0;
+  } else if (event.key === "End") {
+   rail.scrollLeft = rail.scrollWidth;
+  } else {
+   scrollUpcoming(
+    event.key === "ArrowLeft" ? -1 : 1
+   );
+  }
+
+  updateUpcomingArrows(rail);
+ }, true);
+
+ document.addEventListener("toggle", event => {
+  const node = event.target;
+
+  if (
+   !node?.isConnected ||
+   !node.matches?.(
+    "#app details[data-bb-up-plan]"
+   )
+  ) {
+   return;
+  }
+
+  const key = node.dataset.bbUpPlan;
+
+  if (node.open) {
+   keep(upcomingPlanOpen, key, true, 6);
+  } else {
+   upcomingPlanOpen.delete(key);
+  }
+ }, true);
+
+ for (const event of [
+  "billbeacon:signed-out",
+  "billbeacon:authenticated",
+  "billbeacon:household-ready"
+ ]) {
+  window.addEventListener(event, () => {
+   upcomingDays = 7;
+   upcomingOverdueOpen = false;
+   upcomingScroll.clear();
+   upcomingPlanOpen.clear();
+  });
+ }
+
+ // END DASHBOARD UPCOMING TRIAL
  function monthlyHTML(date){
   const data=monthData(date);
   if(data.statusHTML!==null)return data.statusHTML;
@@ -441,7 +1009,7 @@ onclick="changeDashboardPaycheckMonth(1)"
         </span>
       </div>
 
-      ${renderPaycheckInlineRows(selected)}
+      ${paycheckListHTML(selected, referenceDate)}
     </div>
   `;
 }  function view(){
@@ -511,6 +1079,7 @@ onclick="changeDashboardPaycheckMonth(1)"
             ${navigationHTML()}
             <div class="bb-dashboard-paycheck" aria-label="Paycheck Plan">${paycheckHTML()}</div>
           </div>
+          ${upcomingHTML()}
           ${monthlyHTML(reportMonth)}
         </div>
         <div class="dashboard-section-title-row">
@@ -597,6 +1166,220 @@ onclick="changeDashboardPaycheckMonth(1)"
     .bb-dashboard-monthly-status-card .bb-layout-monthly-heading span {
       font-size:var(--text-xs);color:var(--text-muted);line-height:1.4;text-align:right;
     }
+        .bb-upcoming {
+      min-width:0;
+      padding:16px!important;
+      overflow:hidden;
+    }
+
+    .bb-up-heading {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:12px;
+    }
+
+    .bb-up-heading h2 {
+      margin:0;
+      font-size:var(--text-base);
+      font-weight:800;
+    }
+
+    .bb-up-heading .bb-outline-pill {
+      min-height:40px;
+      padding:6px 10px;
+      font-size:var(--text-xs);
+    }
+
+    .bb-up-filters {
+      display:flex;
+      gap:8px;
+    }
+
+    .bb-up-filters button {
+      flex:1;
+      min-height:42px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:transparent;
+      color:var(--text-secondary);
+      font:inherit;
+      font-size:var(--text-sm);
+      font-weight:750;
+      cursor:pointer;
+    }
+
+    .bb-up-filters button[aria-pressed="true"] {
+      border-color:var(--accent);
+      background:var(--accent-soft,rgba(124,92,255,.14));
+      color:var(--text);
+    }
+
+    .bb-up-period {
+      margin:10px 0;
+      font-size:var(--text-xs);
+      color:var(--text-secondary);
+    }
+
+    .bb-up-track {
+      display:flex;
+      gap:12px;
+      overflow-x:auto;
+      overscroll-behavior-x:contain;
+      scroll-snap-type:x proximity;
+      scroll-padding:2px;
+      padding:3px 2px 10px;
+      scrollbar-width:thin;
+    }
+
+    .bb-up-card {
+      flex:0 0 min(220px,78vw);
+      box-sizing:border-box;
+      display:flex;
+      flex-direction:column;
+      align-items:flex-start;
+      gap:8px;
+      padding:16px;
+      border:1px solid var(--border);
+      border-radius:18px;
+      background:var(--surface);
+      color:var(--text);
+      font:inherit;
+      text-align:left;
+      cursor:pointer;
+      scroll-snap-align:start;
+      min-width:0;
+    }
+
+    .bb-up-icon {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-height:32px;
+    }
+
+    .bb-up-name {
+      font-size:var(--text-sm);
+      font-weight:800;
+      overflow-wrap:anywhere;
+    }
+
+    .bb-up-amount {
+      font-size:22px;
+      font-weight:850;
+      line-height:1.2;
+      font-variant-numeric:tabular-nums;
+      white-space:nowrap;
+    }
+
+    .bb-up-date,
+    .bb-up-funding,
+    .bb-up-processing {
+      font-size:var(--text-xs);
+      line-height:1.5;
+    }
+
+    .bb-up-funding {
+      color:var(--text-secondary);
+      margin-top:auto;
+    }
+
+    .bb-up-processing {
+      color:#79b9ff;
+    }
+
+    .bb-up-navigation {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      margin-top:6px;
+    }
+
+    .bb-up-navigation > span {
+      flex:1;
+      font-size:var(--text-xs);
+      color:var(--text-secondary);
+    }
+
+    .bb-up-navigation button {
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      min-width:44px;
+      min-height:44px;
+      border:1px solid var(--border);
+      border-radius:12px;
+      background:transparent;
+      color:var(--text);
+      cursor:pointer;
+    }
+
+    .bb-up-navigation button:disabled {
+      opacity:.35;
+      cursor:default;
+    }
+
+    .bb-up-empty {
+      padding:24px 4px;
+      font-size:var(--text-sm);
+      line-height:1.6;
+      color:var(--text-secondary);
+    }
+
+    .bb-up-attention {
+      margin-bottom:16px;
+    }
+
+    .bb-up-attention > button {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      width:100%;
+      min-height:44px;
+      padding:10px;
+      border:1px solid var(--overdue);
+      border-radius:12px;
+      background:transparent;
+      color:var(--overdue);
+      font:inherit;
+      font-size:var(--text-sm);
+      font-weight:750;
+      cursor:pointer;
+      text-align:left;
+    }
+
+    .bb-up-overdue-list {
+      display:grid;
+      gap:8px;
+      margin-top:10px;
+    }
+
+    .bb-up-overdue-list .bb-up-card {
+      width:100%;
+    }
+
+    .bb-up-paycheck-list {
+      margin-top:14px;
+      border-top:1px solid var(--border);
+    }
+
+    .bb-up-paycheck-list > summary {
+      padding:14px 0 0;
+      min-height:30px;
+      cursor:pointer;
+      font-size:var(--text-sm);
+      font-weight:750;
+      color:var(--text);
+    }
+
+    .bb-upcoming button:focus-visible,
+    .bb-up-track:focus-visible,
+    .bb-up-paycheck-list > summary:focus-visible {
+      outline:2px solid var(--accent);
+      outline-offset:-2px;
+    }
  `;
 
  renderToday=function(){
@@ -640,6 +1423,10 @@ onclick="changeDashboardPaycheckMonth(1)"
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')invalidate();});
  function redrawIfVisible(){if(typeof currentRoute!=='undefined'&&currentRoute==='today'&&document.querySelector('#app .dashboard-content')&&typeof render==='function')render();}
  window.BillBeaconDashboardVisualTrial=Object.freeze({version:3,performancePhase:4,
+    setUpcomingDays,
+  toggleUpcomingOverdue,
+  scrollUpcoming,
+  openUpcomingBill,
   setEnabled(value){enabled=Boolean(value);redrawIfVisible();},isEnabled(){return enabled;},
   _test:{view,model:date=>{freshness();return copy(monthData(date||getDashboardReportMonth()));},
    cacheSizes:()=>({months:months.size,amounts:amounts.size,recent:!!recentCache,epoch})}});
