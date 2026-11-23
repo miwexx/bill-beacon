@@ -1,340 +1,4 @@
-Hire your first teammate
-Persistent agents that work for you.
 
-
-
-US flag
-GOV
-
-This shows the exact placement: keep your existing card and change only the two-column amount row to:
-
-text
-Due          Processing       Leftover
-$885.93      $0.00            $955.86
-Your monthly Paid/Due/Overdue counters, paycheck buttons, progress bar, and bill list should stay in place. Processing belongs between the amounts beneath the paycheck buttons—not in a separate redesigned Dashboard.
-
-One important detail: those amounts sit under the selected PAYCHECK · Nov 15 button. Processing must therefore follow that selected paycheck’s scope. Marking a payment processing should reduce Due only if that payment currently contributes to the displayed $885.93; Leftover must remain unchanged.
-
-To prepare the working patch safely, please attach your current js/app.js. The earlier GitHub retrieval of that large file was truncated, and the smaller modules do not expose the full paycheck-card and payment-saving logic. I can read the other files through the connector.
-
-I need that source rather than guessing at the financial handlers or sending you another visual-only demo.
-
-
-paste.txt
-Text file
-paste.txt
-
-
-I have the full source now. I’ll patch the existing paycheck row directly, keeping your layout and Leftover calculation intact. Processing will be stored against the individual bill occurrence, so it won’t affect future recurring payments.
-
-
-app
-JavaScript
-
-app
-JavaScript
-
-processing-calendar
-JavaScript
-
-5 artifacts
-
-INSTALL
-Text
-
-TEST-RESULTS
-JSON
-
-app
-JavaScript
-
-bill-beacon-processing-trial
-ZIP
-
-processing-trial.diff
-File
-The installable trial package is ready—not another standalone demo. It is built from the full app source you uploaded and keeps your existing Dashboard layout.
-
-What changes
-Your paycheck amount row becomes:
-
-text
-Due          Processing       Leftover
-Everything around it stays in place: month navigation, monthly status counters, paycheck buttons, progress bar, and bill list.
-
-The trial adds:
-
-Mark as Processing in an unpaid bill’s detail screen.
-
-A tappable Processing amount showing that selected paycheck’s processing payments.
-
-Confirm Paid and Failed / Cancel Processing actions.
-
-Processing labels in the paycheck list and Calendar.
-
-Marking a payment Processing moves its amount out of the selected paycheck’s Due amount and removes it from actionable Overdue counts. It does not increase Paid, change Scheduled, advance the progress bar, or change Leftover.
-
-Install: three files in one commit
-Use the attached ZIP.
-
-1. Replace js/app.js
-Replace the entire existing file with js/app.js from the ZIP.
-
-Do not append it. This replacement is based on the source you just uploaded; don’t overwrite any newer edits made afterward.
-
-2. Add js/processing-calendar.js
-Add the new file from the ZIP at:
-
-text
-js/processing-calendar.js
-This keeps Calendar from displaying a processing payment as Due or using a Paid marker for an all-processing day.
-
-3. Edit index.html
-Change the existing app.js script’s src to:
-
-xml
-js/app.js?v=processing-trial-1
-Keep its other attributes and do not add a second app.js tag.
-
-Then add this after the existing Calendar and UI scripts, immediately before </body>:
-
-xml
-<script src="js/processing-calendar.js?v=1"></script>
-Suggested commit message:
-
-text
-Add manual Processing payments to existing paycheck Dashboard
-Test one payment first
-Create a backup and use a preview deployment before applying this to all four transfers.
-
-Record the current Due, Paid, Leftover, and selected paycheck.
-
-Open one transfer you already submitted.
-
-Choose Mark as Processing.
-
-Verify its exact amount moves from Due to Processing.
-
-Verify Paid and Leftover stay unchanged.
-
-Refresh and switch paychecks to check persistence and scope.
-
-Open Processing to confirm the correct item appears.
-
-Cancel Processing before changing that item’s amount, due date, split schedule, or archive state.
-
-Verification and limits
-Both JavaScript files passed syntax checks, and 14 mocked tests passed, including occurrence isolation, no premature payment creation, cancellation, reversal behavior, and local-storage rollback. The core Leftover and payment-commit functions remain unchanged.
-
-Browser/iPhone rendering, live household sync, and backup/restore round-trips have not been verified.
-
-Server-side reminders and existing notification-inbox entries are not changed by this trial, so they may still mention an item as overdue.
-
-Nothing has been committed or deployed. The ZIP includes the installation guide, review diff, and test report.
-
-
-Next is Insights. I’ll preserve the current sections and appearance, but render the final screen directly instead of building the old screen and then replacing it. I’ll also reuse the monthly payment and schedule results while their source data is unchanged.
-
-
-insights-polish
-JavaScript
-
-insights-polish
-JavaScript
-
-5 artifacts
-
-INSIGHTS-PERFORMANCE-TESTS
-JSON
-
-INSTALL-INSIGHTS-PHASE3
-Text
-
-bill-beacon-insights-performance-phase3
-ZIP
-
-index-insights-change.diff
-File
-
-insights-performance.test.cjs
-File
-The Insights performance patch—phase three—is ready. Keep the working core and Calendar patches installed.
-
-This phase targets the old-screen-then-replacement workflow: Insights now renders the accepted screen directly instead of calculating the original screen, parsing its HTML, and replacing sections.
-
-What improves
-One current-month payment result supplies the composition, category totals, and current history bar.
-
-Monthly summaries are reused across the top card and Next Three Months.
-
-Six months of payment aggregates are cached in memory for warm returns.
-
-The original renderer is not called during successful rendering.
-
-No detached-DOM parsing or HTML-rewriting pass is performed.
-
-The existing category and installment-classification rules are reused rather than replaced with new financial definitions.
-
-Install: two files, one commit
-Use the attached phase-three ZIP.
-
-1. Replace js/insights-polish.js
-Replace the entire existing file with js/insights-polish.js from the ZIP.
-
-Do not append it.
-
-2. Update its script line in index.html
-Replace:
-
-xml
-<script src="js/insights-polish.js?v=1"></script>
-With:
-
-xml
-<script src="js/insights-polish.js?v=insights-performance-3"></script>
-Keep the same position and only one Insights script tag.
-
-Do not change app.js, calendar-preview.js, or the Dashboard layout script.
-
-Suggested commit message:
-
-text
-Render Insights once and reuse financial month aggregates
-Test in a preview/local copy before merging to main where possible; your current workflow deploys main.
-
-What stays the same
-Income, scheduled commitments, and planned remainder/shortfall.
-
-Payments Recorded.
-
-Next Three Months.
-
-Payments by Group and its category-opening actions.
-
-Six-month history and the current-month “In progress” label.
-
-The optional Monthly Spending Limit card.
-
-Due-month reporting and exclusion of voided payments.
-
-The cache refreshes when relevant saved data, household scope, date/timezone, or helper implementations change. It does not write financial records or create a persistent cache.
-
-Verification
-25 mocked checks passed in UTC, New York, and Los Angeles timezones.
-
-The synthetic test recorded:
-
-Work	First render	Two warm returns combined
-Monthly-summary provider calls	3	0
-Monthly-payment provider calls	6	0
-Original-renderer calls	0	0
-These are top-level provider counts—not measured phone timings. Actual browser/iPhone rendering, live cloud updates, and category-sheet interaction still need testing.
-
-The old renderer remains in app.js as an error fallback, but is not executed on the normal path.
-
-Test and rollback
-After reloading, compare the totals, six history months, and three scheduled months. Tap a category, then leave Insights and return several times to compare responsiveness.
-
-To roll back, restore only the previous Insights file and its v=1 script line. Keep phases one and two installed; no data reset is needed.
-
-Nothing has been committed or deployed. After this is verified, Dashboard paycheck switching and Back/swipe work are next.
-
-good
-
-Great—keep phases one through three installed.
-
-Next is Dashboard performance: reusing paycheck calculations, avoiding unnecessary rebuilding when switching paychecks, and improving the return from See All or bill details.
-
-We’ll keep your current two-card layout, Processing behavior, and financial totals unchanged. Swipe-preview cleanup comes after that.
-
-Show me the dashboard patch
-
-
-I’ll build this against the versions you’ve installed. The patch will keep the two-card layout, reuse paycheck/month calculations, and update only the paycheck section when you switch paychecks. Back/swipe-preview cleanup will remain a separate step so we can test these changes clearly.
-
-
-dashboard-visual-trial
-JavaScript
-
-dashboard-visual-trial
-JavaScript
-
-dashboard-visual-trial
-JavaScript
-
-5 artifacts
-
-DASHBOARD-PERFORMANCE-TESTS
-JSON
-
-INSTALL-DASHBOARD-PHASE4
-Text
-
-bill-beacon-dashboard-performance-phase4
-ZIP
-
-dashboard-performance.test.cjs
-File
-
-index-dashboard-change.diff
-File
-
-5 artifacts
-
-DASHBOARD-PERFORMANCE-TESTS
-JSON
-
-INSTALL-DASHBOARD-PHASE4
-Text
-
-bill-beacon-dashboard-performance-phase4
-ZIP
-
-dashboard-performance.test.cjs
-File
-
-index-dashboard-change.diff
-File
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-dashboard-visual-trial
-/* Bill Beacon Dashboard performance phase 4 (v3).
-   Full replacement for dashboard-visual-trial.js; load last after existing UI scripts.
-   Direct accepted two-card layout; bounded, read-only private data/amount caches.
-   Paycheck switching updates its own section when the displayed data remains valid. */
 (() => {
  'use strict';
  if(window.BillBeaconDashboardVisualTrial)return;
@@ -378,10 +42,130 @@ dashboard-visual-trial
   const summary=getDashboardMonthSummary(date),plan=getPaycheckPlan(date);
   return keep(months,key,{summary,plan,statusHTML:null},3);
  }
- function amountsHTML(selected,date){
-  const key=monthKey(date)+':'+selected.id;
-  if(amounts.has(key))return amounts.get(key);
-  return keep(amounts,key,renderPaycheckDueAndLeftover(selected),6);
+ function amountsHTML(selected, date, paidCents) {
+  const key = monthKey(date) + ":" + selected.id;
+
+  if (amounts.has(key)) return amounts.get(key);
+
+  const template = document.createElement("template");
+
+  template.innerHTML =
+    renderPaycheckDueAndLeftover(selected);
+
+  const row = template.content.firstElementChild;
+  const leftoverColumn = row?.lastElementChild;
+  const labelBox = leftoverColumn?.firstElementChild;
+  const valueBox = labelBox?.nextElementSibling;
+
+  const label = labelBox
+    ?.querySelector("span")
+    ?.textContent.trim();
+
+  if (
+    !row ||
+    !valueBox ||
+    !["Leftover", "Shortfall"].includes(label)
+  ) {
+    throw new Error(
+      "Dashboard amount layout changed; " +
+      "keeping the original fallback."
+    );
+  }
+
+  const helpButton = labelBox.querySelector("button");
+
+  const notes = [...leftoverColumn.children]
+    .slice(2)
+    .map(note => `
+      <span
+        style="
+          flex-basis:100%;
+          font-size:var(--text-xs);
+          color:${
+            note.style.color || "var(--text-muted)"
+          };
+        "
+      >
+        ${escapeHtml(note.textContent.trim())}
+      </span>
+    `)
+    .join("");
+
+  const leftover = `
+    <span
+      style="
+        display:inline-flex;
+        align-items:center;
+        flex-wrap:wrap;
+        gap:2px 4px;
+        min-width:0;
+      "
+    >
+      <span>${escapeHtml(label)}:</span>
+
+      <span
+        style="
+          color:${valueBox.style.color || "inherit"};
+          font-variant-numeric:tabular-nums;
+        "
+      >
+        ${valueBox.innerHTML}
+      </span>
+
+      ${helpButton ? helpButton.outerHTML : ""}
+
+      ${notes}
+    </span>
+  `;
+
+  const paid = document.createElement("div");
+
+  paid.style.cssText = "min-width:0;text-align:right;";
+
+  paid.innerHTML = `
+    <div
+      style="
+        min-height:36px;
+        display:flex;
+        align-items:center;
+        justify-content:flex-end;
+        font-size:var(--text-sm);
+        font-weight:700;
+        color:var(--text-secondary);
+      "
+    >
+      Paid
+    </div>
+
+    <div
+      style="
+        font-size:clamp(19px,5.5vw,26px);
+        font-weight:800;
+        line-height:1.2;
+        font-variant-numeric:tabular-nums;
+        overflow-wrap:anywhere;
+        color:var(--paid);
+      "
+    >
+      ${
+        Number.isSafeInteger(paidCents) && paidCents >= 0
+          ? formatCurrency(paidCents / 100)
+          : "&mdash;"
+      }
+    </div>
+  `;
+
+  leftoverColumn.replaceWith(paid);
+
+  return keep(
+    amounts,
+    key,
+    {
+      row: template.innerHTML,
+      leftover
+    },
+    6
+  );
  }
  function monthlyHTML(date){
   const data=monthData(date);
@@ -541,6 +325,11 @@ function navigationHTML() {
   const validTotals = paidCents !== null && scheduledCents !== null;
   const paymentProgress = validTotals && scheduledCents > 0
     ? Math.max(0, Math.min(100, paidCents / scheduledCents * 100)) : 0;
+      const amountParts = amountsHTML(
+    selected,
+    referenceDate,
+    paidCents
+  );
 
 
     return `
@@ -608,7 +397,7 @@ function navigationHTML() {
         </button>
       </div>
 
-      ${amountsHTML(selected,referenceDate)}
+      ${amountParts.row}
 
       ${validTotals ? `
         <div class="dashboard-progress-track"
@@ -625,9 +414,30 @@ function navigationHTML() {
         </div>
       ` : `<div style="margin-top:10px;color:var(--text-muted);font-size:var(--text-xs);">Payment Progress Unavailable</div>`}
 
-      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 12px;margin-top:7px;color:var(--text-muted);font-size:var(--text-xs);line-height:1.4;font-variant-numeric:tabular-nums;">
-        <span>${paidCents === null ? '&mdash;' : formatCurrency(paidCents / 100)} Paid</span>
-        <span>${scheduledCents === null ? '&mdash;' : formatCurrency(scheduledCents / 100)} Scheduled</span>
+      <div
+        style="
+          display:flex;
+          align-items:center;
+          justify-content:space-between;
+          flex-wrap:wrap;
+          gap:4px 12px;
+          margin-top:7px;
+          color:var(--text-muted);
+          font-size:var(--text-xs);
+          line-height:1.4;
+          font-variant-numeric:tabular-nums;
+        "
+      >
+        ${amountParts.leftover}
+
+        <span>
+          ${
+            scheduledCents === null
+              ? "&mdash;"
+              : formatCurrency(scheduledCents / 100)
+          }
+          Scheduled
+        </span>
       </div>
 
       ${renderPaycheckInlineRows(selected)}
