@@ -181,14 +181,13 @@ white-space:nowrap;
     6
   );
  }
-  // BEGIN DASHBOARD UPCOMING TRIAL
+ // BEGIN DASHBOARD UPCOMING TRIAL
 
  let upcomingCache = null;
- let upcomingDays = 7;
  let upcomingOverdueOpen = false;
+ let upcomingReturnScroll = null;
 
  const upcomingScroll = new Map();
- const upcomingPlanOpen = new Map();
 
  function upcomingModel() {
   if (upcomingCache) return upcomingCache;
@@ -208,12 +207,7 @@ white-space:nowrap;
   const end = getLocalDateKey(endDate);
 
   const dates = [
-   new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    1,
-    12
-   )
+   new Date(today.getFullYear(), today.getMonth(), 1, 12)
   ];
 
   if (monthKey(endDate) !== monthKey(today)) {
@@ -227,8 +221,6 @@ white-space:nowrap;
    );
   }
 
-  const seen = new Set();
-
   const describe = bill => ({
    bill,
    id: getBillPaymentId(bill),
@@ -236,19 +228,16 @@ white-space:nowrap;
    status: getOccurrenceStatus(
     bill,
     new Date(bill.dueDate)
-   ),
-   funding: occurrenceFundingLabel(
-    getOccurrenceFunding(bill)
    )
   });
+
+  const seen = new Set();
 
   const entries = dates
    .flatMap(date => getCalendarBillsForMonth(date))
    .filter(bill => {
     const day = financialDateKey(bill.dueDate);
-
-    const key =
-     `${getBillPaymentId(bill)}:${day}`;
+    const key = `${getBillPaymentId(bill)}:${day}`;
 
     if (
      !day ||
@@ -278,79 +267,58 @@ white-space:nowrap;
    .map(describe)
    .filter(entry => entry.status === "overdue");
 
-  upcomingCache = {
-   today,
-   entries,
-   overdue
-  };
+  upcomingCache = {today, entries, overdue};
 
   return upcomingCache;
  }
 
  function upcomingCard(entry) {
   const {bill, status} = entry;
+  const name = bill.name || "Bill";
 
-  const processing = status === "processing";
-  const overdue = status === "overdue";
-
-  const color = processing
-   ? "#79b9ff"
-   : overdue
-    ? "var(--overdue)"
-    : "var(--text-secondary)";
+  const state =
+   status === "processing"
+    ? "Processing"
+    : status === "overdue"
+     ? "Overdue"
+     : "Due";
 
   return `
    <button
     type="button"
-    class="bb-up-card"
+    class="bb-up-bill"
     data-bill-id="${escapeHtml(entry.id)}"
     data-due="${escapeHtml(bill.dueDate)}"
     onclick="BillBeaconDashboardVisualTrial.openUpcomingBill(this)"
     aria-label="${escapeHtml(
-     `${bill.name}, ${formatCurrency(bill.amount)}, ` +
-     `due ${formatDate(bill.dueDate, "short")}, ` +
-     `${
-      processing
-       ? "Processing, "
-       : overdue
-        ? "Overdue, "
-        : ""
-     }${entry.funding}`
+     `${name}, ${formatCurrency(bill.amount)}, ` +
+     `${state}, ${formatDate(bill.dueDate, "short")}`
     )}"
    >
-    <span class="bb-up-icon">
-     ${billOrPaymentPlanVisual(bill, 32)}
+    <span class="bb-up-bill-top">
+     <span class="bb-up-bill-icon">
+      ${billOrPaymentPlanVisual(bill, 32)}
+     </span>
+
+     <span class="bb-up-bill-name">
+      ${escapeHtml(name)}
+     </span>
     </span>
 
-    <span class="bb-up-name">
-     ${escapeHtml(bill.name)}
-    </span>
-
-    <span class="bb-up-amount">
+    <span class="bb-up-bill-amount">
      ${formatCurrency(bill.amount)}
     </span>
 
-    <span
-     class="bb-up-date"
-     style="color:${color};"
-    >
-     ${overdue ? "Overdue" : "Due"}
+    <span class="bb-up-bill-date">
+     ${status === "overdue" ? "Overdue" : "Due"}
      ${escapeHtml(formatDate(bill.dueDate, "short"))}
     </span>
 
     ${
-     processing
-      ? `
-       <span class="bb-up-processing">
-        Processing · Awaiting confirmation
-       </span>
-      `
+     status === "processing"
+      ? '<span class="bb-up-bill-processing">Processing</span>'
       : ""
     }
-
-    <span class="bb-up-funding">
-     ${escapeHtml(entry.funding)}
-    </span>
    </button>
   `;
  }
@@ -358,20 +326,79 @@ white-space:nowrap;
  function upcomingHTML() {
   const data = upcomingModel();
 
-  const end = new Date(
+  const dateAt = offset => new Date(
    data.today.getFullYear(),
    data.today.getMonth(),
-   data.today.getDate() + upcomingDays - 1,
+   data.today.getDate() + offset,
    12
   );
 
-  const endKey = getLocalDateKey(end);
+  const firstEnd = getLocalDateKey(dateAt(6));
 
-  const entries = data.entries.filter(
-   entry => entry.day <= endKey
+  const soon = data.entries.filter(
+   entry => entry.day <= firstEnd
   );
 
+  const later = data.entries.filter(
+   entry => entry.day > firstEnd
+  );
+
+  const row = (title, key, items, from, to) => `
+   <section
+    class="bb-up-row"
+    aria-labelledby="bbUpTitle-${key}"
+   >
+    <div class="bb-up-row-heading">
+     <h2 id="bbUpTitle-${key}">
+      ${title}
+     </h2>
+
+     ${
+      key === "soon"
+       ? `
+        <button
+         type="button"
+         class="bb-up-text-link"
+         onclick="navigate('recurring')"
+        >
+         See all
+        </button>
+       `
+       : ""
+     }
+    </div>
+
+    <div class="bb-up-row-period">
+     ${escapeHtml(formatDate(from, "short"))}
+     –
+     ${escapeHtml(formatDate(to, "short"))}
+    </div>
+
+    ${
+     items.length
+      ? `
+       <div
+        class="bb-up-rail"
+        data-bb-up-track
+        data-range="${key}"
+        tabindex="0"
+        role="region"
+        aria-label="${title}; scroll horizontally"
+       >
+        ${items.map(upcomingCard).join("")}
+       </div>
+      `
+      : `
+       <p class="bb-up-row-empty">
+        Nothing due in this window.
+       </p>
+      `
+    }
+   </section>
+  `;
+
   const stamp = epoch;
+  const backScroll = upcomingReturnScroll;
 
   requestAnimationFrame(() => {
    if (
@@ -381,187 +408,105 @@ white-space:nowrap;
     return;
    }
 
-   const rail = document.querySelector(
+   if (
+    !document.querySelector(
+     "#app [data-bb-upcoming]"
+    )
+   ) {
+    return;
+   }
+
+   document.querySelectorAll(
     "#app [data-bb-up-track]"
-   );
+   ).forEach(rail => {
+    rail.scrollLeft =
+     upcomingScroll.get(rail.dataset.range) || 0;
+   });
 
    if (
-    rail &&
-    Number(rail.dataset.days) === upcomingDays
+    backScroll &&
+    upcomingReturnScroll === backScroll
    ) {
-    rail.scrollLeft =
-     upcomingScroll.get(upcomingDays) || 0;
+    window.scrollTo(0, backScroll.window);
 
-    updateUpcomingArrows(rail);
+    const main = document.querySelector(
+     "#app .main-content"
+    );
+
+    if (main) main.scrollTop = backScroll.main;
+
+    upcomingReturnScroll = null;
    }
   });
 
   return `
-   <section
-    class="card bb-upcoming"
-    data-bb-upcoming
-    aria-labelledby="bbUpcomingTitle"
-   >
+   <div class="bb-upcoming" data-bb-upcoming>
     ${
      data.overdue.length
       ? `
-       <div class="bb-up-attention">
+       <div class="bb-up-overdue">
         <button
          type="button"
+         class="bb-up-text-link"
          aria-expanded="${upcomingOverdueOpen}"
-         aria-controls="bbUpcomingOverdue"
+         aria-controls="bbUpOverdueList"
          onclick="BillBeaconDashboardVisualTrial.toggleUpcomingOverdue()"
         >
-         <span>
-          Needs attention · ${data.overdue.length} overdue
-         </span>
-         <span>
-          ${upcomingOverdueOpen ? "Hide" : "Show"}
-         </span>
+         ${data.overdue.length} overdue
+         · ${upcomingOverdueOpen ? "Hide" : "Review"}
         </button>
 
-        ${
-         upcomingOverdueOpen
-          ? `
-           <div
-            id="bbUpcomingOverdue"
-            class="bb-up-overdue-list"
-           >
-            ${data.overdue.map(upcomingCard).join("")}
-           </div>
-          `
-          : '<div id="bbUpcomingOverdue" hidden></div>'
-        }
+        <div
+         id="bbUpOverdueList"
+         class="bb-up-overdue-list"
+         ${upcomingOverdueOpen ? "" : "hidden"}
+        >
+         ${
+          upcomingOverdueOpen
+           ? data.overdue.map(upcomingCard).join("")
+           : ""
+         }
+        </div>
        </div>
       `
       : ""
     }
 
-    <div class="bb-up-heading">
-     <h2 id="bbUpcomingTitle">
-      Upcoming payments
-     </h2>
-
-     <button
-      type="button"
-      class="bb-outline-pill"
-      onclick="navigate('recurring')"
-     >
-      Calendar
-     </button>
-    </div>
-
-    <div
-     class="bb-up-filters"
-     role="group"
-     aria-label="Upcoming payment date range"
-    >
-     ${
-      [7, 14].map(days => `
-       <button
-        type="button"
-        aria-pressed="${upcomingDays === days}"
-        data-bb-up-days="${days}"
-        onclick="BillBeaconDashboardVisualTrial.setUpcomingDays(${days})"
-       >
-        Next ${days} days
-       </button>
-      `).join("")
-     }
-    </div>
-
-    <div class="bb-up-period" aria-live="polite">
-     ${escapeHtml(formatDate(data.today, "short"))}
-     –
-     ${escapeHtml(formatDate(end, "short"))}
-     · ${entries.length}
-     ${entries.length === 1 ? "payment" : "payments"}
-    </div>
+    ${
+     row(
+      "Due in the next 7 days",
+      "soon",
+      soon,
+      data.today,
+      dateAt(6)
+     )
+    }
 
     ${
-     entries.length
-      ? `
-       <div
-        class="bb-up-track"
-        data-bb-up-track
-        data-days="${upcomingDays}"
-        tabindex="0"
-        role="region"
-        aria-label="Payments due within the next ${upcomingDays} days; scroll horizontally"
-       >
-        ${entries.map(upcomingCard).join("")}
-       </div>
-
-       <div class="bb-up-navigation">
-        <span>Swipe to browse</span>
-
-        <button
-         type="button"
-         data-bb-up-prev
-         aria-label="Previous upcoming payments"
-         onclick="BillBeaconDashboardVisualTrial.scrollUpcoming(-1)"
-        >
-         ${svgIcon("chevronLeft", 18)}
-        </button>
-
-        <button
-         type="button"
-         data-bb-up-next
-         aria-label="Next upcoming payments"
-         onclick="BillBeaconDashboardVisualTrial.scrollUpcoming(1)"
-        >
-         ${svgIcon("chevronRight", 18)}
-        </button>
-       </div>
-      `
-      : `
-       <div class="bb-up-empty">
-        No unpaid payments due in this date range.
-       </div>
-      `
+     row(
+      "Due later",
+      "later",
+      later,
+      dateAt(7),
+      dateAt(13)
+     )
     }
-   </section>
+   </div>
   `;
  }
 
  function rememberUpcomingScroll() {
-  const rail = document.querySelector(
+  document.querySelectorAll(
    "#app [data-bb-up-track]"
-  );
-
-  if (rail) {
+  ).forEach(rail => {
    upcomingScroll.set(
-    Number(rail.dataset.days),
+    rail.dataset.range,
     rail.scrollLeft
    );
-  }
+  });
  }
 
- function updateUpcomingArrows(rail) {
-  const section = rail.closest(
-   "[data-bb-upcoming]"
-  );
-
-  const previous = section?.querySelector(
-   "[data-bb-up-prev]"
-  );
-
-  const next = section?.querySelector(
-   "[data-bb-up-next]"
-  );
-
-  if (previous) {
-   previous.disabled = rail.scrollLeft <= 1;
-  }
-
-  if (next) {
-   next.disabled =
-    rail.scrollLeft + rail.clientWidth >=
-    rail.scrollWidth - 1;
-  }
- }
-
- function replaceUpcoming(focusDays = null) {
+ function toggleUpcomingOverdue() {
   if (!enabled || currentRoute !== "today") return;
 
   const section = document.querySelector(
@@ -573,55 +518,12 @@ white-space:nowrap;
   rememberUpcomingScroll();
   freshness();
 
+  upcomingOverdueOpen = !upcomingOverdueOpen;
   section.outerHTML = upcomingHTML();
 
-  if (focusDays) {
-   document.querySelector(
-    `#app [data-bb-up-days="${focusDays}"]`
-   )?.focus({preventScroll:true});
-  }
- }
-
- function setUpcomingDays(days) {
-  if (
-   ![7, 14].includes(days) ||
-   !enabled ||
-   currentRoute !== "today"
-  ) {
-   return;
-  }
-
-  rememberUpcomingScroll();
-  upcomingDays = days;
-  replaceUpcoming(days);
- }
-
- function toggleUpcomingOverdue() {
-  if (!enabled || currentRoute !== "today") return;
-
-  upcomingOverdueOpen = !upcomingOverdueOpen;
-  replaceUpcoming();
-
   document.querySelector(
-   "#app .bb-up-attention > button"
+   "#app .bb-up-overdue > button"
   )?.focus({preventScroll:true});
- }
-
- function scrollUpcoming(direction) {
-  const rail = document.querySelector(
-   "#app [data-bb-up-track]"
-  );
-
-  if (!rail) return;
-
-  const width = rail
-   .querySelector(".bb-up-card")
-   ?.getBoundingClientRect().width || 220;
-
-  rail.scrollBy({
-   left: (direction < 0 ? -1 : 1) * (width + 12),
-   behavior: "auto"
-  });
  }
 
  function openUpcomingBill(button) {
@@ -629,30 +531,18 @@ white-space:nowrap;
 
   rememberUpcomingScroll();
 
+  upcomingReturnScroll = {
+   window: window.scrollY || 0,
+   main: document.querySelector(
+    "#app .main-content"
+   )?.scrollTop || 0
+  };
+
   openPaycheckInlineBill(
    button,
    button.dataset.billId,
    button.dataset.due
   );
- }
-
- function paycheckListHTML(selected, date) {
-  const key =
-   monthKey(date) + ":" + selected.id;
-
-  return `
-   <details
-    class="bb-up-paycheck-list"
-    data-bb-up-plan="${escapeHtml(key)}"
-    ${upcomingPlanOpen.has(key) ? "open" : ""}
-   >
-    <summary>
-     View paycheck bills · ${selected.bills.length}
-    </summary>
-
-    ${renderPaycheckInlineRows(selected)}
-   </details>
-  `;
  }
 
  document.addEventListener("scroll", event => {
@@ -662,11 +552,9 @@ white-space:nowrap;
    rail?.matches?.("#app [data-bb-up-track]")
   ) {
    upcomingScroll.set(
-    Number(rail.dataset.days),
+    rail.dataset.range,
     rail.scrollLeft
    );
-
-   updateUpcomingArrows(rail);
   }
  }, true);
 
@@ -693,32 +581,16 @@ white-space:nowrap;
   } else if (event.key === "End") {
    rail.scrollLeft = rail.scrollWidth;
   } else {
-   scrollUpcoming(
-    event.key === "ArrowLeft" ? -1 : 1
-   );
-  }
+   const width = rail
+    .querySelector(".bb-up-bill")
+    ?.getBoundingClientRect().width || 176;
 
-  updateUpcomingArrows(rail);
- }, true);
-
- document.addEventListener("toggle", event => {
-  const node = event.target;
-
-  if (
-   !node?.isConnected ||
-   !node.matches?.(
-    "#app details[data-bb-up-plan]"
-   )
-  ) {
-   return;
-  }
-
-  const key = node.dataset.bbUpPlan;
-
-  if (node.open) {
-   keep(upcomingPlanOpen, key, true, 6);
-  } else {
-   upcomingPlanOpen.delete(key);
+   rail.scrollBy({
+    left:
+     (event.key === "ArrowLeft" ? -1 : 1) *
+     (width + 12),
+    behavior: "auto"
+   });
   }
  }, true);
 
@@ -728,10 +600,9 @@ white-space:nowrap;
   "billbeacon:household-ready"
  ]) {
   window.addEventListener(event, () => {
-   upcomingDays = 7;
    upcomingOverdueOpen = false;
+   upcomingReturnScroll = null;
    upcomingScroll.clear();
-   upcomingPlanOpen.clear();
   });
  }
 
@@ -1009,7 +880,31 @@ onclick="changeDashboardPaycheckMonth(1)"
         </span>
       </div>
 
-      ${paycheckListHTML(selected, referenceDate)}
+      <div
+        style="
+          display:flex;
+          justify-content:flex-end;
+          margin-top:8px;
+        "
+      >
+        <button
+          type="button"
+          style="
+            min-height:40px;
+            padding:0;
+            border:0;
+            background:transparent;
+            color:var(--accent);
+            font:inherit;
+            font-size:var(--text-xs);
+            font-weight:700;
+            cursor:pointer;
+          "
+          onclick="openPaycheckPlanSheet('${escapeInlineString(selected.id)}')"
+        >
+          See bills
+        </button>
+      </div>
     </div>
   `;
 }  function view(){
@@ -1166,106 +1061,116 @@ onclick="changeDashboardPaycheckMonth(1)"
     .bb-dashboard-monthly-status-card .bb-layout-monthly-heading span {
       font-size:var(--text-xs);color:var(--text-muted);line-height:1.4;text-align:right;
     }
-        .bb-upcoming {
+            .bb-upcoming {
+      display:grid;
+      gap:22px;
       min-width:0;
-      padding:16px!important;
-      overflow:hidden;
+      margin:0;
+      padding:0;
+      background:transparent;
+      border:0;
+      box-shadow:none;
     }
 
-    .bb-up-heading {
+    .bb-up-row {
+      min-width:0;
+    }
+
+    .bb-up-row-heading {
       display:flex;
       align-items:center;
       justify-content:space-between;
-      gap:10px;
-      margin-bottom:12px;
+      gap:12px;
     }
 
-    .bb-up-heading h2 {
+    .bb-up-row-heading h2 {
       margin:0;
       font-size:var(--text-base);
       font-weight:800;
+      line-height:1.4;
     }
 
-    .bb-up-heading .bb-outline-pill {
+    .bb-up-text-link {
+      display:inline-flex;
+      align-items:center;
       min-height:40px;
-      padding:6px 10px;
-      font-size:var(--text-xs);
-    }
-
-    .bb-up-filters {
-      display:flex;
-      gap:8px;
-    }
-
-    .bb-up-filters button {
-      flex:1;
-      min-height:42px;
-      border:1px solid var(--border);
-      border-radius:12px;
+      padding:0;
+      border:0;
       background:transparent;
-      color:var(--text-secondary);
+      color:var(--accent);
       font:inherit;
-      font-size:var(--text-sm);
-      font-weight:750;
+      font-size:var(--text-xs);
+      font-weight:700;
       cursor:pointer;
+      white-space:nowrap;
     }
 
-    .bb-up-filters button[aria-pressed="true"] {
-      border-color:var(--accent);
-      background:var(--accent-soft,rgba(124,92,255,.14));
-      color:var(--text);
-    }
-
-    .bb-up-period {
-      margin:10px 0;
+    .bb-up-row-period {
+      margin:2px 0 10px;
       font-size:var(--text-xs);
       color:var(--text-secondary);
     }
 
-    .bb-up-track {
+    .bb-up-rail {
       display:flex;
       gap:12px;
       overflow-x:auto;
       overscroll-behavior-x:contain;
       scroll-snap-type:x proximity;
-      scroll-padding:2px;
-      padding:3px 2px 10px;
-      scrollbar-width:thin;
+      padding:2px 1px 6px;
+      scrollbar-width:none;
     }
 
-    .bb-up-card {
-      flex:0 0 min(220px,78vw);
+    .bb-up-rail::-webkit-scrollbar {
+      display:none;
+    }
+
+    .bb-up-bill {
       box-sizing:border-box;
+      flex:0 0 176px;
+      max-width:76vw;
       display:flex;
       flex-direction:column;
       align-items:flex-start;
       gap:8px;
-      padding:16px;
+      padding:14px;
       border:1px solid var(--border);
-      border-radius:18px;
+      border-radius:16px;
       background:var(--surface);
       color:var(--text);
       font:inherit;
       text-align:left;
       cursor:pointer;
       scroll-snap-align:start;
-      min-width:0;
     }
 
-    .bb-up-icon {
+    .bb-up-bill-top {
+      display:flex;
+      align-items:center;
+      gap:9px;
+      width:100%;
+      min-width:0;
+      min-height:36px;
+    }
+
+    .bb-up-bill-icon {
       display:flex;
       align-items:center;
       justify-content:center;
-      min-height:32px;
+      flex:0 0 32px;
     }
 
-    .bb-up-name {
+    .bb-up-bill-name {
+      min-width:0;
       font-size:var(--text-sm);
-      font-weight:800;
+      font-weight:750;
+      line-height:1.3;
       overflow-wrap:anywhere;
     }
 
-    .bb-up-amount {
+    .bb-up-bill-amount {
+      display:block;
+      margin-top:6px;
       font-size:22px;
       font-weight:850;
       line-height:1.2;
@@ -1273,110 +1178,50 @@ onclick="changeDashboardPaycheckMonth(1)"
       white-space:nowrap;
     }
 
-    .bb-up-date,
-    .bb-up-funding,
-    .bb-up-processing {
+    .bb-up-bill-date {
       font-size:var(--text-xs);
       line-height:1.5;
-    }
-
-    .bb-up-funding {
       color:var(--text-secondary);
-      margin-top:auto;
     }
 
-    .bb-up-processing {
+    .bb-up-bill-processing {
+      font-size:var(--text-xs);
       color:#79b9ff;
     }
 
-    .bb-up-navigation {
-      display:flex;
-      align-items:center;
+    .bb-up-row-empty {
+      margin:0;
+      padding:10px 0;
+      font-size:var(--text-sm);
+      line-height:1.5;
+      color:var(--text-secondary);
+    }
+
+    .bb-up-overdue {
+      margin-bottom:-10px;
+    }
+
+    .bb-up-overdue > .bb-up-text-link {
+      color:var(--overdue);
+    }
+
+    .bb-up-overdue-list:not([hidden]) {
+      display:grid;
       gap:8px;
       margin-top:6px;
     }
 
-    .bb-up-navigation > span {
-      flex:1;
-      font-size:var(--text-xs);
-      color:var(--text-secondary);
-    }
-
-    .bb-up-navigation button {
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      min-width:44px;
-      min-height:44px;
-      border:1px solid var(--border);
-      border-radius:12px;
-      background:transparent;
-      color:var(--text);
-      cursor:pointer;
-    }
-
-    .bb-up-navigation button:disabled {
-      opacity:.35;
-      cursor:default;
-    }
-
-    .bb-up-empty {
-      padding:24px 4px;
-      font-size:var(--text-sm);
-      line-height:1.6;
-      color:var(--text-secondary);
-    }
-
-    .bb-up-attention {
-      margin-bottom:16px;
-    }
-
-    .bb-up-attention > button {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:12px;
+    .bb-up-overdue-list .bb-up-bill {
       width:100%;
-      min-height:44px;
-      padding:10px;
-      border:1px solid var(--overdue);
-      border-radius:12px;
-      background:transparent;
+      max-width:none;
+    }
+
+    .bb-up-overdue-list .bb-up-bill-date {
       color:var(--overdue);
-      font:inherit;
-      font-size:var(--text-sm);
-      font-weight:750;
-      cursor:pointer;
-      text-align:left;
-    }
-
-    .bb-up-overdue-list {
-      display:grid;
-      gap:8px;
-      margin-top:10px;
-    }
-
-    .bb-up-overdue-list .bb-up-card {
-      width:100%;
-    }
-
-    .bb-up-paycheck-list {
-      margin-top:14px;
-      border-top:1px solid var(--border);
-    }
-
-    .bb-up-paycheck-list > summary {
-      padding:14px 0 0;
-      min-height:30px;
-      cursor:pointer;
-      font-size:var(--text-sm);
-      font-weight:750;
-      color:var(--text);
     }
 
     .bb-upcoming button:focus-visible,
-    .bb-up-track:focus-visible,
-    .bb-up-paycheck-list > summary:focus-visible {
+    .bb-up-rail:focus-visible {
       outline:2px solid var(--accent);
       outline-offset:-2px;
     }
@@ -1423,10 +1268,8 @@ onclick="changeDashboardPaycheckMonth(1)"
  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')invalidate();});
  function redrawIfVisible(){if(typeof currentRoute!=='undefined'&&currentRoute==='today'&&document.querySelector('#app .dashboard-content')&&typeof render==='function')render();}
  window.BillBeaconDashboardVisualTrial=Object.freeze({version:3,performancePhase:4,
-    setUpcomingDays,
-  toggleUpcomingOverdue,
-  scrollUpcoming,
-  openUpcomingBill,
+    toggleUpcomingOverdue,
+  openUpcomingBill, 
   setEnabled(value){enabled=Boolean(value);redrawIfVisible();},isEnabled(){return enabled;},
   _test:{view,model:date=>{freshness();return copy(monthData(date||getDashboardReportMonth()));},
    cacheSizes:()=>({months:months.size,amounts:amounts.size,recent:!!recentCache,epoch})}});
