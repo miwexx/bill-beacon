@@ -4248,7 +4248,7 @@ function openMoveOccurrencePaycheck(
 
   closeMoveOccurrencePaycheck();
 
-  const {bill, to} = context;
+    const {bill, from, to} = context;
 
   const title = direction === "previous"
     ? "Move To Previous Paycheck?"
