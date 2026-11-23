@@ -4310,7 +4310,8 @@ function openMoveOccurrencePaycheck(
     background:var(--surface,#20202b);
     color:var(--text,#fff);
   `;
-  dialog.innerHTML = `
+
+    dialog.innerHTML = `
     <h2
       id="moveOccurrencePaycheckTitle"
       style="font-size:20px;margin:0 0 20px;"
@@ -4321,7 +4322,7 @@ function openMoveOccurrencePaycheck(
     <div
       style="
         font-weight:700;
-        margin-bottom:18px;
+        margin-bottom:20px;
         overflow-wrap:anywhere;
       "
     >
@@ -4329,52 +4330,44 @@ function openMoveOccurrencePaycheck(
       · ${formatCurrency(bill.amount)}
     </div>
 
-    <label
+    <div
       id="moveOccurrencePaycheckScope"
-      for="confirmPaycheckFunding"
       style="
-        display:flex;
-        align-items:center;
-        gap:12px;
-        padding:16px;
-        border:1px solid var(--border);
-        border-radius:14px;
-        background:var(--accent-soft,rgba(124,92,255,.10));
-        cursor:pointer;
+        display:grid;
+        grid-template-columns:auto minmax(0,1fr);
+        align-items:start;
+        gap:12px 14px;
+        margin-bottom:20px;
+        font-size:var(--text-sm);
         line-height:1.5;
       "
     >
-      <input
-        id="confirmPaycheckFunding"
-        type="checkbox"
+      <span style="color:var(--text-secondary);">
+        From
+      </span>
+
+      <span
         style="
-          width:22px;
-          height:22px;
-          flex:0 0 22px;
-          margin:0;
-          accent-color:var(--accent);
+          font-weight:650;
+          overflow-wrap:anywhere;
         "
       >
-
-      <span style="min-width:0;">
-        <span style="display:block;font-weight:750;">
-          Fund this bill with the
-          ${direction === "previous" ? "previous" : "next"}
-          paycheck?
-        </span>
-
-        <span
-          style="
-            display:block;
-            margin-top:4px;
-            font-size:var(--text-sm);
-            color:var(--text-secondary);
-          "
-        >
-          ${escapeHtml(occurrenceFundingLabel(to))}
-        </span>
+        ${escapeHtml(occurrenceFundingLabel(from))}
       </span>
-    </label>
+
+      <span style="color:var(--text-secondary);">
+        To
+      </span>
+
+      <span
+        style="
+          font-weight:750;
+          overflow-wrap:anywhere;
+        "
+      >
+        ${escapeHtml(occurrenceFundingLabel(to))}
+      </span>
+    </div>
 
     <p
       data-move-error
@@ -4400,33 +4393,15 @@ function openMoveOccurrencePaycheck(
         class="btn-primary"
         data-confirm-move
         style="flex:1;"
-        disabled
       >
         Move bill
       </button>
     </div>
   `;
 
-  const fundingCheckbox = dialog.querySelector(
-    "#confirmPaycheckFunding"
-  );
-
-  const confirmButton = dialog.querySelector(
+  dialog.querySelector(
     "[data-confirm-move]"
-  );
-
-  fundingCheckbox.addEventListener("change", () => {
-    confirmButton.disabled = !fundingCheckbox.checked;
-  });
-
-  confirmButton.onclick = () => {
-    if (
-      !fundingCheckbox.checked ||
-      confirmButton.disabled
-    ) {
-      return;
-    }
-
+  ).onclick = () => {
     commitMoveOccurrencePaycheck(
       billId,
       dueDate,
