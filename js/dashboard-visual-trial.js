@@ -139,11 +139,12 @@
 
     <div
       style="
-        font-size:clamp(19px,5.5vw,26px);
+        font-size:clamp(16px,4.3vw,22px);
+white-space:nowrap;
         font-weight:800;
         line-height:1.2;
         font-variant-numeric:tabular-nums;
-        overflow-wrap:anywhere;
+        overflow-wrap:normal;
         color:var(--paid);
       "
     >
