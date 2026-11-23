@@ -3366,6 +3366,7 @@ document.addEventListener("visibilitychange", () => {
   // Preserve forms and popups instead of discarding them.
   if (dashboardHasOpenFormOrPopup()) return;
 
+  bbResetDashboardPaycheckSelection();
   navigate("today");
 });
 
@@ -3830,61 +3831,145 @@ let selectedDashboardPaycheck = null;
 let selectedDashboardPaycheckMonth = null;
 let dashboardPaycheckSelectionMonthKey = null;
 
-function getDashboardPaycheckMonth() {
-  // One displayed month for the combined Dashboard card.
-  return getDashboardReportMonth();
+function bbResetDashboardPaycheckSelection() {
+  selectedDashboardPaycheckMonth = null;
+  selectedDashboardPaycheck = null;
+  dashboardPaycheckSelectionMonthKey = null;
+  paycheckInlineViews = {};
+
+  if (routeParams) {
+    delete routeParams.paycheckInlineReturn;
+    delete routeParams.paycheckSheetReturn;
+  }
 }
-function getDashboardPaycheckDefaultCycle() {
-  const displayedMonth = getDashboardPaycheckMonth();
+
+function bbInitializeDashboardPaycheckSelection() {
+  if (
+    selectedDashboardPaycheckMonth instanceof Date &&
+    Number.isFinite(selectedDashboardPaycheckMonth.getTime()) &&
+    ["first", "second"].includes(selectedDashboardPaycheck)
+  ) {
+    return;
+  }
+
+  const now = new Date();
+
+  let month = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    1,
+    12
+  );
+
+  let cycle = getDefaultDashboardPaycheck(now);
 
   try {
-    const bills = getPaycheckFundingBills(
-      displayedMonth
-    );
-
-    const hasUnpaidBills = cycle =>
-      bills.some(bill => {
+    const assigned = (date, paycheck) =>
+      getPaycheckFundingBills(date).filter(bill => {
         const funding = getOccurrenceFunding(bill);
 
         return (
-          funding?.paycheck === cycle &&
-          !isOccurrencePaid(
-            bill,
-            new Date(bill.dueDate)
-          )
+          funding.month === paycheckMonthKey(date) &&
+          funding.paycheck === paycheck
         );
       });
 
-    // Keep the first paycheck selected while it
-    // still has unpaid assigned bills.
-    if (hasUnpaidBills("first")) {
-      return "first";
-    }
+    const currentBills = assigned(month, cycle);
 
-    // Select the second paycheck only when the
-    // first has no unpaid assigned bills and
-    // the second still does.
-    if (hasUnpaidBills("second")) {
-      return "second";
-    }
+    const completed =
+      currentBills.length > 0 &&
+      currentBills.every(bill =>
+        isOccurrencePaid(
+          bill,
+          new Date(bill.dueDate)
+        )
+      );
 
-    // Empty or completed display months start
-    // on the first paycheck.
-    return "first";
+    if (completed) {
+      const nextMonth =
+        cycle === "second"
+          ? new Date(
+              month.getFullYear(),
+              month.getMonth() + 1,
+              1,
+              12
+            )
+          : new Date(month.getTime());
+
+      const nextCycle =
+        cycle === "first" ? "second" : "first";
+
+      if (assigned(nextMonth, nextCycle).length > 0) {
+        month = nextMonth;
+        cycle = nextCycle;
+      }
+    }
   } catch (error) {
-    console.error(
-      "Could not determine the default paycheck.",
+    console.warn(
+      "Paycheck default kept the current cycle:",
       error
     );
-
-    return "first";
   }
-}
-function changeDashboardPaycheckMonth(offset) {
-  // Compatibility for any older caller: use the same shared month.
-  changeDashboardReportMonth(offset);
+
+  selectedDashboardPaycheckMonth = month;
+  selectedDashboardPaycheck = cycle;
 }
 
+function getDashboardPaycheckMonth() {
+  bbInitializeDashboardPaycheckSelection();
+
+  const date = selectedDashboardPaycheckMonth;
+
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    1,
+    12
+  );
+}
+
+function getDashboardPaycheckDefaultCycle() {
+  bbInitializeDashboardPaycheckSelection();
+
+  return selectedDashboardPaycheck === "second"
+    ? "second"
+    : "first";
+}
+
+function changeDashboardPaycheckMonth(offset) {
+  if (offset !== -1 && offset !== 1) return;
+
+  const date = getDashboardPaycheckMonth();
+
+  bbResetDashboardPaycheckSelection();
+
+  selectedDashboardPaycheckMonth = new Date(
+    date.getFullYear(),
+    date.getMonth() + offset,
+    1,
+    12
+  );
+
+  selectedDashboardPaycheck = "first";
+
+  render();
+}
+
+function resetDashboardPaycheckMonth() {
+  bbResetDashboardPaycheckSelection();
+  render();
+}
+
+for (const event of [
+  "billbeacon:signed-out",
+  "billbeacon:authenticated",
+  "billbeacon:household-ready"
+]) {
+  window.addEventListener(
+    event,
+    bbResetDashboardPaycheckSelection
+  );
+}
 function resetDashboardPaycheckMonth() {
   resetDashboardReportMonth();
 }
@@ -5097,7 +5182,7 @@ function renderPaycheckDueAndLeftover(selected) {
         <div style="min-height:36px;display:flex;align-items:center;font-size:var(--text-sm);font-weight:700;color:var(--text-secondary);">Due</div>
         <div class="text-upcoming" style="font-size:clamp(16px,4.6vw,26px);font-weight:800;line-height:1.2;font-variant-numeric:tabular-nums;overflow-wrap:anywhere;">${formatCurrency(processing.due)}</div>
       </div>
-      <button type="button" onclick="openProcessingList('${escapeInlineString(selected.id)}','${escapeInlineString(getDashboardReportMonth().toISOString())}')"
+      <button type="button" onclick="openProcessingList('${escapeInlineString(selected.id)}','${escapeInlineString(new Date(selected.payday).toISOString())}')"
         aria-label="View ${processing.items.length} processing payments for this paycheck"
         style="display:block;min-width:0;min-height:64px;padding:0;border:0;background:transparent;color:var(--text);text-align:center;font:inherit;cursor:pointer;">
         <span style="min-height:36px;display:flex;align-items:center;justify-content:center;font-size:var(--text-sm);font-weight:700;color:var(--text-secondary);">Processing</span>
@@ -6236,31 +6321,20 @@ function getDashboardReportMonth() {
 
 function changeDashboardReportMonth(offset) {
   if (offset !== -1 && offset !== 1) return;
+
   const date = getDashboardReportMonth();
+
   selectedDashboardReportMonth = new Date(
-    date.getFullYear(), date.getMonth() + offset, 1, 12
+    date.getFullYear(),
+    date.getMonth() + offset,
+    1,
+    12
   );
-  selectedDashboardPaycheckMonth = null;
-  selectedDashboardPaycheck = null;
-  dashboardPaycheckSelectionMonthKey = null;
-  paycheckInlineViews = {};
-  if (routeParams) {
-    delete routeParams.paycheckInlineReturn;
-    delete routeParams.paycheckSheetReturn;
-  }
+
   render();
 }
-
 function resetDashboardReportMonth() {
   selectedDashboardReportMonth = null;
-  selectedDashboardPaycheckMonth = null;
-  selectedDashboardPaycheck = null;
-  dashboardPaycheckSelectionMonthKey = null;
-  paycheckInlineViews = {};
-  if (routeParams) {
-    delete routeParams.paycheckInlineReturn;
-    delete routeParams.paycheckSheetReturn;
-  }
   render();
 }
 
@@ -13388,9 +13462,6 @@ function fab() {
   `;
 }
 function navigateMainTab(route) {
-  selectedDashboardPaycheckMonth = null;
-  selectedDashboardPaycheck = null;
-
   navigate(route);
 }
 function tabBar() {

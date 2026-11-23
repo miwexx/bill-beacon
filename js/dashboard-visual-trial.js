@@ -268,19 +268,19 @@ white-space:nowrap;
     return {payments:recentPayments,rows:recentRows};
   }
 function navigationHTML() {
-  const date = getDashboardReportMonth();
+  const date = getDashboardPaycheckMonth();
   return `
     <div class="bb-paycheck-month-navigation" style="display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;">
-      <button type="button" class="bb-outline-pill" aria-label="Previous reporting month"
-        onclick="changeDashboardReportMonth(-1)"
+      <button type="button" class="bb-outline-pill" aria-label="Previous paycheck plan month"
+onclick="changeDashboardPaycheckMonth(-1)"
         style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;padding:0;box-sizing:border-box;">
         ${svgIcon("chevronLeft", 20)}
       </button>
       <div aria-live="polite" style="min-width:0;text-align:center;font-size:var(--text-base);font-weight:800;line-height:1.3;">
         ${formatDate(date, "monthYear")}
       </div>
-      <button type="button" class="bb-outline-pill" aria-label="Next reporting month"
-        onclick="changeDashboardReportMonth(1)"
+      <button type="button" class="bb-outline-pill" aria-label="Next paycheck plan month"
+onclick="changeDashboardPaycheckMonth(1)"
         style="display:flex;align-items:center;justify-content:center;width:44px;min-height:44px;padding:0;box-sizing:border-box;">
         ${svgIcon("chevronRight", 20)}
       </button>
