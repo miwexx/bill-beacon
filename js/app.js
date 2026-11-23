@@ -4248,7 +4248,7 @@ function openMoveOccurrencePaycheck(
 
   closeMoveOccurrencePaycheck();
 
-  const {bill, from, to} = context;
+  const {bill, to} = context;
 
   const title = direction === "previous"
     ? "Move To Previous Paycheck?"
@@ -4266,7 +4266,10 @@ function openMoveOccurrencePaycheck(
     #moveOccurrencePaycheckDialog button {
       min-height:46px;
     }
-
+    #moveOccurrencePaycheckDialog button:disabled {
+      opacity:.45;
+      cursor:not-allowed;
+    }
     #moveOccurrencePaycheckDialog:focus {
       outline:none;
     }
@@ -4307,12 +4310,6 @@ function openMoveOccurrencePaycheck(
     background:var(--surface,#20202b);
     color:var(--text,#fff);
   `;
-
-  const afterDueDate =
-    paycheckOccurrenceKey(
-      occurrenceFundingDate(to)
-    ) > paycheckOccurrenceKey(bill.dueDate);
-
   dialog.innerHTML = `
     <h2
       id="moveOccurrencePaycheckTitle"
@@ -4321,56 +4318,63 @@ function openMoveOccurrencePaycheck(
       ${title}
     </h2>
 
-    <div style="font-weight:700;">
+    <div
+      style="
+        font-weight:700;
+        margin-bottom:18px;
+        overflow-wrap:anywhere;
+      "
+    >
       ${escapeHtml(bill.name)}
       · ${formatCurrency(bill.amount)}
     </div>
 
-    <div
-      style="margin-top:6px;color:var(--text-muted);"
-    >
-      Due ${escapeHtml(
-        formatDate(bill.dueDate, "full")
-      )}
-    </div>
-
-    <div
+    <label
+      id="moveOccurrencePaycheckScope"
+      for="confirmPaycheckFunding"
       style="
-        display:grid;
-        grid-template-columns:44px 1fr;
-        gap:14px;
-        margin:24px 0;
+        display:flex;
+        align-items:center;
+        gap:12px;
+        padding:16px;
+        border:1px solid var(--border);
+        border-radius:14px;
+        background:var(--accent-soft,rgba(124,92,255,.10));
+        cursor:pointer;
+        line-height:1.5;
       "
     >
-      <span>From</span>
-      <span>${escapeHtml(
-        occurrenceFundingLabel(from)
-      )}</span>
+      <input
+        id="confirmPaycheckFunding"
+        type="checkbox"
+        style="
+          width:22px;
+          height:22px;
+          flex:0 0 22px;
+          margin:0;
+          accent-color:var(--accent);
+        "
+      >
 
-      <span>To</span>
-      <span>${escapeHtml(
-        occurrenceFundingLabel(to)
-      )}</span>
-    </div>
+      <span style="min-width:0;">
+        <span style="display:block;font-weight:750;">
+          Fund this bill with the
+          ${direction === "previous" ? "previous" : "next"}
+          paycheck?
+        </span>
 
-    <p
-      id="moveOccurrencePaycheckScope"
-      style="line-height:1.5;color:var(--text-muted);"
-    >
-      Only this occurrence changes paycheck assignment.
-      Its due date and payment status stay unchanged.
-    </p>
-
-    ${
-      afterDueDate
-        ? `
-          <p style="line-height:1.5;">
-            This paycheck arrives after the bill’s due
-            date. Moving it does not extend the due date.
-          </p>
-        `
-        : ""
-    }
+        <span
+          style="
+            display:block;
+            margin-top:4px;
+            font-size:var(--text-sm);
+            color:var(--text-secondary);
+          "
+        >
+          ${escapeHtml(occurrenceFundingLabel(to))}
+        </span>
+      </span>
+    </label>
 
     <p
       data-move-error
@@ -4396,21 +4400,40 @@ function openMoveOccurrencePaycheck(
         class="btn-primary"
         data-confirm-move
         style="flex:1;"
+        disabled
       >
         Move bill
       </button>
     </div>
   `;
 
-  dialog.querySelector(
+  const fundingCheckbox = dialog.querySelector(
+    "#confirmPaycheckFunding"
+  );
+
+  const confirmButton = dialog.querySelector(
     "[data-confirm-move]"
-  ).onclick = () => {
+  );
+
+  fundingCheckbox.addEventListener("change", () => {
+    confirmButton.disabled = !fundingCheckbox.checked;
+  });
+
+  confirmButton.onclick = () => {
+    if (
+      !fundingCheckbox.checked ||
+      confirmButton.disabled
+    ) {
+      return;
+    }
+
     commitMoveOccurrencePaycheck(
       billId,
       dueDate,
       context
     );
   };
+
 
   dialog.addEventListener("cancel", event => {
     event.preventDefault();
